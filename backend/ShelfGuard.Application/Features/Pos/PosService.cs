@@ -57,18 +57,24 @@ public sealed class PosService : IPosService
     // ── Open shift ─────────────────────────────────────────────────────────
 
     public async Task<(ShiftDto? Shift, string? Error, int? StatusCode)> OpenShiftAsync(
-        Guid tenantId, Guid cashierId, OpenShiftRequest request, CancellationToken ct = default)
+        Guid tenantId, Guid cashierId, OpenShiftRequest request, CancellationToken ct = default,
+        Guid? registerId = null)
     {
-        // 409: only one open shift per tenant
-        var existing = await _pos.GetOpenShiftAsync(tenantId, ct);
+        // 409: legacy/mobile flow = one open shift per tenant; register flow = one per register.
+        var existing = registerId.HasValue
+            ? await _pos.GetOpenShiftForRegisterAsync(registerId.Value, ct)
+            : await _pos.GetOpenShiftAsync(tenantId, ct);
         if (existing is not null)
-            return (null, "A shift is already open for this tenant.", 409);
+            return (null, registerId.HasValue
+                ? "A shift is already open on this register."
+                : "A shift is already open for this tenant.", 409);
 
         var shift = new PosShift
         {
             TenantId = tenantId,
             StoreId = request.StoreId,
             CashierId = cashierId,
+            RegisterId = registerId,
             OpeningCash = request.OpeningCash,
             OpenedAt = DateTime.UtcNow,
         };
@@ -124,18 +130,24 @@ public sealed class PosService : IPosService
 
     // ── Get current shift ──────────────────────────────────────────────────
 
-    public async Task<ShiftDto?> GetCurrentShiftAsync(Guid tenantId, CancellationToken ct = default)
+    public async Task<ShiftDto?> GetCurrentShiftAsync(
+        Guid tenantId, CancellationToken ct = default, Guid? registerId = null)
     {
-        var shift = await _pos.GetOpenShiftAsync(tenantId, ct);
+        var shift = registerId.HasValue
+            ? await _pos.GetOpenShiftForRegisterAsync(registerId.Value, ct)
+            : await _pos.GetOpenShiftAsync(tenantId, ct);
         return shift is null ? null : ToShiftDto(shift, "open", shift.FiscalShiftNumber);
     }
 
     // ── Close shift ────────────────────────────────────────────────────────
 
     public async Task<(ShiftDto? Shift, string? Error, int? StatusCode)> CloseShiftAsync(
-        Guid tenantId, CloseShiftRequest? request = null, CancellationToken ct = default)
+        Guid tenantId, CloseShiftRequest? request = null, CancellationToken ct = default,
+        Guid? registerId = null)
     {
-        var shift = await _pos.GetOpenShiftAsync(tenantId, ct);
+        var shift = registerId.HasValue
+            ? await _pos.GetOpenShiftForRegisterAsync(registerId.Value, ct)
+            : await _pos.GetOpenShiftAsync(tenantId, ct);
         if (shift is null)
             return (null, "No open shift found.", 404);
 
@@ -196,14 +208,139 @@ public sealed class PosService : IPosService
 
     // ── Create sale ────────────────────────────────────────────────────────
 
-    public async Task<(SaleDto? Sale, string? Error, int? StatusCode)> CreateSaleAsync(
+    public Task<(SaleDto? Sale, string? Error, int? StatusCode)> CreateSaleAsync(
         Guid tenantId, Guid cashierId, CreateSaleRequest request,
-        CancellationToken ct = default)
+        CancellationToken ct = default, Guid? registerId = null) =>
+        CreateSaleCoreAsync(tenantId, cashierId, request, registerId, inlineFiscalization: true, ct);
+
+    // ── Batch sale sync (offline register apps) ────────────────────────────
+
+    public const int MaxBatchSales = 100;
+
+    public async Task<(BatchSalesResultDto? Result, string? Error, int? StatusCode)> CreateSalesBatchAsync(
+        Guid tenantId, Guid cashierId, BatchSalesRequest request,
+        CancellationToken ct = default, Guid? registerId = null)
     {
+        if (request.Sales is null || request.Sales.Count == 0)
+            return (null, "Batch must contain at least one sale.", 400);
+        if (request.Sales.Count > MaxBatchSales)
+            return (null, $"Batch is limited to {MaxBatchSales} sales.", 400);
+
+        var results = new List<BatchSaleItemResultDto>(request.Sales.Count);
+
+        foreach (var sale in request.Sales)
+        {
+            if (sale.ClientTransactionId is not Guid clientId || clientId == Guid.Empty)
+            {
+                results.Add(new BatchSaleItemResultDto(null, "failed", null, "ClientTransactionId is required.", 400));
+                continue;
+            }
+
+            try
+            {
+                var existing = await _pos.GetTransactionByClientIdAsync(tenantId, clientId, ct);
+                if (existing is not null)
+                {
+                    var (dup, dupError, dupStatus) = await ResolveReplayAsync(tenantId, existing, sale, registerId, ct);
+                    results.Add(dupError is null
+                        ? new BatchSaleItemResultDto(clientId, "duplicate", dup, null, null)
+                        : new BatchSaleItemResultDto(clientId, "failed", null, dupError, dupStatus));
+                    continue;
+                }
+
+                // Fiscalization stays pending here on purpose: a batch of N queued sales must not
+                // block on N x (up to 8 s) Checkbox round trips; the retry worker picks them up.
+                var (dto, error, status) = await CreateSaleCoreAsync(
+                    tenantId, cashierId, sale, registerId, inlineFiscalization: false, ct);
+
+                if (error is null)
+                {
+                    results.Add(new BatchSaleItemResultDto(clientId, "created", dto, null, null));
+                }
+                else
+                {
+                    _pos.DiscardPendingChanges();
+                    results.Add(new BatchSaleItemResultDto(clientId, "failed", null, error, status));
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                // One bad item must never take down the rest of the batch.
+                _log.LogError(ex, "Batch sale {ClientId} failed unexpectedly for tenant {TenantId}", clientId, tenantId);
+                _pos.DiscardPendingChanges();
+                results.Add(new BatchSaleItemResultDto(clientId, "failed", null, "Unexpected error.", 500));
+            }
+        }
+
+        return (new BatchSalesResultDto(results), null, null);
+    }
+
+    /// <summary>
+    /// A stored sale found for a replayed ClientTransactionId. Returns it only when it belongs to
+    /// the same register (if both are known) and was made of the same shift/payment/items;
+    /// otherwise 409 - a reused key must never silently "succeed" with someone else's sale.
+    /// </summary>
+    private async Task<(SaleDto? Sale, string? Error, int? StatusCode)> ResolveReplayAsync(
+        Guid tenantId, PosTransaction stored, CreateSaleRequest request, Guid? registerId, CancellationToken ct)
+    {
+        const string conflict = "ClientTransactionId was already used for a different sale.";
+
+        if (registerId.HasValue && stored.CashRegisterId.HasValue && stored.CashRegisterId != registerId)
+            return (null, conflict, 409);
+
+        if (stored.ShiftId != request.ShiftId
+            || !string.Equals(stored.PaymentType, request.PaymentType, StringComparison.OrdinalIgnoreCase)
+            || request.Items is null
+            || request.Items.Count != stored.Items.Count)
+            return (null, conflict, 409);
+
+        var wanted = new Dictionary<Guid, decimal>();
+        foreach (var line in request.Items)
+        {
+            var product = await _catalog.GetByBarcodeAsync(line.Barcode, ct);
+            if (product is null) return (null, conflict, 409);
+            wanted[product.Id] = wanted.GetValueOrDefault(product.Id) + line.Quantity;
+        }
+
+        var actual = stored.Items
+            .GroupBy(i => i.ProductId)
+            .ToDictionary(g => g.Key, g => g.Sum(i => i.Quantity));
+        if (wanted.Count != actual.Count || wanted.Any(kv => actual.GetValueOrDefault(kv.Key) != kv.Value))
+            return (null, conflict, 409);
+
+        return (await MapExistingSaleAsync(tenantId, stored, ct), null, null);
+    }
+
+    private async Task<SaleDto> MapExistingSaleAsync(Guid tenantId, PosTransaction tx, CancellationToken ct)
+    {
+        var entries = (await _loyalty.GetLedgerEntriesForTransactionsAsync(tenantId, [tx.Id], ct))
+            .OrderBy(e => e.CreatedAt).ToList();
+        return ToSaleDto(tx, tx.ShiftId ?? Guid.Empty, entries);
+    }
+
+    private async Task<(SaleDto? Sale, string? Error, int? StatusCode)> CreateSaleCoreAsync(
+        Guid tenantId, Guid cashierId, CreateSaleRequest request, Guid? registerId,
+        bool inlineFiscalization, CancellationToken ct)
+    {
+        // 0. Idempotency: a replayed offline sale returns the stored one, never a duplicate.
+        if (request.ClientTransactionId is Guid clientTxId && clientTxId != Guid.Empty)
+        {
+            var already = await _pos.GetTransactionByClientIdAsync(tenantId, clientTxId, ct);
+            if (already is not null)
+                return await ResolveReplayAsync(tenantId, already, request, registerId, ct);
+        }
+
         // 1. Validate shift
         var shift = await _pos.GetShiftByIdAsync(request.ShiftId, ct);
         if (shift is null || shift.TenantId != tenantId || shift.ClosedAt.HasValue)
             return (null, "Shift not found or not open.", 409);
+
+        if (registerId.HasValue && shift.RegisterId != registerId)
+            return (null, "Shift belongs to a different register.", 409);
 
         // StoreId resolved from the shift entity (not JWT) — single source of truth.
         var storeId = shift.StoreId;
@@ -346,6 +483,8 @@ public sealed class PosService : IPosService
             CreatedAt = DateTime.UtcNow,
             CustomerId = customer?.Id,
             LoyaltyMembershipId = request.LoyaltyMembershipId,
+            CashRegisterId = registerId ?? shift.RegisterId,
+            ClientTransactionId = request.ClientTransactionId is { } cid && cid != Guid.Empty ? cid : null,
         };
 
         var txItemDtos = new List<SaleItemDto>();
@@ -567,6 +706,16 @@ public sealed class PosService : IPosService
                 "Concurrent update conflict (stock or loyalty balance) while creating sale for tenant {TenantId}", tenantId);
             return (null, "Stock or loyalty balance was updated concurrently by another operation. Please retry.", 409);
         }
+        catch (DuplicateClientTransactionException)
+        {
+            // Lost the race against an identical concurrent submission: nothing of ours was
+            // persisted, so hand back the winner's stored sale.
+            _pos.DiscardPendingChanges();
+            var winner = await _pos.GetTransactionByClientIdAsync(tenantId, request.ClientTransactionId!.Value, ct);
+            if (winner is null)
+                return (null, "Duplicate client transaction could not be resolved. Please retry.", 409);
+            return await ResolveReplayAsync(tenantId, winner, request, registerId, ct);
+        }
 
         // 4. Fiscalization — attempted synchronously, bounded by a short timeout, so a healthy
         // Checkbox response reaches the cashier before the receipt is printed (v3-spec: the
@@ -590,6 +739,7 @@ public sealed class PosService : IPosService
         using var fiscalCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
         fiscalCts.CancelAfter(OnlineFiscalizationTimeoutMs);
 
+        if (inlineFiscalization)
         try
         {
             var fiscal = await _fiscalFactory.GetForTenantAsync(tenantId, fiscalCts.Token);
@@ -783,69 +933,69 @@ public sealed class PosService : IPosService
             .ToDictionary(g => g.Key, g => g.OrderBy(e => e.CreatedAt).ToList());
 
         var dtos = transactions
-            .Select(t =>
-            {
-                decimal? loyaltyAccrued = null;
-                decimal? loyaltyRedeemed = null;
-                decimal? loyaltyBalance = null;
-
-                if (ledgerByTx.TryGetValue(t.Id, out var entries))
-                {
-                    var accrualSum = entries
-                        .Where(e => e.EntryType == LoyaltyEntryType.Accrual)
-                        .Sum(e => e.Amount);
-                    if (accrualSum > 0m)
-                        loyaltyAccrued = accrualSum;
-
-                    // Stored as a negative delta (see CreateSaleAsync) — surfaced here as a
-                    // positive figure, matching CreateSaleAsync's own LoyaltyRedeemed sign and
-                    // what SaleDetailDrawer.tsx already renders ("-{value} ₴").
-                    var redemptionSum = entries
-                        .Where(e => e.EntryType == LoyaltyEntryType.Redemption)
-                        .Sum(e => e.Amount);
-                    if (redemptionSum < 0m)
-                        loyaltyRedeemed = -redemptionSum;
-
-                    // entries is ordered oldest-first above; the LAST one is whichever ledger
-                    // effect completed this transaction (redemption then accrual, per
-                    // CreateSaleAsync's write order), so its BalanceAfter is the membership's
-                    // balance at the moment THIS sale finished — i.e. a historical, per-sale
-                    // snapshot, not the membership's current/live balance (which a later sale
-                    // on the same membership may have since moved further).
-                    loyaltyBalance = entries[^1].BalanceAfter;
-                }
-
-                return new SaleDto(
-                    TransactionId: t.Id,
-                    ShiftId: t.ShiftId ?? shiftId,
-                    Items: t.Items.Select(i => new SaleItemDto(
-                        ProductId: i.ProductId,
-                        ProductName: i.Product?.Name ?? "—",
-                        Barcode: i.Product?.Barcodes.Count > 0 ? i.Product.Barcodes[0] : string.Empty,
-                        Quantity: i.Quantity,
-                        UnitPrice: i.PriceRetail,
-                        DiscountAmount: i.DiscountAmount,
-                        Total: Math.Round(i.PriceFinal * i.Quantity, 2))).ToList(),
-                    Subtotal: t.TotalAmount,
-                    PaymentType: t.PaymentType,
-                    PaymentAmount: t.TotalAmount, // payment amount stored in TotalAmount
-                    Change: 0,
-                    FiscalStatus: t.Status,
-                    FiscalNumber: t.FiscalNumber,
-                    ReceiptNumber: t.ReceiptNumber,
-                    CreatedAt: t.CreatedAt,
-                    LoyaltyAccrued: loyaltyAccrued,
-                    LoyaltyRedeemed: loyaltyRedeemed,
-                    LoyaltyBalance: loyaltyBalance,
-                    CustomerId: t.CustomerId,
-                    CustomerName: t.Customer?.Name);
-            })
+            .Select(t => ToSaleDto(t, shiftId, ledgerByTx.GetValueOrDefault(t.Id)))
             .ToList();
 
         return new SalesListDto(dtos, dtos.Sum(d => d.Subtotal));
     }
 
     // ── Helpers ────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Maps a stored transaction to a SaleDto. <paramref name="entries"/> = that sale's loyalty
+    /// ledger entries ordered oldest-first (null/empty when the sale had no loyalty activity).
+    /// </summary>
+    private static SaleDto ToSaleDto(PosTransaction t, Guid shiftId, List<LoyaltyLedgerEntry>? entries)
+    {
+        decimal? loyaltyAccrued = null;
+        decimal? loyaltyRedeemed = null;
+        decimal? loyaltyBalance = null;
+
+        if (entries is { Count: > 0 })
+        {
+            var accrualSum = entries
+                .Where(e => e.EntryType == LoyaltyEntryType.Accrual)
+                .Sum(e => e.Amount);
+            if (accrualSum > 0m)
+                loyaltyAccrued = accrualSum;
+
+            // Stored as a negative delta (see CreateSaleAsync) - surfaced as a positive figure.
+            var redemptionSum = entries
+                .Where(e => e.EntryType == LoyaltyEntryType.Redemption)
+                .Sum(e => e.Amount);
+            if (redemptionSum < 0m)
+                loyaltyRedeemed = -redemptionSum;
+
+            // The LAST entry is whichever ledger effect completed this transaction, so its
+            // BalanceAfter is the membership balance at the moment THIS sale finished.
+            loyaltyBalance = entries[^1].BalanceAfter;
+        }
+
+        return new SaleDto(
+            TransactionId: t.Id,
+            ShiftId: t.ShiftId ?? shiftId,
+            Items: t.Items.Select(i => new SaleItemDto(
+                ProductId: i.ProductId,
+                ProductName: i.Product?.Name ?? "—",
+                Barcode: i.Product?.Barcodes.Count > 0 ? i.Product.Barcodes[0] : string.Empty,
+                Quantity: i.Quantity,
+                UnitPrice: i.PriceRetail,
+                DiscountAmount: i.DiscountAmount,
+                Total: Math.Round(i.PriceFinal * i.Quantity, 2))).ToList(),
+            Subtotal: t.TotalAmount,
+            PaymentType: t.PaymentType,
+            PaymentAmount: t.TotalAmount, // payment amount stored in TotalAmount
+            Change: 0,
+            FiscalStatus: t.Status,
+            FiscalNumber: t.FiscalNumber,
+            ReceiptNumber: t.ReceiptNumber,
+            CreatedAt: t.CreatedAt,
+            LoyaltyAccrued: loyaltyAccrued,
+            LoyaltyRedeemed: loyaltyRedeemed,
+            LoyaltyBalance: loyaltyBalance,
+            CustomerId: t.CustomerId,
+            CustomerName: t.Customer?.Name);
+    }
 
     private async Task<FiscalShiftResult> PollShiftStatusAsync(
         IFiscalService fiscal,

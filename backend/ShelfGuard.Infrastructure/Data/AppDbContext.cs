@@ -82,6 +82,8 @@ public sealed class AppDbContext : DbContext
 
     // v3 — POS (ПРРО Каса)
     public DbSet<PosShift> PosShifts => Set<PosShift>();
+    public DbSet<CashRegister> CashRegisters => Set<CashRegister>();
+    public DbSet<RegisterSession> RegisterSessions => Set<RegisterSession>();
     public DbSet<PosTransaction> PosTransactions => Set<PosTransaction>();
     public DbSet<PosTransactionItem> PosTransactionItems => Set<PosTransactionItem>();
 
@@ -256,6 +258,8 @@ public sealed class AppDbContext : DbContext
             // i18n Block 1 (TASK-375): "uk"/"en"; null = browser fallback. Length 5 leaves room for "uk-UA"-style tags.
             e.Property(u => u.PreferredLocale).HasMaxLength(5).IsRequired(false);
             e.Property(u => u.IsActive).HasDefaultValue(true);
+            e.Property(u => u.PosPinHash).HasMaxLength(100).IsRequired(false);
+            e.Property(u => u.PosPinSetAt).IsRequired(false);
             e.Property(u => u.CreatedAt).HasDefaultValueSql("NOW()");
             e.Property(u => u.InvitedByName).HasMaxLength(255).IsRequired(false);
             // Supplier-portal expansion (plan #3): per-user "last opened supplier orders" marker.
@@ -487,6 +491,9 @@ public sealed class AppDbContext : DbContext
             e.Property(p => p.DefaultReimbursementValue).HasColumnType("decimal(12,2)");
             e.Property(p => p.IsActive).HasDefaultValue(true);
             e.Property(p => p.CreatedAt).HasDefaultValueSql("NOW()");
+            // Maintained by trigger items_set_updated_at (see AddCashRegisters migration) — EF never writes it.
+            e.Property(p => p.UpdatedAt).HasDefaultValueSql("NOW()").ValueGeneratedOnAddOrUpdate();
+            e.HasIndex(p => new { p.TenantId, p.UpdatedAt, p.Id }).HasDatabaseName("idx_items_tenant_updated");
             // Catalog browse: filter by category + segment + active status
             e.HasIndex(p => new { p.TenantId, p.CategoryId, p.SegmentId, p.IsActive })
              .HasDatabaseName("idx_items_tenant_category_segment_active");
@@ -1223,11 +1230,58 @@ public sealed class AppDbContext : DbContext
             e.Property(s => s.StoreId).HasColumnName("LocationId");
             e.HasIndex(s => new { s.TenantId, s.StoreId, s.OpenedAt });
             // one open shift per location at a time
-            e.HasIndex(s => s.StoreId).IsUnique().HasFilter("\"ClosedAt\" IS NULL");
+            e.HasIndex(s => s.StoreId).IsUnique().HasFilter("\"ClosedAt\" IS NULL AND \"RegisterId\" IS NULL");
             e.HasOne(s => s.Store).WithMany()
              .HasForeignKey(s => s.StoreId).OnDelete(DeleteBehavior.Restrict);
             e.HasOne(s => s.Cashier).WithMany()
              .HasForeignKey(s => s.CashierId).OnDelete(DeleteBehavior.SetNull).IsRequired(false);
+            // One open shift per register (the store-level unique index above stays for legacy/mobile
+            // shifts: it is narrowed to RegisterId IS NULL so several registers in a store can each
+            // have their own open shift).
+            e.HasOne<CashRegister>().WithMany()
+             .HasForeignKey(s => s.RegisterId).OnDelete(DeleteBehavior.Restrict).IsRequired(false);
+            e.HasIndex(s => s.RegisterId).IsUnique().HasFilter("\"ClosedAt\" IS NULL AND \"RegisterId\" IS NOT NULL")
+             .HasDatabaseName("uq_pos_shifts_open_per_register");
+        });
+
+        // ── CashRegister / RegisterSession (cashier app) ────────────────────
+        builder.Entity<CashRegister>(e =>
+        {
+            e.ToTable("cash_registers");
+            e.HasKey(r => r.Id);
+            e.Property(r => r.Id).HasDefaultValueSql("gen_random_uuid()");
+            e.Property(r => r.StoreId).HasColumnName("LocationId");
+            e.Property(r => r.Type).HasMaxLength(20).HasDefaultValue(CashRegister.TypeLine);
+            e.Property(r => r.Name).HasMaxLength(100).IsRequired();
+            e.Property(r => r.Status).HasMaxLength(20).HasDefaultValue(CashRegister.StatusPending);
+            e.Property(r => r.DeviceTokenHash).HasMaxLength(100);
+            e.Property(r => r.ActivationCodeHash).HasMaxLength(100);
+            e.Property(r => r.AppVersion).HasMaxLength(50);
+            e.Property(r => r.CreatedAt).HasDefaultValueSql("NOW()");
+            e.HasIndex(r => new { r.TenantId, r.Number }).IsUnique();
+            e.HasIndex(r => new { r.TenantId, r.StoreId });
+            e.HasOne(r => r.Store).WithMany()
+             .HasForeignKey(r => r.StoreId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne<Tenant>().WithMany()
+             .HasForeignKey(r => r.TenantId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        builder.Entity<RegisterSession>(e =>
+        {
+            e.ToTable("register_sessions");
+            e.HasKey(s => s.Id);
+            e.Property(s => s.Id).HasDefaultValueSql("gen_random_uuid()");
+            e.Property(s => s.StartedAt).HasDefaultValueSql("NOW()");
+            e.Property(s => s.EndReason).HasMaxLength(20);
+            e.HasIndex(s => new { s.RegisterId, s.StartedAt });
+            e.HasIndex(s => s.RegisterId).HasFilter("\"EndedAt\" IS NULL")
+             .HasDatabaseName("idx_register_sessions_open");
+            e.HasOne(s => s.Register).WithMany()
+             .HasForeignKey(s => s.RegisterId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(s => s.Cashier).WithMany()
+             .HasForeignKey(s => s.CashierId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne<Tenant>().WithMany()
+             .HasForeignKey(s => s.TenantId).OnDelete(DeleteBehavior.Cascade);
         });
 
         // ── PosTransaction (v3 Phase 4) ─────────────────────────────────────
@@ -1254,6 +1308,12 @@ public sealed class AppDbContext : DbContext
              .HasFilter("\"Status\" <> 'fiscalization_failed'");
             e.HasOne(t => t.Store).WithMany()
              .HasForeignKey(t => t.StoreId).OnDelete(DeleteBehavior.Restrict);
+            // Offline idempotency key — unique per tenant when present.
+            e.HasIndex(t => new { t.TenantId, t.ClientTransactionId }).IsUnique()
+             .HasFilter("\"ClientTransactionId\" IS NOT NULL")
+             .HasDatabaseName("uq_pos_transactions_client_tx");
+            e.HasOne<CashRegister>().WithMany()
+             .HasForeignKey(t => t.CashRegisterId).OnDelete(DeleteBehavior.SetNull).IsRequired(false);
             e.HasOne(t => t.Shift).WithMany()
              .HasForeignKey(t => t.ShiftId).OnDelete(DeleteBehavior.SetNull).IsRequired(false);
             e.HasMany(t => t.Items).WithOne(i => i.Transaction)

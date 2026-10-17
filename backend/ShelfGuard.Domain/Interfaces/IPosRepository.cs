@@ -15,6 +15,9 @@ public interface IPosRepository
 
     Task<PosShift?> GetShiftByIdAsync(Guid shiftId, CancellationToken ct = default);
 
+    /// <summary>Open shift bound to a specific register (register-scoped shifts, multiple per tenant/store).</summary>
+    Task<PosShift?> GetOpenShiftForRegisterAsync(Guid registerId, CancellationToken ct = default);
+
     Task AddShiftAsync(PosShift shift, CancellationToken ct = default);
 
     void UpdateShift(PosShift shift);
@@ -22,6 +25,9 @@ public interface IPosRepository
     // ── Transactions ────────────────────────────────────────────────────────
 
     Task<PosTransaction?> GetTransactionByIdAsync(Guid id, CancellationToken ct = default);
+
+    /// <summary>Idempotency lookup: the stored sale for this offline client key, or null.</summary>
+    Task<PosTransaction?> GetTransactionByClientIdAsync(Guid tenantId, Guid clientTransactionId, CancellationToken ct = default);
 
     Task<List<PosTransaction>> GetTransactionsByShiftAsync(Guid shiftId, CancellationToken ct = default);
 
@@ -54,4 +60,10 @@ public interface IPosRepository
     // ── Unit-of-work ────────────────────────────────────────────────────────
 
     Task SaveChangesAsync(CancellationToken ct = default);
+
+    /// <summary>
+    /// Drops every pending (unsaved) tracked change. Used by batch sync after a failed item so
+    /// its half-applied FEFO decrements can never leak into the next item's SaveChanges.
+    /// </summary>
+    void DiscardPendingChanges();
 }

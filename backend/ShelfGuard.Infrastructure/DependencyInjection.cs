@@ -119,6 +119,12 @@ public static class DependencyInjection
 
         // v3.2 - POS (TASK-068)
         services.AddScoped<IPosRepository, PosRepository>();
+        services.AddScoped<ICashRegisterRepository, CashRegisterRepository>();
+        services.AddMemoryCache();
+        services.AddSingleton<Services.OperatorSessionValidator>();
+        services.AddSingleton<Application.Services.IOperatorSessionValidator>(sp => sp.GetRequiredService<Services.OperatorSessionValidator>());
+        services.AddSingleton<Application.Services.IOperatorSessionCache>(sp => sp.GetRequiredService<Services.OperatorSessionValidator>());
+        services.AddScoped<ICatalogSyncRepository, CatalogSyncRepository>();
 
         // v2 - Daily sales (ADU source data)
         services.AddScoped<IDailySalesRepository, DailySalesRepository>();

@@ -6,6 +6,8 @@ public sealed class PosShift
     public Guid TenantId { get; init; }
     public Guid StoreId { get; init; }
     public Guid? CashierId { get; init; }
+    /// <summary>Register this shift was opened on (null for legacy/mobile shifts not bound to a register).</summary>
+    public Guid? RegisterId { get; init; }
     public int ShiftNumber { get; init; }
     // Shift number assigned by ДПС; null while in test mode / not yet fiscalized
     public string? FiscalShiftNumber { get; set; }

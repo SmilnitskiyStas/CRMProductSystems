@@ -11,6 +11,12 @@ namespace ShelfGuard.Tests.Pos;
 
 // ── Fakes ──────────────────────────────────────────────────────────────────
 
+file static class PosServiceTestsIds
+{
+    public static readonly Guid TenantId = Guid.NewGuid();
+    public static readonly Guid StoreId = Guid.NewGuid();
+}
+
 file sealed class FakePosRepo : IPosRepository
 {
     public List<PosShift> Shifts { get; } = [];
@@ -27,6 +33,15 @@ file sealed class FakePosRepo : IPosRepository
 
     public Task<PosShift?> GetShiftByIdAsync(Guid shiftId, CancellationToken ct = default) =>
         Task.FromResult(Shifts.FirstOrDefault(s => s.Id == shiftId));
+
+    public Task<PosShift?> GetOpenShiftForRegisterAsync(Guid registerId, CancellationToken ct = default) =>
+        Task.FromResult(Shifts.FirstOrDefault(s => s.RegisterId == registerId && s.ClosedAt is null));
+
+    public Task<PosTransaction?> GetTransactionByClientIdAsync(Guid tenantId, Guid clientTransactionId, CancellationToken ct = default) =>
+        Task.FromResult(Transactions.FirstOrDefault(t => t.TenantId == tenantId && t.ClientTransactionId == clientTransactionId));
+
+    public int DiscardCount { get; private set; }
+    public void DiscardPendingChanges() => DiscardCount++;
 
     public Task AddShiftAsync(PosShift shift, CancellationToken ct = default)
     {
@@ -349,13 +364,45 @@ file sealed class FakeSuccessfulFiscalService : IFiscalService
             providerReceiptId, FiscalReceiptStatus.Done, "FN-12345", DateTimeOffset.UtcNow, null, null));
 }
 
+file sealed record Seeded(FakePosRepo Pos, FakeStockRepo Stock, FakeCatalogRepo Catalog, PosShift Shift, ProductStock Batch)
+{
+    public void Deconstruct(out FakePosRepo pos, out FakeStockRepo stock, out FakeCatalogRepo catalog, out PosShift shift, out ProductStock batch)
+    {
+        pos = Pos; stock = Stock; catalog = Catalog; shift = Shift; batch = Batch;
+    }
+}
+
+file static class SaleSeeder
+{
+    public static Seeded Seed(string barcode, decimal stockQty = 10m, Guid? registerId = null)
+    {
+        var tenantId = PosServiceTestsIds.TenantId;
+        var storeId = PosServiceTestsIds.StoreId;
+        var pos = new FakePosRepo();
+        var shift = new PosShift { TenantId = tenantId, StoreId = storeId, RegisterId = registerId };
+        pos.Shifts.Add(shift);
+        var product = new Item { Id = Guid.NewGuid(), TenantId = tenantId, Barcodes = [barcode], Name = "Seed", PriceRetail = 10m };
+        var catalog = new FakeCatalogRepo();
+        catalog.Products.Add(product);
+        var stock = new FakeStockRepo();
+        var batch = new ProductStock
+        {
+            Id = Guid.NewGuid(), TenantId = tenantId, ProductId = product.Id, StoreId = storeId,
+            Quantity = stockQty, QuantityInitial = stockQty,
+            ExpiryDate = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(30)), Status = "safe",
+        };
+        stock.Batches.Add(batch);
+        return new Seeded(pos, stock, catalog, shift, batch);
+    }
+}
+
 // ── Tests ──────────────────────────────────────────────────────────────────
 
 public sealed class PosServiceTests
 {
-    private static readonly Guid TenantId = Guid.NewGuid();
+    private static readonly Guid TenantId = PosServiceTestsIds.TenantId;
     private static readonly Guid CashierId = Guid.NewGuid();
-    private static readonly Guid StoreId = Guid.NewGuid();
+    private static readonly Guid StoreId = PosServiceTestsIds.StoreId;
 
     private static PosService BuildService(
         IPosRepository? pos = null,
@@ -1547,5 +1594,196 @@ public sealed class PosServiceTests
         Assert.Equal(8m, sale.LoyaltyAccrued);
         Assert.Equal(20m, sale.LoyaltyRedeemed); // positive, sign flipped from the stored -20m
         Assert.Equal(38m, sale.LoyaltyBalance);  // last entry (accrual) wins, not redemption's 30m
+    }
+    // ── Cashier app: register binding, idempotency, batch sync ─────────────
+
+    [Fact]
+    public async Task CreateSale_same_ClientTransactionId_twice_creates_one_transaction()
+    {
+        var (pos, stock, catalog, shift, batch) = SaleSeeder.Seed("IDEMP-1");
+        var svc = BuildService(pos: pos, stock: stock, catalog: catalog);
+        var clientId = Guid.NewGuid();
+        var request = new CreateSaleRequest(
+            shift.Id, [new SaleItemRequest("IDEMP-1", 2)], "Cash", 20, ClientTransactionId: clientId);
+
+        var (first, err1, _) = await svc.CreateSaleAsync(TenantId, CashierId, request);
+        var (second, err2, _) = await svc.CreateSaleAsync(TenantId, CashierId, request);
+
+        Assert.Null(err1);
+        Assert.Null(err2);
+        Assert.Single(pos.Transactions);
+        Assert.Equal(first!.TransactionId, second!.TransactionId);
+        Assert.Equal(first.ReceiptNumber, second.ReceiptNumber);
+        Assert.Equal(8m, batch.Quantity); // FEFO write-down happened exactly once
+        Assert.Equal(clientId, pos.Transactions[0].ClientTransactionId);
+    }
+
+    [Fact]
+    public async Task CreateSale_without_ClientTransactionId_is_not_deduplicated()
+    {
+        var (pos, stock, catalog, shift, _) = SaleSeeder.Seed("IDEMP-2");
+        var svc = BuildService(pos: pos, stock: stock, catalog: catalog);
+        var request = new CreateSaleRequest(shift.Id, [new SaleItemRequest("IDEMP-2", 1)], "Cash", 10);
+
+        await svc.CreateSaleAsync(TenantId, CashierId, request);
+        await svc.CreateSaleAsync(TenantId, CashierId, request);
+
+        Assert.Equal(2, pos.Transactions.Count);
+    }
+
+    [Fact]
+    public async Task CreateSale_stamps_register_and_rejects_shift_of_another_register()
+    {
+        var registerId = Guid.NewGuid();
+        var (pos, stock, catalog, shift, _) = SaleSeeder.Seed("REG-1", registerId: registerId);
+        var svc = BuildService(pos: pos, stock: stock, catalog: catalog);
+        var request = new CreateSaleRequest(shift.Id, [new SaleItemRequest("REG-1", 1)], "Cash", 10);
+
+        var (sale, error, _) = await svc.CreateSaleAsync(TenantId, CashierId, request, registerId: registerId);
+        Assert.Null(error);
+        Assert.NotNull(sale);
+        Assert.Equal(registerId, pos.Transactions.Single().CashRegisterId);
+
+        var (rejected, err2, status) = await svc.CreateSaleAsync(
+            TenantId, CashierId, request, registerId: Guid.NewGuid());
+        Assert.Null(rejected);
+        Assert.Equal(409, status);
+        Assert.NotNull(err2);
+    }
+
+    [Fact]
+    public async Task OpenShift_is_scoped_per_register()
+    {
+        var pos = new FakePosRepo();
+        var svc = BuildService(pos: pos);
+        var regA = Guid.NewGuid();
+        var regB = Guid.NewGuid();
+
+        var (a, errA, _) = await svc.OpenShiftAsync(TenantId, CashierId, new OpenShiftRequest(StoreId), registerId: regA);
+        var (b, errB, _) = await svc.OpenShiftAsync(TenantId, CashierId, new OpenShiftRequest(StoreId), registerId: regB);
+        var (dup, _, dupStatus) = await svc.OpenShiftAsync(TenantId, CashierId, new OpenShiftRequest(StoreId), registerId: regA);
+
+        Assert.Null(errA);
+        Assert.Null(errB);
+        Assert.NotNull(a);
+        Assert.NotNull(b);
+        Assert.Null(dup);
+        Assert.Equal(409, dupStatus);
+        Assert.Equal(regA, pos.Shifts[0].RegisterId);
+        Assert.Equal(2, pos.Shifts.Count);
+    }
+
+    [Fact]
+    public async Task BatchSales_reports_partial_failure_and_duplicates_per_item()
+    {
+        var (pos, stock, catalog, shift, batch) = SaleSeeder.Seed("BATCH-1");
+        var svc = BuildService(pos: pos, stock: stock, catalog: catalog);
+
+        var okId = Guid.NewGuid();
+        var badId = Guid.NewGuid();
+        var batchRequest = new BatchSalesRequest(
+        [
+            new CreateSaleRequest(shift.Id, [new SaleItemRequest("BATCH-1", 1)], "Cash", 10, ClientTransactionId: okId),
+            new CreateSaleRequest(shift.Id, [new SaleItemRequest("NO-SUCH-BARCODE", 1)], "Cash", 10, ClientTransactionId: badId),
+            new CreateSaleRequest(shift.Id, [new SaleItemRequest("BATCH-1", 1)], "Cash", 10, ClientTransactionId: okId), // replay
+            new CreateSaleRequest(shift.Id, [new SaleItemRequest("BATCH-1", 1)], "Cash", 10), // no client id
+        ]);
+
+        var (result, error, _) = await svc.CreateSalesBatchAsync(TenantId, CashierId, batchRequest);
+
+        Assert.Null(error);
+        var r = result!.Results;
+        Assert.Equal(4, r.Count);
+        Assert.Equal("created", r[0].Status);
+        Assert.Equal("failed", r[1].Status);
+        Assert.Equal(400, r[1].ErrorStatusCode);
+        Assert.Equal("duplicate", r[2].Status);
+        Assert.Equal(r[0].Sale!.TransactionId, r[2].Sale!.TransactionId);
+        Assert.Equal("failed", r[3].Status);
+        Assert.Equal(400, r[3].ErrorStatusCode);
+
+        Assert.Single(pos.Transactions);   // only the first item persisted a sale
+        Assert.Equal(9m, batch.Quantity);  // sold once
+        Assert.True(pos.DiscardCount >= 1); // the failed item's pending changes were dropped
+    }
+
+    [Fact]
+    public async Task BatchSales_rejects_empty_and_oversized_batches()
+    {
+        var svc = BuildService();
+
+        var (_, emptyErr, emptyStatus) = await svc.CreateSalesBatchAsync(TenantId, CashierId, new BatchSalesRequest([]));
+        Assert.Equal(400, emptyStatus);
+        Assert.NotNull(emptyErr);
+
+        var tooMany = Enumerable.Range(0, PosService.MaxBatchSales + 1)
+            .Select(_ => new CreateSaleRequest(Guid.NewGuid(), [new SaleItemRequest("X", 1)], "Cash", 1, ClientTransactionId: Guid.NewGuid()))
+            .ToList();
+        var (_, bigErr, bigStatus) = await svc.CreateSalesBatchAsync(TenantId, CashierId, new BatchSalesRequest(tooMany));
+        Assert.Equal(400, bigStatus);
+        Assert.NotNull(bigErr);
+    }
+    // ── Idempotency hardening: a reused key must not "succeed" with a different sale ─────
+
+    [Fact]
+    public async Task Replay_with_different_items_is_409_not_the_stored_sale()
+    {
+        var (pos, stock, catalog, shift, _) = SaleSeeder.Seed("KEY-1");
+        var other = new Item { Id = Guid.NewGuid(), TenantId = TenantId, Barcodes = ["KEY-2"], Name = "Other", PriceRetail = 5m };
+        catalog.Products.Add(other);
+        stock.Batches.Add(new ProductStock
+        {
+            Id = Guid.NewGuid(), TenantId = TenantId, ProductId = other.Id, StoreId = StoreId,
+            Quantity = 10, QuantityInitial = 10,
+            ExpiryDate = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(30)), Status = "safe",
+        });
+        var svc = BuildService(pos: pos, stock: stock, catalog: catalog);
+        var key = Guid.NewGuid();
+
+        var (first, e1, _) = await svc.CreateSaleAsync(TenantId, CashierId,
+            new CreateSaleRequest(shift.Id, [new SaleItemRequest("KEY-1", 1)], "Cash", 10, ClientTransactionId: key));
+        Assert.Null(e1);
+
+        var differentItem = await svc.CreateSaleAsync(TenantId, CashierId,
+            new CreateSaleRequest(shift.Id, [new SaleItemRequest("KEY-2", 1)], "Cash", 10, ClientTransactionId: key));
+        var differentQty = await svc.CreateSaleAsync(TenantId, CashierId,
+            new CreateSaleRequest(shift.Id, [new SaleItemRequest("KEY-1", 3)], "Cash", 30, ClientTransactionId: key));
+        var differentPayment = await svc.CreateSaleAsync(TenantId, CashierId,
+            new CreateSaleRequest(shift.Id, [new SaleItemRequest("KEY-1", 1)], "Card", 10, ClientTransactionId: key));
+
+        foreach (var r in new[] { differentItem, differentQty, differentPayment })
+        {
+            Assert.Null(r.Sale);
+            Assert.Equal(409, r.StatusCode);
+        }
+
+        Assert.Single(pos.Transactions);
+        Assert.Equal(first!.TransactionId, pos.Transactions[0].Id);
+    }
+
+    [Fact]
+    public async Task Replay_from_another_register_is_409_and_batch_reports_it_as_failed()
+    {
+        var registerA = Guid.NewGuid();
+        var (pos, stock, catalog, shift, _) = SaleSeeder.Seed("KEY-REG", registerId: registerA);
+        var svc = BuildService(pos: pos, stock: stock, catalog: catalog);
+        var key = Guid.NewGuid();
+        var request = new CreateSaleRequest(shift.Id, [new SaleItemRequest("KEY-REG", 1)], "Cash", 10, ClientTransactionId: key);
+
+        var (sale, err, _) = await svc.CreateSaleAsync(TenantId, CashierId, request, registerId: registerA);
+        Assert.Null(err);
+
+        var sameRegister = await svc.CreateSaleAsync(TenantId, CashierId, request, registerId: registerA);
+        Assert.Equal(sale!.TransactionId, sameRegister.Sale!.TransactionId);
+
+        var otherRegister = await svc.CreateSaleAsync(TenantId, CashierId, request, registerId: Guid.NewGuid());
+        Assert.Equal(409, otherRegister.StatusCode);
+
+        var (batch, _, _) = await svc.CreateSalesBatchAsync(
+            TenantId, CashierId, new BatchSalesRequest([request]), registerId: Guid.NewGuid());
+        var item = Assert.Single(batch!.Results);
+        Assert.Equal("failed", item.Status);
+        Assert.Equal(409, item.ErrorStatusCode);
+        Assert.Single(pos.Transactions);
     }
 }

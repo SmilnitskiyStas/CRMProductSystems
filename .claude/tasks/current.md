@@ -1545,3 +1545,6 @@ Open-Meteo/Nominatim/Checkbox: retry(GET)/breaker/timeout; AI: breaker per endpo
 
 ### TASK-725 — Resilience stage 3b (API ролі + gateway) — review
 API_ROLE core/consumer/provider, nginx gateway :5100, SignalR Redis backplane. dotnet test 2491/2491, nginx-маршрути перевірені на dummy-апстрімах; НЕ запускалось end-to-end, НЕ задеплоєно. Перед продом: Maximum Pool Size=30, RAM, staging. Лог: `.claude/logs/tasks/725_*`.
+
+### TASK-726 - Cashier app backend Phase 1 (registers, PIN sessions, idempotent sales, delta catalog) - review
+`cash_registers`/`register_sessions` + RLS, device-token activation, PIN operator JWT, `ClientTransactionId` idempotency, `POST /pos/sales/batch`, `GET /pos/sync/catalog`, `items.UpdatedAt` trigger. Migration AddCashRegisters applied to dev; dotnet test 2527/2527; not committed. Лог: `.claude/logs/tasks/726_*`.

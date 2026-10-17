@@ -30,6 +30,31 @@ public sealed class User
     /// <summary>While set and in the future, logins are rejected with a generic error.</summary>
     public DateTime? LockoutUntil { get; private set; }
 
+    // ── POS PIN (cashier register sign-in) ───────────────────────────────────
+    /// <summary>Hash (same hasher as passwords) of the 4–6 digit register PIN; unique within the user's store.</summary>
+    public string? PosPinHash { get; private set; }
+    public DateTime? PosPinSetAt { get; private set; }
+    /// <summary>PIN sign-in failures - deliberately separate from <see cref="FailedLoginAttempts"/>/<see cref="LockoutUntil"/>
+    /// so guessing a PIN can never lock the password login, and a PIN success never clears a password lockout.</summary>
+    public int PosPinFailedAttempts { get; private set; }
+    public DateTime? PosPinLockoutUntil { get; private set; }
+    public bool IsPosPinLockedOut => PosPinLockoutUntil.HasValue && PosPinLockoutUntil.Value > DateTime.UtcNow;
+
+    public bool RegisterFailedPosPin(int maxAttempts, TimeSpan lockoutDuration)
+    {
+        PosPinFailedAttempts++;
+        if (PosPinFailedAttempts < maxAttempts) return false;
+        PosPinLockoutUntil = DateTime.UtcNow.Add(lockoutDuration);
+        PosPinFailedAttempts = 0;
+        return true;
+    }
+
+    public void ResetPosPinLockout()
+    {
+        PosPinFailedAttempts = 0;
+        PosPinLockoutUntil = null;
+    }
+
     // ── Temporary password (forgot-password flow, TASK-464/465) ─────────────
     /// <summary>
     /// While set and in the future, <see cref="PasswordHash"/> holds a temporary password
@@ -139,6 +164,19 @@ public sealed class User
     }
 
     public void ChangePassword(string newHash) => PasswordHash = newHash;
+
+    public void SetPosPin(string pinHash)
+    {
+        PosPinHash = pinHash;
+        PosPinSetAt = DateTime.UtcNow;
+        ResetPosPinLockout(); // a fresh PIN clears PIN lockout only - never the password lockout
+    }
+
+    public void ClearPosPin()
+    {
+        PosPinHash = null;
+        PosPinSetAt = null;
+    }
 
     /// <summary>Sets the preferred UI locale ("uk"/"en"); null = browser fallback. Value is validated at the Application boundary.</summary>
     public void SetPreferredLocale(string? locale) => PreferredLocale = locale;

@@ -32,6 +32,7 @@ public sealed class LoyaltyController : ControllerBase
     /// <summary>Scan/manual-entry resolution at the register. Any role that can run POS.</summary>
     [HttpPost("resolve-code")]
     [Authorize(Policy = AppPolicies.CanAccessPos)]
+    [AllowOperatorToken]
     [ProducesResponseType(typeof(ResolveLoyaltyCodeResult), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(object), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(object), StatusCodes.Status409Conflict)]
@@ -51,6 +52,7 @@ public sealed class LoyaltyController : ControllerBase
 
     [HttpPost("resolve-identifier")]
     [Authorize(Policy = AppPolicies.CanAccessPos)]
+    [AllowOperatorToken]
     [ProducesResponseType(typeof(ResolveLoyaltyCodeResult), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(object), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(object), StatusCodes.Status404NotFound)]
@@ -74,6 +76,7 @@ public sealed class LoyaltyController : ControllerBase
     /// </summary>
     [HttpPost("resolve-or-create-by-phone")]
     [Authorize(Policy = AppPolicies.CanAccessPos)]
+    [AllowOperatorToken]
     [ProducesResponseType(typeof(object), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(object), StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> ResolveOrCreateByPhone(

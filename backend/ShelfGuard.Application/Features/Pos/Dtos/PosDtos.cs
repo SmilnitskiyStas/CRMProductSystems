@@ -33,7 +33,23 @@ public sealed record CreateSaleRequest(
     decimal PaymentAmount,
     Guid? CustomerId = null,
     Guid? LoyaltyMembershipId = null,
-    decimal? RedeemAmount = null);
+    decimal? RedeemAmount = null,
+    // Offline-first register apps: client-generated idempotency key. Replaying the same key
+    // returns the already-stored sale instead of creating a duplicate. Required in batch sync.
+    Guid? ClientTransactionId = null);
+
+/// <summary>Offline sync: queued sales (max 100) submitted together; each item is idempotent.</summary>
+public sealed record BatchSalesRequest(IReadOnlyList<CreateSaleRequest> Sales);
+
+/// <param name="Status">created | duplicate (already stored, original returned) | failed</param>
+public sealed record BatchSaleItemResultDto(
+    Guid? ClientTransactionId,
+    string Status,
+    SaleDto? Sale,
+    string? Error,
+    int? ErrorStatusCode);
+
+public sealed record BatchSalesResultDto(IReadOnlyList<BatchSaleItemResultDto> Results);
 
 public sealed record SaleItemRequest(
     string Barcode,
