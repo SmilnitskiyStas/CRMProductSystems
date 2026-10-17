@@ -1539,3 +1539,6 @@ DTO-поля «Підтвердив/Відвантажив», змінений �
 
 ### TASK-723 — Resilience stage 2 (Polly для зовнішніх залежностей) — review
 Open-Meteo/Nominatim/Checkbox: retry(GET)/breaker/timeout; AI: breaker per endpoint; Telegram (worker): timeout+breaker; 503 замість 500. Тести 2474/2474; не задеплоєно. Лог: `.claude/logs/tasks/723_*`.
+
+### TASK-724 — Frontend service_unavailable (геокодер, AI, погода) — review
+`isServiceUnavailable` + м'які повідомлення; погода більше не плутає 503 з відсутніми координатами. tsc/vitest OK; не перевірено в браузері. Лог: `.claude/logs/tasks/724_*`.

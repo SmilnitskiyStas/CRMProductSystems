@@ -53,7 +53,11 @@ export default function EventsPage() {
   // Weather needs one concrete location — the header's store selector doubles as the
   // location selector here (a store IS a location). Empty / multi selection = no weather.
   const weatherLocationId = selectedStoreIds.length === 1 ? selectedStoreIds[0] : undefined;
-  const { data: weatherDays = [], isLoading: weatherLoading } = useWeatherMonth(weatherLocationId, year, month);
+  const {
+    data: weatherDays = [],
+    isLoading: weatherLoading,
+    error: weatherError,
+  } = useWeatherMonth(weatherLocationId, year, month);
   const weatherByDate = useMemo(
     () => new Map(weatherDays.map((w) => [w.date, w])),
     [weatherDays],
@@ -63,10 +67,19 @@ export default function EventsPage() {
   // to its card. Editing a location is enterprise-admin-only (mirrors LocationsPage), so lower
   // roles get a "ask your admin" line instead of the CTA.
   const canManageLocations = hasRole(me?.role, AT_LEAST_ENTERPRISE_ADMIN);
-  const weatherHint: null | { kind: "pickOne" } | { kind: "noCoords"; locationId: string; locationName: string } =
+  // Weather provider down / breaker open: the calendar keeps working without weather, and we must
+  // NOT blame missing coordinates (empty data here means "unavailable", not "not configured").
+  const weatherUnavailable = !!weatherError;
+  const weatherHint:
+    | null
+    | { kind: "pickOne" }
+    | { kind: "unavailable" }
+    | { kind: "noCoords"; locationId: string; locationName: string } =
     selectedStoreIds.length !== 1
       ? { kind: "pickOne" }
-      : weatherLocationId && !weatherLoading && weatherDays.length === 0
+      : weatherUnavailable
+        ? { kind: "unavailable" }
+        : weatherLocationId && !weatherLoading && weatherDays.length === 0
         ? {
             kind: "noCoords",
             locationId: weatherLocationId,
@@ -159,6 +172,12 @@ export default function EventsPage() {
       {weatherHint?.kind === "pickOne" && (
         <p style={{ color: "#4B5563", fontSize: 12, marginTop: -6, marginBottom: 16 }}>
           {tWeather("hintPickOneStore")}
+        </p>
+      )}
+
+      {weatherHint?.kind === "unavailable" && (
+        <p style={{ color: "#4B5563", fontSize: 12, marginTop: -6, marginBottom: 16 }}>
+          {tWeather("unavailable")}
         </p>
       )}
 

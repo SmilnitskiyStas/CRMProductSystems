@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import { useTranslations } from "next-intl";
+import { isServiceUnavailable } from "@/lib/api";
 import { Btn } from "@/components/ui/Btn";
 import { AiOrderReview } from "@/features/ai-orders/components/AiOrderReview";
 import { useAiOrder, useAiOrders, useGenerateAiOrder } from "@/features/ai-orders/hooks/useAiOrders";
@@ -37,7 +38,7 @@ export default function AiOrdersPage() {
         toast.success(t("toastGenerated", { count: order.items.length }));
         setSelectedId(order.id);
       },
-      onError: (e) => toast.error(e.message),
+      onError: (e) => toast.error(isServiceUnavailable(e) ? t("serviceUnavailable") : e.message),
     });
   };
 

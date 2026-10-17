@@ -10,6 +10,7 @@ import { Btn } from "@/components/ui/Btn";
 import { useModules } from "@/features/modules/hooks/useModules";
 import { useLegalEntities } from "@/features/legal-entities/hooks/useLegalEntities";
 import { RegionSelect } from "@/features/geo/components/RegionSelect";
+import { isServiceUnavailable } from "@/lib/api";
 import { locationsApi } from "../api/locations";
 import { LOCATION_TYPE_VALUES, type LocationDto, type LocationType } from "../types";
 
@@ -163,9 +164,9 @@ export function LocationFormDialog({ location, isPending, onClose, onSubmit }: P
       setValue("latitude", res.latitude, { shouldDirty: true });
       setValue("longitude", res.longitude, { shouldDirty: true });
       setGeocodedLabel(res.displayName);
-    } catch {
+    } catch (err) {
       setGeocodedLabel(null);
-      toast.error(t("geocodeError"));
+      toast.error(isServiceUnavailable(err) ? t("geocodeUnavailable") : t("geocodeError"));
     } finally {
       setGeocoding(false);
     }

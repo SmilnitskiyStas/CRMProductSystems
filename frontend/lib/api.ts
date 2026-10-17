@@ -20,6 +20,19 @@ export class ApiError extends Error {
   }
 }
 
+/**
+ * True when the backend reports that an OPTIONAL dependency (AI provider, weather, geocoder) is
+ * down or its circuit breaker is open: 503 `{ code: "service_unavailable" }`. Callers use it to
+ * degrade gracefully (hide the block, show a soft notice) instead of a hard error.
+ */
+export function isServiceUnavailable(err: unknown): boolean {
+  return (
+    err instanceof ApiError &&
+    err.status === 503 &&
+    (err.body as { code?: string } | undefined)?.code === "service_unavailable"
+  );
+}
+
 // Token is kept in memory; localStorage is used only to survive page reloads.
 const TOKEN_KEY = "sg_token";
 let _token: string | null = null;
