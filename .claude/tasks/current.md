@@ -1536,3 +1536,6 @@ DTO-поля «Підтвердив/Відвантажив», змінений �
 
 ### TASK-722 — Resilience stage 1 (health checks, limits, deploy) — review
 `/health/live|ready` в API, HEALTHCHECK у 3 Dockerfile, ліміти в prod compose, deploy.sh: build до down + health-gate. Тести 2467/2467; не задеплоєно. Лог: `.claude/logs/tasks/722_*`.
+
+### TASK-723 — Resilience stage 2 (Polly для зовнішніх залежностей) — review
+Open-Meteo/Nominatim/Checkbox: retry(GET)/breaker/timeout; AI: breaker per endpoint; Telegram (worker): timeout+breaker; 503 замість 500. Тести 2474/2474; не задеплоєно. Лог: `.claude/logs/tasks/723_*`.

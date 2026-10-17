@@ -9,6 +9,7 @@ using ShelfGuard.Domain.Interfaces;
 using ShelfGuard.Infrastructure.Data;
 using ShelfGuard.Infrastructure.Data.Repositories;
 using ShelfGuard.Infrastructure.Interceptors;
+using ShelfGuard.Infrastructure.Resilience;
 using ShelfGuard.Infrastructure.Integrations.Prro;
 using ShelfGuard.Infrastructure.Services;
 
@@ -143,8 +144,15 @@ public static class DependencyInjection
         services.AddScoped<Application.Services.IAiClientFactory, AI.AiClientFactory>();
         services.AddScoped<Application.Services.IAiConnectivityTester, AI.AiConnectivityTester>();
         services.AddHttpClient("openai", http => http.Timeout = TimeSpan.FromSeconds(60));
-        services.AddHttpClient<Domain.Interfaces.IOpenMeteoClient, Integrations.OpenMeteoClient>();
-        services.AddHttpClient<Domain.Interfaces.IGeocodingClient, Integrations.NominatimGeocodingClient>();
+        // Stage 2 resilience: optional dependencies get retry (GET only) + circuit breaker +
+        // attempt timeout, and surface as ExternalServiceUnavailableException when down.
+        services.AddHttpClient<Domain.Interfaces.IOpenMeteoClient, Integrations.OpenMeteoClient>()
+            .AddUnavailableTranslation("weather")
+            .AddExternalResilience("open-meteo", TimeSpan.FromSeconds(10), maxRetries: 2);
+        // Nominatim has a strict usage policy — one retry at most.
+        services.AddHttpClient<Domain.Interfaces.IGeocodingClient, Integrations.NominatimGeocodingClient>()
+            .AddUnavailableTranslation("geocoder")
+            .AddExternalResilience("nominatim", TimeSpan.FromSeconds(8), maxRetries: 1);
 
         // v3.2 - ПРРО fiscalization (ADR-013): per-tenant factory replaces the startup-time
         // PRRO:PROVIDER switch. The factory reads each tenant's integration_configs row and
@@ -156,7 +164,11 @@ public static class DependencyInjection
         {
             var opts = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<PrroOptions>>().Value;
             http.Timeout = TimeSpan.FromSeconds(opts.TimeoutSeconds > 0 ? opts.TimeoutSeconds : 30);
-        });
+        })
+        // No retry: POST receipts/sell is not idempotent (a retry could fiscalize twice) — the
+        // fiscalization-retry job already re-submits safely. Breaker + timeout only, so a
+        // Checkbox outage fails fast into the offline-first queue (ADR-011).
+        .AddExternalResilience("checkbox", TimeSpan.FromSeconds(25), maxRetries: 0);
         services.AddSingleton<IFiscalServiceFactory, FiscalServiceFactory>();
 
         // Provider panel (super admin)
