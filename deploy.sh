@@ -9,15 +9,22 @@ REPO_URL="https://github.com/SmilnitskiyStas/CRMProductSystems"
 
 echo "=== ShelfGuard Deploy ==="
 
-# Clone or pull
-if [ -d "$DEPLOY_DIR/.git" ]; then
-  echo ">>> Pulling latest code..."
-  cd "$DEPLOY_DIR" && git pull origin main
-else
-  echo ">>> Cloning repo..."
-  git clone "$REPO_URL" "$DEPLOY_DIR"
-  cd "$DEPLOY_DIR"
+# Phase 1: clone/pull, then RE-EXEC the freshly pulled script. bash reads a script lazily, so
+# when `git pull` rewrites deploy.sh while it is running, the rest of the OLD run would continue
+# from a shifted offset / old logic (this skipped the health gate on the first stage 3b deploy).
+# The whole `if` block is parsed before it runs, so it is safe to replace this file inside it.
+if [ "${1:-}" != "--after-pull" ]; then
+  if [ -d "$DEPLOY_DIR/.git" ]; then
+    echo ">>> Pulling latest code..."
+    cd "$DEPLOY_DIR" && git pull origin main
+  else
+    echo ">>> Cloning repo..."
+    git clone "$REPO_URL" "$DEPLOY_DIR"
+    cd "$DEPLOY_DIR"
+  fi
+  exec bash "$DEPLOY_DIR/deploy.sh" --after-pull
 fi
+cd "$DEPLOY_DIR"
 
 # Check .env exists
 if [ ! -f "$DEPLOY_DIR/.env" ]; then
