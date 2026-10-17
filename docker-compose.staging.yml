@@ -15,6 +15,27 @@ name: shelfguard_staging
 # this line, and never invoke either compose file with an explicit `-p` that
 # overrides it to something colliding with the dev project.
 
+x-api-env: &api-env
+  ASPNETCORE_ENVIRONMENT: Staging
+  ConnectionStrings__DefaultConnection: ${DATABASE_URL}
+  Jwt__Secret: ${JWT_SECRET}
+  Jwt__Issuer: ${JWT_ISSUER:-shelfguard}
+  Jwt__Audience: ${JWT_AUDIENCE:-shelfguard}
+  Cors__Origins: ${Cors__Origins:-http://localhost:3101}
+  Frontend__BaseUrl: ${Frontend__BaseUrl:-http://localhost:3101}
+  Claude__ApiKey: ${CLAUDE_API_KEY:-}
+  Claude__Model: ${CLAUDE_MODEL:-claude-sonnet-4-6}
+  OpenAI__ApiKey: ${OPENAI_API_KEY:-}
+  OpenAI__Model: ${OPENAI_MODEL:-gpt-4o-mini}
+  PRRO__PROVIDER: ${PRRO__PROVIDER:-}
+  PRRO__BASEURL: ${PRRO__BASEURL:-https://api.checkbox.in.ua/api/v1}
+  PRRO__LICENSEKEY: ${PRRO__LICENSEKEY:-}
+  PRRO__CASHIER__PINCODE: ${PRRO__CASHIER__PINCODE:-}
+  PRRO__CASHIER__LOGIN: ${PRRO__CASHIER__LOGIN:-}
+  PRRO__CASHIER__PASSWORD: ${PRRO__CASHIER__PASSWORD:-}
+  # Redis service in the staging network is `redis` (container port 6379).
+  SignalR__RedisConnection: redis:6379,abortConnect=false${REDIS_PASSWORD:+,password=${REDIS_PASSWORD}}
+
 services:
   postgres:
     image: postgres:16-alpine
@@ -36,42 +57,73 @@ services:
       timeout: 5s
       retries: 5
 
-  api:
+  # ---- API topology: gateway + 3 role instances of one image (see infra/gateway/README.md).
+  # Only api_core has `build:` and tags shelfguard-staging-api:latest; the others reuse it.
+  gateway:
+    image: nginx:alpine
+    container_name: shelfguard_staging_gateway
+    restart: unless-stopped
+    # Host-side loopback binding kept (same as the old api 127.0.0.1:5101:5100).
+    ports:
+      - '127.0.0.1:5101:80'
+    volumes:
+      - ./infra/gateway/nginx.conf:/etc/nginx/nginx.conf:ro
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1/gateway-health | grep -q ok"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+
+  api_core:
     build:
       context: ./backend
       dockerfile: Dockerfile
-    container_name: shelfguard_staging_api
+    image: shelfguard-staging-api:latest
+    container_name: shelfguard_staging_api_core
     restart: unless-stopped
     depends_on:
       postgres:
         condition: service_healthy
     # Dockerfile hardcodes ASPNETCORE_URLS=http://+:5100 inside the container
-    # (same image as production) — only the host-side port differs here.
-    ports:
-      - '127.0.0.1:5101:5100'
+    # (same image as production); no host port - reached only via the gateway.
     volumes:
       - shelfguard_staging_api_uploads:/app/wwwroot/uploads
     environment:
-      ASPNETCORE_ENVIRONMENT: Staging
-      ConnectionStrings__DefaultConnection: ${DATABASE_URL}
-      Jwt__Secret: ${JWT_SECRET}
-      Jwt__Issuer: ${JWT_ISSUER:-shelfguard}
-      Jwt__Audience: ${JWT_AUDIENCE:-shelfguard}
-      Cors__Origins: ${Cors__Origins:-http://localhost:3101}
-      Frontend__BaseUrl: ${Frontend__BaseUrl:-http://localhost:3101}
-      Claude__ApiKey: ${CLAUDE_API_KEY:-}
-      Claude__Model: ${CLAUDE_MODEL:-claude-sonnet-4-6}
-      OpenAI__ApiKey: ${OPENAI_API_KEY:-}
-      OpenAI__Model: ${OPENAI_MODEL:-gpt-4o-mini}
-      PRRO__PROVIDER: ${PRRO__PROVIDER:-}
-      PRRO__BASEURL: ${PRRO__BASEURL:-https://api.checkbox.in.ua/api/v1}
-      PRRO__LICENSEKEY: ${PRRO__LICENSEKEY:-}
-      PRRO__CASHIER__PINCODE: ${PRRO__CASHIER__PINCODE:-}
-      PRRO__CASHIER__LOGIN: ${PRRO__CASHIER__LOGIN:-}
-      PRRO__CASHIER__PASSWORD: ${PRRO__CASHIER__PASSWORD:-}
+      <<: *api-env
+      API_ROLE: core
       # KI-006 fix: staging opts into DbSeeder on every fresh boot so the audit
-      # environment always has test data. Production never sets this.
+      # environment always has test data. Production never sets this. Core ONLY
+      # (core also owns migrations).
       SEED_ON_START: ${SEED_ON_START:-true}
+
+  api_consumer:
+    image: shelfguard-staging-api:latest
+    container_name: shelfguard_staging_api_consumer
+    restart: unless-stopped
+    depends_on:
+      api_core:
+        condition: service_healthy
+    volumes:
+      - shelfguard_staging_api_uploads:/app/wwwroot/uploads
+    environment:
+      <<: *api-env
+      API_ROLE: consumer
+      Migrations__RunOnStartup: 'false'
+
+  api_provider:
+    image: shelfguard-staging-api:latest
+    container_name: shelfguard_staging_api_provider
+    restart: unless-stopped
+    depends_on:
+      api_core:
+        condition: service_healthy
+    volumes:
+      - shelfguard_staging_api_uploads:/app/wwwroot/uploads
+    environment:
+      <<: *api-env
+      API_ROLE: provider
+      Migrations__RunOnStartup: 'false'
 
   web:
     build:
@@ -87,7 +139,7 @@ services:
     ports:
       - '127.0.0.1:3101:3100'
     depends_on:
-      - api
+      - gateway
 
   redis:
     image: redis:7-alpine
@@ -125,7 +177,7 @@ services:
     depends_on:
       - redis
       - mosquitto
-      - api
+      - gateway
     environment:
       REDIS_URL: ${WORKER_REDIS_URL:-redis://localhost:6381}
       # node-pg needs a postgres:// URL - DATABASE_URL is the .NET-format string for the API

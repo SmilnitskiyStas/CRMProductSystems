@@ -360,12 +360,27 @@ public static class DependencyInjection
         // (ConsumerSupportHub, mapped in Program.cs at /api/hubs/consumer-support). Keep-alive/
         // client-timeout set explicitly (spec §5 "бажано додати keep-alive") — these values match
         // the framework defaults, made explicit so the choice is documented rather than implicit.
-        services.AddSignalR(options =>
+        var signalR = services.AddSignalR(options =>
         {
             options.KeepAliveInterval = TimeSpan.FromSeconds(15);
             options.ClientTimeoutInterval = TimeSpan.FromSeconds(30);
             options.HandshakeTimeout = TimeSpan.FromSeconds(15);
         });
+        // Stage 3b: with the API split into role instances (core/consumer/provider) staff replies
+        // published from CORE must reach hub clients connected to CONSUMER, so a Redis backplane is
+        // used when SignalR:RedisConnection is set. AbortOnConnectFail=false: a Redis outage degrades
+        // realtime only and never prevents the API from starting.
+        var signalRRedis = configuration["SignalR:RedisConnection"];
+        if (!string.IsNullOrWhiteSpace(signalRRedis))
+        {
+            signalR.AddStackExchangeRedis(o =>
+            {
+                var opts = StackExchange.Redis.ConfigurationOptions.Parse(signalRRedis);
+                opts.AbortOnConnectFail = false;
+                opts.ChannelPrefix = StackExchange.Redis.RedisChannel.Literal("shelfguard");
+                o.Configuration = opts;
+            });
+        }
         services.AddScoped<Application.Features.CustomerSupport.IConsumerSupportRealtimeNotifier,
             Realtime.ConsumerSupportRealtimeNotifier>();
 

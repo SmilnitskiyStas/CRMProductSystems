@@ -24,7 +24,12 @@ builder.Configuration.AddEnvironmentVariables();
 // All error responses follow the { "error": "..." } contract (api-contracts.md):
 // - InvalidModelStateResponseFactory covers automatic 400s from model binding/validation
 // - ErrorBodyClientErrorFactory covers body-less results (bare NotFound(), Forbid(), ...)
+// Stage 3b: API_ROLE (core|consumer|provider|all, default all) selects which controllers this
+// instance exposes; see RoleControllerFeatureProvider.
+var apiRole = RoleControllerFeatureProvider.Normalize(builder.Configuration["API_ROLE"]);
 builder.Services.AddControllers()
+    .ConfigureApplicationPartManager(m =>
+        m.FeatureProviders.Add(new RoleControllerFeatureProvider(apiRole)))
     .ConfigureApiBehaviorOptions(options =>
         options.InvalidModelStateResponseFactory = context =>
         {
@@ -368,6 +373,10 @@ app.MapHealthChecks("/health/ready", new Microsoft.AspNetCore.Diagnostics.Health
 // own doc for the Join/LeaveTicket authorization model). WebSocket is the primary transport;
 // SignalR falls back to Server-Sent Events / long polling automatically when WebSocket isn't
 // available, per the default AddSignalR() transport list — no extra config needed for that.
-app.MapHub<ConsumerSupportHub>(ConsumerSupportHubPath);
+if (apiRole is "consumer" or "all")
+{
+    app.MapHub<ConsumerSupportHub>(ConsumerSupportHubPath);
+}
+app.Logger.LogInformation("API role: {ApiRole}", apiRole);
 
 app.Run();

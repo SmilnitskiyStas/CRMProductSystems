@@ -1542,3 +1542,6 @@ Open-Meteo/Nominatim/Checkbox: retry(GET)/breaker/timeout; AI: breaker per endpo
 
 ### TASK-724 — Frontend service_unavailable (геокодер, AI, погода) — review
 `isServiceUnavailable` + м'які повідомлення; погода більше не плутає 503 з відсутніми координатами. tsc/vitest OK; не перевірено в браузері. Лог: `.claude/logs/tasks/724_*`.
+
+### TASK-725 — Resilience stage 3b (API ролі + gateway) — review
+API_ROLE core/consumer/provider, nginx gateway :5100, SignalR Redis backplane. dotnet test 2491/2491, nginx-маршрути перевірені на dummy-апстрімах; НЕ запускалось end-to-end, НЕ задеплоєно. Перед продом: Maximum Pool Size=30, RAM, staging. Лог: `.claude/logs/tasks/725_*`.

@@ -48,7 +48,7 @@ if ! $COMPOSE up -d --remove-orphans; then
   # Fallback for ghost containers (Created/Exited/hash-named) holding names or ports.
   echo "!!! up failed — falling back to full cleanup + restart"
   $COMPOSE down --remove-orphans 2>/dev/null || true
-  docker rm -f shelfguard_api shelfguard_web shelfguard_redis shelfguard_worker shelfguard_mosquitto 2>/dev/null || true
+  docker rm -f shelfguard_api shelfguard_api_core shelfguard_api_consumer shelfguard_api_provider shelfguard_gateway shelfguard_web shelfguard_redis shelfguard_worker shelfguard_mosquitto 2>/dev/null || true
   for port in 5100 3100 6380 1884; do
     CONTAINER=$(docker ps -aq --filter "publish=$port" 2>/dev/null)
     if [ -n "$CONTAINER" ]; then
@@ -79,7 +79,8 @@ wait_healthy() {
 
 echo ">>> Waiting for services to become healthy..."
 FAILED=0
-for svc in shelfguard_api shelfguard_web shelfguard_worker shelfguard_redis; do
+# core first (runs migrations), then the other roles, then gateway
+for svc in shelfguard_api_core shelfguard_api_consumer shelfguard_api_provider shelfguard_gateway shelfguard_web shelfguard_worker shelfguard_redis; do
   wait_healthy "$svc" || FAILED=1
 done
 if [ "$FAILED" -ne 0 ]; then
@@ -90,6 +91,6 @@ fi
 echo ">>> Migrations run automatically on API startup (EF Core)"
 
 echo "=== Deploy complete ==="
-echo "API:     http://$(curl -s ifconfig.me):5100"
+echo "Gateway: http://$(curl -s ifconfig.me):5100  (api_core/api_consumer/api_provider are internal-only; see infra/gateway/README.md)"
 echo "Web:     http://$(curl -s ifconfig.me):3100"
 docker ps | grep shelfguard
