@@ -40,7 +40,10 @@ internal sealed class AnthropicChatClient : IAiChatClient
                 : new OutputConfig { Format = new JsonOutputFormat { Schema = ParseSchema(req.JsonSchema) } },
         };
 
-        var response = await client.Messages.Create(parameters, cancellationToken: ct);
+        // Breaker only: the SDK already retries 5xx/network itself, so no second retry layer here.
+        var response = await AiResilience.ExecuteAsync(
+            "anthropic", retry: false,
+            token => client.Messages.Create(parameters, cancellationToken: token), ct);
 
         var text = response.Content
             .Select(b => b.Value)

@@ -58,17 +58,23 @@ internal sealed class OpenAiChatClient : IAiChatClient
             };
         }
 
-        using var httpReq = new HttpRequestMessage(HttpMethod.Post, $"{_baseUrl}/chat/completions")
+        // Breaker + single retry (5xx/network only) keyed by endpoint, not by tenant key.
+        // A request message can't be re-sent, so it is built per attempt.
+        var payload = await AiResilience.ExecuteAsync($"openai:{_baseUrl}", retry: true, async token =>
         {
-            Content = JsonContent.Create(body),
-        };
-        httpReq.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _apiKey);
+            using var httpReq = new HttpRequestMessage(HttpMethod.Post, $"{_baseUrl}/chat/completions")
+            {
+                Content = JsonContent.Create(body),
+            };
+            httpReq.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _apiKey);
 
-        using var resp = await _http.SendAsync(httpReq, ct);
-        var payload = await resp.Content.ReadAsStringAsync(ct);
+            using var resp = await _http.SendAsync(httpReq, token);
+            var text = await resp.Content.ReadAsStringAsync(token);
 
-        if (!resp.IsSuccessStatusCode)
-            throw new InvalidOperationException(ExtractError(payload, resp.StatusCode));
+            if (!resp.IsSuccessStatusCode)
+                throw AiResilience.ProviderError(ExtractError(text, resp.StatusCode), (int)resp.StatusCode);
+            return text;
+        }, ct);
 
         using var doc = JsonDocument.Parse(payload);
         var root = doc.RootElement;

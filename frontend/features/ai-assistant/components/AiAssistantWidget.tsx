@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import { useTranslations } from "next-intl";
+import { isServiceUnavailable } from "@/lib/api";
 import { useAiAssistant } from "../hooks/useAiAssistant";
 import type { AiAssistantContextSummary } from "../types";
 
@@ -43,7 +44,9 @@ export function AiAssistantWidget() {
             ...prev,
             {
               role: "assistant",
-              text: t("errorPrefix", { message: err.message ?? t("serviceUnavailable") }),
+              text: isServiceUnavailable(err)
+                ? t("serviceUnavailable")
+                : t("errorPrefix", { message: err.message ?? t("serviceUnavailable") }),
             },
           ]);
         },

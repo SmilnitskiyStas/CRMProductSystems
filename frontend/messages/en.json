@@ -1992,6 +1992,7 @@
         "geocodeButton": "Resolve coordinates",
         "geocodeResolving": "Resolving…",
         "geocodeError": "Could not resolve coordinates for this address.",
+        "geocodeUnavailable": "The address lookup service is temporarily unavailable. Enter coordinates manually or try again later.",
         "geocodeResolvedTo": "Found: {name}"
       },
       "types": {
@@ -2342,6 +2343,7 @@
         "selectStoreHint": "Select a specific store at the top of the page to generate an order",
         "generate": "Generate now",
         "generating": "Claude is analyzing…",
+        "serviceUnavailable": "The AI service is temporarily unavailable. Try again later — the rest of the system keeps working.",
         "emptyHistory": "No suggestions yet — click “Generate now” or wait for the daily generation at 05:00.",
         "toastGenerated": "AI suggestion ready: {count} items",
         "itemsAbbrev": "items"
@@ -7109,6 +7111,7 @@
         "noCoordsBody": "To see weather on the calendar, set coordinates for the location “{location}”.",
         "noCoordsCta": "Set coordinates",
         "noCoordsNoPermission": "Coordinates are added by a company admin",
+        "unavailable": "Weather is temporarily unavailable — the calendar works without it, try again later.",
         "forecastBadge": "forecast",
         "actualBadge": "actual",
         "tempMax": "Maximum",

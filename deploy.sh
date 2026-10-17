@@ -30,37 +30,67 @@ fi
 # string) get truncated by bash, and the exported shell vars then OVERRIDE
 # --env-file in compose interpolation. compose reads .env itself.
 
-echo ">>> Stopping existing containers..."
 cd "$DEPLOY_DIR"
+COMPOSE="docker compose -f docker-compose.production.yml --env-file .env"
 
-# Step 1: compose down first so Docker tracks the removal properly
-docker compose -f docker-compose.production.yml --env-file .env down --remove-orphans 2>/dev/null || true
+# Build FIRST while the old containers keep serving traffic — downtime is then only the
+# container swap (seconds), not the whole image build (minutes).
+echo ">>> Building images (old containers keep running)..."
+$COMPOSE build
 
-# Step 2: force-remove any remaining named containers (Created/Exited/hash-named ghosts)
-echo "    Removing residual containers by name..."
-docker rm -f shelfguard_api shelfguard_web shelfguard_redis shelfguard_worker shelfguard_mosquitto 2>/dev/null || true
-
-# Step 3: sweep by port for any hash-named containers still holding ports
-for port in 5100 3100 6380 1884; do
-  CONTAINER=$(docker ps -aq --filter "publish=$port" 2>/dev/null)
-  if [ -n "$CONTAINER" ]; then
-    echo "    Removing ghost container on port $port: $CONTAINER"
-    docker rm -f "$CONTAINER" 2>/dev/null || true
-  fi
-done
-
-# shelfguard_postgres is external (not in compose) — ensure it's in the network after compose recreates it
+# shelfguard_postgres is external (not in compose) — ensure it's in the network
 echo ">>> Ensuring postgres is reachable..."
 docker network connect shelfguard_default shelfguard_postgres 2>/dev/null || true
 
-echo ">>> Building and starting containers..."
-docker compose -f docker-compose.production.yml --env-file .env up -d --build
+# Recreate only services whose image/config changed; untouched ones (redis, mosquitto) stay up.
+echo ">>> Starting containers..."
+if ! $COMPOSE up -d --remove-orphans; then
+  # Fallback for ghost containers (Created/Exited/hash-named) holding names or ports.
+  echo "!!! up failed — falling back to full cleanup + restart"
+  $COMPOSE down --remove-orphans 2>/dev/null || true
+  docker rm -f shelfguard_api shelfguard_api_core shelfguard_api_consumer shelfguard_api_provider shelfguard_gateway shelfguard_web shelfguard_redis shelfguard_worker shelfguard_mosquitto 2>/dev/null || true
+  for port in 5100 3100 6380 1884; do
+    CONTAINER=$(docker ps -aq --filter "publish=$port" 2>/dev/null)
+    if [ -n "$CONTAINER" ]; then
+      echo "    Removing ghost container on port $port: $CONTAINER"
+      docker rm -f "$CONTAINER" 2>/dev/null || true
+    fi
+  done
+  docker network connect shelfguard_default shelfguard_postgres 2>/dev/null || true
+  $COMPOSE up -d
+fi
 
-echo ">>> Waiting for API to start..."
-sleep 15
-echo ">>> Migrations run automatically on container startup (EF Core)"
+# Health gate: wait until each service reports healthy (HEALTHCHECK in its Dockerfile/compose).
+# API start-period covers EF migrations that run at startup.
+wait_healthy() {
+  local name="$1" timeout="${2:-150}" waited=0 status
+  while [ "$waited" -lt "$timeout" ]; do
+    status=$(docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}nohealth{{end}}' "$name" 2>/dev/null || echo "missing")
+    case "$status" in
+      healthy) echo "    $name: healthy (${waited}s)"; return 0 ;;
+      nohealth) echo "    $name: no healthcheck defined, skipping"; return 0 ;;
+    esac
+    sleep 3; waited=$((waited + 3))
+  done
+  echo "!!! $name did not become healthy within ${timeout}s (last status: $status)"
+  docker logs --tail 40 "$name" 2>&1 || true
+  return 1
+}
+
+echo ">>> Waiting for services to become healthy..."
+FAILED=0
+# core first (runs migrations), then the other roles, then gateway
+for svc in shelfguard_api_core shelfguard_api_consumer shelfguard_api_provider shelfguard_gateway shelfguard_web shelfguard_worker shelfguard_redis; do
+  wait_healthy "$svc" || FAILED=1
+done
+if [ "$FAILED" -ne 0 ]; then
+  echo "=== Deploy FAILED: unhealthy service(s) — see logs above ==="
+  docker ps | grep shelfguard || true
+  exit 1
+fi
+echo ">>> Migrations run automatically on API startup (EF Core)"
 
 echo "=== Deploy complete ==="
-echo "API:     http://$(curl -s ifconfig.me):5100"
+echo "Gateway: http://$(curl -s ifconfig.me):5100  (api_core/api_consumer/api_provider are internal-only; see infra/gateway/README.md)"
 echo "Web:     http://$(curl -s ifconfig.me):3100"
 docker ps | grep shelfguard

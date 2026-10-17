@@ -1,39 +1,116 @@
+# ---------------------------------------------------------------------------
+# API topology (resilience stage 3b): ONE backend image, three role instances behind
+# an nginx path-routing gateway (infra/gateway/nginx.conf, runbook infra/gateway/README.md).
+#   gateway (published :5100) -> api_core | api_consumer | api_provider (internal only)
+# BUILD ORDER: only api_core has a `build:` section and tags the image
+# `shelfguard-api:latest`; api_consumer/api_provider reuse that tag (no build). deploy.sh
+# runs `compose build` first (builds the backend once), then `up -d`, so the tag exists
+# before the other two start. Never add `build:` to the other two (3x build time).
+# ---------------------------------------------------------------------------
+x-api-env: &api-env
+  ASPNETCORE_ENVIRONMENT: Production
+  ConnectionStrings__DefaultConnection: ${DATABASE_URL}
+  Jwt__Secret: ${JWT_SECRET}
+  Jwt__Issuer: ${JWT_ISSUER:-shelfguard}
+  Jwt__Audience: ${JWT_AUDIENCE:-shelfguard}
+  Cors__Origins: ${Cors__Origins:-http://localhost:3000}
+  Frontend__BaseUrl: ${Frontend__BaseUrl:-http://localhost:3000}
+  Claude__ApiKey: ${CLAUDE_API_KEY:-}
+  Claude__Model: ${CLAUDE_MODEL:-claude-sonnet-4-6}
+  OpenAI__ApiKey: ${OPENAI_API_KEY:-}
+  OpenAI__Model: ${OPENAI_MODEL:-gpt-4o-mini}
+  PRRO__PROVIDER: ${PRRO__PROVIDER:-}
+  PRRO__BASEURL: ${PRRO__BASEURL:-https://api.checkbox.in.ua/api/v1}
+  PRRO__LICENSEKEY: ${PRRO__LICENSEKEY:-}
+  PRRO__CASHIER__PINCODE: ${PRRO__CASHIER__PINCODE:-}
+  PRRO__CASHIER__LOGIN: ${PRRO__CASHIER__LOGIN:-}
+  PRRO__CASHIER__PASSWORD: ${PRRO__CASHIER__PASSWORD:-}
+  # SignalR Redis backplane so the consumer hub works across instances.
+  SignalR__RedisConnection: redis:6379,abortConnect=false${REDIS_PASSWORD:+,password=${REDIS_PASSWORD}}
+
 services:
-  api:
+  gateway:
+    image: nginx:alpine
+    container_name: shelfguard_gateway
+    restart: unless-stopped
+    # NOT loopback-bound: the hosting provider's edge proxy terminates TLS for the
+    # no-port URLs (https://api.agrusystems.pp.ua) and forwards straight to host port
+    # 5100 from the provider network, bypassing host nginx — a 127.0.0.1 binding
+    # breaks the whole site with 502 (incident 2026-07-10). The raw port is not
+    # internet-reachable anyway (provider only maps 10054/10048; verified by scan).
+    # Host nginx (proxy_pass 127.0.0.1:5100) therefore needs no change.
+    ports:
+      - '5100:80'
+    volumes:
+      - ./infra/gateway/nginx.conf:/etc/nginx/nginx.conf:ro
+    # Gateway must not depend on any API instance to start (names resolve per request).
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1/gateway-health | grep -q ok"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+    mem_limit: 128m
+
+  api_core:
     build:
       context: ./backend
       dockerfile: Dockerfile
-    container_name: shelfguard_api
+    image: shelfguard-api:latest
+    container_name: shelfguard_api_core
     restart: unless-stopped
-    # NOT loopback-bound: the hosting provider's edge proxy terminates TLS for the
-    # no-port URLs (https://api.agrusystems.pp.ua) and forwards straight to this
-    # port from the provider network, bypassing host nginx — a 127.0.0.1 binding
-    # breaks the whole site with 502 (incident 2026-07-10). The raw port is not
-    # internet-reachable anyway (provider only maps 10054/10048; verified by scan).
-    ports:
-      - '5100:5100'
     volumes:
       - shelfguard_api_uploads:/app/wwwroot/uploads
     environment:
-      ASPNETCORE_ENVIRONMENT: Production
-      ConnectionStrings__DefaultConnection: ${DATABASE_URL}
-      Jwt__Secret: ${JWT_SECRET}
-      Jwt__Issuer: ${JWT_ISSUER:-shelfguard}
-      Jwt__Audience: ${JWT_AUDIENCE:-shelfguard}
-      Cors__Origins: ${Cors__Origins:-http://localhost:3000}
-      Frontend__BaseUrl: ${Frontend__BaseUrl:-http://localhost:3000}
-      Claude__ApiKey: ${CLAUDE_API_KEY:-}
-      Claude__Model: ${CLAUDE_MODEL:-claude-sonnet-4-6}
-      OpenAI__ApiKey: ${OPENAI_API_KEY:-}
-      OpenAI__Model: ${OPENAI_MODEL:-gpt-4o-mini}
-      PRRO__PROVIDER: ${PRRO__PROVIDER:-}
-      PRRO__BASEURL: ${PRRO__BASEURL:-https://api.checkbox.in.ua/api/v1}
-      PRRO__LICENSEKEY: ${PRRO__LICENSEKEY:-}
-      PRRO__CASHIER__PINCODE: ${PRRO__CASHIER__PINCODE:-}
-      PRRO__CASHIER__LOGIN: ${PRRO__CASHIER__LOGIN:-}
-      PRRO__CASHIER__PASSWORD: ${PRRO__CASHIER__PASSWORD:-}
+      <<: *api-env
+      API_ROLE: core
+      # core owns EF migrations (Migrations__RunOnStartup defaults to true)
     external_links:
       - shelfguard_postgres
+    # HEALTHCHECK itself lives in backend/Dockerfile (/health/live on :5100); deploy.sh gates on it.
+    # Limits are a safety net so one runaway container can't starve the others on the single
+    # host - tune with `docker stats` on the server. Each instance has its own Npgsql pool:
+    # postgres max_connections must cover the SUM of the 3 pools (see infra/gateway/README.md).
+    mem_limit: 1536m
+    cpus: 2.0
+
+  api_consumer:
+    image: shelfguard-api:latest
+    container_name: shelfguard_api_consumer
+    restart: unless-stopped
+    # depends_on is only enforced at `up` (so migrations from core finish first on deploy);
+    # a later crash/restart of core never blocks or restarts consumer/provider.
+    depends_on:
+      api_core:
+        condition: service_healthy
+    volumes:
+      - shelfguard_api_uploads:/app/wwwroot/uploads
+    environment:
+      <<: *api-env
+      API_ROLE: consumer
+      Migrations__RunOnStartup: 'false'
+    external_links:
+      - shelfguard_postgres
+    mem_limit: 768m
+    cpus: 1.0
+
+  api_provider:
+    image: shelfguard-api:latest
+    container_name: shelfguard_api_provider
+    restart: unless-stopped
+    depends_on:
+      api_core:
+        condition: service_healthy
+    volumes:
+      - shelfguard_api_uploads:/app/wwwroot/uploads
+    environment:
+      <<: *api-env
+      API_ROLE: provider
+      Migrations__RunOnStartup: 'false'
+    external_links:
+      - shelfguard_postgres
+    mem_limit: 768m
+    cpus: 1.0
 
   web:
     build:
@@ -44,12 +121,14 @@ services:
         NEXT_PUBLIC_GA_ID: ${NEXT_PUBLIC_GA_ID:-G-3YWKV939R2}
     container_name: shelfguard_web
     restart: unless-stopped
-    # NOT loopback-bound — same reason as api above: the provider edge proxy
+    # NOT loopback-bound — same reason as the gateway above: the provider edge proxy
     # serves https://agrusystems.pp.ua by forwarding directly to this port.
     ports:
       - '3100:3100'
     depends_on:
-      - api
+      - gateway
+    mem_limit: 768m
+    cpus: 1.0
 
   redis:
     image: redis:7-alpine
@@ -68,6 +147,14 @@ services:
     command: redis-server ${REDIS_PASSWORD:+--requirepass ${REDIS_PASSWORD}}
     volumes:
       - shelfguard_redis_data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli $${REDIS_PASSWORD:+-a $$REDIS_PASSWORD} ping | grep -q PONG"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+    mem_limit: 384m
 
   mosquitto:
     image: eclipse-mosquitto:2
@@ -93,8 +180,12 @@ services:
     container_name: shelfguard_worker
     restart: unless-stopped
     depends_on:
-      - redis
-      - mosquitto
+      redis:
+        condition: service_healthy
+      mosquitto:
+        condition: service_healthy
+    mem_limit: 768m
+    cpus: 1.0
     environment:
       REDIS_URL: ${REDIS_URL:-redis://localhost:6380}
       # node-pg needs a postgres:// URL - DATABASE_URL is the .NET-format string for the API

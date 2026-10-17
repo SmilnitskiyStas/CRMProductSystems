@@ -1533,3 +1533,15 @@ merge, ідемпотентна) — застосовано на dev, усі 11 
 `ShipOrderAsync`); `MarketplaceOrderDto` +4 поля. `dotnet build -c Release` чисто; `dotnet test`
 **2350/2350** (RLS-audit green). Фронт — окремим агентом (кнопка cancel для `new|confirmed`, нові
 DTO-поля «Підтвердив/Відвантажив», змінений рядок помилки).
+
+### TASK-722 — Resilience stage 1 (health checks, limits, deploy) — review
+`/health/live|ready` в API, HEALTHCHECK у 3 Dockerfile, ліміти в prod compose, deploy.sh: build до down + health-gate. Тести 2467/2467; не задеплоєно. Лог: `.claude/logs/tasks/722_*`.
+
+### TASK-723 — Resilience stage 2 (Polly для зовнішніх залежностей) — review
+Open-Meteo/Nominatim/Checkbox: retry(GET)/breaker/timeout; AI: breaker per endpoint; Telegram (worker): timeout+breaker; 503 замість 500. Тести 2474/2474; не задеплоєно. Лог: `.claude/logs/tasks/723_*`.
+
+### TASK-724 — Frontend service_unavailable (геокодер, AI, погода) — review
+`isServiceUnavailable` + м'які повідомлення; погода більше не плутає 503 з відсутніми координатами. tsc/vitest OK; не перевірено в браузері. Лог: `.claude/logs/tasks/724_*`.
+
+### TASK-725 — Resilience stage 3b (API ролі + gateway) — review
+API_ROLE core/consumer/provider, nginx gateway :5100, SignalR Redis backplane. dotnet test 2491/2491, nginx-маршрути перевірені на dummy-апстрімах; НЕ запускалось end-to-end, НЕ задеплоєно. Перед продом: Maximum Pool Size=30, RAM, staging. Лог: `.claude/logs/tasks/725_*`.

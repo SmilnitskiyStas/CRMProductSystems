@@ -235,6 +235,20 @@ public sealed class CheckboxFiscalClient : IFiscalService
         {
             return await _http.SendAsync(request, ct);
         }
+        catch (Polly.CircuitBreaker.BrokenCircuitException ex)
+        {
+            // Breaker open after repeated Checkbox failures: fail fast (transient → the
+            // offline-first queue / fiscalization-retry job picks the receipt up later).
+            throw new FiscalProviderException(
+                "Checkbox is temporarily unavailable (circuit open).",
+                providerCode: "transport.circuit_open", isTransient: true, inner: ex);
+        }
+        catch (Polly.Timeout.TimeoutRejectedException ex)
+        {
+            throw new FiscalProviderException(
+                "Checkbox request timed out.",
+                providerCode: "transport.timeout", isTransient: true, inner: ex);
+        }
         catch (TaskCanceledException ex) when (!ct.IsCancellationRequested)
         {
             throw new FiscalProviderException(

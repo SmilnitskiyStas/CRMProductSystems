@@ -24,7 +24,12 @@ builder.Configuration.AddEnvironmentVariables();
 // All error responses follow the { "error": "..." } contract (api-contracts.md):
 // - InvalidModelStateResponseFactory covers automatic 400s from model binding/validation
 // - ErrorBodyClientErrorFactory covers body-less results (bare NotFound(), Forbid(), ...)
+// Stage 3b: API_ROLE (core|consumer|provider|all, default all) selects which controllers this
+// instance exposes; see RoleControllerFeatureProvider.
+var apiRole = RoleControllerFeatureProvider.Normalize(builder.Configuration["API_ROLE"]);
 builder.Services.AddControllers()
+    .ConfigureApplicationPartManager(m =>
+        m.FeatureProviders.Add(new RoleControllerFeatureProvider(apiRole)))
     .ConfigureApiBehaviorOptions(options =>
         options.InvalidModelStateResponseFactory = context =>
         {
@@ -250,13 +255,20 @@ builder.Services.AddCors(options =>
               .AllowAnyMethod()
               .AllowCredentials()));
 
+// Health probes (DbReadinessHealthCheck is in ShelfGuard.Api.Infrastructure): "live" = process is up (no dependencies, so a DB blip never restarts the API),
+// "ready" = the DB answers. Used by Docker HEALTHCHECK and the deploy.sh health gate.
+builder.Services.AddHealthChecks()
+    .AddCheck<DbReadinessHealthCheck>("database", tags: new[] { "ready" });
+
 var app = builder.Build();
 
-// Auto-apply pending migrations on startup (dev convenience)
+// Auto-apply pending migrations on startup. Set Migrations:RunOnStartup=false to run them as a
+// separate step instead (the RLS-role guard below still runs either way).
 using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-    await db.Database.MigrateAsync();
+    if (builder.Configuration.GetValue("Migrations:RunOnStartup", true))
+        await db.Database.MigrateAsync();
 
     // KI-028: fail fast if the app connects as a role that bypasses RLS. RLS is the sole
     // tenant-isolation layer for single-object reads (Get*ByIdAsync repos have no app-level
@@ -348,10 +360,23 @@ app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
 
+app.MapHealthChecks("/health/live", new Microsoft.AspNetCore.Diagnostics.HealthChecks.HealthCheckOptions
+{
+    Predicate = _ => false,
+}).AllowAnonymous();
+app.MapHealthChecks("/health/ready", new Microsoft.AspNetCore.Diagnostics.HealthChecks.HealthCheckOptions
+{
+    Predicate = check => check.Tags.Contains("ready"),
+}).AllowAnonymous();
+
 // TASK-625: realtime transport for consumer support ticket threads (see ConsumerSupportHub's
 // own doc for the Join/LeaveTicket authorization model). WebSocket is the primary transport;
 // SignalR falls back to Server-Sent Events / long polling automatically when WebSocket isn't
 // available, per the default AddSignalR() transport list — no extra config needed for that.
-app.MapHub<ConsumerSupportHub>(ConsumerSupportHubPath);
+if (apiRole is "consumer" or "all")
+{
+    app.MapHub<ConsumerSupportHub>(ConsumerSupportHubPath);
+}
+app.Logger.LogInformation("API role: {ApiRole}", apiRole);
 
 app.Run();

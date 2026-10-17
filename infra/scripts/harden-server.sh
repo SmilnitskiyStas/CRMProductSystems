@@ -173,9 +173,9 @@ during a maintenance window:
     #    docker network connect <network> shelfguard_postgres)
 
   # 4. Restart the stack and verify:
-  docker compose -f docker-compose.production.yml start api worker
+  docker compose -f docker-compose.production.yml start api_core api_consumer api_provider gateway worker
   docker exec shelfguard_postgres pg_isready -U shelfguard
-  curl -sk https://api.agrusystems.pp.ua:8443/health || curl -s http://127.0.0.1:5100/health
+  curl -sk https://api.agrusystems.pp.ua:8443/health || curl -s http://127.0.0.1:5100/health/live
 
   # 5. From an EXTERNAL machine confirm the port is closed:
   nc -vz 93.127.143.98 5434   # must now fail/timeout
