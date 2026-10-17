@@ -23,3 +23,12 @@ Status: review (NOT deployed, not run end-to-end)
 ## Відкрито
 - Стейджинг-прогін обов'язково перед продом.
 - mobile/web/worker URL не змінювались (усе через шлюз за тим самим origin).
+
+## Staging run 2026-10-17 (локальний staging, образ зібрано з гілки)
+- Старт: core мігрував (міграції лише там), consumer/provider стартували після healthy core, ролі в логах коректні.
+- Маршрутизація 18 шляхів через шлюз — усі правильні; чужа роль напряму → 404; JWT з core приймається consumer/provider.
+- Ізоляція: stop consumer/provider/core → решта працює, мертва роль → JSON 503 `service_unavailable` (X-Served-By: gateway); core мертвий → consumer/provider відповідають з уже виданими токенами.
+- Redis зупинено: всі ендпоінти й логін 200, RestartCount=0 (раніше не перевірено — тепер перевірено).
+- Rate limit: auth/login 429 після 9–10-го, consumer-auth/login після 10-го.
+- Ресурси (idle): core ~290 МБ, consumer ~230, provider ~240, gateway ~43; під 300 запитів/40 паралельних core ~420 МБ, помилок 0, рестартів 0. Підключень до Postgres ~4 (пул ліниво; Maximum Pool Size на staging не задано).
+- НЕ перевірено: SignalR end-to-end (потрібен мобільний клієнт з тікетом), ліміти памʼяті (на staging mem_limit не задано), POST-завантаження файлів, worker→API під навантаженням, прод-сервер (RAM/max_connections).
