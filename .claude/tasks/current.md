@@ -1551,3 +1551,6 @@ API_ROLE core/consumer/provider, nginx gateway :5100, SignalR Redis backplane. d
 
 ### TASK-727 - Web "Каси" management page - review
 `/registers` (tabs: каси, PIN, статистика, журнал) + sidebar item in `sales` group. New read endpoints under `api/pos/registers`: `operators`, `stats`, `{id}/sessions`, `{id}/shifts`, `employees` (RegisterReportService, store-scoped). tsc/lint clean, dotnet Register tests 59/59; not committed. Лог: `.claude/logs/tasks/727_*`.
+
+### TASK-728 - Cashier desktop app slice 3a (`/cashier`) - review
+Electron+React+TS+Tailwind (electron-vite, NSIS): activation, PIN pad, shift open/close + Z summary, checkout (scanner wedge, cart, cash/card, idempotent sale w/ retry), status bar; `CatalogStore`/`SalesGateway` seams for Phase 4. tsc/lint/24 vitest/build/dist OK -> `cashier/release/ShelfGuard Cashier Setup 0.1.0.exe`; smoke-tested vs mock API, not vs real backend; not committed. Лог: `.claude/logs/tasks/728_*`.
