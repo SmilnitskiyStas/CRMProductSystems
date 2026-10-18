@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { OperatorInfo, RegisterInfo } from '@shared/types';
 
-const MIN_PIN = 4;
-const MAX_PIN = 6;
-/** PINs are 4-6 digits and the length is unknown, so auto-submit after a short typing pause. */
-const AUTO_SUBMIT_MS = 600;
+/** PINs issued by the server are always 6 digits: nothing is checked before the 6th digit. */
+const PIN_LENGTH = 6;
+/** A half-typed PIN is discarded after this long without input. */
+const INCOMPLETE_PIN_RESET_MS = 60_000;
 
 interface Props {
   register: RegisterInfo;
@@ -24,7 +24,7 @@ export function PinScreen({ register, notice, onLoggedIn }: Props) {
 
   const submit = useCallback(
     async (value: string) => {
-      if (busyRef.current || value.length < MIN_PIN) return;
+      if (busyRef.current || value.length !== PIN_LENGTH) return;
       busyRef.current = true;
       setBusy(true);
       setError(null);
@@ -52,7 +52,7 @@ export function PinScreen({ register, notice, onLoggedIn }: Props) {
     setError(null);
     if (k === 'C') setPin('');
     else if (k === '⌫') setPin((p) => p.slice(0, -1));
-    else setPin((p) => (p.length < MAX_PIN ? p + k : p));
+    else setPin((p) => (p.length < PIN_LENGTH ? p + k : p));
   }, []);
 
   // Physical keyboard.
@@ -67,12 +67,19 @@ export function PinScreen({ register, notice, onLoggedIn }: Props) {
     return () => window.removeEventListener('keydown', onKey);
   }, [press, submit]);
 
-  // Auto-submit: immediately at 6 digits, or after a short pause from 4 digits.
+  // Auto-submit only once all 6 digits are in — never on a partial PIN.
   useEffect(() => {
-    if (pin.length < MIN_PIN) return;
-    const t = setTimeout(() => void submit(pin), pin.length === MAX_PIN ? 80 : AUTO_SUBMIT_MS);
+    if (pin.length !== PIN_LENGTH) return;
+    const t = setTimeout(() => void submit(pin), 80);
     return () => clearTimeout(t);
   }, [pin, submit]);
+
+  // A PIN left incomplete is cleared after a minute (restarts on every keystroke).
+  useEffect(() => {
+    if (pin.length === 0 || pin.length >= PIN_LENGTH) return;
+    const t = setTimeout(() => setPin(''), INCOMPLETE_PIN_RESET_MS);
+    return () => clearTimeout(t);
+  }, [pin]);
 
   return (
     <div className="flex flex-1 flex-col items-center justify-center gap-6 p-6">
@@ -83,7 +90,7 @@ export function PinScreen({ register, notice, onLoggedIn }: Props) {
       </div>
 
       <div className="flex h-8 gap-3" aria-label="PIN">
-        {Array.from({ length: MAX_PIN }).map((_, i) => (
+        {Array.from({ length: PIN_LENGTH }).map((_, i) => (
           <span
             key={i}
             className={`h-5 w-5 rounded-full border-2 ${i < pin.length ? 'border-brand-400 bg-brand-400' : 'border-slate-600'}`}
