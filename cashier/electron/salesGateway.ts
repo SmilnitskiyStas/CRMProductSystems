@@ -1,23 +1,26 @@
-import { classifySaleFailure } from '@shared/saleSubmission';
-import type { SaleGatewayResult, SaleReceipt, SaleSubmitRequest } from '@shared/types';
-import { httpRequest } from './http';
+import type { SaleReceipt, SaleSubmitRequest, SaleGatewayResult } from '@shared/types';
+import { toKop, fromKop } from '@shared/money';
+import type { CatalogStore } from './catalogStore';
+import { localReceiptNo, type OutboxRow, type OutboxService } from './outbox';
 
 /**
- * Where completed sales go. Phase 3: straight to the API (online only). Phase 4 replaces this with
- * an outbox-backed gateway (write to SQLite first, sync in the background) - same interface.
+ * Where completed sales go. The sale is always written to the local outbox first (the UI succeeds
+ * immediately with a provisional local receipt number); a background worker delivers it to
+ * POST /api/pos/sales/batch. See outbox.ts.
  */
 export interface SalesGateway {
   submit(request: SaleSubmitRequest): Promise<SaleGatewayResult>;
 }
 
-interface SaleItemWire {
+export interface SaleItemWire {
   productName: string;
   barcode: string;
   quantity: number;
   unitPrice: number;
+  discountAmount?: number;
   total: number;
 }
-interface SaleWire {
+export interface SaleWire {
   transactionId: string;
   receiptNumber: string;
   subtotal: number;
@@ -30,62 +33,114 @@ interface SaleWire {
   items: SaleItemWire[];
 }
 
-export function mapSale(w: SaleWire): SaleReceipt {
+/** Folds the server's view of the sale (final receipt no., fiscal data, discounts) into the local snapshot. */
+export function mergeServerSale(row: OutboxRow, sale: unknown | null): SaleReceipt {
+  const w = sale as SaleWire | null;
+  if (!w?.receiptNumber) return row.receipt;
   return {
+    ...row.receipt,
     transactionId: w.transactionId,
     receiptNumber: w.receiptNumber,
     subtotal: w.subtotal,
-    paymentType: w.paymentType,
-    paymentAmount: w.paymentAmount,
-    change: w.change,
     fiscalStatus: w.fiscalStatus,
     fiscalNumber: w.fiscalNumber,
     createdAt: w.createdAt,
+    local: false,
+    // tendered amount and change stay as the cashier saw them (a replayed duplicate echoes the total)
     items: w.items.map((i) => ({
       name: i.productName,
       barcode: i.barcode,
       quantity: i.quantity,
       unitPrice: i.unitPrice,
       total: i.total,
+      discount: i.discountAmount ?? 0,
     })),
   };
 }
 
-export interface HttpContext {
-  baseUrl: string;
-  operatorToken: string | null;
+export interface ReceiptContext {
+  registerNumber: number;
+  registerName: string;
+  storeName: string | null;
+  cashierName: string;
 }
 
-export class HttpSalesGateway implements SalesGateway {
+export class OutboxSalesGateway implements SalesGateway {
   constructor(
-    private readonly ctx: () => HttpContext,
-    private readonly onUnauthorized: () => void,
+    private readonly outbox: OutboxService,
+    private readonly catalog: CatalogStore,
+    private readonly context: () => ReceiptContext | null,
+    private readonly now: () => number = Date.now,
+    private readonly onQueued: (row: OutboxRow) => void = () => undefined,
   ) {}
 
   async submit(request: SaleSubmitRequest): Promise<SaleGatewayResult> {
-    const { baseUrl, operatorToken } = this.ctx();
-    if (!operatorToken) {
-      return { ok: false, kind: 'unauthorized', message: classifySaleFailure(401).message };
+    const existing = this.outbox.getRow(request.clientTransactionId);
+    if (existing) return { ok: true, sale: existing.receipt }; // renderer retry of the same sale
+
+    const ctx = this.context();
+    if (!ctx) return { ok: false, kind: 'unauthorized', message: 'Сесію завершено. Увійдіть за PIN-кодом знову.' };
+    if (request.items.length === 0) return { ok: false, kind: 'failed', message: 'Кошик порожній.' };
+
+    let totalKop = 0;
+    const items: SaleReceipt['items'] = [];
+    for (const line of request.items) {
+      const item = this.catalog.findByBarcode(line.barcode);
+      if (!item || item.price == null) {
+        return { ok: false, kind: 'failed', message: `Товар зі штрихкодом ${line.barcode} відсутній у локальному каталозі.` };
+      }
+      const lineKop = Math.round(toKop(item.price) * line.quantity);
+      totalKop += lineKop;
+      items.push({ name: item.name, barcode: line.barcode, quantity: line.quantity, unitPrice: item.price, total: fromKop(lineKop) });
     }
-    const res = await httpRequest<SaleWire | { error?: string }>(baseUrl, '/api/pos/sales', {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${operatorToken}` },
-      timeoutMs: 20_000,
-      body: {
+    const total = fromKop(totalKop);
+    const isCard = request.paymentType === 'Card';
+    if (!isCard && toKop(request.paymentAmount) < totalKop) {
+      return { ok: false, kind: 'failed', message: 'Отримана сума менша за суму чека.' };
+    }
+
+    const seq = this.outbox.nextSeq();
+    const local = localReceiptNo(ctx.registerNumber, seq);
+    const nowMs = this.now();
+    const receipt: SaleReceipt = {
+      transactionId: '',
+      receiptNumber: local,
+      localReceiptNo: local,
+      local: true,
+      clientTransactionId: request.clientTransactionId,
+      subtotal: total,
+      paymentType: request.paymentType,
+      paymentAmount: isCard ? total : request.paymentAmount,
+      change: isCard ? 0 : fromKop(toKop(request.paymentAmount) - totalKop),
+      fiscalStatus: 'offline',
+      fiscalNumber: null,
+      createdAt: new Date(nowMs).toISOString(),
+      items,
+      storeName: ctx.storeName,
+      registerNumber: ctx.registerNumber,
+      registerName: ctx.registerName,
+      cashierName: ctx.cashierName,
+    };
+    const row: OutboxRow = {
+      clientTransactionId: request.clientTransactionId,
+      payload: {
         shiftId: request.shiftId,
         items: request.items,
         paymentType: request.paymentType,
-        paymentAmount: request.paymentAmount,
+        paymentAmount: receipt.paymentAmount,
         clientTransactionId: request.clientTransactionId,
       },
-    });
-
-    // 200 (replayed idempotent key) and 201 both return the stored sale.
-    if (!res.networkError && (res.status === 200 || res.status === 201) && res.body) {
-      return { ok: true, sale: mapSale(res.body as SaleWire) };
-    }
-    const f = classifySaleFailure(res.networkError ? undefined : res.status, (res.body as { error?: string } | null)?.error);
-    if (f.kind === 'unauthorized') this.onUnauthorized();
-    return { ok: false, kind: f.kind, message: f.message };
+      status: 'pending',
+      attempts: 0,
+      lastError: null,
+      createdAt: nowMs,
+      nextAttemptAt: 0,
+      localReceiptNo: local,
+      serverReceiptNo: null,
+      receipt,
+    };
+    this.outbox.enqueue(row);
+    this.onQueued(row);
+    return { ok: true, sale: receipt };
   }
 }

@@ -1554,3 +1554,6 @@ API_ROLE core/consumer/provider, nginx gateway :5100, SignalR Redis backplane. d
 
 ### TASK-728 - Cashier desktop app slice 3a (`/cashier`) - review
 Electron+React+TS+Tailwind (electron-vite, NSIS): activation, PIN pad, shift open/close + Z summary, checkout (scanner wedge, cart, cash/card, idempotent sale w/ retry), status bar; `CatalogStore`/`SalesGateway` seams for Phase 4. tsc/lint/24 vitest/build/dist OK -> `cashier/release/ShelfGuard Cashier Setup 0.1.0.exe`; smoke-tested vs mock API, not vs real backend; not committed. Лог: `.claude/logs/tasks/728_*`.
+
+### TASK-729 - Cashier phase 4: offline queue + ESC/POS printing - review
+better-sqlite3 (pinned 11.10.0, Electron prebuilt) catalog + sales outbox with batch sync/backoff, queue screen, offline restart; own ESC/POS builder (CP866/1125/1251/UTF-8, 58/80mm), Windows RAW/TCP/COM/file transports, print settings. 54 vitest, build+dist OK, packaged smoke vs mock API OK; not tested on real backend/printer; not committed. Лог: `.claude/logs/tasks/729_*`.

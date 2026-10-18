@@ -19,13 +19,15 @@ interface Props {
   shift: ShiftInfo;
   online: boolean;
   onOpenShiftScreen: () => void;
+  onOpenQueue: () => void;
+  onOpenPrint: () => void;
   onLogout: () => void;
 }
 
 const isTextTarget = (t: EventTarget | null) =>
   t instanceof HTMLInputElement || t instanceof HTMLTextAreaElement;
 
-export function CheckoutScreen({ shift, online, onOpenShiftScreen, onLogout }: Props) {
+export function CheckoutScreen({ shift, online, onOpenShiftScreen, onOpenQueue, onOpenPrint, onLogout }: Props) {
   const [cart, setCart] = useState<CartLine[]>([]);
   const [selected, setSelected] = useState<string | null>(null);
   const [query, setQuery] = useState('');
@@ -178,6 +180,9 @@ export function CheckoutScreen({ shift, online, onOpenShiftScreen, onLogout }: P
         case 'F9':
           e.preventDefault();
           return onOpenShiftScreen();
+        case 'F10':
+          e.preventDefault();
+          return onOpenQueue();
         case 'F12':
           e.preventDefault();
           return onLogout();
@@ -196,7 +201,7 @@ export function CheckoutScreen({ shift, online, onOpenShiftScreen, onLogout }: P
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [dialogOpen, cart, selected, openPayment, onOpenShiftScreen, onLogout, changeCart]);
+  }, [dialogOpen, cart, selected, openPayment, onOpenShiftScreen, onOpenQueue, onLogout, changeCart]);
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -232,6 +237,12 @@ export function CheckoutScreen({ shift, online, onOpenShiftScreen, onLogout }: P
         <button className="btn-secondary px-4 py-2 text-base" onClick={() => void window.cashier.syncCatalog()}>
           {catalog?.syncing ? 'Синхронізація…' : `Каталог: ${catalog?.count ?? 0}`}
         </button>
+        <button className="btn-secondary px-4 py-2 text-base" onClick={onOpenQueue}>
+          Черга (F10)
+        </button>
+        <button className="btn-secondary px-4 py-2 text-base" onClick={onOpenPrint} title="Налаштування друку">
+          Друк
+        </button>
         <button className="btn-secondary px-4 py-2 text-base" onClick={onOpenShiftScreen}>
           Зміна (F9)
         </button>
@@ -242,12 +253,12 @@ export function CheckoutScreen({ shift, online, onOpenShiftScreen, onLogout }: P
 
       {catalog?.error && (
         <p className="bg-amber-500/10 px-5 py-2 text-sm text-amber-300">
-          Каталог не оновлено: {catalog.error}. Використовується збережена копія ({catalog.count} товарів).
+          Каталог не оновлено: {catalog.error}. Використовується локальна копія ({catalog.count} товарів).
         </p>
       )}
       {!online && (
-        <p className="bg-rose-500/10 px-5 py-2 text-sm text-rose-300">
-          Немає зв’язку з сервером. Продаж неможливий, доки зв’язок не відновиться (офлайн-режим - у наступній версії).
+        <p className="bg-amber-500/10 px-5 py-2 text-sm text-amber-300">
+          Офлайн-режим: продажі зберігаються в локальній черзі й відправляться автоматично, коли зв’язок відновиться. Ціни - з локального каталогу.
         </p>
       )}
 
@@ -343,10 +354,10 @@ export function CheckoutScreen({ shift, online, onOpenShiftScreen, onLogout }: P
             <p className="mt-1 text-slate-400">До сплати</p>
             <p className="text-5xl font-extrabold text-brand-400">{formatMoney(total)}</p>
           </div>
-          <button className="btn-primary py-5 text-2xl" disabled={!cart.length || !online} onClick={() => openPayment('Cash')}>
+          <button className="btn-primary py-5 text-2xl" disabled={!cart.length} onClick={() => openPayment('Cash')}>
             Готівка (F5)
           </button>
-          <button className="btn-secondary py-5 text-2xl" disabled={!cart.length || !online} onClick={() => openPayment('Card')}>
+          <button className="btn-secondary py-5 text-2xl" disabled={!cart.length} onClick={() => openPayment('Card')}>
             Картка (F6)
           </button>
           <button className="btn-secondary" disabled={!cart.length} onClick={() => setConfirmClear(true)}>

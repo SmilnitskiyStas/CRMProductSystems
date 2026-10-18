@@ -1,6 +1,6 @@
 import { app, BrowserWindow, ipcMain, session, shell } from 'electron';
 import { join } from 'node:path';
-import type { SaleSubmitRequest } from '@shared/types';
+import type { PrintSettings, SaleSubmitRequest } from '@shared/types';
 import { CashierService } from './service';
 
 const isDev = !app.isPackaged && !!process.env['ELECTRON_RENDERER_URL'];
@@ -25,6 +25,17 @@ function registerIpc(svc: CashierService): void {
   ipcMain.handle('catalog:lookup', (_e, barcode: string) => svc.lookupBarcode(String(barcode)));
   ipcMain.handle('catalog:search', (_e, q: string) => svc.searchCatalog(String(q)));
   ipcMain.handle('sales:submit', (_e, req: SaleSubmitRequest) => svc.submitSale(req));
+  ipcMain.handle('queue:list', () => svc.queueList());
+  ipcMain.handle('queue:summary', () => svc.queueSummary());
+  ipcMain.handle('queue:syncNow', () => svc.queueSyncNow());
+  ipcMain.handle('queue:retry', (_e, id: string) => svc.queueRetry(String(id)));
+  ipcMain.handle('queue:dismiss', (_e, id: string) => svc.queueDismiss(String(id)));
+  ipcMain.handle('print:getSettings', () => svc.getPrintSettings());
+  ipcMain.handle('print:saveSettings', (_e, s: PrintSettings) => svc.savePrintSettings(s));
+  ipcMain.handle('print:listPrinters', async () => (win ? (await win.webContents.getPrintersAsync()).map((p) => p.name) : []));
+  ipcMain.handle('print:test', () => svc.testPrint());
+  ipcMain.handle('print:receipt', (_e, id: string) => svc.printReceipt(String(id)));
+  ipcMain.handle('print:drawer', () => svc.openDrawer());
 }
 
 function installCsp(): void {
@@ -91,6 +102,8 @@ if (!app.requestSingleInstanceLock()) {
       onlineChange: (v) => send('evt:online', v),
       sessionExpired: () => send('evt:sessionExpired'),
       catalogChange: (s) => send('evt:catalog', s),
+      queueChange: (s) => send('evt:queue', s),
+      printResult: (r) => send('evt:print', r),
     });
     await service.init();
     registerIpc(service);

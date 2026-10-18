@@ -38,6 +38,7 @@ export interface AppState {
   register: RegisterInfo | null;
   operator: OperatorInfo | null;
   online: boolean;
+  queue: QueueSummary;
 }
 
 export interface ShiftInfo {
@@ -95,7 +96,15 @@ export interface SaleReceipt {
   fiscalStatus: string;
   fiscalNumber: string | null;
   createdAt: string;
-  items: { name: string; barcode: string; quantity: number; unitPrice: number; total: number }[];
+  items: { name: string; barcode: string; quantity: number; unitPrice: number; total: number; discount?: number }[];
+  /** True while the receipt number is the provisional local one (L-<register>-<seq>) and not yet confirmed by the server. */
+  local?: boolean;
+  clientTransactionId?: string;
+  localReceiptNo?: string;
+  storeName?: string | null;
+  registerNumber?: number;
+  registerName?: string;
+  cashierName?: string;
 }
 
 /** Outcome of a sale submit, classified like mobile/features/pos/saleSubmission.ts. */
@@ -103,6 +112,57 @@ export type SaleFailureKind = 'conflict' | 'locked' | 'uncertain' | 'failed' | '
 export type SaleGatewayResult =
   | { ok: true; sale: SaleReceipt }
   | { ok: false; kind: SaleFailureKind; message: string };
+
+export type OutboxStatus = 'pending' | 'sending' | 'synced' | 'rejected' | 'dismissed';
+
+export interface QueueEntry {
+  clientTransactionId: string;
+  status: OutboxStatus;
+  attempts: number;
+  lastError: string | null;
+  createdAt: string;
+  nextAttemptAt: string | null;
+  localReceiptNo: string;
+  serverReceiptNo: string | null;
+  total: number;
+  paymentType: string;
+  itemCount: number;
+}
+
+export interface QueueSummary {
+  pending: number; // pending + sending
+  rejected: number;
+  needsLogin: boolean;
+  syncing: boolean;
+  lastSyncAt: string | null;
+  lastError: string | null;
+}
+
+export type PrintTransport = 'windows' | 'tcp' | 'serial' | 'file';
+export type PrintCodepage = 'cp866' | 'cp1125' | 'cp1251' | 'utf8';
+
+export interface PrintSettings {
+  autoPrint: boolean;
+  transport: PrintTransport;
+  printerName: string; // windows
+  tcpHost: string;
+  tcpPort: number;
+  serialPort: string; // e.g. COM3
+  serialBaud: number;
+  filePath: string; // virtual transport: raw bytes appended to this file
+  codepage: PrintCodepage;
+  /** Printer-specific ESC t n page number for the chosen codepage (Epson: 17=CP866, 46=WPC1251). */
+  codepageId: number;
+  widthMm: 58 | 80;
+  copies: number;
+  openDrawerOnCash: boolean;
+}
+
+export interface PrintResult {
+  clientTransactionId?: string;
+  ok: boolean;
+  error?: string;
+}
 
 export interface CashierApi {
   getState(): Promise<AppState>;
@@ -117,9 +177,22 @@ export interface CashierApi {
   lookupBarcode(barcode: string): Promise<CatalogItem | null>;
   searchCatalog(query: string): Promise<CatalogItem[]>;
   submitSale(request: SaleSubmitRequest): Promise<SaleGatewayResult>;
+  queueList(): Promise<QueueEntry[]>;
+  queueSummary(): Promise<QueueSummary>;
+  queueSyncNow(): Promise<QueueSummary>;
+  queueRetry(clientTransactionId: string): Promise<QueueSummary>;
+  queueDismiss(clientTransactionId: string): Promise<QueueSummary>;
+  getPrintSettings(): Promise<PrintSettings>;
+  savePrintSettings(settings: PrintSettings): Promise<PrintSettings>;
+  listPrinters(): Promise<string[]>;
+  testPrint(): Promise<PrintResult>;
+  printReceipt(clientTransactionId: string): Promise<PrintResult>;
+  openDrawer(): Promise<PrintResult>;
   onOnlineChange(cb: (online: boolean) => void): () => void;
   onSessionExpired(cb: () => void): () => void;
   onCatalogChange(cb: (status: CatalogStatus) => void): () => void;
+  onQueueChange(cb: (summary: QueueSummary) => void): () => void;
+  onPrintResult(cb: (result: PrintResult) => void): () => void;
 }
 
 declare global {

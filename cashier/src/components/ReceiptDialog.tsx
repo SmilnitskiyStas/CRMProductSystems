@@ -1,5 +1,5 @@
-import { useEffect } from 'react';
-import type { SaleReceipt } from '@shared/types';
+import { useEffect, useState } from 'react';
+import type { PrintResult, SaleReceipt } from '@shared/types';
 import { formatMoney } from '@shared/money';
 
 export function ReceiptDialog({ sale, onDone }: { sale: SaleReceipt; onDone: () => void }) {
@@ -11,7 +11,25 @@ export function ReceiptDialog({ sale, onDone }: { sale: SaleReceipt; onDone: () 
     return () => window.removeEventListener('keydown', onKey);
   }, [onDone]);
 
+  const [printError, setPrintError] = useState<string | null>(null);
+  const [printing, setPrinting] = useState(false);
   const fiscalized = sale.fiscalStatus === 'fiscalized';
+
+  useEffect(
+    () =>
+      window.cashier.onPrintResult((r: PrintResult) => {
+        if (r.clientTransactionId === sale.clientTransactionId) setPrintError(r.ok ? null : (r.error ?? 'Помилка друку'));
+      }),
+    [sale.clientTransactionId],
+  );
+
+  const reprint = async () => {
+    if (!sale.clientTransactionId) return;
+    setPrinting(true);
+    const r = await window.cashier.printReceipt(sale.clientTransactionId);
+    setPrinting(false);
+    setPrintError(r.ok ? null : (r.error ?? 'Помилка друку'));
+  };
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-6">
       <div className="card w-full max-w-xl space-y-4">
@@ -20,7 +38,10 @@ export function ReceiptDialog({ sale, onDone }: { sale: SaleReceipt; onDone: () 
             ✓
           </div>
           <h2 className="text-2xl font-bold">Продаж проведено</h2>
-          <p className="text-slate-400">Чек {sale.receiptNumber}</p>
+          <p className="text-slate-400">
+            Чек {sale.receiptNumber}
+            {sale.local ? ' (локальний номер, очікує відправки)' : ''}
+          </p>
         </div>
 
         <div className="max-h-40 overflow-auto rounded-xl bg-slate-800/60 px-4 py-2 text-sm">
@@ -54,8 +75,19 @@ export function ReceiptDialog({ sale, onDone }: { sale: SaleReceipt; onDone: () 
         <p className={`text-sm ${fiscalized ? 'text-emerald-400' : 'text-amber-300'}`}>
           {fiscalized
             ? `Фіскалізовано${sale.fiscalNumber ? ` · ${sale.fiscalNumber}` : ''}`
-            : 'Фіскалізація очікує - чек буде проведено автоматично.'}
+            : sale.local
+              ? 'Чек не фіскалізовано (офлайн). Фіскалізація та відправка - після синхронізації.'
+              : 'Фіскалізація очікує - чек буде проведено автоматично.'}
         </p>
+
+        {printError && (
+          <div className="flex items-center justify-between gap-3 rounded-lg bg-amber-500/10 px-4 py-3 text-amber-300">
+            <span>Чек не надруковано: {printError}. Продаж збережено.</span>
+            <button className="btn-secondary shrink-0 px-4 py-2 text-base" disabled={printing} onClick={() => void reprint()}>
+              Повторити друк
+            </button>
+          </div>
+        )}
 
         <button className="btn-primary w-full" autoFocus onClick={onDone}>
           Новий чек (Enter)

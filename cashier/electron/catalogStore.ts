@@ -1,5 +1,3 @@
-import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
-import { dirname } from 'node:path';
 import type { CatalogItem, CatalogStatus } from '@shared/types';
 
 /**
@@ -45,11 +43,38 @@ export interface CatalogCursor {
 
 export type FetchCatalogPage = (cursor: CatalogCursor) => Promise<SyncCatalogPageWire>;
 
-interface PersistedCatalog {
-  version: 1;
-  cursor: string | null; // ISO "since" to resume from (already moved back by the overlap)
+export interface PersistedCatalog {
+  cursor: string | null; // ISO updatedAt cursor to resume from (the overlap is applied on resume)
   lastSyncAt: string | null;
   items: CatalogItem[];
+}
+
+/** Durable side of the catalog: SQLite in the app, in-memory in tests. */
+export interface CatalogPersistence {
+  load(): PersistedCatalog;
+  /** Applies one sync atomically: upsert changed items, delete removed ids, store the cursor. */
+  applyDelta(upserts: CatalogItem[], removedIds: string[], cursor: string | null, lastSyncAt: string | null): void;
+  clear(): void;
+}
+
+export class MemoryCatalogPersistence implements CatalogPersistence {
+  private items = new Map<string, CatalogItem>();
+  private cursor: string | null = null;
+  private lastSyncAt: string | null = null;
+  load(): PersistedCatalog {
+    return { cursor: this.cursor, lastSyncAt: this.lastSyncAt, items: [...this.items.values()] };
+  }
+  applyDelta(upserts: CatalogItem[], removedIds: string[], cursor: string | null, lastSyncAt: string | null): void {
+    for (const id of removedIds) this.items.delete(id);
+    for (const it of upserts) this.items.set(it.id, it);
+    this.cursor = cursor;
+    this.lastSyncAt = lastSyncAt;
+  }
+  clear(): void {
+    this.items.clear();
+    this.cursor = null;
+    this.lastSyncAt = null;
+  }
 }
 
 /** UpdatedAt is stamped at statement time, so resume slightly before the saved cursor and upsert by id. */
@@ -64,23 +89,23 @@ export class MemoryCatalogStore implements CatalogStore {
   private syncing: Promise<CatalogStatus> | null = null;
   private error: string | null = null;
 
+  /** In-memory index for instant barcode lookup; the persistence layer keeps it across restarts (works offline). */
   constructor(
-    private readonly filePath: string,
+    private readonly persistence: CatalogPersistence,
     private readonly fetchPage: FetchCatalogPage,
     private readonly onChange?: (s: CatalogStatus) => void,
   ) {}
 
   async load(): Promise<void> {
     try {
-      const raw = JSON.parse(await readFile(this.filePath, 'utf8')) as PersistedCatalog;
-      if (raw.version !== 1) return;
+      const raw = this.persistence.load();
       this.items.clear();
       this.byBarcode.clear();
       for (const it of raw.items) this.index(it);
       this.cursor = raw.cursor;
       this.lastSyncAt = raw.lastSyncAt;
     } catch {
-      /* no cache yet or unreadable: start empty, a full sync follows */
+      /* unreadable cache: start empty, a full sync follows */
     }
   }
 
@@ -116,19 +141,27 @@ export class MemoryCatalogStore implements CatalogStore {
         afterId: null,
       };
       let lastNextSince: string | null = null;
+      const upserts = new Map<string, CatalogItem>();
+      const removed = new Set<string>();
       for (let page = 0; page < MAX_PAGES; page++) {
         const res = await this.fetchPage(cursor);
         for (const w of res.items) {
           this.unindex(w.id);
           if (w.isActive) {
-            this.index({
+            const item: CatalogItem = {
               id: w.id,
               name: w.name,
               barcodes: w.barcodes,
               price: w.priceRetail,
               vatRate: w.vatRate,
               unit: w.unit,
-            });
+            };
+            this.index(item);
+            upserts.set(w.id, item);
+            removed.delete(w.id);
+          } else {
+            upserts.delete(w.id);
+            removed.add(w.id);
           }
         }
         if (res.nextSince) lastNextSince = res.nextSince;
@@ -138,23 +171,10 @@ export class MemoryCatalogStore implements CatalogStore {
       if (lastNextSince) this.cursor = lastNextSince;
       this.lastSyncAt = new Date().toISOString();
       this.error = null;
-      await this.persist();
+      this.persistence.applyDelta([...upserts.values()], [...removed], this.cursor, this.lastSyncAt);
     } catch (e) {
       this.error = (e as Error).message;
     }
-  }
-
-  private async persist(): Promise<void> {
-    const data: PersistedCatalog = {
-      version: 1,
-      cursor: this.cursor,
-      lastSyncAt: this.lastSyncAt,
-      items: [...this.items.values()],
-    };
-    await mkdir(dirname(this.filePath), { recursive: true });
-    const tmp = this.filePath + '.tmp';
-    await writeFile(tmp, JSON.stringify(data), 'utf8');
-    await rename(tmp, this.filePath);
   }
 
   findByBarcode(barcode: string): CatalogItem | null {
@@ -191,6 +211,6 @@ export class MemoryCatalogStore implements CatalogStore {
     this.cursor = null;
     this.lastSyncAt = null;
     this.error = null;
-    await this.persist().catch(() => undefined);
+    this.persistence.clear();
   }
 }

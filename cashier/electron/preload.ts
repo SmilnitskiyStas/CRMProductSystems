@@ -20,9 +20,22 @@ const api: CashierApi = {
   lookupBarcode: (barcode) => ipcRenderer.invoke('catalog:lookup', barcode),
   searchCatalog: (query) => ipcRenderer.invoke('catalog:search', query),
   submitSale: (request) => ipcRenderer.invoke('sales:submit', request),
+  queueList: () => ipcRenderer.invoke('queue:list'),
+  queueSummary: () => ipcRenderer.invoke('queue:summary'),
+  queueSyncNow: () => ipcRenderer.invoke('queue:syncNow'),
+  queueRetry: (id) => ipcRenderer.invoke('queue:retry', id),
+  queueDismiss: (id) => ipcRenderer.invoke('queue:dismiss', id),
+  getPrintSettings: () => ipcRenderer.invoke('print:getSettings'),
+  savePrintSettings: (s) => ipcRenderer.invoke('print:saveSettings', s),
+  listPrinters: () => ipcRenderer.invoke('print:listPrinters'),
+  testPrint: () => ipcRenderer.invoke('print:test'),
+  printReceipt: (id) => ipcRenderer.invoke('print:receipt', id),
+  openDrawer: () => ipcRenderer.invoke('print:drawer'),
   onOnlineChange: (cb) => subscribe('evt:online', cb),
   onSessionExpired: (cb) => subscribe<void>('evt:sessionExpired', () => cb()),
   onCatalogChange: (cb) => subscribe('evt:catalog', cb),
+  onQueueChange: (cb) => subscribe('evt:queue', cb),
+  onPrintResult: (cb) => subscribe('evt:print', cb),
 };
 
 contextBridge.exposeInMainWorld('cashier', api);

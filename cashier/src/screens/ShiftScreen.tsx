@@ -5,7 +5,10 @@ import { formatMoney } from '@shared/money';
 interface Props {
   shift: ShiftInfo | null;
   onShiftChange: (shift: ShiftInfo | null) => void;
+  online: boolean;
   onBack?: () => void;
+  onOpenQueue: () => void;
+  onOpenPrint: () => void;
   onLogout: () => void;
 }
 
@@ -21,7 +24,7 @@ const Row = ({ label, value, tone }: { label: string; value: string; tone?: stri
   </div>
 );
 
-export function ShiftScreen({ shift, onShiftChange, onBack, onLogout }: Props) {
+export function ShiftScreen({ shift, online, onShiftChange, onBack, onOpenQueue, onOpenPrint, onLogout }: Props) {
   const [cash, setCash] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -118,7 +121,19 @@ export function ShiftScreen({ shift, onShiftChange, onBack, onLogout }: Props) {
             autoFocus
           />
         </label>
-        {error && <p className="rounded-lg bg-rose-500/10 px-4 py-3 text-rose-300">{error}</p>}
+        {!online && (
+          <p className="rounded-lg bg-amber-500/10 px-4 py-3 text-amber-300">
+            Немає зв’язку з сервером: відкриття та закриття зміни потребують мережі.
+          </p>
+        )}
+        {error && (
+          <div className="rounded-lg bg-rose-500/10 px-4 py-3 text-rose-300">
+            <p>{error}</p>
+            <button className="mt-2 underline" onClick={onOpenQueue}>
+              Відкрити чергу
+            </button>
+          </div>
+        )}
         <div className="flex gap-3">
           {isOpen ? (
             <>
@@ -127,7 +142,7 @@ export function ShiftScreen({ shift, onShiftChange, onBack, onLogout }: Props) {
                   Назад
                 </button>
               )}
-              <button className="btn-danger flex-1" disabled={busy || amount === null} onClick={close}>
+              <button className="btn-danger flex-1" disabled={busy || amount === null || !online} onClick={close}>
                 {busy ? 'Закриття…' : 'Закрити зміну'}
               </button>
             </>
@@ -136,11 +151,19 @@ export function ShiftScreen({ shift, onShiftChange, onBack, onLogout }: Props) {
               <button className="btn-secondary" onClick={onLogout}>
                 Вийти
               </button>
-              <button className="btn-primary flex-1" disabled={busy || amount === null} onClick={open}>
+              <button className="btn-primary flex-1" disabled={busy || amount === null || !online} onClick={open}>
                 {busy ? 'Відкриття…' : 'Відкрити зміну'}
               </button>
             </>
           )}
+        </div>
+        <div className="flex gap-4 text-sm text-slate-400">
+          <button className="underline" onClick={onOpenQueue}>
+            Черга продажів
+          </button>
+          <button className="underline" onClick={onOpenPrint}>
+            Налаштування друку
+          </button>
         </div>
       </div>
     </div>

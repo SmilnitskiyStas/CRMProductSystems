@@ -12,15 +12,32 @@
     "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json",
     "lint": "eslint .",
     "test": "vitest run",
-    "dist": "npm run build && electron-builder --win nsis"
+    "dist": "npm run build && electron-builder --win nsis",
+    "postinstall": "electron-builder install-app-deps"
   },
   "build": {
     "appId": "net.shelfguard.cashier",
     "productName": "ShelfGuard Cashier",
     "artifactName": "ShelfGuard Cashier Setup ${version}.${ext}",
-    "directories": { "output": "release", "buildResources": "build" },
-    "files": ["out/**/*", "package.json"],
-    "win": { "target": [{ "target": "nsis", "arch": ["x64"] }], "icon": "build/icon.ico" },
+    "directories": {
+      "output": "release",
+      "buildResources": "build"
+    },
+    "files": [
+      "out/**/*",
+      "package.json"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "build/icon.ico"
+    },
     "nsis": {
       "oneClick": false,
       "perMachine": false,
@@ -28,10 +45,14 @@
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
       "shortcutName": "ShelfGuard Cashier"
-    }
+    },
+    "asarUnpack": [
+      "node_modules/better-sqlite3/**"
+    ]
   },
   "devDependencies": {
     "@eslint/js": "^9.17.0",
+    "@types/better-sqlite3": "^9.6.0",
     "@types/node": "^22.10.0",
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",
@@ -50,5 +71,8 @@
     "typescript-eslint": "^8.18.0",
     "vite": "^5.4.11",
     "vitest": "^2.1.8"
+  },
+  "dependencies": {
+    "better-sqlite3": "11.10.0"
   }
 }

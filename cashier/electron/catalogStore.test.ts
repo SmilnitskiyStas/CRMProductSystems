@@ -1,8 +1,5 @@
-import { mkdtemp, rm } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { CURSOR_OVERLAP_MS, MemoryCatalogStore, type SyncCatalogItemWire, type SyncCatalogPageWire } from './catalogStore';
+import { describe, expect, it } from 'vitest';
+import { CURSOR_OVERLAP_MS, MemoryCatalogPersistence, MemoryCatalogStore, type SyncCatalogItemWire, type SyncCatalogPageWire } from './catalogStore';
 
 const wire = (id: string, name: string, barcodes: string[], over: Partial<SyncCatalogItemWire> = {}): SyncCatalogItemWire => ({
   id,
@@ -16,14 +13,6 @@ const wire = (id: string, name: string, barcodes: string[], over: Partial<SyncCa
   ...over,
 });
 
-let dir: string;
-beforeEach(async () => {
-  dir = await mkdtemp(join(tmpdir(), 'cashier-cat-'));
-});
-afterEach(async () => {
-  await rm(dir, { recursive: true, force: true });
-});
-
 describe('MemoryCatalogStore', () => {
   it('pages through the delta, indexes barcodes, drops inactive items', async () => {
     const pages: SyncCatalogPageWire[] = [
@@ -31,7 +20,7 @@ describe('MemoryCatalogStore', () => {
       { items: [wire('2', 'Bread', ['222']), wire('3', 'Old', ['333'], { isActive: false })], hasMore: false, nextSince: '2026-10-18T10:05:00Z', nextAfterId: '3', serverTime: 't' },
     ];
     const calls: unknown[] = [];
-    const store = new MemoryCatalogStore(join(dir, 'c.json'), async (c) => {
+    const store = new MemoryCatalogStore(new MemoryCatalogPersistence(), async (c) => {
       calls.push(c);
       return pages.shift()!;
     });
@@ -48,7 +37,7 @@ describe('MemoryCatalogStore', () => {
       { items: [wire('1', 'Milk', ['999'])], hasMore: false, nextSince: '2026-10-18T10:10:00Z', nextAfterId: '1', serverTime: 't' },
       { items: [wire('1', 'Milk', ['999'], { isActive: false })], hasMore: false, nextSince: '2026-10-18T10:20:00Z', nextAfterId: '1', serverTime: 't' },
     ];
-    const store = new MemoryCatalogStore(join(dir, 'c.json'), async () => batches.shift()!);
+    const store = new MemoryCatalogStore(new MemoryCatalogPersistence(), async () => batches.shift()!);
     await store.sync();
     await store.sync();
     expect(store.findByBarcode('111')).toBeNull();
@@ -59,7 +48,7 @@ describe('MemoryCatalogStore', () => {
   });
 
   it('persists, reloads and resumes from the cursor minus the overlap', async () => {
-    const path = join(dir, 'c.json');
+    const path = new MemoryCatalogPersistence();
     const first = new MemoryCatalogStore(path, async () => ({
       items: [wire('1', 'Milk', ['111'])],
       hasMore: false,
@@ -85,7 +74,7 @@ describe('MemoryCatalogStore', () => {
 
   it('keeps cached data and reports an error when the server is unreachable', async () => {
     let fail = false;
-    const store = new MemoryCatalogStore(join(dir, 'c.json'), async () => {
+    const store = new MemoryCatalogStore(new MemoryCatalogPersistence(), async () => {
       if (fail) throw new Error('offline');
       return { items: [wire('1', 'Milk', ['111'])], hasMore: false, nextSince: '2026-10-18T10:00:00Z', nextAfterId: '1', serverTime: 't' };
     });
@@ -97,7 +86,7 @@ describe('MemoryCatalogStore', () => {
   });
 
   it('searches by name and barcode prefix', async () => {
-    const store = new MemoryCatalogStore(join(dir, 'c.json'), async () => ({
+    const store = new MemoryCatalogStore(new MemoryCatalogPersistence(), async () => ({
       items: [wire('1', 'Milk 2.5%', ['111']), wire('2', 'Chocolate milk', ['222']), wire('3', 'Bread', ['4820'])],
       hasMore: false,
       nextSince: null,
