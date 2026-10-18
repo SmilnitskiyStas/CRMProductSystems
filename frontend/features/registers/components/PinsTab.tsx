@@ -5,8 +5,7 @@ import { toast } from "sonner";
 import { useLocale, useTranslations } from "next-intl";
 import { Table, type TableColumn } from "@/components/ui/Table";
 import { Btn } from "@/components/ui/Btn";
-import { useLocations } from "@/features/locations/hooks/useLocations";
-import { useClearPin, useGeneratePin, usePosEmployees } from "../hooks/useRegisters";
+import { useClearPin, useGeneratePin, useManageableStores, usePosEmployees } from "../hooks/useRegisters";
 import type { PosEmployee } from "../types";
 import { ConfirmModal, SecretModal, formatDateTime, inputStyle, labelStyle } from "./shared";
 
@@ -14,11 +13,12 @@ export function PinsTab({ storeId: globalStoreId }: { storeId?: string }) {
   const t = useTranslations("Dashboard.registers.pins");
   const tRole = useTranslations("Dashboard.registers.roles");
   const locale = useLocale();
-  const { data: stores = [] } = useLocations();
+  const { data: stores = [] } = useManageableStores();
 
   // PINs are unique per store, so exactly one store is always in play.
   const [pickedStore, setPickedStore] = useState<string | undefined>(undefined);
-  const storeId = pickedStore ?? globalStoreId ?? stores[0]?.id;
+  const globalManageable = stores.some((s) => s.id === globalStoreId) ? globalStoreId : undefined;
+  const storeId = pickedStore ?? globalManageable ?? stores[0]?.id;
 
   const { data: employees = [], isLoading } = usePosEmployees(storeId);
   const generate = useGeneratePin();

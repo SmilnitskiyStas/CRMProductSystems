@@ -6,10 +6,10 @@ import { toast } from "sonner";
 import { useLocale, useTranslations } from "next-intl";
 import { Table, type TableColumn } from "@/components/ui/Table";
 import { Btn } from "@/components/ui/Btn";
-import { useLocations } from "@/features/locations/hooks/useLocations";
 import {
   useCreateRegister,
   useIssueActivationCode,
+  useManageableStores,
   useRegisterOperators,
   useRegisters,
   useRevokeRegister,
@@ -33,7 +33,7 @@ export function RegistersTab({ storeId }: { storeId?: string }) {
   const locale = useLocale();
   const { data: registers = [], isLoading } = useRegisters(storeId);
   const { data: operators = [] } = useRegisterOperators(storeId);
-  const { data: stores = [] } = useLocations();
+  const { data: stores = [] } = useManageableStores();
 
   const createMut = useCreateRegister();
   const updateMut = useUpdateRegister();
@@ -166,7 +166,7 @@ export function RegistersTab({ storeId }: { storeId?: string }) {
         <RegisterFormModal
           register={editing ?? undefined}
           stores={stores}
-          defaultStoreId={storeId}
+          defaultStoreId={stores.some((s) => s.id === storeId) ? storeId : stores[0]?.id}
           isPending={createMut.isPending || updateMut.isPending}
           error={(editing ? updateMut.error : createMut.error)?.message ?? null}
           onClose={() => { setFormOpen(false); setEditing(null); createMut.reset(); updateMut.reset(); }}
