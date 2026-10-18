@@ -8,17 +8,15 @@ import type { CreateRegisterPayload, StatsPeriod, UpdateRegisterPayload } from "
 const KEY = ["registers"] as const;
 
 /**
- * Stores the current user may manage registers/PINs for. Mirrors the backend rule
- * (RegisterService.CanManageStoreAsync): a store manager is limited to their own store;
- * network managers are scoped server-side; enterprise admin / provider see every store.
+ * Stores the current user may manage registers/PINs for. `useLocations()` is already scoped
+ * server-side to the user's assigned stores (ADR-022 user_locations), which is the same
+ * assignment the backend enforces (RegisterService.CanManageStoreAsync); enterprise admin /
+ * provider see every store. Waits for the current user so nothing flashes before scoping.
  */
 export function useManageableStores() {
   const { data: stores = [], ...rest } = useLocations();
   const { data: user } = useMe();
-  const manageable = useMemo(() => {
-    if (!user) return []; // wait for the current user so a store manager never briefly sees other stores
-    return user.role === "store_manager" && user.storeId ? stores.filter((s) => s.id === user.storeId) : stores;
-  }, [stores, user]);
+  const manageable = useMemo(() => (user ? stores : []), [stores, user]);
   return { data: manageable, ...rest };
 }
 

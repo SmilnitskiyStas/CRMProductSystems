@@ -93,11 +93,8 @@ public sealed partial class RegisterService : IRegisterService
         switch (caller.Role)
         {
             case AppRoles.StoreManager:
-                if (caller.StoreId is null) return [];
-                storeId = caller.StoreId; // forced: ignore any other requested store
-                break;
             case AppRoles.NetworkManager:
-                var mine = await _userLocations.GetLocationIdsForUserAsync(caller.TenantId, caller.UserId, ct);
+                var mine = await AssignedStoreIdsAsync(caller, ct);
                 var all = await _registers.ListAsync(storeId, ct);
                 return all.Where(r => mine.Contains(r.StoreId)).Select(RegisterDto.From).ToList();
             case AppRoles.EnterpriseAdmin:
@@ -125,7 +122,7 @@ public sealed partial class RegisterService : IRegisterService
             return (null, "Store not found.", 400);
 
         if (!await CanManageStoreAsync(caller, request.StoreId, ct))
-            return (null, "You can only manage registers of your own store.", 403);
+            return (null, "You can only manage registers of stores assigned to you.", 403);
 
         int number;
         if (request.Number.HasValue)
@@ -180,7 +177,7 @@ public sealed partial class RegisterService : IRegisterService
                 return (null, "Store not found.", 400);
             // The caller must manage the destination store too (a store manager cannot move a till elsewhere).
             if (!await CanManageStoreAsync(caller, request.StoreId.Value, ct))
-                return (null, "You can only manage registers of your own store.", 403);
+                return (null, "You can only manage registers of stores assigned to you.", 403);
             register.StoreId = request.StoreId.Value;
         }
 
@@ -440,8 +437,9 @@ public sealed partial class RegisterService : IRegisterService
     // ── helpers ────────────────────────────────────────────────────────────
 
     /// <summary>
-    /// store_manager: only their own store; network_manager: only stores assigned to them
-    /// (user_locations); enterprise_admin/provider: any store of the tenant (RLS bounds the tenant).
+    /// store_manager / network_manager: only stores assigned to them (user_locations + primary
+    /// store, see <see cref="AssignedStoreIdsAsync"/>); enterprise_admin/provider: any store of
+    /// the tenant (RLS bounds the tenant).
     /// </summary>
     private async Task<bool> CanManageStoreAsync(RegisterCaller caller, Guid? storeId, CancellationToken ct)
     {
@@ -452,13 +450,22 @@ public sealed partial class RegisterService : IRegisterService
             case AppRoles.Provider:
                 return true;
             case AppRoles.NetworkManager:
-                return (await _userLocations.GetLocationIdsForUserAsync(caller.TenantId, caller.UserId, ct))
-                    .Contains(storeId.Value);
             case AppRoles.StoreManager:
-                return caller.StoreId == storeId;
+                return (await AssignedStoreIdsAsync(caller, ct)).Contains(storeId.Value);
             default:
                 return false;
         }
+    }
+
+    /// <summary>
+    /// Stores a store-scoped manager is assigned to: their <c>user_locations</c> rows (ADR-022,
+    /// a manager may run several stores) plus their primary <c>StoreId</c>.
+    /// </summary>
+    internal async Task<HashSet<Guid>> AssignedStoreIdsAsync(RegisterCaller caller, CancellationToken ct)
+    {
+        var ids = (await _userLocations.GetLocationIdsForUserAsync(caller.TenantId, caller.UserId, ct)).ToHashSet();
+        if (caller.StoreId is { } own) ids.Add(own);
+        return ids;
     }
 
     private async Task<(CashRegister? Register, string? Error, int? Status)> LoadManagedRegisterAsync(

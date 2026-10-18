@@ -713,8 +713,8 @@ public sealed class RegisterServiceTests
 
         var list = await h.Service.ListAsync(sm, null);
         Assert.Equal([mine!.Register.Id], list.Select(r => r.Id).ToArray());
-        // an explicit other-store filter is overridden, not honoured
-        Assert.Equal([mine.Register.Id], (await h.Service.ListAsync(sm, OtherStoreId)).Select(r => r.Id).ToArray());
+        // an explicit filter on a store the manager is not assigned to yields nothing
+        Assert.Empty(await h.Service.ListAsync(sm, OtherStoreId));
 
         var foreignId = theirs!.Register.Id;
         Assert.Equal(404, (await h.Service.UpdateAsync(sm, foreignId, new UpdateRegisterRequest(Name: "x"))).StatusCode);
@@ -724,6 +724,22 @@ public sealed class RegisterServiceTests
         Assert.NotEqual(CashRegister.StatusRevoked, h.Repo.Registers.Single(r => r.Id == foreignId).Status);
 
         Assert.NotNull((await h.Service.UpdateAsync(sm, mine.Register.Id, new UpdateRegisterRequest(Name: "ok"))).Result);
+    }
+
+    [Fact]
+    public async Task Store_manager_with_extra_user_locations_assignment_manages_both_stores()
+    {
+        var h = new Harness();
+        var sm = StoreManager();
+        h.UserLocations.GetLocationIdsForUserAsync(TenantId, sm.UserId, Arg.Any<CancellationToken>())
+            .Returns(new List<Guid> { OtherStoreId });
+
+        var own = await h.Service.CreateAsync(sm, new CreateRegisterRequest(StoreId, "Own"));
+        var extra = await h.Service.CreateAsync(sm, new CreateRegisterRequest(OtherStoreId, "Extra"));
+
+        Assert.NotNull(own.Result);
+        Assert.NotNull(extra.Result);
+        Assert.Equal(2, (await h.Service.ListAsync(sm, null)).Count);
     }
 
     [Fact]

@@ -123,15 +123,16 @@ public sealed class RegisterReportService : IRegisterReportService
     public async Task<(IReadOnlyList<PosEmployeeDto>? Result, string? Error, int? StatusCode)> GetEmployeesAsync(
         RegisterCaller caller, Guid? storeId, CancellationToken ct = default)
     {
-        if (caller.Role == AppRoles.StoreManager) storeId = caller.StoreId; // forced to own store
+        if (storeId is null && caller.Role == AppRoles.StoreManager) storeId = caller.StoreId;
         if (storeId is null) return (null, "storeId is required.", 400);
 
+        // Same assignment rule as register management: user_locations plus the primary store.
         var allowed = caller.Role switch
         {
             AppRoles.EnterpriseAdmin or AppRoles.Provider => true,
-            AppRoles.StoreManager => caller.StoreId == storeId,
-            AppRoles.NetworkManager =>
-                (await _userLocations.GetLocationIdsForUserAsync(caller.TenantId, caller.UserId, ct)).Contains(storeId.Value),
+            AppRoles.StoreManager or AppRoles.NetworkManager =>
+                (await _userLocations.GetLocationIdsForUserAsync(caller.TenantId, caller.UserId, ct)).Contains(storeId.Value)
+                || caller.StoreId == storeId,
             _ => false,
         };
         if (!allowed) return (null, "Store not found.", 404);

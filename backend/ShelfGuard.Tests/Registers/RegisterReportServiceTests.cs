@@ -98,13 +98,13 @@ public sealed class RegisterReportServiceTests
     }
 
     [Fact]
-    public async Task Employees_StoreManager_IsForcedToOwnStore_AndRolesCappedAtCallerRank()
+    public async Task Employees_StoreManager_RolesCappedAtCallerRank_AndDefaultsToOwnStore()
     {
         var caller = Manager(StoreA);
         _report.GetPosEmployeesAsync(StoreA, Arg.Any<IReadOnlyCollection<string>>(), Arg.Any<CancellationToken>())
             .Returns([new PosEmployeeRow(Guid.NewGuid(), "Anna", AppRoles.Cashier, true, DateTime.UtcNow, false)]);
 
-        var (result, error, _) = await _sut.GetEmployeesAsync(caller, StoreB); // requested foreign store is ignored
+        var (result, error, _) = await _sut.GetEmployeesAsync(caller, null); // no store requested -> own store
 
         Assert.Null(error);
         Assert.Single(result!);
@@ -114,6 +114,32 @@ public sealed class RegisterReportServiceTests
                 r.Contains(AppRoles.Cashier) && r.Contains(AppRoles.StoreManager)
                 && !r.Contains(AppRoles.NetworkManager) && !r.Contains(AppRoles.EnterpriseAdmin)),
             Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task Employees_StoreManager_OnUnassignedStore_Returns404()
+    {
+        var caller = Manager(StoreA);
+
+        var (result, _, status) = await _sut.GetEmployeesAsync(caller, StoreB); // not assigned
+
+        Assert.Null(result);
+        Assert.Equal(404, status);
+    }
+
+    [Fact]
+    public async Task Employees_StoreManager_OnExtraAssignedStore_IsAllowed()
+    {
+        var caller = Manager(StoreA);
+        _locations.GetLocationIdsForUserAsync(Tenant, caller.UserId, Arg.Any<CancellationToken>())
+            .Returns(new List<Guid> { StoreB }); // user_locations: manager runs two stores
+        _report.GetPosEmployeesAsync(StoreB, Arg.Any<IReadOnlyCollection<string>>(), Arg.Any<CancellationToken>())
+            .Returns([new PosEmployeeRow(Guid.NewGuid(), "Bob", AppRoles.Cashier, true, DateTime.UtcNow, false)]);
+
+        var (result, error, _) = await _sut.GetEmployeesAsync(caller, StoreB);
+
+        Assert.Null(error);
+        Assert.Single(result!);
     }
 
     [Fact]
