@@ -14,6 +14,8 @@ public sealed class PosTransaction
     public string PaymentType { get; init; } = "cash"; // cash / card / mixed
     public decimal TotalAmount { get; set; }
     public decimal TaxAmount { get; set; }
+    /// <summary>Amount handed over by the customer; lets a replayed sale reproduce the same change (null for legacy rows).</summary>
+    public decimal? TenderedAmount { get; init; }
     // completed / pending_fiscalization / fiscalized / fiscalization_failed / cancelled
     public string Status { get; set; } = "pending_fiscalization";
     /// <summary>

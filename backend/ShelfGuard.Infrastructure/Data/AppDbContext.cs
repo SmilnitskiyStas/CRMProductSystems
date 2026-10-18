@@ -1295,6 +1295,7 @@ public sealed class AppDbContext : DbContext
             e.Property(t => t.PaymentType).HasMaxLength(20).HasDefaultValue("cash");
             e.Property(t => t.TotalAmount).HasColumnType("decimal(12,2)");
             e.Property(t => t.TaxAmount).HasColumnType("decimal(12,2)");
+            e.Property(t => t.TenderedAmount).HasColumnType("decimal(12,2)");
             e.Property(t => t.Status).HasMaxLength(30).HasDefaultValue("pending_fiscalization");
             e.Property(t => t.CreatedAt).HasDefaultValueSql("NOW()");
             e.Property(t => t.StoreId).HasColumnName("LocationId");

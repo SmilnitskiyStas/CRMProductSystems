@@ -37,6 +37,10 @@ file sealed class FakePosRepo : IPosRepository
     public Task<PosShift?> GetOpenShiftForRegisterAsync(Guid registerId, CancellationToken ct = default) =>
         Task.FromResult(Shifts.FirstOrDefault(s => s.RegisterId == registerId && s.ClosedAt is null));
 
+    public Task<int> GetNextShiftNumberAsync(Guid tenantId, Guid? registerId, CancellationToken ct = default) =>
+        Task.FromResult(Shifts.Where(s => s.TenantId == tenantId && s.RegisterId == registerId)
+            .Select(s => s.ShiftNumber).DefaultIfEmpty(0).Max() + 1);
+
     public Task<PosTransaction?> GetTransactionByClientIdAsync(Guid tenantId, Guid clientTransactionId, CancellationToken ct = default) =>
         Task.FromResult(Transactions.FirstOrDefault(t => t.TenantId == tenantId && t.ClientTransactionId == clientTransactionId));
 
@@ -1616,6 +1620,37 @@ public sealed class PosServiceTests
         Assert.Equal(first.ReceiptNumber, second.ReceiptNumber);
         Assert.Equal(8m, batch.Quantity); // FEFO write-down happened exactly once
         Assert.Equal(clientId, pos.Transactions[0].ClientTransactionId);
+    }
+
+    [Fact]
+    public async Task CreateSale_replay_returns_same_tendered_amount_and_change()
+    {
+        var (pos, stock, catalog, shift, _) = SaleSeeder.Seed("IDEMP-CHG");
+        var svc = BuildService(pos: pos, stock: stock, catalog: catalog);
+        var request = new CreateSaleRequest(
+            shift.Id, [new SaleItemRequest("IDEMP-CHG", 1)], "Cash", 100, ClientTransactionId: Guid.NewGuid());
+
+        var (first, _, _) = await svc.CreateSaleAsync(TenantId, CashierId, request);
+        var (second, _, _) = await svc.CreateSaleAsync(TenantId, CashierId, request);
+
+        Assert.True(first!.Change > 0);
+        Assert.Equal(100m, second!.PaymentAmount);
+        Assert.Equal(first.Change, second.Change);
+    }
+
+    [Fact]
+    public async Task OpenShift_assigns_local_sequential_number_per_register()
+    {
+        var pos = new FakePosRepo();
+        var svc = BuildService(pos: pos);
+        var regA = Guid.NewGuid();
+
+        var (a, _, _) = await svc.OpenShiftAsync(TenantId, CashierId, new OpenShiftRequest(StoreId), registerId: regA);
+        await svc.CloseShiftAsync(TenantId, registerId: regA);
+        var (a2, _, _) = await svc.OpenShiftAsync(TenantId, CashierId, new OpenShiftRequest(StoreId), registerId: regA);
+
+        Assert.Equal(1, a!.ShiftNumber);
+        Assert.Equal(2, a2!.ShiftNumber);
     }
 
     [Fact]

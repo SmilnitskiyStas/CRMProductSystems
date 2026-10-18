@@ -27,6 +27,12 @@ public sealed class PosRepository : IPosRepository
             .Where(s => s.RegisterId == registerId && s.ClosedAt == null)
             .FirstOrDefaultAsync(ct);
 
+    public async Task<int> GetNextShiftNumberAsync(Guid tenantId, Guid? registerId, CancellationToken ct = default)
+    {
+        var shifts = _db.PosShifts.Where(s => s.TenantId == tenantId && s.RegisterId == registerId);
+        return (await shifts.MaxAsync(s => (int?)s.ShiftNumber, ct) ?? 0) + 1;
+    }
+
     public Task<PosShift?> GetShiftByIdAsync(Guid shiftId, CancellationToken ct = default) =>
         _db.PosShifts
             .Include(s => s.Store)

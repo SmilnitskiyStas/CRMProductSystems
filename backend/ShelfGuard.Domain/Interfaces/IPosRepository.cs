@@ -17,6 +17,8 @@ public interface IPosRepository
 
     /// <summary>Open shift bound to a specific register (register-scoped shifts, multiple per tenant/store).</summary>
     Task<PosShift?> GetOpenShiftForRegisterAsync(Guid registerId, CancellationToken ct = default);
+    /// <summary>Next local shift number: per register, or per tenant for shifts not bound to a register.</summary>
+    Task<int> GetNextShiftNumberAsync(Guid tenantId, Guid? registerId, CancellationToken ct = default);
 
     Task AddShiftAsync(PosShift shift, CancellationToken ct = default);
 

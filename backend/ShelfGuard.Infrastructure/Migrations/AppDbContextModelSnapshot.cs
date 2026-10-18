@@ -3637,6 +3637,9 @@ namespace ShelfGuard.Infrastructure.Migrations
                     b.Property<Guid>("TenantId")
                         .HasColumnType("uuid");
 
+                    b.Property<decimal?>("TenderedAmount")
+                        .HasColumnType("decimal(12,2)");
+
                     b.Property<decimal>("TotalAmount")
                         .HasColumnType("decimal(12,2)");
 

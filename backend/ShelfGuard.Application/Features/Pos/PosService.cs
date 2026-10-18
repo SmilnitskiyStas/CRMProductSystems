@@ -75,6 +75,9 @@ public sealed class PosService : IPosService
             StoreId = request.StoreId,
             CashierId = cashierId,
             RegisterId = registerId,
+            // Local sequential number (per register, or per tenant for legacy shifts) so it is
+            // meaningful even without a fiscal provider; the ДПС number stays in FiscalShiftNumber.
+            ShiftNumber = await _pos.GetNextShiftNumberAsync(tenantId, registerId, ct),
             OpeningCash = request.OpeningCash,
             OpenedAt = DateTime.UtcNow,
         };
@@ -484,6 +487,7 @@ public sealed class PosService : IPosService
             CustomerId = customer?.Id,
             LoyaltyMembershipId = request.LoyaltyMembershipId,
             CashRegisterId = registerId ?? shift.RegisterId,
+            TenderedAmount = request.PaymentAmount,
             ClientTransactionId = request.ClientTransactionId is { } cid && cid != Guid.Empty ? cid : null,
         };
 
@@ -984,8 +988,8 @@ public sealed class PosService : IPosService
                 Total: Math.Round(i.PriceFinal * i.Quantity, 2))).ToList(),
             Subtotal: t.TotalAmount,
             PaymentType: t.PaymentType,
-            PaymentAmount: t.TotalAmount, // payment amount stored in TotalAmount
-            Change: 0,
+            PaymentAmount: t.TenderedAmount ?? t.TotalAmount,
+            Change: t.TenderedAmount is { } tendered ? Math.Max(0, tendered - t.TotalAmount) : 0,
             FiscalStatus: t.Status,
             FiscalNumber: t.FiscalNumber,
             ReceiptNumber: t.ReceiptNumber,
