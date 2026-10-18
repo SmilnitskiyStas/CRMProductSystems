@@ -161,8 +161,10 @@ public sealed class ConsumerContentFeatureGateRlsIntegrationTests : IAsyncLifeti
     private static RequireConsumerFeatureFilter BuildRealFilter(AppDbContext db, string flagKey)
     {
         var publishedRead = new MobileConfigPublishedReadService(
-            new MobileConfigurationRepository(db), new TenantRepository(db), new TenantSessionOverride(db));
-        var flagService = new ConsumerFeatureFlagService(publishedRead);
+            new MobileConfigurationRepository(db), new TenantRepository(db), new TenantSessionOverride(db),
+            new LoyaltyProgramAvailability(new TenantRepository(db), new LoyaltyRepository(db), new TenantSessionOverride(db)));
+        var flagService = new ConsumerFeatureFlagService(publishedRead,
+            new LoyaltyProgramAvailability(new TenantRepository(db), new LoyaltyRepository(db), new TenantSessionOverride(db)));
         return new RequireConsumerFeatureFilter(flagKey, flagService);
     }
 

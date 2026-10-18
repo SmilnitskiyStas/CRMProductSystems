@@ -36,9 +36,9 @@ Gateway `limit_req` 10 req/min/IP (burst 10) on `/api/auth/(login|2fa)`, `/api/c
 
 ## Postgres connections
 Each instance has its own Npgsql pool. No pool size is set in code, so the default Maximum Pool Size
-is 100 per instance (300 total). Set `;Maximum Pool Size=30` in `DATABASE_URL` (shared by all three)
+is 100 per instance (300 total). Set `;Maximum Pool Size=25` in `DATABASE_URL` (shared by all three)
 and verify on the server: `docker exec shelfguard_postgres psql -U shelfguard -c "SHOW max_connections;"`
-- it must exceed 3x30 + worker pool + headroom (default 100 is enough with 30).
+- it should exceed 3x25 + worker pool (10) + ad-hoc (5) = 90; the default 100 (97 usable) fits but with little slack, so prefer raising it to 200.
 
 ## Rollback
 `git revert <stage-3b commit(s)>` and redeploy (`bash deploy.sh`). Redeploy removes orphaned

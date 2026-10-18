@@ -11,8 +11,8 @@ from the repo root, on the branch with stage 3b.
 ## 0. Prerequisites (once)
 - `.env.staging` exists (copy from `.env.staging.example`, fill the `CHANGE_ME` values).
 - `DATABASE_URL` is used **inside the API containers**, so its host must be the compose service
-  `postgres` and the container port, e.g. `Host=postgres;Port=5432;Database=shelfguard_staging;Username=shelfguard_staging;Password=...;Maximum Pool Size=30`.
-  (`localhost:5436` is only right for tools on the host such as `psql`.) `Maximum Pool Size=30`
+  `postgres` and the container port, e.g. `Host=postgres;Port=5432;Database=shelfguard_staging;Username=shelfguard_staging;Password=...;Maximum Pool Size=25`.
+  (`localhost:5436` is only right for tools on the host such as `psql`.) `Maximum Pool Size=25`
   mirrors what production will use, so the connection count you measure is realistic.
 - Never pass `-p` to compose: the file pins its project name to protect the dev containers.
 
@@ -123,12 +123,12 @@ docker exec shelfguard_staging_postgres psql -U shelfguard_staging -d shelfguard
 docker exec shelfguard_staging_postgres psql -U shelfguard_staging -c "show max_connections;"
 ```
 Record: idle RAM of core/consumer/provider, total connections (must stay well below
-`max_connections`, expect ≤ 3×30). Optionally run `loadtests/smoke.js` against `$G` (see
+`max_connections`, expect ≤ 3×25). Optionally run `loadtests/smoke.js` against `$G` (see
 `loadtests/README.md`) and re-check `docker stats` — a role must not hit its `mem_limit`.
 
 **Production go/no-go:** all of §2, §4 (incl. Redis stop), §5 and §6 pass, RAM fits the production
 host with headroom (compare against `free -m` there), and `max_connections` there exceeds
-3×30 + worker pool.
+3×25 + worker pool (10).
 
 ## 8. Cleanup / rollback
 ```bash

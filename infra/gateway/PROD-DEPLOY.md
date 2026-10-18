@@ -12,6 +12,36 @@ Staging evidence (2026-10-17, see `.claude/logs/tasks/725_*`): routing, role iso
 rate limit, 300-request load — all passed. **Not** proven on staging: SignalR end-to-end, memory
 limits, file uploads through the gateway, the production host's RAM/connection headroom.
 
+## 0. Catch-up after the 2026-10-17 merge (PR #10 was merged BEFORE section A was done)
+
+State found after that deploy (run 39037241607): the new topology came up healthy, but
+1. **The old `deploy.sh` ran** (it was replaced by `git pull` while bash was executing it), so the
+   health gate did not run; `shelfguard_web` was still `health: starting` when it finished.
+2. **`shelfguard_web` will report `unhealthy`** (stage-1 bug: Next.js standalone listened on the container
+   IP, the HEALTHCHECK probed 127.0.0.1). Traffic is unaffected (the port mapping works), but the next
+   health-gated deploy would fail on it. Fixed in `frontend/Dockerfile` (`ENV HOSTNAME=0.0.0.0`) and
+   `deploy.sh` now re-execs itself after `git pull` — both ship with the follow-up PR.
+3. Pool limit / RAM / `max_connections` were not verified.
+
+Do on the server, in this order (the scripts are in the follow-up PR; run them straight from the
+branch without merging, so nothing deploys):
+```bash
+ssh -p 10048 administrator@93.127.143.98
+cd ~/shelfguard && git fetch origin chore/prod-prep-3b
+# 1. read-only check - changes nothing
+git show origin/chore/prod-prep-3b:infra/scripts/prod-preflight-3b.sh | bash
+# 2. see exactly what would change (no writes)
+git show origin/chore/prod-prep-3b:infra/scripts/prod-apply-pool-limit.sh > /tmp/apply-pool.sh
+bash /tmp/apply-pool.sh --dry-run
+# 3. apply: backs up .env, adds ;Maximum Pool Size=25, rolling-recreates provider -> consumer -> core
+bash /tmp/apply-pool.sh
+# 4. re-run step 1; every line should be PASS (web may still WARN/FAIL until the follow-up PR is deployed)
+```
+If `max_connections` is 100, the budget (3x25 + worker 10 + ad-hoc 5 = 90 vs 97 usable) fits but is tight;
+raising it to 200 needs a Postgres restart (`ALTER SYSTEM SET max_connections = 200;` then restart
+`shelfguard_postgres`) — do that in a quiet window, it is a separate decision.
+Then merge the follow-up PR (it deploys the web healthcheck fix and the self-re-exec `deploy.sh`).
+
 ## A. Before merging (on the production server, ssh -p 10048 administrator@93.127.143.98)
 
 - [ ] **CI is green on PR #10** (backend, frontend, worker, mobile). A red job blocks the deploy step.
@@ -24,10 +54,10 @@ limits, file uploads through the gateway, the production host's RAM/connection h
 - [ ] **Disk.** `df -h /` and `docker system df` — two new image builds (backend, frontend) need a few GB.
   `docker image prune -f` if tight.
 - [ ] **Postgres connections.** `docker exec shelfguard_postgres psql -U shelfguard -c "show max_connections;"`
-  must exceed `3 × 30 + worker pool + headroom` (default 100 is enough with a pool of 30).
+  must exceed `3 × 25 + worker pool (10) + ad-hoc (5) = 90`, i.e. fits the default 100 (97 usable) only with little slack — prefer raising it to 200.
   Current usage: `... -c "select count(*) from pg_stat_activity;"`.
 - [ ] **Add the pool limit to the server `.env`** (`~/shelfguard/.env`): append
-  `;Maximum Pool Size=30` to the end of `DATABASE_URL` (see `.env.production.example`). Without it each
+  `;Maximum Pool Size=25` to the end of `DATABASE_URL` (see `.env.production.example`). Without it each
   instance may open up to 100 connections (300 total). Keep the value on one line; do not `source` the file.
 - [ ] `.env` has `REDIS_PASSWORD` set the same way as before (the API now also uses it for the SignalR
   backplane). If `REDIS_PASSWORD` is set, the worker's `REDIS_URL` must already include it (existing rule).

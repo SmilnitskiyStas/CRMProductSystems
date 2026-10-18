@@ -207,6 +207,7 @@ services.AddScoped<IAuthService, AuthService>();
 
         // TASK-543 - Consumer app-builder platform: consumer-session-aware feature flags (Stage D ЕТАП 10)
         services.AddScoped<Features.MobileConfig.IConsumerFeatureFlagService, Features.MobileConfig.ConsumerFeatureFlagService>();
+        services.AddScoped<Features.MobileConfig.ILoyaltyProgramAvailability, Features.MobileConfig.LoyaltyProgramAvailability>();
         services.AddScoped<Features.MobileConfig.ISubscriptionPlanFeatureGate, Features.MobileConfig.SubscriptionPlanFeatureGate>();
 
         // TASK-544 - Consumer app-builder platform: generalized Draft->Validate->Publish (Stage D ЕТАП 11)
