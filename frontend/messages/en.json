@@ -6111,8 +6111,10 @@
       "featureFlags": {
         "loading": "Loading…",
         "loadError": "Failed to load app features",
-        "warningTitle": "Not wired up yet:",
-        "warningText": "these toggles are saved for real — in the draft and after publishing — but today they have zero effect on the consumer app: no consumer app endpoint checks these flags yet. Publishing this draft won't change anything for shoppers either, until that check is added on the backend.",
+        "warningTitle": "Publishing changes:",
+        "warningText": "changes to these features take effect after publishing the app configuration.",
+        "loyaltyManagedHint": "Loyalty activation and bonus rules are managed in one place —",
+        "bonusProgramLink": "Bonus Program",
         "keys": {
           "loyalty": "Loyalty Program",
           "promotions": "Promotions",
@@ -6146,7 +6148,7 @@
         "loading": "Loading…",
         "loadError": "Failed to load bonus program settings",
         "enabledLabel": "Bonus program active",
-        "enabledHint": "Enables bonus accrual and redemption at checkout for this network.",
+        "enabledHint": "Controls availability to new shoppers in the app and bonus accrual and redemption at checkout. Takes effect on save without publishing the app configuration.",
         "accrualRateLabel": "Accrual rate, %",
         "accrualRateHint": "Percentage of the receipt total accrued to the customer as bonus points.",
         "redemptionCapLabel": "Redemption cap, %",

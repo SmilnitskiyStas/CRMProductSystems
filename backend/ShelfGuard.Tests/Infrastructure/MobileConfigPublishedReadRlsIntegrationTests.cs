@@ -198,7 +198,8 @@ public sealed class MobileConfigPublishedReadRlsIntegrationTests : IAsyncLifetim
     // ── helpers ──────────────────────────────────────────────────────────────
 
     private static MobileConfigPublishedReadService BuildService(AppDbContext db) => new(
-        new MobileConfigurationRepository(db), new TenantRepository(db), new TenantSessionOverride(db));
+        new MobileConfigurationRepository(db), new TenantRepository(db), new TenantSessionOverride(db),
+            new LoyaltyProgramAvailability(new TenantRepository(db), new LoyaltyRepository(db), new TenantSessionOverride(db)));
 
     private async Task<Tenant> SeedTenantAsync()
     {

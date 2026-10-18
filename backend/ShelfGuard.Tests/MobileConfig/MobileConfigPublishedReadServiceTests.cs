@@ -26,6 +26,7 @@ public sealed class MobileConfigPublishedReadServiceTests
     private readonly IMobileConfigurationRepository _repo = Substitute.For<IMobileConfigurationRepository>();
     private readonly ITenantRepository _tenants = Substitute.For<ITenantRepository>();
     private readonly ITenantSessionOverride _tenantScope = Substitute.For<ITenantSessionOverride>();
+    private readonly ILoyaltyProgramAvailability _loyalty = Substitute.For<ILoyaltyProgramAvailability>();
     private readonly MobileConfigPublishedReadService _sut;
 
     private static readonly Guid TenantId = Guid.NewGuid();
@@ -75,13 +76,35 @@ public sealed class MobileConfigPublishedReadServiceTests
 
     public MobileConfigPublishedReadServiceTests()
     {
-        _sut = new MobileConfigPublishedReadService(_repo, _tenants, _tenantScope);
+        _loyalty.IsEnabledAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns(true);
+        _sut = new MobileConfigPublishedReadService(_repo, _tenants, _tenantScope, _loyalty);
 
         // Pure pass-through — same pattern LoyaltyServiceTests uses for ITenantSessionOverride:
         // this mock just invokes the delegate immediately instead of opening a real transaction.
         _tenantScope.ExecuteAsync(
                 Arg.Any<Guid>(), Arg.Any<Func<Task<MobileConfiguration?>>>(), Arg.Any<CancellationToken>())
             .Returns(ci => ci.Arg<Func<Task<MobileConfiguration?>>>()());
+    }
+
+    [Fact]
+    public async Task Live_bonus_setting_overrides_legacy_flag_and_changes_etag_without_republish()
+    {
+        var tenant = SeedTenant();
+        var (config, _) = SeedPublishedConfig(tenant.Id,
+            PublishedDocumentJson.Replace("\"loyalty\": true", "\"loyalty\": false"));
+        _tenants.GetByIdAsync(tenant.Id, Arg.Any<CancellationToken>()).Returns(tenant);
+        _repo.GetPublishedByTenantIdAsync(tenant.Id, Arg.Any<CancellationToken>()).Returns(config);
+
+        var (enabledJson, enabledEtag, _) = await _sut.GetPublishedConfigAsync(tenant.Id);
+        using var enabled = JsonDocument.Parse(enabledJson!);
+        Assert.True(enabled.RootElement.GetProperty("features").GetProperty("loyalty").GetBoolean());
+
+        _loyalty.IsEnabledAsync(tenant.Id, Arg.Any<CancellationToken>()).Returns(false);
+        var (disabledJson, disabledEtag, _) = await _sut.GetPublishedConfigAsync(tenant.Id);
+        using var disabled = JsonDocument.Parse(disabledJson!);
+        Assert.False(disabled.RootElement.GetProperty("features").GetProperty("loyalty").GetBoolean());
+        Assert.NotEqual(enabledEtag, disabledEtag);
+        await _repo.DidNotReceive().SaveChangesAsync(Arg.Any<CancellationToken>());
     }
 
     [Fact]

@@ -17,13 +17,15 @@ namespace ShelfGuard.Tests.MobileConfig;
 public sealed class ConsumerFeatureFlagServiceTests
 {
     private readonly IMobileConfigPublishedReadService _publishedRead = Substitute.For<IMobileConfigPublishedReadService>();
+    private readonly ILoyaltyProgramAvailability _loyalty = Substitute.For<ILoyaltyProgramAvailability>();
     private readonly ConsumerFeatureFlagService _sut;
 
     private static readonly Guid TenantId = Guid.NewGuid();
 
     public ConsumerFeatureFlagServiceTests()
     {
-        _sut = new ConsumerFeatureFlagService(_publishedRead);
+        _loyalty.IsEnabledAsync(TenantId, Arg.Any<CancellationToken>()).Returns(true);
+        _sut = new ConsumerFeatureFlagService(_publishedRead, _loyalty);
     }
 
     /// <summary>
@@ -35,7 +37,6 @@ public sealed class ConsumerFeatureFlagServiceTests
     /// in production.
     /// </summary>
     [Theory]
-    [InlineData("loyalty")]
     [InlineData("promotions")]
     [InlineData("catalog")]
     [InlineData("coupons")]
@@ -59,20 +60,20 @@ public sealed class ConsumerFeatureFlagServiceTests
         _publishedRead.GetPublishedConfigAsync(TenantId, Arg.Any<CancellationToken>())
             .Returns((null, (string?)null, new MobileConfigReadError(MobileConfigReadErrorType.TenantNotFound, "none")));
 
-        var enabled = await _sut.IsEnabledAsync(TenantId, "loyalty");
+        var enabled = await _sut.IsEnabledAsync(TenantId, "news");
 
         Assert.True(enabled);
     }
 
     [Fact]
-    public async Task Explicit_false_in_published_features_disables_the_flag()
+    public async Task Loyalty_ignores_legacy_published_false_while_other_flags_still_apply()
     {
-        const string documentJson = """{"features":{"loyalty":false,"news":true}}""";
+        const string documentJson = """{"features":{"loyalty":false,"news":false}}""";
         _publishedRead.GetPublishedConfigAsync(TenantId, Arg.Any<CancellationToken>())
             .Returns((documentJson, "\"etag\"", (MobileConfigReadError?)null));
 
-        Assert.False(await _sut.IsEnabledAsync(TenantId, "loyalty"));
-        Assert.True(await _sut.IsEnabledAsync(TenantId, "news"));
+        Assert.True(await _sut.IsEnabledAsync(TenantId, "loyalty"));
+        Assert.False(await _sut.IsEnabledAsync(TenantId, "news"));
     }
 
     [Fact]
@@ -95,6 +96,14 @@ public sealed class ConsumerFeatureFlagServiceTests
             .Returns((documentJson, "\"etag\"", (MobileConfigReadError?)null));
 
         Assert.True(await _sut.IsEnabledAsync(TenantId, "catalog"));
+    }
+
+    [Fact]
+    public async Task Disabled_bonus_program_disables_loyalty_without_reading_published_flags()
+    {
+        _loyalty.IsEnabledAsync(TenantId, Arg.Any<CancellationToken>()).Returns(false);
+        Assert.False(await _sut.IsEnabledAsync(TenantId, "loyalty"));
+        await _publishedRead.DidNotReceive().GetPublishedConfigAsync(TenantId, Arg.Any<CancellationToken>());
     }
 
     [Fact]
