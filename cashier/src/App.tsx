@@ -104,7 +104,11 @@ export function App() {
         shift={shift}
         online={state.online}
         onShiftChange={(s) => {
-          setShift(s && s.status !== 'Closed' ? s : null);
+          const open = s && s.status !== 'Closed' ? s : null;
+          setShift(open);
+          // A freshly opened shift goes straight to the cashier workplace; closing keeps the
+          // shift screen so the Z-report stays visible.
+          if (open) setView('checkout');
         }}
         onBack={shift ? goCheckout : undefined}
         onOpenQueue={() => setView('queue')}
