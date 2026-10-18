@@ -32,7 +32,7 @@ public sealed partial class RegisterService : IRegisterService
     private const string InvalidCode = "Invalid or expired activation code.";
 
     // Roles that may operate a till (mirrors AppPolicies.CanAccessPosRoles minus provider) and their rank.
-    private static readonly Dictionary<string, int> PosRoleRank = new()
+    internal static readonly Dictionary<string, int> PosRoleRank = new()
     {
         [AppRoles.EnterpriseAdmin] = 4,
         [AppRoles.NetworkManager] = 3,

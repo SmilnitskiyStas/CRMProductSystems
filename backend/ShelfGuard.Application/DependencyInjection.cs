@@ -72,6 +72,7 @@ services.AddScoped<IAuthService, AuthService>();
         // v3.2 - POS (TASK-068)
         services.AddScoped<Features.Pos.IPosService, Features.Pos.PosService>();
         services.AddScoped<Features.Registers.IRegisterService, Features.Registers.RegisterService>();
+        services.AddScoped<Features.Registers.IRegisterReportService, Features.Registers.RegisterReportService>();
         services.AddScoped<Features.Registers.IPosSyncService, Features.Registers.PosSyncService>();
         services.AddSingleton<Features.Registers.IPinGenerator, Features.Registers.RandomPinGenerator>();
 

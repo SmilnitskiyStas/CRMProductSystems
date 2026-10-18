@@ -1548,3 +1548,6 @@ API_ROLE core/consumer/provider, nginx gateway :5100, SignalR Redis backplane. d
 
 ### TASK-726 - Cashier app backend Phase 1 (registers, PIN sessions, idempotent sales, delta catalog) - review
 `cash_registers`/`register_sessions` + RLS, device-token activation, PIN operator JWT, `ClientTransactionId` idempotency, `POST /pos/sales/batch`, `GET /pos/sync/catalog`, `items.UpdatedAt` trigger. Migration AddCashRegisters applied to dev; dotnet test 2527/2527; not committed. Лог: `.claude/logs/tasks/726_*`.
+
+### TASK-727 - Web "Каси" management page - review
+`/registers` (tabs: каси, PIN, статистика, журнал) + sidebar item in `sales` group. New read endpoints under `api/pos/registers`: `operators`, `stats`, `{id}/sessions`, `{id}/shifts`, `employees` (RegisterReportService, store-scoped). tsc/lint clean, dotnet Register tests 59/59; not committed. Лог: `.claude/logs/tasks/727_*`.

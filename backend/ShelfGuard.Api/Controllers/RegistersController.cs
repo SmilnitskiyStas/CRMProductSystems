@@ -19,8 +19,75 @@ public sealed class RegistersController : ControllerBase
     public const string DeviceTokenHeader = "X-Register-Token";
 
     private readonly IRegisterService _registers;
+    private readonly IRegisterReportService _reports;
 
-    public RegistersController(IRegisterService registers) => _registers = registers;
+    public RegistersController(IRegisterService registers, IRegisterReportService reports)
+    {
+        _registers = registers;
+        _reports = reports;
+    }
+
+    // ── Management page read endpoints ─────────────────────────────────────
+
+    /// <summary>Operator currently signed in on each visible register.</summary>
+    [HttpGet("operators")]
+    [Authorize(Policy = AppPolicies.AtLeastStoreManager)]
+    [RequireModule("pos")]
+    [ProducesResponseType(typeof(IReadOnlyList<RegisterOperatorDto>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> CurrentOperators([FromQuery] Guid? storeId, CancellationToken ct) =>
+        TryGetCaller(out var caller) ? Ok(await _reports.GetCurrentOperatorsAsync(caller, storeId, ct)) : Forbid();
+
+    /// <summary>Turnover / receipts / payment split per register and per operator for [from, to).</summary>
+    [HttpGet("stats")]
+    [Authorize(Policy = AppPolicies.AtLeastStoreManager)]
+    [RequireModule("pos")]
+    [ProducesResponseType(typeof(IReadOnlyList<RegisterStatsDto>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> Stats(
+        [FromQuery] DateTime from, [FromQuery] DateTime to, [FromQuery] Guid? storeId, CancellationToken ct)
+    {
+        if (!TryGetCaller(out var caller)) return Forbid();
+        if (to <= from || (to - from).TotalDays > RegisterReportService.MaxStatsRangeDays)
+            return BadRequest(new { error = "Invalid period." });
+        return Ok(await _reports.GetStatsAsync(
+            caller, storeId, DateTime.SpecifyKind(from, DateTimeKind.Utc).ToUniversalTime(),
+            DateTime.SpecifyKind(to, DateTimeKind.Utc).ToUniversalTime(), ct));
+    }
+
+    [HttpGet("{id:guid}/sessions")]
+    [Authorize(Policy = AppPolicies.AtLeastStoreManager)]
+    [RequireModule("pos")]
+    [ProducesResponseType(typeof(PagedResult<RegisterSessionDto>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> Sessions(
+        Guid id, [FromQuery] int page = 1, [FromQuery] int pageSize = 20, CancellationToken ct = default)
+    {
+        if (!TryGetCaller(out var caller)) return Forbid();
+        var (result, error, status) = await _reports.GetSessionsAsync(caller, id, page, pageSize, ct);
+        return error is null ? Ok(result) : Fail(error, status);
+    }
+
+    [HttpGet("{id:guid}/shifts")]
+    [Authorize(Policy = AppPolicies.AtLeastStoreManager)]
+    [RequireModule("pos")]
+    [ProducesResponseType(typeof(PagedResult<RegisterShiftDto>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> Shifts(
+        Guid id, [FromQuery] int page = 1, [FromQuery] int pageSize = 20, CancellationToken ct = default)
+    {
+        if (!TryGetCaller(out var caller)) return Forbid();
+        var (result, error, status) = await _reports.GetShiftsAsync(caller, id, page, pageSize, ct);
+        return error is null ? Ok(result) : Fail(error, status);
+    }
+
+    /// <summary>POS-role employees of a store with their PIN status (never the PIN itself).</summary>
+    [HttpGet("employees")]
+    [Authorize(Policy = AppPolicies.AtLeastStoreManager)]
+    [RequireModule("pos")]
+    [ProducesResponseType(typeof(IReadOnlyList<PosEmployeeDto>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> Employees([FromQuery] Guid? storeId, CancellationToken ct)
+    {
+        if (!TryGetCaller(out var caller)) return Forbid();
+        var (result, error, status) = await _reports.GetEmployeesAsync(caller, storeId, ct);
+        return error is null ? Ok(result) : Fail(error, status);
+    }
 
     // ── Manager endpoints ──────────────────────────────────────────────────
 
