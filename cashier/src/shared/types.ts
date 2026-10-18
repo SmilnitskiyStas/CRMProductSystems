@@ -127,6 +127,7 @@ export interface QueueEntry {
   total: number;
   paymentType: string;
   itemCount: number;
+  cashierName: string | null;
 }
 
 export interface QueueSummary {

@@ -1557,3 +1557,6 @@ Electron+React+TS+Tailwind (electron-vite, NSIS): activation, PIN pad, shift ope
 
 ### TASK-729 - Cashier phase 4: offline queue + ESC/POS printing - review
 better-sqlite3 (pinned 11.10.0, Electron prebuilt) catalog + sales outbox with batch sync/backoff, queue screen, offline restart; own ESC/POS builder (CP866/1125/1251/UTF-8, 58/80mm), Windows RAW/TCP/COM/file transports, print settings. 54 vitest, build+dist OK, packaged smoke vs mock API OK; not tested on real backend/printer; not committed. Лог: `.claude/logs/tasks/729_*`.
+
+### TASK-730 - Batch sale cashier attribution - review
+Offline sales flushed by another operator are stored under the real cashier when that cashier had a session on this register (window +5 min tolerance), is active/POS/same store, OccurredAt sane; else failed 403. No migration. Лог: `.claude/logs/tasks/730_*`.

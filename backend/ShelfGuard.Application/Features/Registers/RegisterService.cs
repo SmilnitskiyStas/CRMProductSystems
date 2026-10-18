@@ -41,6 +41,9 @@ public sealed partial class RegisterService : IRegisterService
         [AppRoles.Cashier] = 1,
     };
 
+    /// <summary>True for roles that may work a till (shared with POS offline-sale attribution).</summary>
+    public static bool IsPosRole(string role) => PosRoleRank.ContainsKey(role);
+
     [GeneratedRegex(@"^\d{4,6}$")]
     private static partial Regex PinRegex();
 

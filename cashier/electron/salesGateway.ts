@@ -59,6 +59,7 @@ export function mergeServerSale(row: OutboxRow, sale: unknown | null): SaleRecei
 }
 
 export interface ReceiptContext {
+  cashierId: string;
   registerNumber: number;
   registerName: string;
   storeName: string | null;
@@ -129,6 +130,8 @@ export class OutboxSalesGateway implements SalesGateway {
         paymentType: request.paymentType,
         paymentAmount: receipt.paymentAmount,
         clientTransactionId: request.clientTransactionId,
+        cashierId: ctx.cashierId,
+        occurredAt: receipt.createdAt,
       },
       status: 'pending',
       attempts: 0,

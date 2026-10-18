@@ -99,6 +99,15 @@ public sealed class CashRegisterRepository : ICashRegisterRepository
     public Task<RegisterSession?> GetSessionAsync(Guid sessionId, CancellationToken ct = default) =>
         _db.RegisterSessions.FirstOrDefaultAsync(s => s.Id == sessionId, ct);
 
+    public Task<bool> HadSessionAtAsync(
+        Guid registerId, Guid cashierId, DateTime at, TimeSpan endTolerance, CancellationToken ct = default)
+    {
+        var endedAfter = at - endTolerance;
+        return _db.RegisterSessions.AnyAsync(s =>
+            s.RegisterId == registerId && s.CashierId == cashierId && s.StartedAt <= at
+            && (s.EndedAt == null || s.EndedAt >= endedAfter), ct);
+    }
+
     public async Task<IReadOnlyList<RegisterSession>> GetOpenSessionsAsync(Guid registerId, CancellationToken ct = default) =>
         await _db.RegisterSessions.Where(s => s.RegisterId == registerId && s.EndedAt == null).ToListAsync(ct);
 

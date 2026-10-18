@@ -137,7 +137,7 @@ export class CashierService {
       () => {
         const reg = this.config.snapshot.register;
         if (!reg || !this.operator) return null;
-        return { registerNumber: reg.number, registerName: reg.name, storeName: reg.storeName, cashierName: this.operator.info.cashierName };
+        return { cashierId: this.operator.info.cashierId, registerNumber: reg.number, registerName: reg.name, storeName: reg.storeName, cashierName: this.operator.info.cashierName };
       },
       Date.now,
       (row) => {

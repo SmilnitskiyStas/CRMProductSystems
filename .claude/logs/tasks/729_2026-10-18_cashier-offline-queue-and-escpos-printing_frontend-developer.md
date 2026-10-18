@@ -19,3 +19,6 @@ Packaged smoke vs mock API on :5078 (CDP): SQLite loads; offline sale -> L-3-1 p
 
 ## Not verified / risks
 Real backend batch endpoint, real printer (RAW spooler/TCP/COM never exercised on hardware), printer codepage table numbers (ESC t n) vary by model. safeStorage key (`Local State`) is flushed by Chromium late: a hard kill/power loss on the very first run can lose it -> device token undecryptable -> re-activation needed (queue in SQLite survives). Sync attributes sales to the cashier whose token sends the batch (server uses token cashier). Prices on offline receipts come from the local catalog; server prices win on sync.
+
+## Follow-up: per-sale cashier attribution
+Outbox payload (JSON column, so no SQLite migration) now carries `cashierId` (operator at sale time) and `occurredAt` (receipt time) and both go in the batch items; legacy rows lack them and are sent unchanged (server uses token cashier). Queue entries show the cashier name; server rejections (4xx, incl. cashier-not-allowed) become `rejected` with the reason. Flushing by a different cashier is not blocked. Tests in `electron/salesGateway.test.ts`. Not run against the real backend yet.

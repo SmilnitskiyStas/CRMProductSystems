@@ -1,3 +1,5 @@
+using NSubstitute;
+using ShelfGuard.Domain.Constants;
 using Microsoft.Extensions.Logging.Abstractions;
 using ShelfGuard.Application.Features.Pos;
 using ShelfGuard.Application.Features.Pos.Dtos;
@@ -96,6 +98,12 @@ file sealed class FakePosRepo : IPosRepository
             throw new ConcurrencyConflictException("simulated concurrent write conflict");
         return Task.CompletedTask;
     }
+}
+
+file static class AttributionAccess
+{
+    public static IReadOnlyList<PosTransaction> Transactions(object repo) => ((FakePosRepo)repo).Transactions;
+    public static IReadOnlyList<StockEvent> Events(object repo) => ((FakePosRepo)repo).Events;
 }
 
 file sealed class FakeStockRepo : IStockRepository
@@ -415,7 +423,9 @@ public sealed class PosServiceTests
         IDiscountRepository? discounts = null,
         IFiscalService? fiscal = null,
         ILoyaltyRepository? loyalty = null,
-        ICustomerRepository? customers = null)
+        ICustomerRepository? customers = null,
+        IUserRepository? users = null,
+        ICashRegisterRepository? registers = null)
     {
         return new PosService(
             pos ?? new FakePosRepo(),
@@ -425,7 +435,9 @@ public sealed class PosServiceTests
             new FakeFiscalFactory(fiscal ?? new NoopFiscalService()),
             loyalty ?? new FakeLoyaltyRepo(),
             customers ?? new FakeCustomerRepo(),
-            NullLogger<PosService>.Instance);
+            NullLogger<PosService>.Instance,
+            users,
+            registers);
     }
 
     private static Item MakeProduct(string barcode = "123", decimal price = 10m) =>
@@ -1820,5 +1832,238 @@ public sealed class PosServiceTests
         Assert.Equal("failed", item.Status);
         Assert.Equal(409, item.ErrorStatusCode);
         Assert.Single(pos.Transactions);
+    }
+    // ── Offline sync attribution (TASK-730) ────────────────────────────────
+
+    private sealed class Attribution
+    {
+        public Guid RegisterId { get; } = Guid.NewGuid();
+        public List<RegisterSession> Sessions { get; } = [];
+        public Dictionary<Guid, User> Users { get; } = [];
+        public PosService Svc { get; }
+        public FakePosRepoHandle Pos { get; }
+        public PosShift Shift { get; }
+        public ProductStock Batch { get; }
+        public readonly Guid TokenCashier = Guid.NewGuid();
+
+        public Attribution(string barcode)
+        {
+            var (pos, stock, catalog, shift, batch) = SaleSeeder.Seed(barcode, stockQty: 50m, registerId: RegisterId);
+            Shift = shift;
+            Batch = batch;
+            Pos = new FakePosRepoHandle(pos);
+
+            var registers = Substitute.For<ICashRegisterRepository>();
+            registers.GetByIdAsync(RegisterId, Arg.Any<CancellationToken>())
+                .Returns(new CashRegister { Id = RegisterId, TenantId = TenantId, StoreId = StoreId, Number = 1, Name = "r" });
+            registers.HadSessionAtAsync(default, default, default, default, default).ReturnsForAnyArgs(ci =>
+            {
+                var (reg, cashier, at, tol) = (ci.ArgAt<Guid>(0), ci.ArgAt<Guid>(1), ci.ArgAt<DateTime>(2), ci.ArgAt<TimeSpan>(3));
+                return Sessions.Any(x => x.RegisterId == reg && x.CashierId == cashier && x.StartedAt <= at
+                                         && (x.EndedAt == null || x.EndedAt >= at - tol));
+            });
+
+            var users = Substitute.For<IUserRepository>();
+            users.GetByIdAsync(default, default).ReturnsForAnyArgs(ci => Users.GetValueOrDefault(ci.ArgAt<Guid>(0)));
+
+            Svc = BuildService(pos: pos, stock: stock, catalog: catalog, users: users, registers: registers);
+        }
+
+        public User AddUser(string role = AppRoles.Cashier, Guid? storeId = null, bool active = true)
+        {
+            var u = User.Create(TenantId, $"{Guid.NewGuid():N}@x.test", "Colleague", "pw", role, storeId ?? StoreId);
+            if (!active) u.Deactivate();
+            Users[u.Id] = u;
+            return u;
+        }
+
+        public void AddSession(Guid cashier, DateTime start, DateTime? end = null) =>
+            Sessions.Add(new RegisterSession { TenantId = TenantId, RegisterId = RegisterId, CashierId = cashier, StartedAt = start, EndedAt = end });
+
+        public CreateSaleRequest Sale(string barcode, Guid? cashier = null, DateTime? at = null, Guid? key = null) =>
+            new(Shift.Id, [new SaleItemRequest(barcode, 1)], "Cash", 10,
+                ClientTransactionId: key ?? Guid.NewGuid(), CashierId: cashier, OccurredAt: at);
+
+        public async Task<BatchSaleItemResultDto> Flush(CreateSaleRequest sale)
+        {
+            var (result, error, _) = await Svc.CreateSalesBatchAsync(
+                TenantId, TokenCashier, new BatchSalesRequest([sale]), registerId: RegisterId);
+            Assert.Null(error);
+            return Assert.Single(result!.Results);
+        }
+    }
+
+    // The repo is a file-local fake; expose just what the attribution tests read.
+    private sealed class FakePosRepoHandle(object inner)
+    {
+        public IReadOnlyList<PosTransaction> Transactions => AttributionAccess.Transactions(inner);
+        public IReadOnlyList<StockEvent> Events => AttributionAccess.Events(inner);
+    }
+
+    [Fact]
+    public async Task Batch_sale_of_cashier_A_flushed_by_B_is_recorded_under_A()
+    {
+        var t = new Attribution("ATTR-1");
+        var a = t.AddUser();
+        var now = DateTime.UtcNow;
+        t.AddSession(a.Id, now.AddHours(-3), now.AddHours(-1));          // A worked, then B signed in
+        t.AddSession(t.TokenCashier, now.AddHours(-1));
+
+        var item = await t.Flush(t.Sale("ATTR-1", cashier: a.Id, at: now.AddHours(-2)));
+
+        Assert.Equal("created", item.Status);
+        var tx = Assert.Single(t.Pos.Transactions);
+        Assert.Equal(a.Id, tx.CashierId);
+        Assert.All(t.Pos.Events, e => Assert.Equal(a.Id, e.PerformedBy));
+    }
+
+    [Fact]
+    public async Task Batch_sale_without_or_with_own_CashierId_is_recorded_under_the_token_cashier()
+    {
+        var t = new Attribution("ATTR-2");
+
+        await t.Flush(t.Sale("ATTR-2"));
+        await t.Flush(t.Sale("ATTR-2", cashier: t.TokenCashier));
+
+        Assert.All(t.Pos.Transactions, tx => Assert.Equal(t.TokenCashier, tx.CashierId));
+        Assert.Equal(2, t.Pos.Transactions.Count);
+    }
+
+    [Fact]
+    public async Task Batch_sale_for_a_cashier_with_no_session_on_this_register_fails()
+    {
+        var t = new Attribution("ATTR-3");
+        var stranger = t.AddUser();
+
+        var item = await t.Flush(t.Sale("ATTR-3", cashier: stranger.Id, at: DateTime.UtcNow.AddMinutes(-10)));
+
+        Assert.Equal("failed", item.Status);
+        Assert.Equal(403, item.ErrorStatusCode);
+        Assert.Empty(t.Pos.Transactions);
+    }
+
+    [Fact]
+    public async Task Batch_attribution_respects_the_session_window_with_5_minute_end_tolerance()
+    {
+        var t = new Attribution("ATTR-4");
+        var a = t.AddUser();
+        var now = DateTime.UtcNow;
+        t.AddSession(a.Id, now.AddHours(-3), now.AddHours(-2));
+
+        var before = await t.Flush(t.Sale("ATTR-4", a.Id, now.AddHours(-4)));                         // before session start
+        var withinTolerance = await t.Flush(t.Sale("ATTR-4", a.Id, now.AddHours(-2).AddMinutes(3)));  // 3 min after end
+        var afterTolerance = await t.Flush(t.Sale("ATTR-4", a.Id, now.AddHours(-2).AddMinutes(10)));  // 10 min after end
+
+        Assert.Equal("failed", before.Status);
+        Assert.Equal("created", withinTolerance.Status);
+        Assert.Equal("failed", afterTolerance.Status);
+    }
+
+    [Fact]
+    public async Task Batch_attribution_without_OccurredAt_uses_now_and_needs_an_open_or_just_ended_session()
+    {
+        var t = new Attribution("ATTR-5");
+        var open = t.AddUser();
+        var longGone = t.AddUser();
+        t.AddSession(open.Id, DateTime.UtcNow.AddHours(-1));
+        t.AddSession(longGone.Id, DateTime.UtcNow.AddHours(-5), DateTime.UtcNow.AddHours(-4));
+
+        Assert.Equal("created", (await t.Flush(t.Sale("ATTR-5", open.Id))).Status);
+        Assert.Equal("failed", (await t.Flush(t.Sale("ATTR-5", longGone.Id))).Status);
+    }
+
+    [Fact]
+    public async Task Batch_attribution_rejects_other_store_inactive_and_non_pos_users()
+    {
+        var t = new Attribution("ATTR-6");
+        var now = DateTime.UtcNow;
+        var otherStore = t.AddUser(storeId: Guid.NewGuid());
+        var inactive = t.AddUser(active: false);
+        var merch = t.AddUser(role: AppRoles.Merchandiser);
+        foreach (var u in new[] { otherStore, inactive, merch })
+            t.AddSession(u.Id, now.AddHours(-2)); // even with a session row, the user checks fail
+
+        foreach (var u in new[] { otherStore.Id, inactive.Id, merch.Id, Guid.NewGuid() /* unknown */ })
+        {
+            var item = await t.Flush(t.Sale("ATTR-6", u, now.AddMinutes(-30)));
+            Assert.Equal("failed", item.Status);
+            Assert.Equal(403, item.ErrorStatusCode);
+        }
+
+        Assert.Empty(t.Pos.Transactions);
+    }
+
+    [Fact]
+    public async Task Batch_attribution_rejects_future_and_too_old_OccurredAt()
+    {
+        var t = new Attribution("ATTR-7");
+        var a = t.AddUser();
+        var now = DateTime.UtcNow;
+        t.AddSession(a.Id, now.AddDays(-30));
+
+        var future = await t.Flush(t.Sale("ATTR-7", a.Id, now.AddMinutes(10)));
+        var skewOk = await t.Flush(t.Sale("ATTR-7", a.Id, now.AddMinutes(3)));
+        var tooOld = await t.Flush(t.Sale("ATTR-7", a.Id, now.AddDays(-15)));
+        var oldButOk = await t.Flush(t.Sale("ATTR-7", a.Id, now.AddDays(-13)));
+
+        Assert.Equal("failed", future.Status);
+        Assert.Equal("created", skewOk.Status);
+        Assert.Equal("failed", tooOld.Status);
+        Assert.Equal("created", oldButOk.Status);
+    }
+
+    [Fact]
+    public async Task Batch_attribution_needs_a_register_token()
+    {
+        var t = new Attribution("ATTR-8");
+        var a = t.AddUser();
+        t.AddSession(a.Id, DateTime.UtcNow.AddHours(-1));
+
+        var (result, _, _) = await t.Svc.CreateSalesBatchAsync(
+            TenantId, t.TokenCashier, new BatchSalesRequest([t.Sale("ATTR-8", a.Id)]), registerId: null);
+
+        Assert.Equal("failed", result!.Results.Single().Status);
+        Assert.Empty(t.Pos.Transactions);
+    }
+
+    [Fact]
+    public async Task Single_sale_with_a_foreign_CashierId_is_400_and_own_id_is_fine_and_OccurredAt_is_ignored()
+    {
+        var t = new Attribution("ATTR-9");
+        var someoneElse = t.AddUser();
+
+        var foreign = await t.Svc.CreateSaleAsync(TenantId, t.TokenCashier,
+            t.Sale("ATTR-9", cashier: someoneElse.Id), registerId: t.RegisterId);
+        Assert.Equal(400, foreign.StatusCode);
+        Assert.Empty(t.Pos.Transactions);
+
+        var own = await t.Svc.CreateSaleAsync(TenantId, t.TokenCashier,
+            t.Sale("ATTR-9", cashier: t.TokenCashier, at: DateTime.UtcNow.AddDays(-400)), registerId: t.RegisterId);
+        Assert.Null(own.Error); // absurd OccurredAt is simply ignored here
+        Assert.Equal(t.TokenCashier, t.Pos.Transactions.Single().CashierId);
+    }
+
+    [Fact]
+    public async Task Replay_keeps_its_original_cashier_and_a_different_CashierId_is_a_mismatch()
+    {
+        var t = new Attribution("ATTR-10");
+        var a = t.AddUser();
+        var c = t.AddUser();
+        var now = DateTime.UtcNow;
+        t.AddSession(a.Id, now.AddHours(-3), now.AddHours(-1));
+        t.AddSession(c.Id, now.AddHours(-3), now.AddHours(-1));
+        var key = Guid.NewGuid();
+
+        var first = await t.Flush(t.Sale("ATTR-10", a.Id, now.AddHours(-2), key));
+        var sameReplay = await t.Flush(t.Sale("ATTR-10", a.Id, now.AddHours(-2), key));
+        var otherCashierReplay = await t.Flush(t.Sale("ATTR-10", c.Id, now.AddHours(-2), key));
+
+        Assert.Equal("created", first.Status);
+        Assert.Equal("duplicate", sameReplay.Status);
+        Assert.Equal(first.Sale!.TransactionId, sameReplay.Sale!.TransactionId);
+        Assert.Equal("failed", otherCashierReplay.Status);
+        Assert.Equal(409, otherCashierReplay.ErrorStatusCode);
+        Assert.Single(t.Pos.Transactions);
+        Assert.Equal(a.Id, t.Pos.Transactions[0].CashierId);
     }
 }

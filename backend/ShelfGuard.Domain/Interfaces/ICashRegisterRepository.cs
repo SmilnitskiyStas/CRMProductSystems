@@ -37,6 +37,13 @@ public interface ICashRegisterRepository
 
     Task AddSessionAsync(RegisterSession session, CancellationToken ct = default);
     Task<RegisterSession?> GetSessionAsync(Guid sessionId, CancellationToken ct = default);
+    /// <summary>
+    /// True when the cashier had a session on this register covering <paramref name="at"/>:
+    /// StartedAt &lt;= at and (still open or EndedAt &gt;= at - tolerance).
+    /// </summary>
+    Task<bool> HadSessionAtAsync(
+        Guid registerId, Guid cashierId, DateTime at, TimeSpan endTolerance, CancellationToken ct = default);
+
     Task<IReadOnlyList<RegisterSession>> GetOpenSessionsAsync(Guid registerId, CancellationToken ct = default);
 
     /// <summary>Active users of the store that have a POS PIN set (PIN uniqueness / PIN-only sign-in candidates).</summary>

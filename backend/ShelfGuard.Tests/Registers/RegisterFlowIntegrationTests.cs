@@ -412,6 +412,82 @@ public sealed class RegisterFlowIntegrationTests : IAsyncLifetime
         Assert.False(await Valid(third));
     }
 
+    [Fact]
+    public async Task Offline_sale_of_cashier_A_flushed_by_cashier_B_is_stored_under_A_and_strangers_are_refused()
+    {
+        if (!_dbAvailable) { _output.WriteLine("DB not available - skipped."); return; }
+
+        // A = seeded cashier, B = second cashier, C = colleague who never worked this register.
+        var b = User.Create(_tenantId, $"b-{_run}@flow.test", "Flow B", "pw", AppRoles.Cashier, _storeId);
+        var c = User.Create(_tenantId, $"c-{_run}@flow.test", "Flow C", "pw", AppRoles.Cashier, _storeId);
+        await using (var seed = NewContext())
+        {
+            seed.Users.AddRange(b, c);
+            await seed.SaveChangesAsync();
+        }
+
+        var pinA = (await WithRegisterService(s => s.SetPinAsync(Admin, _cashierId))).Result!.Pin;
+        var pinB = (await WithRegisterService(s => s.SetPinAsync(Admin, b.Id))).Result!.Pin;
+        var (created, _, _) = await WithRegisterService(s =>
+            s.CreateAsync(Admin, new CreateRegisterRequest(_storeId, "Attr")));
+        var registerId = created!.Register.Id;
+        var device = (await WithRegisterService(s =>
+            s.ActivateAsync(new ActivateRegisterRequest(created.ActivationCode)))).Result!.DeviceToken;
+
+        // A works the till, then B signs in (A's session is closed by the replacement).
+        var sessionA = (await WithRegisterService(s =>
+            s.StartSessionAsync(device, new StartSessionRequest(pinA, _cashierId)))).Result!;
+        DateTime startedA;
+        await using (var q = NewContext())
+            startedA = (await q.RegisterSessions.AsNoTracking().SingleAsync(x => x.Id == sessionA.SessionId)).StartedAt;
+        var sessionB = (await WithRegisterService(s =>
+            s.StartSessionAsync(device, new StartSessionRequest(pinB, b.Id)))).Result!;
+        Assert.NotEqual(sessionA.SessionId, sessionB.SessionId);
+
+        var shift = (await WithPos(p => p.OpenShiftAsync(
+            _tenantId, b.Id, new OpenShiftRequest(_storeId, 0m), default, registerId))).Shift!;
+
+        CreateSaleRequest Sale(Guid? cashier, DateTime? at, Guid key) => new(
+            shift.ShiftId, [new SaleItemRequest(Barcode, 1)], "Cash", 50m,
+            ClientTransactionId: key, CashierId: cashier, OccurredAt: at);
+
+        var keyA = Guid.NewGuid();
+        var keyC = Guid.NewGuid();
+        var keyOwn = Guid.NewGuid();
+        var batch = new BatchSalesRequest(
+        [
+            Sale(_cashierId, startedA.AddMilliseconds(20), keyA),   // A's offline sale, flushed by B
+            Sale(c.Id, DateTime.UtcNow.AddSeconds(-5), keyC),       // C never had a session here
+            Sale(null, null, keyOwn),                               // B's own sale
+        ]);
+        var (result, error, _) = await WithPos(p => p.CreateSalesBatchAsync(
+            _tenantId, b.Id, batch, default, registerId));
+        Assert.Null(error);
+        Assert.Equal(["created", "failed", "created"], result!.Results.Select(r => r.Status).ToArray());
+        Assert.Equal(403, result.Results[1].ErrorStatusCode);
+
+        await using (var verify = NewContext())
+        {
+            var byKey = await verify.PosTransactions.AsNoTracking()
+                .Where(t => t.TenantId == _tenantId)
+                .ToDictionaryAsync(t => t.ClientTransactionId!.Value);
+            Assert.Equal(2, byKey.Count);
+            Assert.Equal(_cashierId, byKey[keyA].CashierId);   // attributed to A, not the token holder B
+            Assert.Equal(b.Id, byKey[keyOwn].CashierId);
+            Assert.DoesNotContain(keyC, byKey.Keys);
+            Assert.Equal(registerId, byKey[keyA].CashRegisterId);
+            var ev = await verify.StockEvents.AsNoTracking().Where(e => e.TenantId == _tenantId).ToListAsync();
+            Assert.Contains(ev, e => e.PerformedBy == _cashierId);
+        }
+
+        // A replay of A's sale claiming a different cashier is a conflict, not a silent success.
+        var replay = await WithPos(p => p.CreateSalesBatchAsync(
+            _tenantId, b.Id, new BatchSalesRequest([Sale(b.Id, null, keyA)]), default, registerId));
+        var item = Assert.Single(replay.Result!.Results);
+        Assert.Equal("failed", item.Status);
+        Assert.Equal(409, item.ErrorStatusCode);
+    }
+
     // ── helpers ──────────────────────────────────────────────────────────
 
     private AppDbContext NewContext() => TestPostgres.NewContext(_cs);
@@ -449,7 +525,9 @@ public sealed class RegisterFlowIntegrationTests : IAsyncLifetime
             new StaticFiscalFactory(new NoopFiscalService()),
             new LoyaltyRepository(db),
             new CustomerRepository(db),
-            NullLogger<PosService>.Instance);
+            NullLogger<PosService>.Instance,
+            new UserRepository(db),
+            new CashRegisterRepository(db));
         return await action(svc);
     }
 

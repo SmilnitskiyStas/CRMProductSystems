@@ -33,6 +33,13 @@ public sealed class PosService : IPosService
     private readonly ILoyaltyRepository _loyalty;
     private readonly ICustomerRepository _customers;
     private readonly ILogger<PosService> _log;
+    private readonly IUserRepository? _users;
+    private readonly ICashRegisterRepository? _registers;
+
+    // Offline-sale attribution window (batch sync).
+    public static readonly TimeSpan MaxFutureSkew = TimeSpan.FromMinutes(5);
+    public static readonly TimeSpan MaxSaleAge = TimeSpan.FromDays(14);
+    public static readonly TimeSpan SessionEndTolerance = TimeSpan.FromMinutes(5);
 
     public PosService(
         IPosRepository pos,
@@ -42,8 +49,12 @@ public sealed class PosService : IPosService
         IFiscalServiceFactory fiscalFactory,
         ILoyaltyRepository loyalty,
         ICustomerRepository customers,
-        ILogger<PosService> log)
+        ILogger<PosService> log,
+        IUserRepository? users = null,
+        ICashRegisterRepository? registers = null)
     {
+        _users = users;
+        _registers = registers;
         _pos = pos;
         _stock = stock;
         _catalog = catalog;
@@ -213,8 +224,16 @@ public sealed class PosService : IPosService
 
     public Task<(SaleDto? Sale, string? Error, int? StatusCode)> CreateSaleAsync(
         Guid tenantId, Guid cashierId, CreateSaleRequest request,
-        CancellationToken ct = default, Guid? registerId = null) =>
-        CreateSaleCoreAsync(tenantId, cashierId, request, registerId, inlineFiscalization: true, ct);
+        CancellationToken ct = default, Guid? registerId = null)
+    {
+        // Single sale: always the signed-in operator; OccurredAt is ignored. Attributing a sale to
+        // someone else is only possible through the batch (offline sync) path, with proof.
+        if (request.CashierId.HasValue && request.CashierId.Value != cashierId)
+            return Task.FromResult<(SaleDto?, string?, int?)>(
+                (null, "CashierId must match the signed-in cashier.", 400));
+
+        return CreateSaleCoreAsync(tenantId, cashierId, request, registerId, inlineFiscalization: true, ct);
+    }
 
     // ── Batch sale sync (offline register apps) ────────────────────────────
 
@@ -253,8 +272,16 @@ public sealed class PosService : IPosService
 
                 // Fiscalization stays pending here on purpose: a batch of N queued sales must not
                 // block on N x (up to 8 s) Checkbox round trips; the retry worker picks them up.
+                var (effectiveCashier, attrError, attrStatus) =
+                    await ResolveAttributedCashierAsync(tenantId, cashierId, sale, registerId, ct);
+                if (attrError is not null)
+                {
+                    results.Add(new BatchSaleItemResultDto(clientId, "failed", null, attrError, attrStatus));
+                    continue;
+                }
+
                 var (dto, error, status) = await CreateSaleCoreAsync(
-                    tenantId, cashierId, sale, registerId, inlineFiscalization: false, ct);
+                    tenantId, effectiveCashier, sale, registerId, inlineFiscalization: false, ct);
 
                 if (error is null)
                 {
@@ -283,6 +310,44 @@ public sealed class PosService : IPosService
     }
 
     /// <summary>
+    /// Batch only. Decides whose sale this is: the token's cashier (CashierId absent/equal), or a
+    /// colleague the token holder is flushing for - accepted only with proof the colleague worked
+    /// this register at OccurredAt, so a token cannot attribute sales to arbitrary people.
+    /// </summary>
+    private async Task<(Guid Cashier, string? Error, int? StatusCode)> ResolveAttributedCashierAsync(
+        Guid tenantId, Guid tokenCashierId, CreateSaleRequest sale, Guid? registerId, CancellationToken ct)
+    {
+        if (sale.CashierId is not Guid claimed || claimed == tokenCashierId)
+            return (tokenCashierId, null, null);
+
+        const string denied = "Sale cannot be attributed to the requested cashier.";
+
+        if (registerId is not Guid regId || _users is null || _registers is null)
+            return (default, denied + " Only a register operator may sync another cashier's sales.", 403);
+
+        // (c) plausible time: not in the future (5 min skew), not older than 14 days.
+        var now = DateTime.UtcNow;
+        var at = (sale.OccurredAt ?? now).ToUniversalTime();
+        if (at > now + MaxFutureSkew)
+            return (default, "OccurredAt is in the future.", 403);
+        if (at < now - MaxSaleAge)
+            return (default, "OccurredAt is older than 14 days.", 403);
+
+        // (a) same checks as PIN sign-in: exists in tenant, active, POS role, this register's store.
+        var register = await _registers.GetByIdAsync(regId, ct);
+        var user = await _users.GetByIdAsync(claimed, ct);
+        if (register is null || user is null || user.TenantId != tenantId || !user.IsActive
+            || !Registers.RegisterService.IsPosRole(user.Role) || user.StoreId != register.StoreId)
+            return (default, denied + " Cashier is unknown, inactive, not a POS user or not of this store.", 403);
+
+        // (b) the cashier really worked THIS register at that moment.
+        if (!await _registers.HadSessionAtAsync(regId, claimed, at, SessionEndTolerance, ct))
+            return (default, denied + " Cashier had no session on this register at that time.", 403);
+
+        return (claimed, null, null);
+    }
+
+    /// <summary>
     /// A stored sale found for a replayed ClientTransactionId. Returns it only when it belongs to
     /// the same register (if both are known) and was made of the same shift/payment/items;
     /// otherwise 409 - a reused key must never silently "succeed" with someone else's sale.
@@ -293,6 +358,10 @@ public sealed class PosService : IPosService
         const string conflict = "ClientTransactionId was already used for a different sale.";
 
         if (registerId.HasValue && stored.CashRegisterId.HasValue && stored.CashRegisterId != registerId)
+            return (null, conflict, 409);
+
+        // An explicit CashierId must be the one the sale was stored under.
+        if (request.CashierId.HasValue && stored.CashierId != request.CashierId)
             return (null, conflict, 409);
 
         if (stored.ShiftId != request.ShiftId

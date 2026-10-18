@@ -7,6 +7,10 @@ export interface OutboxPayload {
   paymentType: 'Cash' | 'Card';
   paymentAmount: number;
   clientTransactionId: string;
+  /** Cashier who rang the sale (operator session at sale time). Absent on legacy rows: the server then uses the token's cashier. */
+  cashierId?: string;
+  /** When the sale was made (ISO UTC); lets the server verify the cashier had a session then. */
+  occurredAt?: string;
 }
 
 export interface OutboxRow {
@@ -266,6 +270,7 @@ export function toEntry(r: OutboxRow): QueueEntry {
     total: r.receipt.subtotal,
     paymentType: r.payload.paymentType,
     itemCount: r.payload.items.length,
+    cashierName: r.receipt.cashierName ?? null,
   };
 }
 

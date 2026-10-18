@@ -64,6 +64,11 @@ internal sealed class FakeRegisterRepo : ICashRegisterRepository
         return Task.FromResult(new PinFailureOutcome(w, d, r.Status));
     }
 
+    public Task<bool> HadSessionAtAsync(
+        Guid registerId, Guid cashierId, DateTime at, TimeSpan endTolerance, CancellationToken ct = default) =>
+        Task.FromResult(Sessions.Any(s => s.RegisterId == registerId && s.CashierId == cashierId
+            && s.StartedAt <= at && (s.EndedAt == null || s.EndedAt >= at - endTolerance)));
+
     public Task AddSessionAsync(RegisterSession session, CancellationToken ct = default)
     {
         Sessions.Add(session);

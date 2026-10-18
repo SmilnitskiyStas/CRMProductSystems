@@ -111,6 +111,7 @@ export function QueueScreen({ onBack }: { onBack: () => void }) {
                 </p>
                 <p className="text-sm text-slate-500">
                   {new Date(e.createdAt).toLocaleString('uk-UA')}
+                  {e.cashierName && ` · касир: ${e.cashierName}`}
                   {e.attempts > 0 && ` · спроб: ${e.attempts}`}
                   {e.serverReceiptNo && ` · лок. ${e.localReceiptNo}`}
                 </p>
