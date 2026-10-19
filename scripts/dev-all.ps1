@@ -21,7 +21,7 @@ if ((docker ps --filter "name=$db" --format '{{.Names}}') -ne $db) {
 
 function Start-Window($title, $dir, $command) {
   $full = "`$Host.UI.RawUI.WindowTitle = '$title'; Set-Location '$dir'; $command"
-  Start-Process powershell -ArgumentList '-NoExit', '-Command', $full
+  Start-Process powershell -ArgumentList '-NoExit', '-ExecutionPolicy', 'Bypass', '-Command', $full
 }
 
 # 2. Backend API (CORS allows the web panel origin).
@@ -31,14 +31,14 @@ Start-Window 'ShelfGuard API' $root (
 
 # 3. Web panel.
 Start-Window 'ShelfGuard Web' (Join-Path $root 'frontend') (
-  "if (-not (Test-Path node_modules)) { npm install }; " +
-  "`$env:NEXT_PUBLIC_API_URL='$api'; npm run dev -- -p 3003")
+  "npm.cmd install --no-audit --no-fund; " +
+  "`$env:NEXT_PUBLIC_API_URL='$api'; npm.cmd run dev -- -p 3003")
 
 # 4. Cashier desktop app (Electron, dev mode). Give the API a head start first.
-# First run installs dependencies (Electron + native SQLite prebuilt) — takes a few minutes.
+# Dependencies are synced on every start (the first run takes a few minutes: Electron + native SQLite).
 Start-Sleep -Seconds 15
 Start-Window 'ShelfGuard Cashier' (Join-Path $root 'cashier') (
-  "if (-not (Test-Path node_modules)) { npm install }; " +
-  "`$env:CASHIER_SERVER_URL='$api'; npm run dev")
+  "npm.cmd install --no-audit --no-fund; " +
+  "`$env:CASHIER_SERVER_URL='$api'; npm.cmd run dev")
 
 Write-Host "Started: API $api, web $web, cashier (Electron window)."
