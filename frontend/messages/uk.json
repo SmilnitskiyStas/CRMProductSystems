@@ -944,7 +944,7 @@
         "enterprise_admin": "Адміністратор", "network_manager": "Менеджер мережі", "store_manager": "Керівник магазину",
         "storekeeper": "Комірник", "cashier": "Касир"
       },
-      "actions": { "create": "Створити касу", "edit": "Редагувати", "issueCode": "Код активації", "revoke": "Відкликати", "unlock": "Розблокувати" },
+      "actions": { "menu": "Дії", "create": "Створити касу", "edit": "Редагувати", "issueCode": "Код активації", "revoke": "Відкликати", "unlock": "Розблокувати" },
       "form": {
         "createTitle": "Нова каса", "editTitle": "Редагування каси", "name": "Назва", "namePlaceholder": "Напр. Каса 1",
         "store": "Магазин", "number": "Номер (необов'язково)", "numberPlaceholder": "Призначиться автоматично",
