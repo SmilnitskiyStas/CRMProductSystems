@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { ShiftInfo } from '@shared/types';
 import { formatMoney } from '@shared/money';
 
@@ -31,6 +31,11 @@ export function ShiftScreen({ shift, online, onShiftChange, onBack, onOpenQueue,
   const [report, setReport] = useState<ShiftInfo | null>(null);
 
   const amount = parseAmount(cash);
+
+  // connection restored: drop the stale "needs network" error so the buttons work without a restart
+  useEffect(() => {
+    if (online) setError(null);
+  }, [online]);
 
   const open = async () => {
     if (amount === null) return;

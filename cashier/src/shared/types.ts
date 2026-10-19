@@ -32,12 +32,20 @@ export interface OperatorInfo {
   expiresAt: string;
 }
 
+export interface ConnectionState {
+  online: boolean;
+  checking: boolean;
+  /** ISO time of the next automatic probe (drives the countdown); null while a probe runs. */
+  nextProbeAt: string | null;
+}
+
 export interface AppState {
   version: string;
   serverUrl: string;
   register: RegisterInfo | null;
   operator: OperatorInfo | null;
   online: boolean;
+  connection: ConnectionState;
   queue: QueueSummary;
 }
 
@@ -165,6 +173,11 @@ export interface PrintResult {
   error?: string;
 }
 
+export interface CameraPrefs {
+  enabled: boolean;
+  deviceId: string | null;
+}
+
 export interface CashierApi {
   getState(): Promise<AppState>;
   activate(serverUrl: string, activationCode: string): Promise<Result<RegisterInfo>>;
@@ -189,7 +202,11 @@ export interface CashierApi {
   testPrint(): Promise<PrintResult>;
   printReceipt(clientTransactionId: string): Promise<PrintResult>;
   openDrawer(): Promise<PrintResult>;
-  onOnlineChange(cb: (online: boolean) => void): () => void;
+  getCameraPrefs(): Promise<CameraPrefs>;
+  saveCameraPrefs(prefs: CameraPrefs): Promise<CameraPrefs>;
+  onOnlineChange(cb: (state: ConnectionState) => void): () => void;
+  retryConnection(): Promise<ConnectionState>;
+  checkServer(url: string): Promise<{ reachable: boolean; message: string | null }>;
   onSessionExpired(cb: () => void): () => void;
   onCatalogChange(cb: (status: CatalogStatus) => void): () => void;
   onQueueChange(cb: (summary: QueueSummary) => void): () => void;

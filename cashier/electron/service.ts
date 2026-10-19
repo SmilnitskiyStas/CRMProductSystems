@@ -2,6 +2,8 @@ import { app } from 'electron';
 import { join } from 'node:path';
 import type {
   AppState,
+  CameraPrefs,
+  ConnectionState,
   CatalogItem,
   CatalogStatus,
   OperatorInfo,
@@ -16,7 +18,8 @@ import type {
   ShiftInfo,
 } from '@shared/types';
 import { MemoryCatalogStore, type CatalogStore, type SyncCatalogPageWire } from './catalogStore';
-import { httpRequest, normalizeServerUrl, toApiError, toResult } from './http';
+import { ConnectivityMonitor } from './connectivity';
+import { httpRequest, normalizeServerUrl, setNetworkErrorListener, toApiError, toResult } from './http';
 import {
   closeShiftBlockReason,
   OutboxService,
@@ -24,6 +27,7 @@ import {
   type BatchResponse,
   type OutboxPayload,
 } from './outbox';
+import { CameraPrefsStore } from './cameraPrefs';
 import { PrintService, PrintSettingsStore } from './print/printService';
 import { mergeServerSale, OutboxSalesGateway, type SalesGateway } from './salesGateway';
 import { SecureConfigStore } from './secureStore';
@@ -77,11 +81,10 @@ const mapShift = (s: ShiftWire): ShiftInfo => ({
 
 const CATALOG_PAGE_LIMIT = 500;
 const CATALOG_REFRESH_MS = 5 * 60 * 1000;
-const ONLINE_POLL_MS = 15_000;
 const OUTBOX_TICK_MS = 15_000;
 
 export interface ServiceEvents {
-  onlineChange(online: boolean): void;
+  onlineChange(state: ConnectionState): void;
   sessionExpired(): void;
   catalogChange(status: CatalogStatus): void;
   queueChange(summary: QueueSummary): void;
@@ -97,8 +100,7 @@ export class CashierService {
   private readonly config = new SecureConfigStore();
   /** Operator JWT: memory + safeStorage-encrypted on disk until it expires (offline restart resumes). */
   private operator: { info: OperatorInfo; token: string } | null = null;
-  private online = false;
-  private pollTimer: NodeJS.Timeout | null = null;
+  private monitor!: ConnectivityMonitor;
   private outboxTimer: NodeJS.Timeout | null = null;
   private catalogTimer: NodeJS.Timeout | null = null;
   private db!: Db;
@@ -108,6 +110,7 @@ export class CashierService {
   private sales!: SalesGateway;
   private print!: PrintService;
   private printSettings!: PrintSettingsStore;
+  private cameraPrefs!: CameraPrefsStore;
 
   constructor(private readonly events: ServiceEvents) {}
 
@@ -150,6 +153,7 @@ export class CashierService {
 
     this.printSettings = new PrintSettingsStore(join(app.getPath('userData'), 'print-settings.json'));
     this.print = new PrintService(this.printSettings);
+    this.cameraPrefs = new CameraPrefsStore(join(app.getPath('userData'), 'camera-prefs.json'));
 
     // Resume a still-valid operator session after restart (works offline).
     const saved = this.config.snapshot.operator;
@@ -158,13 +162,25 @@ export class CashierService {
       this.startBackgroundWork();
     }
 
-    void this.pollOnline();
-    this.pollTimer = setInterval(() => void this.pollOnline(), ONLINE_POLL_MS);
+    this.monitor = new ConnectivityMonitor(
+      async () => {
+        // ANY HTTP response (even 401/404) means the server is reachable
+        const res = await httpRequest<unknown>(this.config.snapshot.serverUrl, '/health/live', { timeoutMs: 3_000, probe: true });
+        return !res.networkError;
+      },
+      {
+        onState: (s) => this.events.onlineChange(s),
+        onReconnected: () => this.onReconnected(),
+      },
+    );
+    setNetworkErrorListener(() => this.monitor.trigger());
+    this.monitor.start();
     this.outboxTimer = setInterval(() => void this.outbox.syncNow(false), OUTBOX_TICK_MS);
   }
 
   dispose(): void {
-    if (this.pollTimer) clearInterval(this.pollTimer);
+    this.monitor?.stop();
+    setNetworkErrorListener(null);
     if (this.outboxTimer) clearInterval(this.outboxTimer);
     if (this.catalogTimer) clearInterval(this.catalogTimer);
     try {
@@ -183,7 +199,8 @@ export class CashierService {
       serverUrl: c.serverUrl,
       register: c.register,
       operator: this.currentOperator()?.info ?? null,
-      online: this.online,
+      online: this.monitor.state.online,
+      connection: this.monitor.state,
       queue: this.outbox.summary(),
     };
   }
@@ -196,17 +213,26 @@ export class CashierService {
     return this.operator;
   }
 
-  private async pollOnline(): Promise<void> {
-    const res = await httpRequest<unknown>(this.config.snapshot.serverUrl, '/health/live', { timeoutMs: 5_000 });
-    const now = !res.networkError && res.status >= 200 && res.status < 300;
-    if (now !== this.online) {
-      this.online = now;
-      this.events.onlineChange(now);
-      if (now) {
-        void this.outbox.syncNow(true); // connectivity regained: flush the queue
-        if (this.operator) void this.catalog.sync();
-      }
+  /** offline -> online: flush the outbox, delta-sync the catalog and refresh the cached shift. */
+  private onReconnected(): void {
+    void this.outbox.syncNow(true);
+    if (this.operator) {
+      void this.catalog.sync(); // a full download happens automatically when the local catalog is empty
+      void this.getCurrentShift(); // replaces the cached copy; a restored session is validated here (401 -> PIN screen)
     }
+  }
+
+  probeNow = (): Promise<ConnectionState> => this.monitor.probeNow();
+  retryConnection = (): Promise<ConnectionState> => this.monitor.probeNow();
+
+  /** One-off reachability check of an arbitrary URL (activation screen, before anything is saved). */
+  async checkServer(urlRaw: string): Promise<{ reachable: boolean; message: string | null }> {
+    const url = normalizeServerUrl(urlRaw);
+    if (!url) return { reachable: false, message: 'Некоректна адреса сервера (потрібно http:// або https://).' };
+    const res = await httpRequest<unknown>(url, '/health/live', { timeoutMs: 3_000, probe: true });
+    return res.networkError
+      ? { reachable: false, message: 'Сервер недоступний (немає відповіді). Перевірте адресу та що API запущено.' }
+      : { reachable: true, message: null };
   }
 
   private startBackgroundWork(): void {
@@ -250,7 +276,7 @@ export class CashierService {
     this.operator = null;
     this.kv.set('shift.current', null);
     await this.catalog.clear();
-    void this.pollOnline();
+    void this.monitor.probeNow();
     return { ok: true, data: register };
   }
 
@@ -444,6 +470,9 @@ export class CashierService {
   }
 
   // ── printing ─────────────────────────────────────────────────────────────
+
+  getCameraPrefs = (): CameraPrefs => this.cameraPrefs.get();
+  saveCameraPrefs = (p: CameraPrefs): CameraPrefs => this.cameraPrefs.save(p);
 
   getPrintSettings = (): PrintSettings => this.printSettings.get();
   savePrintSettings = (s: PrintSettings): PrintSettings => this.printSettings.save(s);

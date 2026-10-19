@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useState } from 'react';
-import type { AppState, OperatorInfo, QueueSummary, RegisterInfo, ShiftInfo } from '@shared/types';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import type { AppState, ConnectionState, OperatorInfo, QueueSummary, RegisterInfo, ShiftInfo } from '@shared/types';
+import { ConnectionBanner } from './components/ConnectionBanner';
 import { StatusBar } from './components/StatusBar';
 import { useIdleLogout } from './hooks/useIdleLogout';
 import { ActivationScreen } from './screens/ActivationScreen';
@@ -24,7 +25,10 @@ export function App() {
 
   useEffect(() => {
     void refreshState();
-    const offOnline = window.cashier.onOnlineChange((online) => setState((s) => (s ? { ...s, online } : s)));
+    // single source of truth: the main-process connectivity monitor
+    const offOnline = window.cashier.onOnlineChange((connection: ConnectionState) =>
+      setState((s) => (s ? { ...s, online: connection.online, connection } : s)),
+    );
     const offQueue = window.cashier.onQueueChange((queue: QueueSummary) =>
       setState((s) => (s ? { ...s, queue } : s)),
     );
@@ -62,6 +66,26 @@ export function App() {
       cancelled = true;
     };
   }, [operatorSession]);
+
+  // Back online: re-fetch the shift from the server (replaces the cached copy) without disturbing the screen.
+  const online = state?.online ?? false;
+  const prevOnline = useRef(online);
+  const [reconnectedAt, setReconnectedAt] = useState<number | null>(null);
+  useEffect(() => {
+    const was = prevOnline.current;
+    prevOnline.current = online;
+    if (!online || was) return;
+    setReconnectedAt(Date.now());
+    const t = setTimeout(() => setReconnectedAt(null), 5000);
+    if (operatorSession) {
+      void window.cashier.getCurrentShift().then((res) => {
+        if (!res.ok) return;
+        const live = res.data && res.data.status !== 'Closed' ? res.data : null;
+        setShift((cur) => (cur?.shiftId === live?.shiftId ? (live ?? cur) : live));
+      });
+    }
+    return () => clearTimeout(t);
+  }, [online, operatorSession]);
 
   const logout = useCallback(
     async (reason: 'logout' | 'idle') => {
@@ -131,6 +155,9 @@ export function App() {
 
   return (
     <div className="flex h-full flex-col bg-slate-950">
+      {state.register && (
+        <ConnectionBanner connection={state.connection} online={state.online} syncing={state.queue.syncing} reconnectedAt={reconnectedAt} />
+      )}
       {operator && state.queue.rejected > 0 && view !== 'queue' && (
         <button
           onClick={() => setView('queue')}

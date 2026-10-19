@@ -6,7 +6,7 @@ import react from '@vitejs/plugin-react';
 // injected as a <meta> at build time. In dev the main process sets a relaxed header instead
 // (Vite's React refresh preamble is an inline script).
 const PROD_CSP =
-  "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; " +
+  "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; media-src 'self' blob:; " +
   "connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'";
 
 export default defineConfig({

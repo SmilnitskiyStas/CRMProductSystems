@@ -27,6 +27,11 @@
       "out/**/*",
       "package.json"
     ],
+    "mac": {
+      "extendInfo": {
+        "NSCameraUsageDescription": "ShelfGuard Cashier використовує камеру для сканування штрихкодів товарів."
+      }
+    },
     "win": {
       "target": [
         {
@@ -54,15 +59,18 @@
     "@eslint/js": "^9.17.0",
     "@types/better-sqlite3": "^9.6.0",
     "@types/node": "^22.10.0",
+    "@types/pngjs": "^6.0.5",
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",
     "@vitejs/plugin-react": "^4.3.4",
     "autoprefixer": "^10.4.20",
+    "bwip-js": "^4.11.4",
     "electron": "^33.2.1",
     "electron-builder": "^25.1.8",
     "electron-vite": "^2.3.0",
     "eslint": "^9.17.0",
     "eslint-plugin-react-hooks": "^5.1.0",
+    "pngjs": "^7.0.0",
     "postcss": "^8.4.49",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
@@ -73,6 +81,7 @@
     "vitest": "^2.1.8"
   },
   "dependencies": {
+    "@zxing/library": "^0.21.3",
     "better-sqlite3": "11.10.0"
   }
 }
