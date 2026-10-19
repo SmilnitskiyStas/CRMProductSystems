@@ -167,7 +167,7 @@ export function ShiftScreen({ shift, online, onShiftChange, onBack, onOpenQueue,
             Черга продажів
           </button>
           <button className="underline" onClick={onOpenPrint}>
-            Налаштування друку
+            Налаштування
           </button>
         </div>
       </div>

@@ -1,5 +1,11 @@
 import { useEffect, useState } from 'react';
-import type { PrintCodepage, PrintSettings, PrintTransport } from '@shared/types';
+import {
+  MAX_IDLE_LOGOUT_MINUTES,
+  MIN_IDLE_LOGOUT_MINUTES,
+  type PrintCodepage,
+  type PrintSettings,
+  type PrintTransport,
+} from '@shared/types';
 
 const CODEPAGES: { id: PrintCodepage; label: string; escT: number }[] = [
   { id: 'cp866', label: 'CP866 (є ї без і ґ)', escT: 17 },
@@ -15,15 +21,39 @@ const TRANSPORTS: { id: PrintTransport; label: string }[] = [
   { id: 'file', label: 'Файл (діагностика)' },
 ];
 
-export function PrintSettingsScreen({ onBack }: { onBack: () => void }) {
+interface Props {
+  onBack: () => void;
+  /** Called after the idle sign-out time is saved so the app applies it immediately. */
+  onIdleMinutesChange?: (minutes: number) => void;
+}
+
+export function PrintSettingsScreen({ onBack, onIdleMinutesChange }: Props) {
   const [s, setS] = useState<PrintSettings | null>(null);
   const [printers, setPrinters] = useState<string[]>([]);
   const [msg, setMsg] = useState<{ text: string; ok: boolean } | null>(null);
+  const [idleRaw, setIdleRaw] = useState('');
+  const [idleMsg, setIdleMsg] = useState<{ text: string; ok: boolean } | null>(null);
 
   useEffect(() => {
     void window.cashier.getPrintSettings().then(setS);
     void window.cashier.listPrinters().then(setPrinters);
+    void window.cashier.getAppPrefs().then((p) => setIdleRaw(String(p.idleLogoutMinutes)));
   }, []);
+
+  const idleValue = Number(idleRaw);
+  const idleValid =
+    idleRaw.trim() !== '' &&
+    Number.isInteger(idleValue) &&
+    idleValue >= MIN_IDLE_LOGOUT_MINUTES &&
+    idleValue <= MAX_IDLE_LOGOUT_MINUTES;
+
+  const saveIdle = async () => {
+    if (!idleValid) return;
+    const saved = await window.cashier.saveAppPrefs({ idleLogoutMinutes: idleValue });
+    setIdleRaw(String(saved.idleLogoutMinutes));
+    onIdleMinutesChange?.(saved.idleLogoutMinutes);
+    setIdleMsg({ text: `Збережено: автовихід через ${saved.idleLogoutMinutes} хв.`, ok: true });
+  };
 
   if (!s) return null;
   const set = <K extends keyof PrintSettings>(k: K, v: PrintSettings[K]) => setS({ ...s, [k]: v });
@@ -53,7 +83,42 @@ export function PrintSettingsScreen({ onBack }: { onBack: () => void }) {
         <button className="btn-secondary px-4 py-2" onClick={onBack}>
           ← Назад
         </button>
-        <h1 className="text-2xl font-bold">Налаштування друку</h1>
+        <h1 className="text-2xl font-bold">Налаштування</h1>
+      </div>
+
+      <div className="card mx-auto mb-4 w-full max-w-2xl space-y-3">
+        <h2 className="text-lg font-semibold">Безпека сесії</h2>
+        <label className="block space-y-1">
+          <Label>{`Автоматичний вихід через неактивність, хвилин (${MIN_IDLE_LOGOUT_MINUTES}–${MAX_IDLE_LOGOUT_MINUTES})`}</Label>
+          <div className="flex gap-3">
+            <input
+              className="field w-40 text-right"
+              type="number"
+              inputMode="numeric"
+              min={MIN_IDLE_LOGOUT_MINUTES}
+              max={MAX_IDLE_LOGOUT_MINUTES}
+              step={1}
+              value={idleRaw}
+              onChange={(e) => {
+                setIdleRaw(e.target.value);
+                setIdleMsg(null);
+              }}
+              onKeyDown={(e) => e.key === 'Enter' && void saveIdle()}
+            />
+            <button className="btn-primary" disabled={!idleValid} onClick={() => void saveIdle()}>
+              Зберегти
+            </button>
+          </div>
+        </label>
+        <p className="text-sm text-slate-400">
+          Якщо касир не торкається клавіатури чи миші (і не сканує камерою) цей час, потрібно знову ввести PIN.
+        </p>
+        {!idleValid && idleRaw !== '' && (
+          <p className="text-sm text-rose-300">
+            Вкажіть ціле число від {MIN_IDLE_LOGOUT_MINUTES} до {MAX_IDLE_LOGOUT_MINUTES}.
+          </p>
+        )}
+        {idleMsg && <p className={`text-sm ${idleMsg.ok ? 'text-emerald-300' : 'text-rose-300'}`}>{idleMsg.text}</p>}
       </div>
 
       <div className="card mx-auto w-full max-w-2xl space-y-5">

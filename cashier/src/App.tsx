@@ -1,5 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { AppState, ConnectionState, OperatorInfo, QueueSummary, RegisterInfo, ShiftInfo } from '@shared/types';
+import {
+  DEFAULT_IDLE_LOGOUT_MINUTES,
+  type AppState,
+  type ConnectionState,
+  type OperatorInfo,
+  type QueueSummary,
+  type RegisterInfo,
+  type ShiftInfo,
+} from '@shared/types';
 import { ConnectionBanner } from './components/ConnectionBanner';
 import { StatusBar } from './components/StatusBar';
 import { useIdleLogout } from './hooks/useIdleLogout';
@@ -10,8 +18,6 @@ import { PrintSettingsScreen } from './screens/PrintSettingsScreen';
 import { QueueScreen } from './screens/QueueScreen';
 import { ShiftScreen } from './screens/ShiftScreen';
 
-/** An operator who steps away stays signed in this long; any input (or a camera scan) resets it. */
-const IDLE_LOGOUT_MS = 15 * 60 * 1000;
 
 type View = 'checkout' | 'shift' | 'queue' | 'print';
 
@@ -21,6 +27,12 @@ export function App() {
   const [shiftLoaded, setShiftLoaded] = useState(false);
   const [view, setView] = useState<View>('checkout');
   const [notice, setNotice] = useState<string | null>(null);
+  // Auto sign-out after this many idle minutes; configurable in Налаштування, persisted in app-prefs.json.
+  const [idleMinutes, setIdleMinutes] = useState(DEFAULT_IDLE_LOGOUT_MINUTES);
+
+  useEffect(() => {
+    void window.cashier.getAppPrefs().then((p) => setIdleMinutes(p.idleLogoutMinutes));
+  }, []);
 
   const refreshState = useCallback(async () => setState(await window.cashier.getState()), []);
 
@@ -100,7 +112,7 @@ export function App() {
     [refreshState],
   );
 
-  useIdleLogout(operator !== null, IDLE_LOGOUT_MS, () => void logout('idle'));
+  useIdleLogout(operator !== null, idleMinutes * 60 * 1000, () => void logout('idle'));
 
   if (!state) return <div className="flex h-full items-center justify-center text-slate-500">Завантаження…</div>;
 
@@ -122,7 +134,7 @@ export function App() {
   } else if (view === 'queue') {
     body = <QueueScreen onBack={goBack} />;
   } else if (view === 'print') {
-    body = <PrintSettingsScreen onBack={goBack} />;
+    body = <PrintSettingsScreen onBack={goBack} onIdleMinutesChange={setIdleMinutes} />;
   } else if (view === 'shift' || !shift) {
     body = (
       <ShiftScreen

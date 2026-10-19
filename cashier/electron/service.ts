@@ -2,6 +2,7 @@ import { app } from 'electron';
 import { join } from 'node:path';
 import type {
   AppState,
+  AppPrefs,
   CameraPrefs,
   ConnectionState,
   CatalogItem,
@@ -27,6 +28,7 @@ import {
   type BatchResponse,
   type OutboxPayload,
 } from './outbox';
+import { AppPrefsStore } from './appPrefs';
 import { CameraPrefsStore } from './cameraPrefs';
 import { PrintService, PrintSettingsStore } from './print/printService';
 import { mergeServerSale, OutboxSalesGateway, type SalesGateway } from './salesGateway';
@@ -111,6 +113,7 @@ export class CashierService {
   private print!: PrintService;
   private printSettings!: PrintSettingsStore;
   private cameraPrefs!: CameraPrefsStore;
+  private appPrefs!: AppPrefsStore;
 
   constructor(private readonly events: ServiceEvents) {}
 
@@ -154,6 +157,7 @@ export class CashierService {
     this.printSettings = new PrintSettingsStore(join(app.getPath('userData'), 'print-settings.json'));
     this.print = new PrintService(this.printSettings);
     this.cameraPrefs = new CameraPrefsStore(join(app.getPath('userData'), 'camera-prefs.json'));
+    this.appPrefs = new AppPrefsStore(join(app.getPath('userData'), 'app-prefs.json'));
 
     // Resume a still-valid operator session after restart (works offline).
     const saved = this.config.snapshot.operator;
@@ -473,6 +477,8 @@ export class CashierService {
 
   getCameraPrefs = (): CameraPrefs => this.cameraPrefs.get();
   saveCameraPrefs = (p: CameraPrefs): CameraPrefs => this.cameraPrefs.save(p);
+  getAppPrefs = (): AppPrefs => this.appPrefs.get();
+  saveAppPrefs = (p: AppPrefs): AppPrefs => this.appPrefs.save(p);
 
   getPrintSettings = (): PrintSettings => this.printSettings.get();
   savePrintSettings = (s: PrintSettings): PrintSettings => this.printSettings.save(s);
