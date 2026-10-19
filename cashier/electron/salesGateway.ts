@@ -54,11 +54,11 @@ export function mergeServerSale(row: OutboxRow, sale: unknown | null): SaleRecei
       name: i.productName,
       barcode: i.barcode,
       quantity: i.quantity,
-      unitPrice: i.unitPrice,
+      // SaleItemDto.UnitPrice is the REGULAR price; the net price per unit is Total / Quantity
+      unitPrice: i.quantity > 0 ? Math.round((i.total / i.quantity) * 100) / 100 : i.unitPrice,
       total: i.total,
-      discount: i.discountAmount ?? 0,
       promoLabel: i.promotionLabel ?? null,
-      regularUnitPrice: row.receipt.items.find((x) => x.barcode === i.barcode)?.regularUnitPrice,
+      regularUnitPrice: i.unitPrice,
     })),
     // tendered amount stays as the cashier saw it (a replayed duplicate echoes the total); change follows the real total
     change: row.receipt.paymentType.toLowerCase() === 'card' ? 0 : Math.max(0, fromKop(toKop(row.receipt.paymentAmount) - toKop(w.subtotal))),

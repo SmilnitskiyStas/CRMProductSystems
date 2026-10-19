@@ -79,7 +79,7 @@ export function receiptLines(r: SaleReceipt, cols: number, opts: Pick<ReceiptOpt
     out.push(twoCol(`  ${qtyStr(it.quantity)} x ${money(it.unitPrice)}`, money(it.total), cols));
     if (it.promoLabel) out.push(...wrapText(`Акція: ${it.promoLabel}`, cols - 2).map((l) => `  ${l}`));
     if (it.discount && it.discount > 0) out.push(twoCol('  Знижка', '-' + money(it.discount), cols));
-    if (it.regularUnitPrice !== undefined && it.regularUnitPrice > it.unitPrice) {
+    if (it.promoLabel && it.regularUnitPrice !== undefined && it.regularUnitPrice > it.unitPrice) {
       savedKop += Math.round((it.regularUnitPrice - it.unitPrice) * it.quantity * 100);
     }
   }
