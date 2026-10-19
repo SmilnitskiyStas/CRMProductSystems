@@ -1,10 +1,11 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Plus } from "lucide-react";
+import { Ban, KeyRound, Pencil, Plus, Unlock } from "lucide-react";
 import { toast } from "sonner";
 import { useLocale, useTranslations } from "next-intl";
 import { Table, type TableColumn } from "@/components/ui/Table";
+import { ActionMenu, type ActionMenuItem } from "@/components/ui/ActionMenu";
 import { Btn } from "@/components/ui/Btn";
 import {
   useCreateRegister,
@@ -119,28 +120,35 @@ export function RegistersTab({ storeId }: { storeId?: string }) {
       header: "",
       render: (r) => {
         if (r.status === "revoked") return null;
+        const items: ActionMenuItem[] = [
+          { label: t("actions.edit"), icon: <Pencil size={13} />, onClick: () => setEditing(r) },
+          {
+            label: t("actions.issueCode"),
+            icon: <KeyRound size={13} />,
+            onClick: () => requestIssue(r),
+            disabled: issueMut.isPending,
+          },
+        ];
+        if (r.status === "locked") {
+          items.push({
+            label: t("actions.unlock"),
+            icon: <Unlock size={13} />,
+            variant: "success",
+            disabled: unlockMut.isPending,
+            onClick: () =>
+              unlockMut.mutate(r.id, {
+                onSuccess: () => toast.success(t("toast.unlocked")),
+                onError: (e) => toast.error(e.message),
+              }),
+          });
+        }
+        items.push(
+          { separator: true },
+          { label: t("actions.revoke"), icon: <Ban size={13} />, variant: "danger", onClick: () => setRevoking(r) },
+        );
         return (
-          <div style={{ display: "flex", gap: 6, justifyContent: "center", flexWrap: "wrap" }}>
-            <Btn size="sm" variant="ghost" onClick={() => setEditing(r)}>{t("actions.edit")}</Btn>
-            <Btn size="sm" onClick={() => requestIssue(r)} disabled={issueMut.isPending}>
-              {t("actions.issueCode")}
-            </Btn>
-            {r.status === "locked" && (
-              <Btn
-                size="sm"
-                variant="success"
-                disabled={unlockMut.isPending}
-                onClick={() =>
-                  unlockMut.mutate(r.id, {
-                    onSuccess: () => toast.success(t("toast.unlocked")),
-                    onError: (e) => toast.error(e.message),
-                  })
-                }
-              >
-                {t("actions.unlock")}
-              </Btn>
-            )}
-            <Btn size="sm" variant="danger" onClick={() => setRevoking(r)}>{t("actions.revoke")}</Btn>
+          <div style={{ display: "flex", justifyContent: "center" }}>
+            <ActionMenu label={t("actions.menu")} items={items} />
           </div>
         );
       },

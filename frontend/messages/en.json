@@ -944,7 +944,7 @@
         "enterprise_admin": "Administrator", "network_manager": "Network manager", "store_manager": "Store manager",
         "storekeeper": "Storekeeper", "cashier": "Cashier"
       },
-      "actions": { "create": "Create register", "edit": "Edit", "issueCode": "Activation code", "revoke": "Revoke", "unlock": "Unlock" },
+      "actions": { "menu": "Actions", "create": "Create register", "edit": "Edit", "issueCode": "Activation code", "revoke": "Revoke", "unlock": "Unlock" },
       "form": {
         "createTitle": "New register", "editTitle": "Edit register", "name": "Name", "namePlaceholder": "e.g. Register 1",
         "store": "Store", "number": "Number (optional)", "numberPlaceholder": "Assigned automatically",
