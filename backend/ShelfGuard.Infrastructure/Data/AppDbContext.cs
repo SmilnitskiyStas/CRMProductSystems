@@ -87,6 +87,11 @@ public sealed class AppDbContext : DbContext
     public DbSet<PosTransaction> PosTransactions => Set<PosTransaction>();
     public DbSet<PosTransactionItem> PosTransactionItems => Set<PosTransactionItem>();
 
+    // POS promotion rules (price rules) — immutable versions + execution log (promotion-rules.md)
+    public DbSet<PromotionRule> PromotionRules => Set<PromotionRule>();
+    public DbSet<PromotionRuleVersion> PromotionRuleVersions => Set<PromotionRuleVersion>();
+    public DbSet<PromotionRuleApplication> PromotionRuleApplications => Set<PromotionRuleApplication>();
+
     // Support
     public DbSet<SupportTicket>  SupportTickets  => Set<SupportTicket>();
     public DbSet<SupportMessage> SupportMessages => Set<SupportMessage>();
@@ -1348,6 +1353,69 @@ public sealed class AppDbContext : DbContext
              .HasForeignKey(i => i.ProductId).OnDelete(DeleteBehavior.Restrict);
             e.HasOne<ProductStock>().WithMany()
              .HasForeignKey(i => i.ProductStockId).OnDelete(DeleteBehavior.SetNull).IsRequired(false);
+            e.Property(i => i.PromotionLabel).HasMaxLength(200);
+            e.HasOne<PromotionRule>().WithMany()
+             .HasForeignKey(i => i.PromotionRuleId).OnDelete(DeleteBehavior.SetNull).IsRequired(false);
+        });
+
+        // ── Promotion rules (POS price rules) ───────────────────────────────
+        builder.Entity<PromotionRule>(e =>
+        {
+            e.ToTable("promotion_rules");
+            e.HasKey(r => r.Id);
+            e.Property(r => r.Id).HasDefaultValueSql("gen_random_uuid()");
+            e.Property(r => r.Name).HasMaxLength(200).IsRequired();
+            e.Property(r => r.Description).HasMaxLength(2000);
+            e.Property(r => r.Status).HasMaxLength(20).HasDefaultValue(PromotionRule.StatusDraft);
+            e.Property(r => r.CreatedAt).HasDefaultValueSql("NOW()");
+            e.Property(r => r.UpdatedAt).HasDefaultValueSql("NOW()");
+            e.HasIndex(r => new { r.TenantId, r.Status });
+            e.HasOne<Tenant>().WithMany()
+             .HasForeignKey(r => r.TenantId).OnDelete(DeleteBehavior.Cascade);
+            // Circular pointers into the version table: NO ACTION (checked at statement end) so a
+            // cascading rule delete that also removes its versions does not trip the FK.
+            e.HasOne<PromotionRuleVersion>().WithMany()
+             .HasForeignKey(r => r.CurrentVersionId).OnDelete(DeleteBehavior.NoAction).IsRequired(false);
+            e.HasOne<PromotionRuleVersion>().WithMany()
+             .HasForeignKey(r => r.PublishedVersionId).OnDelete(DeleteBehavior.NoAction).IsRequired(false);
+        });
+
+        builder.Entity<PromotionRuleVersion>(e =>
+        {
+            e.ToTable("promotion_rule_versions");
+            e.HasKey(v => v.Id);
+            e.Property(v => v.Id).HasDefaultValueSql("gen_random_uuid()");
+            e.Property(v => v.DefinitionJson).HasColumnType("jsonb").IsRequired();
+            e.Property(v => v.Checksum).HasMaxLength(64).IsRequired();
+            e.Property(v => v.ChangeComment).HasMaxLength(500);
+            e.Property(v => v.CreatedAt).HasDefaultValueSql("NOW()");
+            e.HasIndex(v => new { v.RuleId, v.VersionNumber }).IsUnique();
+            e.HasIndex(v => v.TenantId);
+            e.HasOne<PromotionRule>().WithMany()
+             .HasForeignKey(v => v.RuleId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne<Tenant>().WithMany()
+             .HasForeignKey(v => v.TenantId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        builder.Entity<PromotionRuleApplication>(e =>
+        {
+            e.ToTable("promotion_rule_applications");
+            e.HasKey(a => a.Id);
+            e.Property(a => a.Id).HasDefaultValueSql("gen_random_uuid()");
+            e.Property(a => a.StoreId).HasColumnName("LocationId");
+            e.Property(a => a.Units).HasColumnType("decimal(10,2)");
+            e.Property(a => a.DiscountAmount).HasColumnType("decimal(12,2)");
+            e.Property(a => a.AppliedAt).HasDefaultValueSql("NOW()");
+            e.HasIndex(a => new { a.TenantId, a.RuleId, a.AppliedAt });
+            e.HasIndex(a => a.TransactionId);
+            e.HasOne<Tenant>().WithMany()
+             .HasForeignKey(a => a.TenantId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne<PromotionRule>().WithMany()
+             .HasForeignKey(a => a.RuleId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne<PromotionRuleVersion>().WithMany()
+             .HasForeignKey(a => a.VersionId).OnDelete(DeleteBehavior.NoAction);
+            e.HasOne<PosTransaction>().WithMany()
+             .HasForeignKey(a => a.TransactionId).OnDelete(DeleteBehavior.Cascade);
         });
 
         // ── SupportTicket ───────────────────────────────────────────────────

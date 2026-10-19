@@ -14,6 +14,11 @@ public sealed class PosTransactionItem
     // Expiry read from the package by CV at checkout (v3 Phase 3); null = pure FEFO
     public DateOnly? ExpiryDate { get; init; }
     public int? CvConfidence { get; init; }
+    // Promotion rule that priced this (sub-)line; null = regular / tier / stock discount only.
+    // A line only partly covered by a promo is stored as several sub-lines of the same product
+    // so PriceFinal * Quantity stays exact per row.
+    public Guid? PromotionRuleId { get; init; }
+    public string? PromotionLabel { get; init; }
 
     // Navigation properties
     public PosTransaction? Transaction { get; init; }

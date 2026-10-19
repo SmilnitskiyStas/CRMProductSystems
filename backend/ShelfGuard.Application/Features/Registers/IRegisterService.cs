@@ -58,4 +58,11 @@ public interface IPosSyncService
     /// <summary>Delta catalog for register apps (barcodes, prices, active flag), paged by (UpdatedAt, Id).</summary>
     Task<SyncCatalogResponse> GetCatalogAsync(
         DateTime? since, Guid? afterId, int? limit, CancellationToken ct = default);
+
+    /// <summary>
+    /// Published promotion rules applying to a store (the register's store for operator tokens,
+    /// otherwise <paramref name="fallbackStoreId"/>). Null error = success.
+    /// </summary>
+    Task<(SyncPromotionsResponse? Result, string? Error, int? StatusCode)> GetPromotionsAsync(
+        Guid tenantId, Guid? registerId, Guid? fallbackStoreId, string? etag, CancellationToken ct = default);
 }

@@ -1578,3 +1578,6 @@ Offline sales flushed by another operator are stored under the real cashier when
 
 ### TASK-731 - Cashier: webcam scanner + connectivity monitor - review
 F3 camera panel (zxing, check-digit + 2-read + 1.5 s debounce, same pipeline as USB wedge, beep/flash, remembered camera, scoped `media` permission) and a main-process connectivity monitor (3 s probe, backoff 5-15 s, auto reconnect: outbox flush + catalog delta + shift refresh, banner with countdown/"Спробувати зараз"). 84 vitest, build+dist OK, smoke with Chromium fake camera OK; real webcam and real-backend start order not verified; not committed. Лог: `.claude/logs/tasks/731_*`.
+
+### TASK-732 - Promotion rules Phase 1 (backend) - review
+Schema+RLS (`AddPromotionRules`, immutable versions), pure `PromotionEngine` + 37 golden vectors (`backend/ShelfGuard.Tests/Promotions/golden-vectors.json`), PosService sub-lines/FEFO/application log, `GET /api/pos/sync/promotions`, catalog `categoryId`. Full test suite green on a migrated scratch DB; dev DB needs the migration applied (start API). Not committed. Лог: `.claude/logs/tasks/732_*`.

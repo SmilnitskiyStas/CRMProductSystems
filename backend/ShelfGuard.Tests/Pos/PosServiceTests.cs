@@ -4,6 +4,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using ShelfGuard.Application.Features.Pos;
 using ShelfGuard.Application.Features.Pos.Dtos;
 using ShelfGuard.Application.Features.Pos.Fiscal;
+using ShelfGuard.Application.Features.Promotions;
 using ShelfGuard.Domain.Entities;
 using ShelfGuard.Domain.Exceptions;
 using ShelfGuard.Domain.Interfaces;
@@ -2070,5 +2071,273 @@ public sealed class PosServiceTests
         Assert.Equal(409, otherCashierReplay.ErrorStatusCode);
         Assert.Single(t.Pos.Transactions);
         Assert.Equal(a.Id, t.Pos.Transactions[0].CashierId);
+    }
+}
+
+// ── Promotion rules (promotion-rules.md, Phase 1) ──────────────────────────
+
+file sealed class FakePromotionRepo : IPromotionRuleRepository
+{
+    public List<PublishedPromotionRuleRow> Published { get; } = [];
+    public List<PromotionRuleApplication> Applications { get; } = [];
+
+    public Task<IReadOnlyList<PublishedPromotionRuleRow>> GetPublishedAsync(Guid tenantId, CancellationToken ct = default) =>
+        Task.FromResult<IReadOnlyList<PublishedPromotionRuleRow>>(Published);
+
+    public Task AddApplicationsAsync(IEnumerable<PromotionRuleApplication> applications, CancellationToken ct = default)
+    {
+        Applications.AddRange(applications);
+        return Task.CompletedTask;
+    }
+
+    public Task<IReadOnlyList<PromotionRuleApplication>> GetApplicationsForTransactionAsync(Guid transactionId, CancellationToken ct = default) =>
+        Task.FromResult<IReadOnlyList<PromotionRuleApplication>>(Applications.Where(a => a.TransactionId == transactionId).ToList());
+
+    public Task<PromotionRule?> GetByIdAsync(Guid id, CancellationToken ct = default) => Task.FromResult<PromotionRule?>(null);
+    public Task<IReadOnlyList<PromotionRuleVersion>> GetVersionsAsync(Guid ruleId, CancellationToken ct = default) =>
+        Task.FromResult<IReadOnlyList<PromotionRuleVersion>>([]);
+    public Task AddRuleAsync(PromotionRule rule, CancellationToken ct = default) => Task.CompletedTask;
+    public Task AddVersionAsync(PromotionRuleVersion version, CancellationToken ct = default) => Task.CompletedTask;
+    public Task SaveChangesAsync(CancellationToken ct = default) => Task.CompletedTask;
+
+    public PublishedPromotionRuleRow Add(string name, string definitionJson)
+    {
+        var row = new PublishedPromotionRuleRow(Guid.NewGuid(), name, DateTime.UtcNow.AddDays(-1), Guid.NewGuid(), definitionJson);
+        Published.Add(row);
+        return row;
+    }
+}
+
+file sealed class PromoCtx
+{
+    public FakePosRepo Pos { get; } = new();
+    public FakeStockRepo Stock { get; } = new();
+    public FakeCatalogRepo Catalog { get; } = new();
+    public FakeLoyaltyRepo Loyalty { get; } = new();
+    public FakePromotionRepo Promotions { get; } = new();
+    public PosShift Shift { get; }
+
+    public PromoCtx()
+    {
+        Shift = new PosShift { TenantId = PosServiceTestsIds.TenantId, StoreId = PosServiceTestsIds.StoreId };
+        Pos.Shifts.Add(Shift);
+    }
+
+    public Item AddProduct(string barcode, decimal price)
+    {
+        var p = new Item { Id = Guid.NewGuid(), TenantId = PosServiceTestsIds.TenantId, Barcodes = [barcode], Name = "P-" + barcode, PriceRetail = price };
+        Catalog.Products.Add(p);
+        return p;
+    }
+
+    public ProductStock AddBatch(Guid productId, decimal qty, int days)
+    {
+        var b = new ProductStock
+        {
+            Id = Guid.NewGuid(), TenantId = PosServiceTestsIds.TenantId, ProductId = productId, StoreId = PosServiceTestsIds.StoreId,
+            Quantity = qty, QuantityInitial = qty,
+            ExpiryDate = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(days)), Status = "safe",
+        };
+        Stock.Batches.Add(b);
+        return b;
+    }
+
+    public PosService Service(bool withPromotions = true) => new(
+        Pos, Stock, Catalog, new FakeDiscountRepo(), new FakeFiscalFactory(new NoopFiscalService()),
+        Loyalty, new FakeCustomerRepo(), NullLogger<PosService>.Instance,
+        promotions: withPromotions ? Promotions : null);
+
+    public static (LoyaltyMembership Membership, PromoCtx T, Item Product) WithTier(decimal tierPercent)
+    {
+        var t = new PromoCtx();
+        var product = t.AddProduct("TIERPROMO", 100m);
+        t.AddBatch(product.Id, 10m, days: 10);
+        var tier = new LoyaltyTierDefinition
+        {
+            TenantId = PosServiceTestsIds.TenantId, Name = "Gold", SortOrder = 1, AccrualMultiplier = 0m, DiscountPercent = tierPercent,
+        };
+        var membership = new LoyaltyMembership
+        {
+            TenantId = PosServiceTestsIds.TenantId, Balance = 0m, Status = LoyaltyMembershipStatus.Active,
+            CurrentTierId = tier.Id, CurrentTier = tier,
+        };
+        t.Loyalty.Memberships.Add(membership);
+        t.Loyalty.Settings.Add(new LoyaltyProgramSettings { TenantId = PosServiceTestsIds.TenantId, IsEnabled = true, AccrualRatePercent = 0m });
+        return (membership, t, product);
+    }
+
+    public PosTransaction SingleTx => Pos.Transactions.Single();
+    public IReadOnlyList<StockEvent> Events => Pos.Events;
+}
+
+public sealed class PosServicePromotionTests
+{
+    private static readonly Guid TenantId = PosServiceTestsIds.TenantId;
+    private static readonly Guid StoreId = PosServiceTestsIds.StoreId;
+    private static readonly Guid CashierId = Guid.NewGuid();
+
+    private static string TwoPlusOne(Guid itemId) =>
+        $$$"""{"type":"buy_n_get_m","targets":{"itemIds":["{{{itemId}}}"]},"params":{"buyQty":2,"getQty":1,"getPrice":0.01}}""";
+
+    private static string PercentOff(Guid itemId, decimal percent) =>
+        $$$"""{"type":"percent_off","targets":{"itemIds":["{{{itemId}}}"]},"params":{"percent":{{{percent.ToString(System.Globalization.CultureInfo.InvariantCulture)}}}}}""";
+
+    [Fact]
+    public async Task Two_plus_one_splits_the_line_into_sub_lines_keeps_FEFO_logs_and_replays_idempotently()
+    {
+        var t = new PromoCtx();
+        var product = t.AddProduct("PROMO-21", 30m);
+        var early = t.AddBatch(product.Id, 2m, days: 5);
+        var late = t.AddBatch(product.Id, 10m, days: 30);
+        var rule = t.Promotions.Add("2+1", TwoPlusOne(product.Id));
+        var svc = t.Service();
+        var request = new CreateSaleRequest(t.Shift.Id, [new SaleItemRequest("PROMO-21", 3)], "Cash", 100m,
+            ClientTransactionId: Guid.NewGuid());
+
+        var (sale, error, _) = await svc.CreateSaleAsync(TenantId, CashierId, request);
+
+        Assert.Null(error);
+        Assert.Equal(60.01m, sale!.Subtotal);
+        Assert.Equal(39.99m, sale.Change);
+        var tx = t.SingleTx;
+        Assert.Equal(60.01m, tx.TotalAmount);
+        Assert.Equal(tx.TotalAmount, tx.Items.Sum(i => Math.Round(i.PriceFinal * i.Quantity, 2)));
+        Assert.Equal(2, tx.Items.Count);
+
+        var regular = tx.Items.ElementAt(0);
+        Assert.Equal((2m, 30m, 0m, 30m), (regular.Quantity, regular.PriceRetail, regular.DiscountAmount, regular.PriceFinal));
+        Assert.Null(regular.PromotionRuleId);
+        Assert.Equal(early.Id, regular.ProductStockId);
+
+        var promo = tx.Items.ElementAt(1);
+        Assert.Equal((1m, 30m, 29.99m, 0.01m), (promo.Quantity, promo.PriceRetail, promo.DiscountAmount, promo.PriceFinal));
+        Assert.Equal(rule.RuleId, promo.PromotionRuleId);
+        Assert.Equal("2+1", promo.PromotionLabel);
+        Assert.Equal(late.Id, promo.ProductStockId); // 3rd unit came from the later batch
+
+        // FEFO for the total quantity: 2 from the early batch, 1 from the later one.
+        Assert.Equal(0m, early.Quantity);
+        Assert.Equal(9m, late.Quantity);
+        Assert.Equal([-2m, -1m], t.Events.Select(e => e.QuantityDelta).ToArray());
+
+        Assert.Equal(new[] { "2+1" }, sale.Items.Where(i => i.PromotionLabel is not null).Select(i => i.PromotionLabel!).ToArray());
+
+        var app = Assert.Single(t.Promotions.Applications);
+        Assert.Equal((rule.RuleId, rule.VersionId, tx.Id, StoreId), (app.RuleId, app.VersionId, app.TransactionId, app.StoreId));
+        Assert.Equal(1m, app.Units);
+        Assert.Equal(29.99m, app.DiscountAmount);
+
+        // Idempotent replay: the same request (1 line) matches the stored 2 sub-lines.
+        var (again, againError, _) = await svc.CreateSaleAsync(TenantId, CashierId, request);
+        Assert.Null(againError);
+        Assert.Equal(sale.TransactionId, again!.TransactionId);
+        Assert.Equal(60.01m, again.Subtotal);
+        Assert.Single(t.Pos.Transactions);
+        Assert.Single(t.Promotions.Applications);
+        Assert.Equal(9m, late.Quantity);
+
+        var batch = await svc.CreateSalesBatchAsync(TenantId, CashierId, new BatchSalesRequest([request]));
+        Assert.Equal("duplicate", Assert.Single(batch.Result!.Results).Status);
+
+        // A replay with another quantity is still a conflict.
+        var (_, conflictError, conflictStatus) = await svc.CreateSaleAsync(TenantId, CashierId,
+            request with { Items = [new SaleItemRequest("PROMO-21", 4)] });
+        Assert.NotNull(conflictError);
+        Assert.Equal(409, conflictStatus);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Sale_without_applicable_rules_is_identical_to_the_legacy_path(bool withRules)
+    {
+        var t = new PromoCtx();
+        var product = t.AddProduct("PLAIN", 12.35m);
+        t.AddBatch(product.Id, 10m, days: 10);
+        if (withRules)
+        {
+            t.Promotions.Add("other item", PercentOff(Guid.NewGuid(), 50m));
+            t.Promotions.Add("other store", $$$"""{"type":"percent_off","targets":{"itemIds":["{{{product.Id}}}"]},"params":{"percent":50},"scope":{"storeIds":["{{{Guid.NewGuid()}}}"]}}""");
+            t.Promotions.Add("expired", $$$"""{"type":"percent_off","targets":{"itemIds":["{{{product.Id}}}"]},"params":{"percent":50},"scope":{"validTo":"2020-01-01T00:00:00Z"}}""");
+            t.Promotions.Add("2+1 needs 3", TwoPlusOne(product.Id));
+            t.Promotions.Add("broken json", "{oops");
+        }
+
+        var (sale, error, _) = await t.Service(withPromotions: withRules).CreateSaleAsync(TenantId, CashierId,
+            new CreateSaleRequest(t.Shift.Id, [new SaleItemRequest("PLAIN", 2)], "Card", 24.70m));
+
+        Assert.Null(error);
+        var item = Assert.Single(t.SingleTx.Items);
+        Assert.Equal((2m, 12.35m, 0m, 12.35m), (item.Quantity, item.PriceRetail, item.DiscountAmount, item.PriceFinal));
+        Assert.Null(item.PromotionRuleId);
+        Assert.Null(item.PromotionLabel);
+        Assert.Equal(24.70m, t.SingleTx.TotalAmount);
+        Assert.Equal(4.12m, t.SingleTx.TaxAmount);
+        Assert.Equal(24.70m, sale!.Subtotal);
+        Assert.Empty(t.Promotions.Applications);
+    }
+
+    [Fact]
+    public async Task Loyalty_tier_competes_with_a_promo_and_the_cheaper_one_wins_without_stacking()
+    {
+        // Tier 25% vs promo 10%: tier wins, line priced exactly like the legacy tier path.
+        var (m1, t1, p1) = PromoCtx.WithTier(25m);
+        t1.Promotions.Add("-10%", PercentOff(p1.Id, 10m));
+        var (s1, e1, _) = await t1.Service().CreateSaleAsync(TenantId, CashierId,
+            new CreateSaleRequest(t1.Shift.Id, [new SaleItemRequest("TIERPROMO", 1)], "Cash", 100m, LoyaltyMembershipId: m1.Id));
+        Assert.Null(e1);
+        var i1 = Assert.Single(t1.SingleTx.Items);
+        Assert.Equal((25m, 75m), (i1.DiscountAmount, i1.PriceFinal));
+        Assert.Null(i1.PromotionRuleId);
+        Assert.Equal(75m, s1!.Subtotal);
+        Assert.Empty(t1.Promotions.Applications);
+
+        // Tier 25% vs promo 30%: promo wins, the tier is NOT added on top (70, not 45).
+        var (m2, t2, p2) = PromoCtx.WithTier(25m);
+        var rule = t2.Promotions.Add("-30%", PercentOff(p2.Id, 30m));
+        var (s2, e2, _) = await t2.Service().CreateSaleAsync(TenantId, CashierId,
+            new CreateSaleRequest(t2.Shift.Id, [new SaleItemRequest("TIERPROMO", 1)], "Cash", 100m, LoyaltyMembershipId: m2.Id));
+        Assert.Null(e2);
+        var i2 = Assert.Single(t2.SingleTx.Items);
+        Assert.Equal((30m, 70m), (i2.DiscountAmount, i2.PriceFinal));
+        Assert.Equal(rule.RuleId, i2.PromotionRuleId);
+        Assert.Equal(70m, s2!.Subtotal);
+        Assert.Equal(30m, Assert.Single(t2.Promotions.Applications).DiscountAmount);
+    }
+
+    [Fact]
+    public async Task Loyalty_only_rule_needs_a_membership()
+    {
+        var t = new PromoCtx();
+        var product = t.AddProduct("MEMBERS", 50m);
+        t.AddBatch(product.Id, 10m, days: 10);
+        t.Promotions.Add("members", $$$"""{"type":"percent_off","targets":{"itemIds":["{{{product.Id}}}"]},"params":{"percent":20},"audience":{"kind":"loyalty_member"}}""");
+
+        var (sale, error, _) = await t.Service().CreateSaleAsync(TenantId, CashierId,
+            new CreateSaleRequest(t.Shift.Id, [new SaleItemRequest("MEMBERS", 1)], "Cash", 50m));
+
+        Assert.Null(error);
+        Assert.Equal(50m, sale!.Subtotal);
+        Assert.Null(Assert.Single(t.SingleTx.Items).PromotionRuleId);
+    }
+
+    [Fact]
+    public async Task Batch_sale_is_priced_at_its_OccurredAt()
+    {
+        var t = new PromoCtx();
+        var product = t.AddProduct("WINDOW", 40m);
+        t.AddBatch(product.Id, 10m, days: 10);
+        var end = DateTime.UtcNow.AddHours(-1);
+        t.Promotions.Add("ended an hour ago", $$$"""{"type":"percent_off","targets":{"itemIds":["{{{product.Id}}}"]},"params":{"percent":50},"scope":{"validTo":"{{{end:O}}}"}}""");
+
+        var during = new CreateSaleRequest(t.Shift.Id, [new SaleItemRequest("WINDOW", 1)], "Cash", 40m,
+            ClientTransactionId: Guid.NewGuid(), OccurredAt: end.AddMinutes(-30));
+        var after = during with { ClientTransactionId = Guid.NewGuid(), OccurredAt = DateTime.UtcNow.AddMinutes(-1) };
+
+        var batch = await t.Service().CreateSalesBatchAsync(TenantId, CashierId, new BatchSalesRequest([during, after]));
+
+        Assert.Equal(["created", "created"], batch.Result!.Results.Select(r => r.Status).ToArray());
+        Assert.Equal(20m, batch.Result.Results[0].Sale!.Subtotal);
+        Assert.Equal(40m, batch.Result.Results[1].Sale!.Subtotal);
     }
 }

@@ -2,6 +2,7 @@ using Microsoft.Extensions.Logging;
 using System.Text.Json;
 using ShelfGuard.Application.Features.Pos.Dtos;
 using ShelfGuard.Application.Features.Pos.Fiscal;
+using ShelfGuard.Application.Features.Promotions;
 using ShelfGuard.Application.Features.Stock;
 using ShelfGuard.Domain.Entities;
 using ShelfGuard.Domain.Exceptions;
@@ -35,6 +36,7 @@ public sealed class PosService : IPosService
     private readonly ILogger<PosService> _log;
     private readonly IUserRepository? _users;
     private readonly ICashRegisterRepository? _registers;
+    private readonly IPromotionRuleRepository? _promotions;
 
     // Offline-sale attribution window (batch sync).
     public static readonly TimeSpan MaxFutureSkew = TimeSpan.FromMinutes(5);
@@ -51,10 +53,12 @@ public sealed class PosService : IPosService
         ICustomerRepository customers,
         ILogger<PosService> log,
         IUserRepository? users = null,
-        ICashRegisterRepository? registers = null)
+        ICashRegisterRepository? registers = null,
+        IPromotionRuleRepository? promotions = null)
     {
         _users = users;
         _registers = registers;
+        _promotions = promotions;
         _pos = pos;
         _stock = stock;
         _catalog = catalog;
@@ -364,10 +368,14 @@ public sealed class PosService : IPosService
         if (request.CashierId.HasValue && stored.CashierId != request.CashierId)
             return (null, conflict, 409);
 
+        // A promotion can split one requested line into several stored sub-lines (same product),
+        // so the line-count check only holds for sales without promo sub-lines; the per-product
+        // quantity comparison below is the authoritative one either way.
+        var storedHasPromoSubLines = stored.Items.Any(i => i.PromotionRuleId.HasValue);
         if (stored.ShiftId != request.ShiftId
             || !string.Equals(stored.PaymentType, request.PaymentType, StringComparison.OrdinalIgnoreCase)
             || request.Items is null
-            || request.Items.Count != stored.Items.Count)
+            || (!storedHasPromoSubLines && request.Items.Count != stored.Items.Count))
             return (null, conflict, 409);
 
         var wanted = new Dictionary<Guid, decimal>();
@@ -519,6 +527,8 @@ public sealed class PosService : IPosService
                 }
             }
 
+            var stockDiscountAmount = discountAmount;
+
             // TASK-615: tier discount applied per item (not as a lump-sum reduction against
             // tx.TotalAmount) so each line's DiscountAmount/PriceFinal already reflects it and
             // the transaction total stays internally consistent with the sum of item totals —
@@ -537,8 +547,20 @@ public sealed class PosService : IPosService
                 Batches: batches.Where(b => b.ExpiryDate > today).ToList(),
                 Quantity: itemReq.Quantity,
                 PriceRetail: priceRetail,
-                DiscountAmount: discountAmount));
+                DiscountAmount: discountAmount,
+                StockDiscount: stockDiscountAmount));
         }
+
+        // 2b. Promotion rules (promotion-rules.md). Only lines where a rule actually priced at
+        // least one unit are re-priced (and possibly split into sub-lines); every other line keeps
+        // the exact legacy stock/tier discount computed above.
+        var pricingAt = ResolvePricingInstant(request, inlineFiscalization);
+        var promo = await EvaluatePromotionsAsync(
+            tenantId, storeId, pricingAt, resolvedItems,
+            membership is not null && loyaltySettings is { IsEnabled: true }
+                ? new PromotionMembership(membership.Id, membership.CurrentTierId, tierDiscountPercent)
+                : null,
+            ct);
 
         // 3. Build transaction (all in ONE EF transaction)
         var receiptNumber = $"R-{DateTime.UtcNow:yyyyMMddHHmmss}-{Guid.NewGuid().ToString("N")[..6].ToUpper()}";
@@ -561,21 +583,26 @@ public sealed class PosService : IPosService
         };
 
         var txItemDtos = new List<SaleItemDto>();
+        var subLines = new List<SaleSubLine>();
         var stockEvents = new List<StockEvent>();
 
-        foreach (var resolved in resolvedItems)
+        for (var lineIndex = 0; lineIndex < resolvedItems.Count; lineIndex++)
         {
+            var resolved = resolvedItems[lineIndex];
             var priceFinal = Math.Max(0, resolved.PriceRetail - resolved.DiscountAmount);
             decimal remaining = resolved.Quantity;
 
-            // FEFO write-down: consume batches in order (nearest expiry first)
+            // FEFO write-down: consume batches in order (nearest expiry first) for the WHOLE line
+            // quantity - promo sub-lines below only split the money, never the stock movement.
             Guid? primaryBatchId = null;
+            var consumption = new List<(Guid BatchId, decimal Quantity)>();
             foreach (var batch in resolved.Batches)
             {
                 if (remaining <= 0) break;
 
                 var consume = Math.Min(remaining, batch.Quantity);
                 primaryBatchId ??= batch.Id;
+                consumption.Add((batch.Id, consume));
 
                 var before = batch.Quantity;
                 batch.Quantity -= consume;
@@ -598,40 +625,72 @@ public sealed class PosService : IPosService
                 remaining -= consume;
             }
 
+            var segments = promo?.Segments[lineIndex];
+            if (segments is null)
+            {
+                AddSubLine(resolved, primaryBatchId, resolved.Quantity,
+                    resolved.DiscountAmount, priceFinal, null, null);
+                continue;
+            }
+
+            // Promo-priced line: one sub-line per segment (e.g. 2 @ regular + 1 @ 0.01), each
+            // pointing at the FEFO batch its first unit was taken from.
+            var offset = 0m;
+            foreach (var seg in segments)
+            {
+                AddSubLine(resolved, BatchAt(consumption, offset) ?? primaryBatchId, seg.Quantity,
+                    resolved.PriceRetail - seg.UnitPrice, seg.UnitPrice, seg.RuleId, seg.Label);
+                offset += seg.Quantity;
+            }
+        }
+
+        void AddSubLine(ResolvedSaleItem resolved, Guid? batchId, decimal quantity,
+            decimal discountAmount, decimal priceFinal, Guid? ruleId, string? label)
+        {
             tx.Items.Add(new PosTransactionItem
             {
                 TransactionId = tx.Id,
                 ProductId = resolved.Product.Id,
-                ProductStockId = primaryBatchId,
-                Quantity = resolved.Quantity,
+                ProductStockId = batchId,
+                Quantity = quantity,
                 PriceRetail = resolved.PriceRetail,
-                DiscountAmount = resolved.DiscountAmount,
+                DiscountAmount = discountAmount,
                 PriceFinal = priceFinal,
+                PromotionRuleId = ruleId,
+                PromotionLabel = label,
             });
 
-            txItemDtos.Add(new SaleItemDto(
+            var dto = new SaleItemDto(
                 ProductId: resolved.Product.Id,
                 ProductName: resolved.Product.Name,
                 Barcode: resolved.Product.Barcodes.Count > 0 ? resolved.Product.Barcodes[0] : string.Empty,
-                Quantity: resolved.Quantity,
+                Quantity: quantity,
                 UnitPrice: resolved.PriceRetail,
-                DiscountAmount: resolved.DiscountAmount,
-                Total: Math.Round(priceFinal * resolved.Quantity, 2)));
+                DiscountAmount: discountAmount,
+                Total: Math.Round(priceFinal * quantity, 2),
+                PromotionRuleId: ruleId,
+                PromotionLabel: label);
+            txItemDtos.Add(dto);
+            subLines.Add(new SaleSubLine(resolved.Product, quantity, priceFinal, discountAmount, dto.Total));
         }
 
         // Set totals
         tx.TotalAmount = txItemDtos.Sum(i => i.Total);
 
+        // Execution log: one row per rule that priced at least one unit (committed with the sale).
+        var applications = promo is null
+            ? []
+            : BuildApplications(promo, tenantId, tx.Id, storeId, tx.CashRegisterId, pricingAt);
+
         var excludedProductIds = loyaltySettings?.BonusExclusionsEnabled == true
             ? JsonSerializer.Deserialize<HashSet<Guid>>(loyaltySettings.ExcludedProductIdsJson) ?? [] : [];
         var excludedCategoryIds = loyaltySettings?.BonusExclusionsEnabled == true
             ? JsonSerializer.Deserialize<HashSet<Guid>>(loyaltySettings.ExcludedCategoryIdsJson) ?? [] : [];
-        bool IsBonusExcluded(ResolvedSaleItem item) => loyaltySettings?.BonusExclusionsEnabled == true &&
-            (excludedProductIds.Contains(item.Product.Id) ||
-             (item.Product.CategoryId is Guid categoryId && excludedCategoryIds.Contains(categoryId)) ||
-             (loyaltySettings.ExcludeDiscountedItems && item.DiscountAmount > 0));
-        var eligibleBonusTotal = resolvedItems.Select((item, index) => new { item, total = txItemDtos[index].Total })
-            .Where(x => !IsBonusExcluded(x.item)).Sum(x => x.total);
+        bool IsBonusExcluded(SaleSubLine line) => loyaltySettings?.BonusExclusionsEnabled == true &&
+            (excludedProductIds.Contains(line.Product.Id) ||
+             (line.Product.CategoryId is Guid categoryId && excludedCategoryIds.Contains(categoryId)) ||
+             (loyaltySettings.ExcludeDiscountedItems && line.DiscountAmount > 0));
+        var eligibleBonusTotal = subLines.Where(x => !IsBonusExcluded(x)).Sum(x => x.Total);
 
         // TASK-405 (Loyalty Фаза 0): redemption/accrual computed on the NET (post-redemption)
         // amount — matches the plan's "чиста сума, від якої далі рахується нарахування", and
@@ -757,6 +816,8 @@ public sealed class PosService : IPosService
         await _pos.AddTransactionAsync(tx, ct);
         foreach (var ev in stockEvents)
             await _pos.AddStockEventAsync(ev, ct);
+        if (applications.Count > 0)
+            await _promotions!.AddApplicationsAsync(applications, ct);
 
         // Update shift total sales
         shift.TotalSales += tx.TotalAmount;
@@ -817,10 +878,10 @@ public sealed class PosService : IPosService
         {
             var fiscal = await _fiscalFactory.GetForTenantAsync(tenantId, fiscalCts.Token);
             var fiscalRequest = new FiscalReceiptRequest(
-                Items: resolvedItems.Select(r => new FiscalReceiptItem(
+                Items: subLines.Select(r => new FiscalReceiptItem(
                     Code: r.Product.Id.ToString(),
                     Name: r.Product.Name,
-                    UnitPrice: r.PriceRetail - r.DiscountAmount,
+                    UnitPrice: r.PriceFinal,
                     Quantity: r.Quantity,
                     Barcode: r.Product.Barcodes.Count > 0 ? r.Product.Barcodes[0] : null)).ToList(),
                 Payments: [new FiscalPayment(
@@ -1054,7 +1115,9 @@ public sealed class PosService : IPosService
                 Quantity: i.Quantity,
                 UnitPrice: i.PriceRetail,
                 DiscountAmount: i.DiscountAmount,
-                Total: Math.Round(i.PriceFinal * i.Quantity, 2))).ToList(),
+                Total: Math.Round(i.PriceFinal * i.Quantity, 2),
+                PromotionRuleId: i.PromotionRuleId,
+                PromotionLabel: i.PromotionLabel)).ToList(),
             Subtotal: t.TotalAmount,
             PaymentType: t.PaymentType,
             PaymentAmount: t.TenderedAmount ?? t.TotalAmount,
@@ -1123,5 +1186,108 @@ public sealed class PosService : IPosService
         List<ProductStock> Batches,
         decimal Quantity,
         decimal PriceRetail,
-        decimal DiscountAmount);
+        decimal DiscountAmount,
+        decimal StockDiscount);
+
+    /// <summary>One persisted pos_transaction_items row (a whole line, or a promo sub-line).</summary>
+    private sealed record SaleSubLine(Item Product, decimal Quantity, decimal PriceFinal, decimal DiscountAmount, decimal Total);
+
+    private sealed record PromotionOutcome(
+        IReadOnlyList<IReadOnlyList<PromotionSegment>?> Segments,
+        IReadOnlyList<PromotionLineInput> Lines,
+        IReadOnlyDictionary<Guid, PromotionRuleInput> Rules);
+
+    // ── Promotions ─────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Single sales are priced "now". Batch (offline) sales are priced at their OccurredAt so the
+    /// rules that were in scope when the customer paid apply - but only inside the same plausible
+    /// window the attribution check uses (5 min future skew, 14 days back); otherwise "now".
+    /// </summary>
+    private static DateTime ResolvePricingInstant(CreateSaleRequest request, bool inlineFiscalization)
+    {
+        var now = DateTime.UtcNow;
+        if (inlineFiscalization || request.OccurredAt is not DateTime occurred) return now;
+        var at = occurred.Kind == DateTimeKind.Unspecified
+            ? DateTime.SpecifyKind(occurred, DateTimeKind.Utc)
+            : occurred.ToUniversalTime();
+        return at <= now + MaxFutureSkew && at >= now - MaxSaleAge ? at : now;
+    }
+
+    /// <summary>
+    /// Store-local offset for weekday/time-of-day rule scope. Locations carry no time zone yet,
+    /// so this is UTC (0) for now - a "18:00-20:00" window is evaluated in UTC until a store
+    /// time zone exists (the cashier mirror must use the same offset).
+    /// </summary>
+    private static int StoreUtcOffsetMinutes(Guid storeId) => 0;
+
+    private async Task<PromotionOutcome?> EvaluatePromotionsAsync(
+        Guid tenantId, Guid storeId, DateTime pricingAt, List<ResolvedSaleItem> items,
+        PromotionMembership? membership, CancellationToken ct)
+    {
+        if (_promotions is null || items.Count == 0) return null;
+
+        var rules = PromotionRuleLoader.ToInputs(await _promotions.GetPublishedAsync(tenantId, ct));
+        if (rules.Count == 0) return null;
+
+        var lines = items.Select(r => new PromotionLineInput(
+            ItemId: r.Product.Id,
+            CategoryId: r.Product.CategoryId,
+            UnitPrice: Math.Max(0m, r.PriceRetail - r.StockDiscount),
+            Quantity: r.Quantity,
+            HasStockDiscount: r.StockDiscount > 0m,
+            RegularPrice: r.PriceRetail)).ToList();
+
+        var result = PromotionEngine.Evaluate(lines, rules,
+            new PromotionContext(storeId, new DateTimeOffset(pricingAt, TimeSpan.Zero),
+                StoreUtcOffsetMinutes(storeId), membership));
+
+        var segments = result.Lines
+            .Select(l => l.Segments.Any(s => s.RuleId.HasValue) ? l.Segments : null)
+            .ToList();
+        if (segments.All(s => s is null)) return null;
+
+        return new PromotionOutcome(segments, lines, rules.ToDictionary(r => r.Id));
+    }
+
+    private static List<PromotionRuleApplication> BuildApplications(
+        PromotionOutcome promo, Guid tenantId, Guid transactionId, Guid storeId, Guid? registerId, DateTime appliedAt)
+    {
+        var totals = new Dictionary<Guid, (decimal Units, decimal Discount)>();
+        for (var i = 0; i < promo.Segments.Count; i++)
+        {
+            if (promo.Segments[i] is not { } segs) continue;
+            foreach (var seg in segs)
+            {
+                if (seg.RuleId is not Guid ruleId) continue;
+                var (units, discount) = totals.GetValueOrDefault(ruleId);
+                totals[ruleId] = (units + seg.Quantity, discount + (promo.Lines[i].UnitPrice - seg.UnitPrice) * seg.Quantity);
+            }
+        }
+
+        return totals.Select(kv => new PromotionRuleApplication
+        {
+            TenantId = tenantId,
+            RuleId = kv.Key,
+            VersionId = promo.Rules[kv.Key].VersionId,
+            TransactionId = transactionId,
+            StoreId = storeId,
+            RegisterId = registerId,
+            AppliedAt = appliedAt,
+            Units = kv.Value.Units,
+            DiscountAmount = Math.Round(kv.Value.Discount, 2, MidpointRounding.AwayFromZero),
+        }).ToList();
+    }
+
+    /// <summary>The FEFO batch the unit at <paramref name="offset"/> (0-based, in line quantity) came from.</summary>
+    private static Guid? BatchAt(List<(Guid BatchId, decimal Quantity)> consumption, decimal offset)
+    {
+        var acc = 0m;
+        foreach (var (batchId, qty) in consumption)
+        {
+            acc += qty;
+            if (offset < acc) return batchId;
+        }
+        return null;
+    }
 }

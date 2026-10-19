@@ -24,10 +24,10 @@ public sealed class CatalogSyncRepository : ICatalogSyncRepository
         var rows = await q
             .OrderBy(i => i.UpdatedAt).ThenBy(i => i.Id)
             .Take(limit + 1)
-            .Select(i => new { i.Id, i.Name, i.Barcodes, i.PriceRetail, i.VatRate, i.Unit, i.IsActive, i.UpdatedAt })
+            .Select(i => new { i.Id, i.Name, i.Barcodes, i.PriceRetail, i.VatRate, i.Unit, i.IsActive, i.UpdatedAt, i.CategoryId })
             .ToListAsync(ct);
 
         return rows.Select(i => new CatalogSyncRow(
-            i.Id, i.Name, i.Barcodes, i.PriceRetail, i.VatRate, i.Unit, i.IsActive, i.UpdatedAt)).ToList();
+            i.Id, i.Name, i.Barcodes, i.PriceRetail, i.VatRate, i.Unit, i.IsActive, i.UpdatedAt, i.CategoryId)).ToList();
     }
 }

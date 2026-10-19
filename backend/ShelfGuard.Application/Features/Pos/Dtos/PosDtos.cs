@@ -117,7 +117,10 @@ public sealed record SaleItemDto(
     decimal Quantity,
     decimal UnitPrice,
     decimal DiscountAmount,
-    decimal Total);
+    decimal Total,
+    // Promotion rule that priced this (sub-)line, with its receipt label; null otherwise.
+    Guid? PromotionRuleId = null,
+    string? PromotionLabel = null);
 
 public sealed record SalesListDto(
     IReadOnlyList<SaleDto> Items,

@@ -126,6 +126,7 @@ public static class DependencyInjection
         services.AddSingleton<Application.Services.IOperatorSessionValidator>(sp => sp.GetRequiredService<Services.OperatorSessionValidator>());
         services.AddSingleton<Application.Services.IOperatorSessionCache>(sp => sp.GetRequiredService<Services.OperatorSessionValidator>());
         services.AddScoped<ICatalogSyncRepository, CatalogSyncRepository>();
+        services.AddScoped<IPromotionRuleRepository, PromotionRuleRepository>();
 
         // v2 - Daily sales (ADU source data)
         services.AddScoped<IDailySalesRepository, DailySalesRepository>();
