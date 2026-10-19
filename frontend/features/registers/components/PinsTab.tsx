@@ -1,24 +1,27 @@
 "use client";
 
 import { useState } from "react";
+import { KeyRound, RefreshCw, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { useLocale, useTranslations } from "next-intl";
+import { ActionMenu, type ActionMenuItem } from "@/components/ui/ActionMenu";
 import { Table, type TableColumn } from "@/components/ui/Table";
-import { Btn } from "@/components/ui/Btn";
 import { useClearPin, useGeneratePin, useManageableStores, usePosEmployees } from "../hooks/useRegisters";
 import type { PosEmployee } from "../types";
-import { ConfirmModal, SecretModal, formatDateTime, inputStyle, labelStyle } from "./shared";
+import { ConfirmModal, SecretModal, formatDateTime } from "./shared";
 
 export function PinsTab({ storeId: globalStoreId }: { storeId?: string }) {
   const t = useTranslations("Dashboard.registers.pins");
   const tRole = useTranslations("Dashboard.registers.roles");
+  const tActions = useTranslations("Dashboard.registers.actions");
   const locale = useLocale();
   const { data: stores = [] } = useManageableStores();
 
-  // PINs are unique per store, so exactly one store is always in play.
-  const [pickedStore, setPickedStore] = useState<string | undefined>(undefined);
+  // PINs are unique per store, so exactly one store is always in play: the one chosen in the
+  // header store selector, or (when the header shows "all stores") the first manageable one.
   const globalManageable = stores.some((s) => s.id === globalStoreId) ? globalStoreId : undefined;
-  const storeId = pickedStore ?? globalManageable ?? stores[0]?.id;
+  const storeId = globalManageable ?? stores[0]?.id;
+  const storeName = stores.find((s) => s.id === storeId)?.name;
 
   const { data: employees = [], isLoading } = usePosEmployees(storeId);
   const generate = useGeneratePin();
@@ -54,43 +57,52 @@ export function PinsTab({ storeId: globalStoreId }: { storeId?: string }) {
     {
       key: "actions",
       header: "",
-      render: (e) => (
-        <div style={{ display: "flex", gap: 6, justifyContent: "center" }}>
-          {e.hasPin ? (
-            <>
-              <Btn size="sm" disabled={generate.isPending} onClick={() => setResetting(e)}>{t("regenerate")}</Btn>
-              <Btn
-                size="sm"
-                variant="danger"
-                disabled={clear.isPending}
-                onClick={() =>
+      render: (e) => {
+        const items: ActionMenuItem[] = e.hasPin
+          ? [
+              {
+                label: t("regenerate"),
+                icon: <RefreshCw size={13} />,
+                disabled: generate.isPending,
+                onClick: () => setResetting(e),
+              },
+              { separator: true },
+              {
+                label: t("clear"),
+                icon: <Trash2 size={13} />,
+                variant: "danger",
+                disabled: clear.isPending,
+                onClick: () =>
                   clear.mutate(e.id, {
                     onSuccess: () => toast.success(t("cleared")),
                     onError: (err) => toast.error(err.message),
-                  })
-                }
-              >
-                {t("clear")}
-              </Btn>
-            </>
-          ) : (
-            <Btn size="sm" disabled={generate.isPending} onClick={() => doGenerate(e)}>{t("generate")}</Btn>
-          )}
-        </div>
-      ),
+                  }),
+              },
+            ]
+          : [
+              {
+                label: t("generate"),
+                icon: <KeyRound size={13} />,
+                disabled: generate.isPending,
+                onClick: () => doGenerate(e),
+              },
+            ];
+        return (
+          <div style={{ display: "flex", justifyContent: "center" }}>
+            <ActionMenu label={tActions("menu")} items={items} />
+          </div>
+        );
+      },
     },
   ];
 
   return (
     <div>
-      <div style={{ maxWidth: 320, marginBottom: 14 }}>
-        <label style={labelStyle}>{t("store")}</label>
-        <select style={inputStyle} value={storeId ?? ""} onChange={(e) => setPickedStore(e.target.value)}>
-          {stores.map((s) => (
-            <option key={s.id} value={s.id}>{s.name}</option>
-          ))}
-        </select>
-      </div>
+      {storeName && (
+        <p style={{ color: "#9CA3AF", fontSize: 13, margin: "0 0 6px" }}>
+          {t("store")}: <strong style={{ color: "#E8EDF5" }}>{storeName}</strong> · {t("storeFromHeader")}
+        </p>
+      )}
       <p style={{ color: "#6B7280", fontSize: 12, margin: "0 0 14px" }}>{t("hint")}</p>
 
       <Table
