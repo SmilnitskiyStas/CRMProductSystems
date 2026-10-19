@@ -973,7 +973,7 @@
         "shownOnce": "This value is shown only once and cannot be retrieved later.", "close": "Close"
       },
       "pins": {
-        "store": "Store", "hint": "PINs are unique per store. Stored PINs are never displayed: a generated PIN is shown once.",
+        "store": "Store", "storeFromHeader": "change it with the store selector in the top bar", "hint": "PINs are unique per store. Stored PINs are never displayed: a generated PIN is shown once.",
         "empty": "No employees with register access in this store.",
         "columns": { "name": "Employee", "role": "Role", "pin": "PIN", "pinSetAt": "Set on" },
         "set": "Set", "notSet": "Not set", "lockedOut": "Temporarily locked",
