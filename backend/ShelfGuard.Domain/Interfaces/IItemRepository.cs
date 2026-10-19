@@ -73,6 +73,14 @@ public interface IItemRepository
         bool? uncategorized = null,
         CancellationToken ct = default);
 
+    /// <summary>
+    /// Promotion item picker: ACTIVE items of <paramref name="tenantId"/> having a barcode that
+    /// CONTAINS <paramref name="digits"/> (substring) or equals it after stripping leading zeros on
+    /// both sides (EAN-13 vs UPC-A / EAN-8). <paramref name="digits"/> must be digits only (caller
+    /// guarantees); parameterized SQL over <c>jsonb_array_elements_text</c>. Ordered by name, capped.
+    /// </summary>
+    Task<List<Item>> SearchByBarcodeFragmentAsync(Guid tenantId, string digits, int take, CancellationToken ct = default);
+
     Task<Item?> GetByIdAsync(Guid id, CancellationToken ct = default);
     Task<Item?> GetByBarcodeAsync(string barcode, CancellationToken ct = default);
     Task<IReadOnlyList<Item>> GetByAnyBarcodeAsync(IReadOnlyList<string> barcodes, CancellationToken ct = default);
