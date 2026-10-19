@@ -79,7 +79,10 @@ public sealed record SyncCatalogItemDto(
     decimal VatRate,
     string Unit,
     bool IsActive,
-    DateTime UpdatedAt);
+    DateTime UpdatedAt,
+    // Target of category-wide promotion rules. Added after the first cashier release: rows synced
+    // earlier lack it until they change, so the cashier must run one full resync (since=null).
+    Guid? CategoryId = null);
 
 /// <summary>
 /// Page of changed items. Call again with since=NextSince&amp;afterId=NextAfterId while HasMore.
@@ -94,3 +97,25 @@ public sealed record SyncCatalogResponse(
     DateTime? NextSince,
     Guid? NextAfterId,
     DateTime ServerTime);
+
+// ── Promotion rules sync ────────────────────────────────────────────────────
+
+/// <param name="Definition">Published version definition JSON, verbatim (promotion-rules.md shape).</param>
+/// <param name="CreatedAt">Rule creation time - the engine's "older rule" tie-break.</param>
+public sealed record SyncPromotionRuleDto(
+    Guid Id,
+    Guid VersionId,
+    string Name,
+    DateTime CreatedAt,
+    System.Text.Json.JsonElement Definition);
+
+/// <summary>
+/// Published rules for the register's store that are valid now or later. When the client's etag
+/// equals <see cref="Etag"/>, <see cref="NotModified"/> is true and <see cref="Rules"/> is empty:
+/// keep the local copy.
+/// </summary>
+public sealed record SyncPromotionsResponse(
+    string Etag,
+    bool NotModified,
+    DateTime ServerTime,
+    IReadOnlyList<SyncPromotionRuleDto> Rules);

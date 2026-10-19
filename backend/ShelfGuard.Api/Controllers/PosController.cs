@@ -173,6 +173,27 @@ public sealed class PosController : ControllerBase
         return Ok(await _sync.GetCatalogAsync(since?.ToUniversalTime(), afterId, limit, ct));
     }
 
+    /// <summary>
+    /// Published promotion rules for the register's store (valid now or later), with an etag.
+    /// Pass the last etag: when nothing changed the response is { etag, notModified: true, rules: [] }.
+    /// Operator tokens always get their register's store; other POS users pass storeId (or their
+    /// token's store_id is used).
+    /// </summary>
+    [HttpGet("sync/promotions")]
+    [ProducesResponseType(typeof(SyncPromotionsResponse), StatusCodes.Status200OK)]
+    public async Task<IActionResult> SyncPromotions(
+        [FromQuery] string? etag, [FromQuery] Guid? storeId, CancellationToken ct)
+    {
+        var (tenantId, _) = GetContext();
+        if (tenantId is null) return Forbid();
+
+        var (result, error, status) = await _sync.GetPromotionsAsync(
+            tenantId.Value, GetRegisterId(), storeId ?? GetStoreId(), etag, ct);
+        if (error is not null)
+            return status == 403 ? Forbid() : StatusCode(status ?? 400, new { error });
+        return Ok(result);
+    }
+
     /// <summary>Lists all sales for a given shift.</summary>
     [HttpGet("sales")]
     [ProducesResponseType(typeof(SalesListDto), StatusCodes.Status200OK)]

@@ -9,7 +9,8 @@ public sealed record CatalogSyncRow(
     decimal VatRate,
     string Unit,
     bool IsActive,
-    DateTime UpdatedAt);
+    DateTime UpdatedAt,
+    Guid? CategoryId = null);
 
 public interface ICatalogSyncRepository
 {
