@@ -178,6 +178,16 @@ export interface CameraPrefs {
   deviceId: string | null;
 }
 
+/** General app preferences (userData/app-prefs.json). */
+export interface AppPrefs {
+  /** Auto sign-out after this many minutes without input (MIN..MAX). */
+  idleLogoutMinutes: number;
+}
+
+export const DEFAULT_IDLE_LOGOUT_MINUTES = 15;
+export const MIN_IDLE_LOGOUT_MINUTES = 1;
+export const MAX_IDLE_LOGOUT_MINUTES = 120;
+
 export interface CashierApi {
   getState(): Promise<AppState>;
   activate(serverUrl: string, activationCode: string): Promise<Result<RegisterInfo>>;
@@ -204,6 +214,8 @@ export interface CashierApi {
   openDrawer(): Promise<PrintResult>;
   getCameraPrefs(): Promise<CameraPrefs>;
   saveCameraPrefs(prefs: CameraPrefs): Promise<CameraPrefs>;
+  getAppPrefs(): Promise<AppPrefs>;
+  saveAppPrefs(prefs: AppPrefs): Promise<AppPrefs>;
   onOnlineChange(cb: (state: ConnectionState) => void): () => void;
   retryConnection(): Promise<ConnectionState>;
   checkServer(url: string): Promise<{ reachable: boolean; message: string | null }>;

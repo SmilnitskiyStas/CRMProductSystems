@@ -1,6 +1,6 @@
 import { app, BrowserWindow, ipcMain, session, shell } from 'electron';
 import { join } from 'node:path';
-import type { CameraPrefs, PrintSettings, SaleSubmitRequest } from '@shared/types';
+import type { AppPrefs, CameraPrefs, PrintSettings, SaleSubmitRequest } from '@shared/types';
 import { CashierService } from './service';
 
 const isDev = !app.isPackaged && !!process.env['ELECTRON_RENDERER_URL'];
@@ -40,6 +40,8 @@ function registerIpc(svc: CashierService): void {
   ipcMain.handle('connection:check', (_e, url: string) => svc.checkServer(String(url)));
   ipcMain.handle('camera:getPrefs', () => svc.getCameraPrefs());
   ipcMain.handle('camera:savePrefs', (_e, p: CameraPrefs) => svc.saveCameraPrefs(p));
+  ipcMain.handle('app:getPrefs', () => svc.getAppPrefs());
+  ipcMain.handle('app:savePrefs', (_e, p: AppPrefs) => svc.saveAppPrefs(p));
 }
 
 /**

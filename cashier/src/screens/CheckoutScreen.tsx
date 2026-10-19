@@ -286,7 +286,7 @@ export function CheckoutScreen({ shift, online, onOpenShiftScreen, onOpenQueue, 
         <button className="btn-secondary px-4 py-2 text-base" onClick={onOpenQueue}>
           Черга (F10)
         </button>
-        <button className="btn-secondary px-4 py-2 text-base" onClick={onOpenPrint} title="Налаштування друку">
+        <button className="btn-secondary px-4 py-2 text-base" onClick={onOpenPrint} title="Налаштування">
           Друк
         </button>
         <button className="btn-secondary px-4 py-2 text-base" onClick={onOpenShiftScreen}>

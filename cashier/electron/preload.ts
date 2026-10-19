@@ -35,6 +35,8 @@ const api: CashierApi = {
   checkServer: (url) => ipcRenderer.invoke('connection:check', url),
   getCameraPrefs: () => ipcRenderer.invoke('camera:getPrefs'),
   saveCameraPrefs: (p) => ipcRenderer.invoke('camera:savePrefs', p),
+  getAppPrefs: () => ipcRenderer.invoke('app:getPrefs'),
+  saveAppPrefs: (p) => ipcRenderer.invoke('app:savePrefs', p),
   onOnlineChange: (cb) => subscribe('evt:online', cb),
   onSessionExpired: (cb) => subscribe<void>('evt:sessionExpired', () => cb()),
   onCatalogChange: (cb) => subscribe('evt:catalog', cb),
