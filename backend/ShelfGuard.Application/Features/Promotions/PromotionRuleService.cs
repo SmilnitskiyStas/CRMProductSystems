@@ -331,11 +331,33 @@ public sealed partial class PromotionRuleService : IPromotionRuleService
                 .ToList();
         }
         var take = Math.Clamp(limit ?? 20, 1, MaxLookupLimit);
+
+        // Scanner suffixes / control chars / stray spaces must not break the search.
+        var cleaned = new string((search ?? string.Empty).Where(c => !char.IsControl(c)).ToArray()).Trim();
+        var compact = new string(cleaned.Where(c => !char.IsWhiteSpace(c)).ToArray());
+        var digitsOnly = compact.Length > 0 && compact.All(c => c is >= '0' and <= '9');
+        var query = digitsOnly ? compact : cleaned;
+
         var (items, _) = await _items.GetPagedAsync(
-            categoryId, null, null, string.IsNullOrWhiteSpace(search) ? null : search.Trim(), null,
+            categoryId, null, null, string.IsNullOrWhiteSpace(query) ? null : query, null,
             "name", false, 1, take, null, null, null, ct);
-        return items
+        var merged = items.ToList();
+
+        // Digits-only query (>= 3): also barcode substring + leading-zero-insensitive matches.
+        if (digitsOnly && compact.Length >= 3)
+        {
+            var fragment = await _items.SearchByBarcodeFragmentAsync(caller.TenantId, compact, take, ct);
+            var known = merged.Select(i => i.Id).ToHashSet();
+            merged.AddRange(fragment.Where(i => (categoryId is null || i.CategoryId == categoryId) && known.Add(i.Id)));
+        }
+
+        var stripped = digitsOnly ? compact.TrimStart('0') : string.Empty;
+        bool Exact(Item i) => digitsOnly && i.Barcodes.Any(b =>
+            b == compact || (stripped.Length > 0 && b.TrimStart('0') == stripped));
+
+        return merged
             .Where(i => i.TenantId == caller.TenantId && i.IsActive)
+            .OrderByDescending(Exact).ThenBy(i => i.Name, StringComparer.CurrentCultureIgnoreCase)
             .Take(take)
             .Select(i => new ItemLookupDto(
                 i.Id, i.Name, i.Barcodes.FirstOrDefault(), i.PriceRetail, i.CategoryId, i.Category?.Name))

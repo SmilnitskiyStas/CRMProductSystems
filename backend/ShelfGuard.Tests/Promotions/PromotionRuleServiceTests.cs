@@ -19,13 +19,19 @@ public sealed class PromotionRuleServiceTests
     private readonly Item _item;
     private readonly InMemoryRuleRepo _repo = new();
     private readonly PromotionRuleService _svc;
+    private readonly List<Item> _catalog = [];
+    private readonly IItemRepository _itemsRepo = Substitute.For<IItemRepository>();
     private readonly IUserLocationRepository _userLocations = Substitute.For<IUserLocationRepository>();
 
     public PromotionRuleServiceTests()
     {
         _item = new Item { TenantId = _tenant, Name = "Milk", Barcodes = ["4820000000001"], PriceRetail = 30m, CategoryId = _categoryId };
-        var items = Substitute.For<IItemRepository>();
-        var catalog = new List<Item> { _item };
+        var items = _itemsRepo;
+        var catalog = _catalog;
+        catalog.Add(_item);
+        items.SearchByBarcodeFragmentAsync(Arg.Any<Guid>(), Arg.Any<string>(), Arg.Any<int>(), Arg.Any<CancellationToken>())
+            .Returns(ci => catalog.Where(i => i.TenantId == ci.ArgAt<Guid>(0) && i.IsActive
+                && i.Barcodes.Any(b => b.Contains(ci.ArgAt<string>(1)) || b.TrimStart('0') == ci.ArgAt<string>(1).TrimStart('0'))).ToList());
         items.GetPagedAsync(
                 Arg.Any<Guid?>(), Arg.Any<Guid?>(), Arg.Any<string?>(), Arg.Any<string?>(),
                 Arg.Any<IReadOnlyList<Guid>?>(), Arg.Any<string?>(), Arg.Any<bool?>(), Arg.Any<int>(), Arg.Any<int>(),
@@ -490,6 +496,32 @@ public sealed class PromotionRuleServiceTests
         var detail = (await _svc.GetAsync(Admin, created.Id)).Value!;
         Assert.Equal(("Rule", original.Id), (detail.Name, detail.CurrentVersion.Id));
         Assert.Equal(original.Id, Assert.Single(_repo.Versions).Id);
+    }
+
+    [Fact]
+    public async Task Lookup_items_matches_barcode_fragments_and_ranks_exact_first()
+    {
+        var substring = new Item { TenantId = _tenant, Name = "AAA", Barcodes = ["9912399"] };
+        var exact = new Item { TenantId = _tenant, Name = "ZZZ", Barcodes = ["00123"] }; // equals "123" after zero strip
+        var inactive = new Item { TenantId = _tenant, Name = "Old", Barcodes = ["123000"], IsActive = false };
+        var foreign = new Item { TenantId = Guid.NewGuid(), Name = "Other", Barcodes = ["123456"] };
+        _catalog.AddRange([substring, exact, inactive, foreign]);
+
+        var r = await _svc.LookupItemsAsync(Admin, " 123\r\n", null, null);
+        Assert.Equal(["ZZZ", "AAA"], r.Select(x => x.Name).ToArray()); // exact first, then others; no inactive/foreign
+
+        // partial of the standard fixture barcode (suffix + prefix + middle)
+        foreach (var frag in new[] { "0000001", "48200", "20000000" })
+            Assert.Equal([_item.Id], (await _svc.LookupItemsAsync(Admin, frag, null, null)).Select(x => x.Id).ToArray());
+        // scanner whitespace inside the digits
+        Assert.Single(await _svc.LookupItemsAsync(Admin, "4820 0000 00001", null, null));
+        // < 3 digits: no fragment search
+        _itemsRepo.ClearReceivedCalls();
+        await _svc.LookupItemsAsync(Admin, "12", null, null);
+        await _itemsRepo.DidNotReceive().SearchByBarcodeFragmentAsync(Arg.Any<Guid>(), Arg.Any<string>(), Arg.Any<int>(), Arg.Any<CancellationToken>());
+        // non-digit query is name-only
+        await _svc.LookupItemsAsync(Admin, "mil", null, null);
+        await _itemsRepo.DidNotReceive().SearchByBarcodeFragmentAsync(Arg.Any<Guid>(), Arg.Any<string>(), Arg.Any<int>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]

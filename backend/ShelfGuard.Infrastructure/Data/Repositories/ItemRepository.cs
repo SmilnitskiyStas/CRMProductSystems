@@ -211,6 +211,25 @@ public sealed class ItemRepository : IItemRepository
     // the matched Item is mutated and re-saved — a loaded Category/DefaultSupplier graph would
     // then be marked Modified too, re-opening the cross-tenant multi-table write the
     // CreateOrder_link_to_a_foreign_tenant_item write-vector test guards against.
+    public async Task<List<Item>> SearchByBarcodeFragmentAsync(
+        Guid tenantId, string digits, int take, CancellationToken ct = default)
+    {
+        if (string.IsNullOrEmpty(digits) || digits.Any(c => c is < '0' or > '9')) return [];
+        var stripped = digits.TrimStart('0');
+        var pattern = "%" + digits + "%"; // digits only: no LIKE wildcards possible
+        return await _db.Items
+            .FromSqlInterpolated($@"SELECT i.* FROM items i
+                WHERE i.""TenantId"" = {tenantId} AND i.""IsActive""
+                  AND EXISTS (SELECT 1 FROM jsonb_array_elements_text(i.""Barcodes"") AS b(code)
+                              WHERE b.code LIKE {pattern}
+                                 OR ({stripped} <> '' AND ltrim(b.code, '0') = {stripped}))")
+            .AsNoTracking()
+            .Include(i => i.Category)
+            .OrderBy(i => i.Name)
+            .Take(take)
+            .ToListAsync(ct);
+    }
+
     public async Task<IReadOnlyList<Item>> GetByAnyBarcodeAsync(IReadOnlyList<string> barcodes, CancellationToken ct = default)
     {
         if (barcodes.Count == 0)
