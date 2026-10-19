@@ -1587,3 +1587,6 @@ Schema+RLS (`AddPromotionRules`, immutable versions), pure `PromotionEngine` + 3
 
 ## TASK-734 Promotion rules web UI — review (frontend-developer, 2026-10-19)
 Wizard + list + simulator under `frontend/features/promotion-rules`, pages `/promotion-rules[/new|/{id}]`, sidebar + uk/en i18n. tsc/eslint/vitest/next build green; API untested (backend parallel). Log: `.claude/logs/tasks/734_2026-10-19_promotion-rules-web-ui_frontend-developer.md`.
+
+### TASK-735 - Cashier phase 3: promotions (engine mirror + sync + cart/receipt) - review
+TS engine mirror passing all 37 shared golden vectors (+ drift test, `sync-vectors`), catalog `categoryId` with forced one-time resync, etag promotions sync cached in SQLite (offline-safe), cart/payment/receipt priced with promo sub-lines and badges, server receipt shown after online sale with "Ціну перераховано сервером" notice, offline repricing difference on the Черга screen. 141 vitest, build+dist OK; not run against the real backend; not committed. Лог: `.claude/logs/tasks/735_*`.

@@ -1,5 +1,6 @@
 import type { SaleReceipt, SaleSubmitRequest, SaleGatewayResult } from '@shared/types';
 import { toKop, fromKop } from '@shared/money';
+import { applyPromotions, type PromotionLine, type PromotionRule } from '@shared/promotions/engine';
 import type { CatalogStore } from './catalogStore';
 import { localReceiptNo, type OutboxRow, type OutboxService } from './outbox';
 
@@ -19,6 +20,8 @@ export interface SaleItemWire {
   unitPrice: number;
   discountAmount?: number;
   total: number;
+  promotionRuleId?: string | null;
+  promotionLabel?: string | null;
 }
 export interface SaleWire {
   transactionId: string;
@@ -46,7 +49,7 @@ export function mergeServerSale(row: OutboxRow, sale: unknown | null): SaleRecei
     fiscalNumber: w.fiscalNumber,
     createdAt: w.createdAt,
     local: false,
-    // tendered amount and change stay as the cashier saw them (a replayed duplicate echoes the total)
+    // the server's lines are authoritative (promotions split a line into sub-lines)
     items: w.items.map((i) => ({
       name: i.productName,
       barcode: i.barcode,
@@ -54,11 +57,19 @@ export function mergeServerSale(row: OutboxRow, sale: unknown | null): SaleRecei
       unitPrice: i.unitPrice,
       total: i.total,
       discount: i.discountAmount ?? 0,
+      promoLabel: i.promotionLabel ?? null,
+      regularUnitPrice: row.receipt.items.find((x) => x.barcode === i.barcode)?.regularUnitPrice,
     })),
+    // tendered amount stays as the cashier saw it (a replayed duplicate echoes the total); change follows the real total
+    change: row.receipt.paymentType.toLowerCase() === 'card' ? 0 : Math.max(0, fromKop(toKop(row.receipt.paymentAmount) - toKop(w.subtotal))),
+    // the server re-priced the sale: remember what the cashier saw first
+    localTotal:
+      Math.abs(w.subtotal - row.receipt.subtotal) >= 0.005 ? (row.receipt.localTotal ?? row.receipt.subtotal) : row.receipt.localTotal,
   };
 }
 
 export interface ReceiptContext {
+  storeId: string;
   cashierId: string;
   registerNumber: number;
   registerName: string;
@@ -72,7 +83,7 @@ export class OutboxSalesGateway implements SalesGateway {
     private readonly catalog: CatalogStore,
     private readonly context: () => ReceiptContext | null,
     private readonly now: () => number = Date.now,
-    private readonly onQueued: (row: OutboxRow) => void = () => undefined,
+    private readonly rules: () => readonly PromotionRule[] = () => [],
   ) {}
 
   async submit(request: SaleSubmitRequest): Promise<SaleGatewayResult> {
@@ -83,17 +94,38 @@ export class OutboxSalesGateway implements SalesGateway {
     if (!ctx) return { ok: false, kind: 'unauthorized', message: 'Сесію завершено. Увійдіть за PIN-кодом знову.' };
     if (request.items.length === 0) return { ok: false, kind: 'failed', message: 'Кошик порожній.' };
 
-    let totalKop = 0;
-    const items: SaleReceipt['items'] = [];
+    // price through the promotion engine (server re-prices authoritatively at sync time)
+    const resolved: { name: string; barcode: string; regular: number; line: PromotionLine }[] = [];
     for (const line of request.items) {
       const item = this.catalog.findByBarcode(line.barcode);
       if (!item || item.price == null) {
         return { ok: false, kind: 'failed', message: `Товар зі штрихкодом ${line.barcode} відсутній у локальному каталозі.` };
       }
-      const lineKop = Math.round(toKop(item.price) * line.quantity);
-      totalKop += lineKop;
-      items.push({ name: item.name, barcode: line.barcode, quantity: line.quantity, unitPrice: item.price, total: fromKop(lineKop) });
+      resolved.push({
+        name: item.name,
+        barcode: line.barcode,
+        regular: item.price,
+        line: { itemId: item.id, categoryId: item.categoryId ?? null, unitPrice: item.price, quantity: line.quantity },
+      });
     }
+    const segments = applyPromotions(resolved.map((r) => r.line), this.rules(), { storeId: ctx.storeId, at: this.now() });
+    let totalKop = 0;
+    const items: SaleReceipt['items'] = [];
+    resolved.forEach((r, i) => {
+      for (const s of segments[i]) {
+        const lineKop = Math.round(toKop(s.unitPrice) * s.quantity);
+        totalKop += lineKop;
+        items.push({
+          name: r.name,
+          barcode: r.barcode,
+          quantity: s.quantity,
+          unitPrice: s.unitPrice,
+          total: fromKop(lineKop),
+          promoLabel: s.label,
+          regularUnitPrice: r.regular,
+        });
+      }
+    });
     const total = fromKop(totalKop);
     const isCard = request.paymentType === 'Card';
     if (!isCard && toKop(request.paymentAmount) < totalKop) {
@@ -143,7 +175,6 @@ export class OutboxSalesGateway implements SalesGateway {
       receipt,
     };
     this.outbox.enqueue(row);
-    this.onQueued(row);
     return { ok: true, sale: receipt };
   }
 }

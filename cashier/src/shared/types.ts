@@ -1,3 +1,5 @@
+import type { PromotionRule } from './promotions/engine';
+
 // Types shared by the main process, the preload bridge and the renderer.
 
 export type ErrorKind =
@@ -70,6 +72,8 @@ export interface CatalogItem {
   price: number | null;
   vatRate: number;
   unit: string;
+  /** Target of category-wide promotion rules (catalog schema v2). */
+  categoryId?: string | null;
 }
 
 export interface CatalogStatus {
@@ -104,7 +108,20 @@ export interface SaleReceipt {
   fiscalStatus: string;
   fiscalNumber: string | null;
   createdAt: string;
-  items: { name: string; barcode: string; quantity: number; unitPrice: number; total: number; discount?: number }[];
+  items: {
+    name: string;
+    barcode: string;
+    quantity: number;
+    unitPrice: number;
+    total: number;
+    discount?: number;
+    /** Receipt label of the promotion that priced this (sub-)line. */
+    promoLabel?: string | null;
+    /** Shelf price per unit before promotions (struck through in the UI). */
+    regularUnitPrice?: number;
+  }[];
+  /** Set when the server re-priced an offline/provisional sale: the total the cashier saw first. */
+  localTotal?: number;
   /** True while the receipt number is the provisional local one (L-<register>-<seq>) and not yet confirmed by the server. */
   local?: boolean;
   clientTransactionId?: string;
@@ -136,6 +153,9 @@ export interface QueueEntry {
   paymentType: string;
   itemCount: number;
   cashierName: string | null;
+  /** Server total after sync when it differs from what the cashier saw (re-priced by the server). */
+  serverTotal: number | null;
+  totalDifference: number | null;
 }
 
 export interface QueueSummary {
@@ -171,6 +191,14 @@ export interface PrintResult {
   clientTransactionId?: string;
   ok: boolean;
   error?: string;
+}
+
+export interface PromotionsState {
+  rules: PromotionRule[];
+  etag: string | null;
+  fetchedAt: string | null;
+  syncing: boolean;
+  error: string | null;
 }
 
 export interface CameraPrefs {
@@ -212,6 +240,9 @@ export interface CashierApi {
   testPrint(): Promise<PrintResult>;
   printReceipt(clientTransactionId: string): Promise<PrintResult>;
   openDrawer(): Promise<PrintResult>;
+  getPromotions(): Promise<PromotionsState>;
+  syncPromotions(): Promise<PromotionsState>;
+  onPromotionsChange(cb: (state: PromotionsState) => void): () => void;
   getCameraPrefs(): Promise<CameraPrefs>;
   saveCameraPrefs(prefs: CameraPrefs): Promise<CameraPrefs>;
   getAppPrefs(): Promise<AppPrefs>;

@@ -1,5 +1,6 @@
 import type { CatalogItem } from './types';
 import { fromKop, toKop } from './money';
+import { applyPromotions, type PromotionContext, type PromotionRule, type PromotionSegment } from './promotions/engine';
 
 export interface CartLine {
   itemId: string;
@@ -8,6 +9,8 @@ export interface CartLine {
   unit: string;
   price: number;
   quantity: number;
+  /** For category-wide promotions. */
+  categoryId?: string | null;
 }
 
 const MAX_QTY = 9999;
@@ -41,6 +44,7 @@ export function addItem(cart: CartLine[], item: CatalogItem, barcode: string, qt
       name: item.name,
       unit: item.unit,
       price: item.price,
+      categoryId: item.categoryId ?? null,
       quantity: normalizeQty(item.unit, qty) || 1,
     },
   ];
@@ -84,4 +88,56 @@ export function quickCashAmounts(total: number): number[] {
     if (up >= total) out.add(up);
   }
   return [...out].sort((a, b) => a - b).slice(0, 5);
+}
+
+// ── promotions ───────────────────────────────────────────────────────────────
+
+export interface PricedLine {
+  itemId: string;
+  /** Price segments after promotions, e.g. 2 x 42.73 + 1 x 0.01. */
+  segments: PromotionSegment[];
+  total: number;
+  regularTotal: number;
+  /** Distinct rule labels applied to this line. */
+  labels: string[];
+}
+
+export interface PricedCart {
+  lines: PricedLine[];
+  total: number;
+  regularTotal: number;
+  /** regularTotal - total (>= 0). */
+  savings: number;
+}
+
+const segKop = (s: PromotionSegment): number => Math.round(toKop(s.unitPrice) * s.quantity);
+
+/** Prices the cart through the same promotion engine the server uses (server stays authoritative). */
+export function priceCart(cart: CartLine[], rules: readonly PromotionRule[], ctx: PromotionContext): PricedCart {
+  const segs = applyPromotions(
+    cart.map((l) => ({ itemId: l.itemId, categoryId: l.categoryId ?? null, unitPrice: l.price, quantity: l.quantity })),
+    rules,
+    ctx,
+  );
+  let totalKop = 0;
+  let regularKop = 0;
+  const lines = cart.map((l, i) => {
+    const lineKop = segs[i].reduce((a, s) => a + segKop(s), 0);
+    const regKop = Math.round(toKop(l.price) * l.quantity);
+    totalKop += lineKop;
+    regularKop += regKop;
+    return {
+      itemId: l.itemId,
+      segments: segs[i],
+      total: fromKop(lineKop),
+      regularTotal: fromKop(regKop),
+      labels: [...new Set(segs[i].flatMap((s) => (s.label ? [s.label] : [])))],
+    };
+  });
+  return {
+    lines,
+    total: fromKop(totalKop),
+    regularTotal: fromKop(regularKop),
+    savings: fromKop(Math.max(0, regularKop - totalKop)),
+  };
 }

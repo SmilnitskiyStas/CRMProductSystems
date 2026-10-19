@@ -36,6 +36,8 @@ function registerIpc(svc: CashierService): void {
   ipcMain.handle('print:test', () => svc.testPrint());
   ipcMain.handle('print:receipt', (_e, id: string) => svc.printReceipt(String(id)));
   ipcMain.handle('print:drawer', () => svc.openDrawer());
+  ipcMain.handle('promotions:get', () => svc.getPromotions());
+  ipcMain.handle('promotions:sync', () => svc.syncPromotions());
   ipcMain.handle('connection:retry', () => svc.retryConnection());
   ipcMain.handle('connection:check', (_e, url: string) => svc.checkServer(String(url)));
   ipcMain.handle('camera:getPrefs', () => svc.getCameraPrefs());
@@ -128,6 +130,7 @@ if (!app.requestSingleInstanceLock()) {
       sessionExpired: () => send('evt:sessionExpired'),
       catalogChange: (s) => send('evt:catalog', s),
       queueChange: (s) => send('evt:queue', s),
+      promotionsChange: (s) => send('evt:promotions', s),
       printResult: (r) => send('evt:print', r),
     });
     await service.init();

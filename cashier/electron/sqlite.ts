@@ -1,6 +1,7 @@
 import Database from 'better-sqlite3';
 import type { CatalogItem, OutboxStatus } from '@shared/types';
-import type { CatalogPersistence, PersistedCatalog } from './catalogStore';
+import { CATALOG_SCHEMA_VERSION, effectiveCursor, type CatalogPersistence, type PersistedCatalog } from './catalogStore';
+import type { PromotionsPersistence, StoredPromotions } from './promotions';
 import type { OutboxRepo, OutboxRow } from './outbox';
 
 /**
@@ -44,6 +45,9 @@ export function openDatabase(file: string): Db {
   db.pragma('journal_mode = WAL');
   db.pragma('synchronous = NORMAL');
   db.exec(SCHEMA);
+  // additive migration: catalog_items.category_id (catalog schema v2)
+  const cols = db.prepare('PRAGMA table_info(catalog_items)').all() as { name: string }[];
+  if (!cols.some((c) => c.name === 'category_id')) db.exec('ALTER TABLE catalog_items ADD COLUMN category_id TEXT');
   return db;
 }
 
@@ -68,8 +72,8 @@ export class SqliteCatalogPersistence implements CatalogPersistence {
 
   load(): PersistedCatalog {
     const rows = this.db
-      .prepare('SELECT id, name, barcodes, price, vat_rate, unit FROM catalog_items WHERE active = 1')
-      .all() as { id: string; name: string; barcodes: string; price: number | null; vat_rate: number; unit: string }[];
+      .prepare('SELECT id, name, barcodes, price, vat_rate, unit, category_id FROM catalog_items WHERE active = 1')
+      .all() as { id: string; name: string; barcodes: string; price: number | null; vat_rate: number; unit: string; category_id: string | null }[];
     const items: CatalogItem[] = rows.map((r) => ({
       id: r.id,
       name: r.name,
@@ -77,15 +81,22 @@ export class SqliteCatalogPersistence implements CatalogPersistence {
       price: r.price,
       vatRate: r.vat_rate,
       unit: r.unit,
+      categoryId: r.category_id,
     }));
-    return { items, cursor: this.kv.get('catalog.cursor'), lastSyncAt: this.kv.get('catalog.lastSyncAt') };
+    // items stay usable offline; an old schema version forces one full resync (cursor dropped)
+    const version = Number(this.kv.get('catalog.schemaVersion') ?? '0');
+    return {
+      items,
+      cursor: effectiveCursor(version, this.kv.get('catalog.cursor')),
+      lastSyncAt: this.kv.get('catalog.lastSyncAt'),
+    };
   }
 
   applyDelta(upserts: CatalogItem[], removedIds: string[], cursor: string | null, lastSyncAt: string | null): void {
     const up = this.db.prepare(
-      `INSERT INTO catalog_items(id, name, barcodes, price, vat_rate, unit, active, updated_at)
-       VALUES(@id, @name, @barcodes, @price, @vat, @unit, 1, @updatedAt)
-       ON CONFLICT(id) DO UPDATE SET name=@name, barcodes=@barcodes, price=@price, vat_rate=@vat, unit=@unit, active=1, updated_at=@updatedAt`,
+      `INSERT INTO catalog_items(id, name, barcodes, price, vat_rate, unit, category_id, active, updated_at)
+       VALUES(@id, @name, @barcodes, @price, @vat, @unit, @categoryId, 1, @updatedAt)
+       ON CONFLICT(id) DO UPDATE SET name=@name, barcodes=@barcodes, price=@price, vat_rate=@vat, unit=@unit, category_id=@categoryId, active=1, updated_at=@updatedAt`,
     );
     const del = this.db.prepare('DELETE FROM catalog_items WHERE id = ?');
     this.db.transaction(() => {
@@ -98,11 +109,13 @@ export class SqliteCatalogPersistence implements CatalogPersistence {
           price: it.price,
           vat: it.vatRate,
           unit: it.unit,
+          categoryId: it.categoryId ?? null,
           updatedAt: cursor,
         });
       }
       this.kv.set('catalog.cursor', cursor);
       this.kv.set('catalog.lastSyncAt', lastSyncAt);
+      this.kv.set('catalog.schemaVersion', String(CATALOG_SCHEMA_VERSION));
     })();
   }
 
@@ -227,5 +240,36 @@ export class SqliteOutboxRepo implements OutboxRepo {
       this.kv.set('receipt.seq', String(n));
       return n;
     })();
+  }
+}
+
+/** Promotion rules cache in kv (rules JSON + etag + fetchedAt); survives restarts so promos work offline. */
+export class SqlitePromotionsPersistence implements PromotionsPersistence {
+  constructor(private readonly kv: SqliteKv) {}
+
+  load(): StoredPromotions | null {
+    const raw = this.kv.get('promotions.rules');
+    if (!raw) return null;
+    try {
+      return {
+        rules: JSON.parse(raw),
+        etag: this.kv.get('promotions.etag'),
+        fetchedAt: this.kv.get('promotions.fetchedAt'),
+      };
+    } catch {
+      return null;
+    }
+  }
+
+  save(s: StoredPromotions): void {
+    this.kv.set('promotions.rules', JSON.stringify(s.rules));
+    this.kv.set('promotions.etag', s.etag);
+    this.kv.set('promotions.fetchedAt', s.fetchedAt);
+  }
+
+  clear(): void {
+    this.kv.set('promotions.rules', null);
+    this.kv.set('promotions.etag', null);
+    this.kv.set('promotions.fetchedAt', null);
   }
 }
