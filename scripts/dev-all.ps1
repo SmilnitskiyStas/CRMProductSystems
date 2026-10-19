@@ -31,11 +31,14 @@ Start-Window 'ShelfGuard API' $root (
 
 # 3. Web panel.
 Start-Window 'ShelfGuard Web' (Join-Path $root 'frontend') (
+  "if (-not (Test-Path node_modules)) { npm install }; " +
   "`$env:NEXT_PUBLIC_API_URL='$api'; npm run dev -- -p 3003")
 
 # 4. Cashier desktop app (Electron, dev mode). Give the API a head start first.
+# First run installs dependencies (Electron + native SQLite prebuilt) — takes a few minutes.
 Start-Sleep -Seconds 15
 Start-Window 'ShelfGuard Cashier' (Join-Path $root 'cashier') (
+  "if (-not (Test-Path node_modules)) { npm install }; " +
   "`$env:CASHIER_SERVER_URL='$api'; npm run dev")
 
 Write-Host "Started: API $api, web $web, cashier (Electron window)."
