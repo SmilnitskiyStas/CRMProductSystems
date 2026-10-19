@@ -9,6 +9,7 @@ import {
   ClipboardList,
   ArrowLeftRight,
   CalendarDays,
+  Tag,
   Trash2,
   TrendingUp,
   BarChart2,
@@ -168,7 +169,8 @@ export function buildNavGroups(t: SidebarGroupsT): NavGroup[] {
     moduleKey: "pos",
     items: [
       { href: "/registers", label: t("sales.registers"), icon: <CreditCard size={16} />,   roles: AT_LEAST_STORE_MANAGER },
-      { href: "/sales",     label: t("sales.sales"),     icon: <TrendingUp size={16} />,   roles: AT_LEAST_STORE_MANAGER },
+      { href: "/promotion-rules", label: t("sales.promotionRules"), icon: <Tag size={16} />,   roles: AT_LEAST_STORE_MANAGER },
+      { href: "/sales",     label: t("sales.sales"),    icon: <TrendingUp size={16} />,   roles: AT_LEAST_STORE_MANAGER },
       { href: "/customers", label: t("sales.customers"), icon: <Users size={16} />,        roles: AT_LEAST_STORE_MANAGER },
     ],
   },

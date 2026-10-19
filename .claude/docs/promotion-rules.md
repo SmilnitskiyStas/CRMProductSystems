@@ -80,6 +80,44 @@ Cashier (operator token `[AllowOperatorToken]`):
 - Catalog sync item DTO gains `categoryId`.
 Store managers manage only rules whose scope is inside their assigned stores (same rule as registers).
 
+## Phase 2 API contract (FINAL — backend and web follow this exactly; JSON camelCase)
+Route base `api/promotion-rules`; auth: policy AtLeastStoreManager, `[RequireModule("pos")]`.
+Store scoping: store_manager / network_manager only see/manage rules whose `scope.storeIds` is non-empty and a
+subset of their assigned stores (user_locations + primary store, same rule as registers); enterprise_admin /
+provider manage all. A store-scoped manager cannot save a rule with empty `storeIds` (= all stores).
+
+- `GET /` ?status=draft|published|paused|archived &storeId= → `RuleListItem[]`
+  `{ id, name, description, status, type, currentVersionNumber, publishedVersionNumber|null,
+     storeIds: string[], validFrom|null, validTo|null, hasUnpublishedChanges: bool, updatedAt }`
+- `GET /{id}` → `RuleDetail`
+  `{ id, name, description, status, currentVersion: Version, publishedVersion: Version|null,
+     versions: VersionSummary[] }`, `Version = { id, versionNumber, definition: <rule JSON>, changeComment|null,
+     createdByName|null, createdAt }`, `VersionSummary = { id, versionNumber, createdAt, createdByName|null,
+     changeComment|null, isPublished: bool }`
+- `POST /` body `{ name, description|null, definition }` → 201 `RuleDetail` (status draft, version 1)
+- `PUT /{id}` body `{ name, description|null, definition, changeComment|null }` → `RuleDetail`
+  (draft: updates the current draft version in place ONLY while it is unpublished; if the current version is the
+  published one, creates version N+1 as the new draft; the published version stays live until publish)
+- `POST /{id}/validate` → `{ errors: Issue[], warnings: Issue[] }`, `Issue = { code, field|null, message }`
+  (validates the CURRENT version; `message` is an English default, the web localizes by `code`)
+- `POST /{id}/publish` → `RuleDetail` (400 with the same `{errors, warnings}` body when validation errors exist;
+  publishes the current version; status published)
+- `POST /{id}/pause` (stops the rule at the cashier, keeps published version) | `POST /{id}/resume` |
+  `POST /{id}/archive` → `RuleDetail`
+- `POST /simulate` body `{ ruleId|null, definition|null, storeId, at|null, membership|null /* {tierId} */,
+  lines: [{ itemId, quantity, unitPrice|null }] }` — evaluates `definition` (unsaved draft) if given, else the
+  current version of `ruleId`; ONLY that rule is evaluated (plus nothing else) so the manager sees its own
+  effect. `unitPrice` null → the item's PriceRetail; `categoryId` is resolved from the item server-side.
+  → `{ lines: [{ itemId, name, quantity, regularUnitPrice, segments: [{ quantity, unitPrice, label|null }],
+     lineTotal, regularLineTotal }], total, regularTotal, savings }`
+- `GET /lookups/items?search=&categoryId=&limit=&ids=` (`ids` = comma-separated GUIDs, max 50, invalid ignored; when present returns exactly those tenant-visible items and ignores search/categoryId/limit)  → `[{ id, name, barcode|null, priceRetail|null, categoryId|null,
+  categoryName|null }]` (≤50, for the item picker; tenant-scoped)
+Validation `code` values: `no_targets`, `missing_param`, `percent_out_of_range`, `price_below_minimum`,
+`invalid_quantity`, `invalid_period`, `unknown_item`, `unknown_category`, `unknown_store`, `unknown_tier`,
+`tier_required`, `store_scope_violation` (errors); `overlaps_other_rule`, `all_stores`, `already_expired`,
+`promo_price_not_lower`, `loyalty_not_available_yet` (warnings; the last one is emitted while cashier loyalty
+scanning is not shipped, for audience ≠ all).
+
 ## Validation (errors block publish, warnings do not)
 Errors: no targets; no price param for the type; percent ∉ (0,100]; price < 0.01; buyQty<1/getQty<1;
 validTo < validFrom; unknown item/category/store/tier ids; loyalty audience without tiers when kind=loyalty_tier.
