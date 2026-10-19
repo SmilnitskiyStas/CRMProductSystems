@@ -20,7 +20,8 @@
       "@shared/*": [
         "src/shared/*"
       ]
-    }
+    },
+    "resolveJsonModule": true
   },
   "include": [
     "electron/**/*.ts",

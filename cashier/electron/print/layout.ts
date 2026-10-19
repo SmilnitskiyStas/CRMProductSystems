@@ -68,12 +68,23 @@ export function receiptLines(r: SaleReceipt, cols: number, opts: Pick<ReceiptOpt
   out.push(...wrapText(rcpt, cols));
   out.push(sep);
 
+  // Promotions split one product into sub-lines (2 x 42,73 + 1 x 0,01): print the name once,
+  // then one row per sub-line; promo sub-lines get the rule label underneath.
+  let savedKop = 0;
+  let prev: string | null = null;
   for (const it of r.items) {
-    out.push(...wrapText(it.name, cols));
+    const key = `${it.barcode}|${it.name}`;
+    if (key !== prev) out.push(...wrapText(it.name, cols));
+    prev = key;
     out.push(twoCol(`  ${qtyStr(it.quantity)} x ${money(it.unitPrice)}`, money(it.total), cols));
+    if (it.promoLabel) out.push(...wrapText(`Акція: ${it.promoLabel}`, cols - 2).map((l) => `  ${l}`));
     if (it.discount && it.discount > 0) out.push(twoCol('  Знижка', '-' + money(it.discount), cols));
+    if (it.regularUnitPrice !== undefined && it.regularUnitPrice > it.unitPrice) {
+      savedKop += Math.round((it.regularUnitPrice - it.unitPrice) * it.quantity * 100);
+    }
   }
   out.push(sep);
+  if (savedKop > 0) out.push(twoCol('Знижка за акціями', '-' + money(savedKop / 100), cols));
   out.push(twoCol('РАЗОМ', money(r.subtotal), cols));
   const card = r.paymentType.toLowerCase() === 'card';
   out.push(twoCol(card ? 'Картка' : 'Готівка', money(r.paymentAmount), cols));

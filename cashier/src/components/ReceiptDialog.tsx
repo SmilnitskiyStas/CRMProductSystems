@@ -14,6 +14,7 @@ export function ReceiptDialog({ sale, onDone }: { sale: SaleReceipt; onDone: () 
   const [printError, setPrintError] = useState<string | null>(null);
   const [printing, setPrinting] = useState(false);
   const fiscalized = sale.fiscalStatus === 'fiscalized';
+  const repriced = sale.localTotal !== undefined && Math.abs(sale.localTotal - sale.subtotal) >= 0.005;
 
   useEffect(
     () =>
@@ -49,11 +50,18 @@ export function ReceiptDialog({ sale, onDone }: { sale: SaleReceipt; onDone: () 
             <div key={idx} className="flex justify-between py-1">
               <span className="truncate pr-3">
                 {i.name} × {i.quantity}
+                {i.quantity !== 1 || i.promoLabel ? ` (${formatMoney(i.unitPrice)})` : ''}
+                {i.promoLabel && <span className="ml-2 rounded-md bg-amber-500/20 px-2 py-0.5 text-xs text-amber-300">{i.promoLabel}</span>}
               </span>
               <span>{formatMoney(i.total)}</span>
             </div>
           ))}
         </div>
+        {repriced && (
+          <p className="rounded-lg bg-amber-500/10 px-4 py-3 text-amber-300">
+            Ціну перераховано сервером: було {formatMoney(sale.localTotal!)}, стало {formatMoney(sale.subtotal)}.
+          </p>
+        )}
 
         <div className="space-y-1 text-lg">
           <div className="flex justify-between">

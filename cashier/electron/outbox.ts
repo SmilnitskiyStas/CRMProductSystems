@@ -271,6 +271,9 @@ export function toEntry(r: OutboxRow): QueueEntry {
     paymentType: r.payload.paymentType,
     itemCount: r.payload.items.length,
     cashierName: r.receipt.cashierName ?? null,
+    serverTotal: r.receipt.localTotal !== undefined ? r.receipt.subtotal : null,
+    totalDifference:
+      r.receipt.localTotal !== undefined ? Math.round((r.receipt.subtotal - r.receipt.localTotal) * 100) / 100 : null,
   };
 }
 

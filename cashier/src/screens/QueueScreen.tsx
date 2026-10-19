@@ -115,6 +115,12 @@ export function QueueScreen({ onBack }: { onBack: () => void }) {
                   {e.attempts > 0 && ` · спроб: ${e.attempts}`}
                   {e.serverReceiptNo && ` · лок. ${e.localReceiptNo}`}
                 </p>
+                {e.totalDifference !== null && Math.abs(e.totalDifference) >= 0.005 && (
+                  <p className="mt-1 text-sm text-amber-300">
+                    Ціну перераховано сервером: {e.totalDifference > 0 ? '+' : '−'}
+                    {formatMoney(Math.abs(e.totalDifference))} (стало {formatMoney(e.serverTotal ?? 0)}).
+                  </p>
+                )}
                 {e.lastError && (
                   <p className={`mt-1 text-sm ${e.status === 'rejected' ? 'text-rose-300' : 'text-amber-300'}`}>{e.lastError}</p>
                 )}

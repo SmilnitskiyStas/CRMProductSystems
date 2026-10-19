@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { CatalogItem, CatalogStatus, PaymentType, ShiftInfo } from '@shared/types';
 import {
   addItem,
-  cartTotal,
+  priceCart,
   isWholeUnit,
   lineTotal,
   removeLine,
@@ -10,6 +10,7 @@ import {
   type CartLine,
 } from '@shared/cart';
 import { formatMoney } from '@shared/money';
+import type { PromotionRule } from '@shared/promotions/engine';
 import { SaleSubmitter, type SubmissionState } from '@shared/saleSubmission';
 import { CASHIER_ACTIVITY_EVENT } from '../hooks/useIdleLogout';
 import { PaymentDialog } from '../components/PaymentDialog';
@@ -47,7 +48,24 @@ export function CheckoutScreen({ shift, online, onOpenShiftScreen, onOpenQueue, 
     [],
   );
 
-  const total = cartTotal(cart);
+  // Published promotion rules (synced + cached in main, so they also apply offline). The cart is priced
+  // through the same engine the server uses; the server stays authoritative at sale time.
+  const [promoRules, setPromoRules] = useState<PromotionRule[]>([]);
+  const [tick, setTick] = useState(() => Date.now());
+  useEffect(() => {
+    void window.cashier.getPromotions().then((p) => setPromoRules(p.rules));
+    const off = window.cashier.onPromotionsChange((p) => setPromoRules(p.rules));
+    const t = setInterval(() => setTick(Date.now()), 30_000); // time-window rules flip on the minute
+    return () => {
+      off();
+      clearInterval(t);
+    };
+  }, []);
+  const priced = useMemo(
+    () => priceCart(cart, promoRules, { storeId: shift.storeId, at: tick }),
+    [cart, promoRules, shift.storeId, tick],
+  );
+  const total = priced.total;
   const dialogOpen = payment !== null || submission.status === 'completed' || confirmClear;
 
   const flash = useCallback((text: string, tone: 'info' | 'error' = 'info') => {
@@ -324,7 +342,10 @@ export function CheckoutScreen({ shift, online, onOpenShiftScreen, onOpenQueue, 
                 Скануйте товар або скористайтесь пошуком
               </div>
             ) : (
-              cart.map((l) => (
+              cart.map((l, idx) => {
+                const pl = priced.lines[idx];
+                const promo = pl.labels.length > 0;
+                return (
                 <div
                   key={l.itemId}
                   onClick={() => setSelected(l.itemId)}
@@ -332,7 +353,19 @@ export function CheckoutScreen({ shift, online, onOpenShiftScreen, onOpenQueue, 
                     selected === l.itemId ? 'bg-brand-500/10' : 'hover:bg-slate-900'
                   }`}
                 >
-                  <span className="truncate">{l.name}</span>
+                  <span className="min-w-0">
+                    <span className="block truncate">{l.name}</span>
+                    {promo && (
+                      <span className="mt-0.5 flex flex-wrap items-center gap-2 text-sm text-slate-300">
+                        {pl.labels.map((label) => (
+                          <span key={label} className="rounded-md bg-amber-500/20 px-2 py-0.5 text-xs font-semibold text-amber-300">
+                            {label}
+                          </span>
+                        ))}
+                        <span>{pl.segments.map((s) => `${s.quantity} × ${formatMoney(s.unitPrice)}`).join(' + ')}</span>
+                      </span>
+                    )}
+                  </span>
                   <span className="flex items-center justify-center gap-1">
                     <button
                       className="h-10 w-10 rounded-lg bg-slate-800 text-2xl hover:bg-slate-700"
@@ -366,8 +399,13 @@ export function CheckoutScreen({ shift, online, onOpenShiftScreen, onOpenQueue, 
                       +
                     </button>
                   </span>
-                  <span className="text-right text-slate-400">{formatMoney(l.price)}</span>
-                  <span className="text-right font-semibold">{formatMoney(lineTotal(l))}</span>
+                  <span className="text-right text-slate-400">
+                    {promo ? <s className="text-slate-500">{formatMoney(l.price)}</s> : formatMoney(l.price)}
+                  </span>
+                  <span className={`text-right font-semibold ${promo ? 'text-amber-300' : ''}`}>
+                    {promo && <s className="mr-2 text-sm font-normal text-slate-500">{formatMoney(lineTotal(l))}</s>}
+                    {formatMoney(pl.total)}
+                  </span>
                   <button
                     className="h-10 w-10 rounded-lg text-xl text-rose-400 hover:bg-rose-500/10"
                     title="Видалити (Del)"
@@ -379,7 +417,8 @@ export function CheckoutScreen({ shift, online, onOpenShiftScreen, onOpenQueue, 
                     ✕
                   </button>
                 </div>
-              ))
+                );
+              })
             )}
           </div>
           {toast && (
@@ -409,6 +448,9 @@ export function CheckoutScreen({ shift, online, onOpenShiftScreen, onOpenQueue, 
           )}
           <div>
             <p className="text-slate-400">Позицій: {cart.length}</p>
+            {priced.savings > 0 && (
+              <p className="mt-1 font-semibold text-amber-300">Знижка за акціями: −{formatMoney(priced.savings)}</p>
+            )}
             <p className="mt-1 text-slate-400">До сплати</p>
             <p className="text-5xl font-extrabold text-brand-400">{formatMoney(total)}</p>
           </div>

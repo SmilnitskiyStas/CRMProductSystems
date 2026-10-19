@@ -23,7 +23,7 @@ function setup(cashierId = 'cashier-A', cashierName = 'Anna') {
   const gw = new OutboxSalesGateway(
     outbox,
     catalog,
-    () => ({ cashierId, registerNumber: 3, registerName: 'R3', storeName: 'S', cashierName }),
+    () => ({ storeId: 's1', cashierId, registerNumber: 3, registerName: 'R3', storeName: 'S', cashierName }),
     () => Date.parse('2026-10-18T10:00:00Z'),
   );
   return { repo, outbox, gw, sent, setRespond: (f: typeof respond) => (respond = f) };

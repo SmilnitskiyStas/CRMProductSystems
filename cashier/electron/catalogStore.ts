@@ -26,6 +26,7 @@ export interface SyncCatalogItemWire {
   unit: string;
   isActive: boolean;
   updatedAt: string;
+  categoryId?: string | null;
 }
 
 export interface SyncCatalogPageWire {
@@ -75,6 +76,17 @@ export class MemoryCatalogPersistence implements CatalogPersistence {
     this.cursor = null;
     this.lastSyncAt = null;
   }
+}
+
+/**
+ * Catalog schema version. v2 added `categoryId` (promotion targets): rows synced by v1 lack it, so
+ * after an upgrade ONE full resync (cursor reset) is forced; the version is stored with the first
+ * successful sync that follows.
+ */
+export const CATALOG_SCHEMA_VERSION = 2;
+
+export function effectiveCursor(storedVersion: number, cursor: string | null): string | null {
+  return storedVersion >= CATALOG_SCHEMA_VERSION ? cursor : null;
 }
 
 /** UpdatedAt is stamped at statement time, so resume slightly before the saved cursor and upsert by id. */
@@ -155,6 +167,7 @@ export class MemoryCatalogStore implements CatalogStore {
               price: w.priceRetail,
               vatRate: w.vatRate,
               unit: w.unit,
+              categoryId: w.categoryId ?? null,
             };
             this.index(item);
             upserts.set(w.id, item);

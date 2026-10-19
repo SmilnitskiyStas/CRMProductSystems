@@ -9,6 +9,7 @@ import type {
   CatalogStatus,
   OperatorInfo,
   PrintResult,
+  PromotionsState,
   PrintSettings,
   QueueEntry,
   QueueSummary,
@@ -31,9 +32,10 @@ import {
 import { AppPrefsStore } from './appPrefs';
 import { CameraPrefsStore } from './cameraPrefs';
 import { PrintService, PrintSettingsStore } from './print/printService';
+import { PromotionsStore, type SyncPromotionsWire } from './promotions';
 import { mergeServerSale, OutboxSalesGateway, type SalesGateway } from './salesGateway';
 import { SecureConfigStore } from './secureStore';
-import { openDatabase, SqliteCatalogPersistence, SqliteKv, SqliteOutboxRepo, type Db } from './sqlite';
+import { openDatabase, SqliteCatalogPersistence, SqliteKv, SqliteOutboxRepo, SqlitePromotionsPersistence, type Db } from './sqlite';
 
 interface ActivateWire {
   deviceToken: string;
@@ -83,7 +85,9 @@ const mapShift = (s: ShiftWire): ShiftInfo => ({
 
 const CATALOG_PAGE_LIMIT = 500;
 const CATALOG_REFRESH_MS = 5 * 60 * 1000;
+const PROMOTIONS_REFRESH_MS = 60 * 1000;
 const OUTBOX_TICK_MS = 15_000;
+const SALE_SYNC_WAIT_MS = 5_000;
 
 export interface ServiceEvents {
   onlineChange(state: ConnectionState): void;
@@ -91,6 +95,7 @@ export interface ServiceEvents {
   catalogChange(status: CatalogStatus): void;
   queueChange(summary: QueueSummary): void;
   printResult(result: PrintResult): void;
+  promotionsChange(state: PromotionsState): void;
 }
 
 /**
@@ -105,6 +110,8 @@ export class CashierService {
   private monitor!: ConnectivityMonitor;
   private outboxTimer: NodeJS.Timeout | null = null;
   private catalogTimer: NodeJS.Timeout | null = null;
+  private promoTimer: NodeJS.Timeout | null = null;
+  private promotions!: PromotionsStore;
   private db!: Db;
   private kv!: SqliteKv;
   private catalog!: CatalogStore;
@@ -137,21 +144,24 @@ export class CashierService {
     });
     this.outbox.recoverStuck();
 
+    // published promotion rules: cached in SQLite, so they also apply offline
+    this.promotions = new PromotionsStore(
+      new SqlitePromotionsPersistence(this.kv),
+      (etag) => this.fetchPromotions(etag),
+      (s) => this.events.promotionsChange(s),
+    );
+    this.promotions.load();
+
     this.sales = new OutboxSalesGateway(
       this.outbox,
       this.catalog,
       () => {
         const reg = this.config.snapshot.register;
         if (!reg || !this.operator) return null;
-        return { cashierId: this.operator.info.cashierId, registerNumber: reg.number, registerName: reg.name, storeName: reg.storeName, cashierName: this.operator.info.cashierName };
+        return { storeId: reg.storeId, cashierId: this.operator.info.cashierId, registerNumber: reg.number, registerName: reg.name, storeName: reg.storeName, cashierName: this.operator.info.cashierName };
       },
       Date.now,
-      (row) => {
-        void this.outbox.syncNow(true);
-        void this.print.printReceipt(row.receipt, { auto: true }).then((r) => {
-          this.events.printResult({ ...r, clientTransactionId: row.clientTransactionId });
-        });
-      },
+      () => this.promotions.state().rules,
     );
 
     this.printSettings = new PrintSettingsStore(join(app.getPath('userData'), 'print-settings.json'));
@@ -187,6 +197,7 @@ export class CashierService {
     setNetworkErrorListener(null);
     if (this.outboxTimer) clearInterval(this.outboxTimer);
     if (this.catalogTimer) clearInterval(this.catalogTimer);
+    if (this.promoTimer) clearInterval(this.promoTimer);
     try {
       this.db?.close();
     } catch {
@@ -221,6 +232,7 @@ export class CashierService {
   private onReconnected(): void {
     void this.outbox.syncNow(true);
     if (this.operator) {
+      void this.promotions.sync();
       void this.catalog.sync(); // a full download happens automatically when the local catalog is empty
       void this.getCurrentShift(); // replaces the cached copy; a restored session is validated here (401 -> PIN screen)
     }
@@ -243,6 +255,9 @@ export class CashierService {
     void this.catalog.sync();
     if (this.catalogTimer) clearInterval(this.catalogTimer);
     this.catalogTimer = setInterval(() => void this.catalog.sync(), CATALOG_REFRESH_MS);
+    void this.promotions.sync();
+    if (this.promoTimer) clearInterval(this.promoTimer);
+    this.promoTimer = setInterval(() => void this.promotions.sync(), PROMOTIONS_REFRESH_MS); // cheap: etag / notModified
   }
 
   // ── activation ───────────────────────────────────────────────────────────
@@ -280,6 +295,7 @@ export class CashierService {
     this.operator = null;
     this.kv.set('shift.current', null);
     await this.catalog.clear();
+    this.promotions.clear();
     void this.monitor.probeNow();
     return { ok: true, data: register };
   }
@@ -339,6 +355,10 @@ export class CashierService {
       clearInterval(this.catalogTimer);
       this.catalogTimer = null;
     }
+    if (this.promoTimer) {
+      clearInterval(this.promoTimer);
+      this.promoTimer = null;
+    }
     if (notify) this.events.sessionExpired();
   }
 
@@ -390,7 +410,10 @@ export class CashierService {
     const storeId = this.config.snapshot.register?.storeId;
     const res = await this.operatorCall<ShiftWire>('/api/pos/shifts/open', 'POST', { storeId, openingCash });
     const r = toResult(res, mapShift);
-    if (r.ok) this.kv.set('shift.current', JSON.stringify(r.data));
+    if (r.ok) {
+      this.kv.set('shift.current', JSON.stringify(r.data));
+      void this.promotions.sync(); // rules may have changed since login
+    }
     if (!r.ok && r.error.kind === 'network') r.error.message = 'Відкриття зміни потребує зв’язку з сервером.';
     return r;
   }
@@ -427,9 +450,38 @@ export class CashierService {
 
   // ── sales / outbox ───────────────────────────────────────────────────────
 
-  submitSale(request: SaleSubmitRequest): Promise<SaleGatewayResult> {
-    return this.sales.submit(request);
+  /**
+   * Writes the sale to the outbox first (provisional local receipt). When the server is reachable it
+   * is sent right away and, if it answers in time, the SERVER's lines/totals replace the local ones
+   * (re-pricing notice is derived from `localTotal`); otherwise the provisional receipt stands.
+   */
+  async submitSale(request: SaleSubmitRequest): Promise<SaleGatewayResult> {
+    const res = await this.sales.submit(request);
+    if (!res.ok) return res;
+    let receipt = res.sale;
+    const syncP = this.outbox.syncNow(true);
+    if (this.monitor.state.online) {
+      await Promise.race([syncP, new Promise((r) => setTimeout(r, SALE_SYNC_WAIT_MS))]);
+      const row = this.outbox.getRow(request.clientTransactionId);
+      if (row?.status === 'synced') receipt = row.receipt;
+    }
+    void this.print.printReceipt(receipt, { auto: true }).then((r) => {
+      this.events.printResult({ ...r, clientTransactionId: request.clientTransactionId });
+    });
+    return { ok: true, sale: receipt };
   }
+
+  private async fetchPromotions(etag: string | null): Promise<SyncPromotionsWire> {
+    const q = etag ? `?etag=${encodeURIComponent(etag)}` : '';
+    const res = await this.operatorCall<SyncPromotionsWire>(`/api/pos/sync/promotions${q}`, 'GET');
+    if (res.networkError || res.status !== 200 || !res.body) {
+      throw new Error(res.networkError ? 'Немає зв’язку з сервером' : toApiError(res).message);
+    }
+    return res.body;
+  }
+
+  getPromotions = (): PromotionsState => this.promotions.state();
+  syncPromotions = (): Promise<PromotionsState> => this.promotions.sync();
 
   /** POST /api/pos/sales/batch with the operator token; maps transport outcomes for the outbox. */
   private async sendBatch(payloads: OutboxPayload[]): Promise<BatchResponse> {
