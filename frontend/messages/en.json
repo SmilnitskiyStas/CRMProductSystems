@@ -928,6 +928,239 @@
     "rangeTo": "to"
   },
   "Dashboard": {
+    "promotionRules": {
+      "title": "Promotions & discounts",
+      "subtitle": "Price rules for the register: item and category discounts, \"2+1\", fixed prices",
+      "create": "Create rule",
+      "backToList": "← Back to promotions",
+      "loading": "Loading…",
+      "notFound": "Rule not found",
+      "currency": "UAH",
+      "unpublished": "Unpublished changes",
+      "tabs": { "draft": "Drafts", "published": "Published", "paused": "Paused", "archived": "Archive" },
+      "status": { "draft": "Draft", "published": "Published", "paused": "Paused", "archived": "Archived" },
+      "empty": {
+        "draft": "No drafts. Create your first promotion.",
+        "published": "No published promotions yet.",
+        "paused": "No paused promotions.",
+        "archived": "The archive is empty."
+      },
+      "columns": { "name": "Name", "type": "Type", "stores": "Stores", "period": "Period", "status": "Status" },
+      "stores": {
+        "all": "All stores",
+        "count": "{count, plural, one {# store} other {# stores}}"
+      },
+      "period": { "always": "No limits", "from": "from {date}", "to": "until {date}" },
+      "actions": {
+        "menu": "Actions",
+        "edit": "Edit",
+        "publish": "Publish",
+        "pause": "Pause",
+        "resume": "Resume",
+        "archive": "Archive"
+      },
+      "toast": {
+        "saved": "Draft saved",
+        "publish": "Promotion published",
+        "published": "Promotion published",
+        "pause": "Promotion paused",
+        "resume": "Promotion resumed",
+        "archive": "Promotion archived",
+        "publishBlocked": "There are errors - open the rule to fix them",
+        "autosaveFailed": "Could not autosave the draft. {message}"
+      },
+      "summary": {
+        "percent_off": "{percent}% off",
+        "fixed_off": "{amount} UAH off each unit",
+        "fixed_price": "Price {price} UAH",
+        "buy_n_get_m_price": "Buy {buy}, get {get} for {price} UAH",
+        "buy_n_get_m_percent": "Buy {buy}, get {get} at {percent}% off"
+      },
+      "types": {
+        "percent_off": {
+          "title": "Percentage off",
+          "text": "The item price is reduced by a percentage.",
+          "example": "Example: -20% on all yogurts"
+        },
+        "fixed_off": {
+          "title": "Amount off",
+          "text": "A fixed amount is taken off the price of each unit.",
+          "example": "Example: -5 UAH per unit"
+        },
+        "fixed_price": {
+          "title": "Fixed price",
+          "text": "The item sells at the set price regardless of its regular price.",
+          "example": "Example: price 9.99 UAH"
+        },
+        "buy_n_get_m": {
+          "title": "Buy N - get M",
+          "text": "Buy several units and get the next ones cheaper or nearly free.",
+          "example": "Example: 2+1 - the third unit costs 0.01 UAH"
+        }
+      },
+      "steps": {
+        "type": "Promotion type",
+        "items": "What we sell",
+        "params": "Settings",
+        "scope": "Where and when",
+        "audience": "Who it is for",
+        "review": "Review and publish"
+      },
+      "stepHelp": {
+        "type": "Choose how the discount works and name the promotion.",
+        "items": "Pick items and/or whole categories the promotion applies to.",
+        "params": "Set the discount size or the price.",
+        "scope": "Which stores, which period and which hours it runs.",
+        "audience": "Who can get the promotion.",
+        "review": "Check the rule, try it on a test receipt and publish."
+      },
+      "wizard": {
+        "createTitle": "New promotion",
+        "editTitle": "Edit promotion",
+        "name": "Promotion name",
+        "nameHelp": "Only you see it - for example \"Yogurts -20% on weekends\".",
+        "namePlaceholder": "For example: 2+1 on coffee",
+        "description": "Description (optional)",
+        "back": "Back",
+        "next": "Next",
+        "saveDraft": "Save draft",
+        "publish": "Publish",
+        "liveBanner": "Changes create a new version; the previous one stays live until you publish."
+      },
+      "items": {
+        "searchPlaceholder": "Search an item by name or barcode (2+ characters)",
+        "searching": "Searching…",
+        "nothingFound": "Nothing found"
+      },
+      "targets": {
+        "intro": "The promotion applies to the chosen items and to every item in the chosen categories. One of them is enough.",
+        "items": "Individual items",
+        "itemsHelp": "Find an item and click it to add.",
+        "categories": "Categories",
+        "categoriesHelp": "The promotion applies to every item in the category.",
+        "categoryPlaceholder": "Search a category…",
+        "needOne": "Add at least one item or category.",
+        "unknownItem": "Item …{id}",
+        "unknownCategory": "Category …{id}"
+      },
+      "params": {
+        "percent": "Discount size",
+        "percentHelp": "From 0.01 to 100. For example 20 makes the item 20% cheaper.",
+        "amount": "Discount per unit",
+        "amountHelp": "This amount is taken off each unit. The price never drops below 0.01 UAH.",
+        "price": "New price per unit",
+        "priceHelp": "If the regular price is lower, the regular price stays. Decimals with a comma are fine: 9,99.",
+        "buyQty": "Buy (pcs)",
+        "getQty": "Get (pcs)",
+        "buyGetHelp": "For example 2 + 1: in every three units the last one is discounted.",
+        "getModePrice": "At a fixed price",
+        "getModePriceText": "The bonus units cost a set price, for example 0.01 UAH.",
+        "getModePercent": "With a percentage off",
+        "getModePercentText": "100% means free (the register shows 0.01 UAH).",
+        "getPrice": "Price of the bonus unit",
+        "getPriceHelp": "Minimum 0.01 UAH.",
+        "getPercent": "Discount on the bonus units",
+        "getPercentHelp": "From 0.01 to 100.",
+        "matchMode": "How to count \"N + M\"",
+        "perItem": "Per item separately",
+        "perItemText": "Units are counted separately for each item. Yogurt A x2 + yogurt B x1 does not trigger the promotion.",
+        "acrossSet": "Across the whole set",
+        "acrossSetText": "Any promotion items are combined and the cheapest units get the discount.",
+        "maxApplications": "Max times per receipt",
+        "maxApplicationsHelp": "How many times the promotion can trigger in one receipt. Empty means no limit.",
+        "noLimit": "No limit",
+        "excludeDiscounted": "Do not apply to items that already have a discount",
+        "excludeDiscountedHelp": "Skips units that already carry an expiry or stock discount."
+      },
+      "scope": {
+        "allStores": "All stores",
+        "ownStoresOnly": "Only your assigned stores are available to you",
+        "allStoresHelp": "Turn off to choose specific stores. New stores join automatically while the promotion covers all.",
+        "chooseStores": "Choose stores",
+        "storesChosen": "{count, plural, one {# store selected} other {# stores selected}}",
+        "done": "Done",
+        "validFrom": "Starts",
+        "validFromHelp": "Empty - active right after publishing.",
+        "validTo": "Ends",
+        "validToHelp": "Empty - active until you pause it.",
+        "weekdays": "Days of the week",
+        "weekdaysHelp": "None selected - runs every day.",
+        "day": { "1": "Mon", "2": "Tue", "3": "Wed", "4": "Thu", "5": "Fri", "6": "Sat", "7": "Sun" },
+        "timeFrom": "From",
+        "timeTo": "Until",
+        "timeHelp": "Store local time. Empty - all day.",
+        "showAdvanced": "Advanced: priority",
+        "hideAdvanced": "Hide advanced settings",
+        "priority": "Priority",
+        "priorityHelp": "The customer always gets the best promotion. Priority only matters on equal prices: the lower number wins."
+      },
+      "audience": {
+        "all": { "title": "Everyone", "text": "The promotion applies to every receipt." },
+        "loyalty_member": { "title": "Loyalty members", "text": "Only when a loyalty card is attached to the receipt." },
+        "loyalty_tier": { "title": "Specific loyalty tiers", "text": "Only for customers on the selected tiers." },
+        "tiers": "Loyalty tiers",
+        "noTiers": "No loyalty tiers are configured yet, or you do not have access to them.",
+        "cashierNote": "Loyalty card scanning at the register is not available yet - member promotions will not trigger at the register until it ships."
+      },
+      "review": {
+        "check": "Check",
+        "validating": "Checking…",
+        "notChecked": "Save the draft to run the check.",
+        "allGood": "No errors or warnings - ready to publish.",
+        "warningsOk": "Warnings do not block publishing.",
+        "goFix": "Fix",
+        "targetsLine": "Items: {items}, categories: {categories}",
+        "simTitle": "Test a receipt",
+        "simHelp": "Add items to a test receipt and see how the promotion works. Nothing is saved.",
+        "qty": "Quantity",
+        "simRun": "Calculate",
+        "simRunning": "Calculating…",
+        "was": "was {amount}",
+        "total": "Total",
+        "savings": "Savings",
+        "noEffect": "The promotion did not change the price in this receipt. Check the conditions (quantity, store, period)."
+      },
+      "versions": { "title": "Version history", "version": "Version {n}", "published": "published", "draft": "draft" },
+      "fields": {
+        "targets": "Items and categories",
+        "targets_itemIds": "Items",
+        "targets_categoryIds": "Categories",
+        "params_percent": "Discount percentage",
+        "params_amount": "Discount amount",
+        "params_price": "Price",
+        "params_buyQty": "Buy (pcs)",
+        "params_getQty": "Get (pcs)",
+        "params_getPrice": "Bonus unit price",
+        "params_getPercent": "Bonus unit discount",
+        "scope_storeIds": "Stores",
+        "scope_validFrom": "Start",
+        "scope_validTo": "End",
+        "audience_tierIds": "Loyalty tiers"
+      },
+      "issues": {
+        "no_targets": "No item or category selected.",
+        "missing_param": "A required promotion parameter is missing.",
+        "percent_out_of_range": "The percentage must be above 0 and at most 100.",
+        "price_below_minimum": "The price cannot be below 0.01 UAH.",
+        "invalid_quantity": "\"Buy\" and \"get\" quantities must be at least 1.",
+        "invalid_period": "The end date is earlier than the start date.",
+        "unknown_item": "Some item does not exist or is unavailable.",
+        "unknown_category": "Some category does not exist.",
+        "unknown_store": "Some store does not exist.",
+        "unknown_tier": "Some loyalty tier does not exist.",
+        "tier_required": "Select at least one loyalty tier.",
+        "store_scope_violation": "You can only manage promotions for your own stores. Pick specific stores.",
+        "overlaps_other_rule": "Another promotion already covers these items. The customer gets the best one.",
+        "all_stores": "The promotion will run in all stores.",
+        "already_expired": "The promotion period has already ended - it will not trigger.",
+        "promo_price_not_lower": "The promo price is not lower than the regular price - the customer saves nothing.",
+        "loyalty_not_available_yet": "Loyalty card scanning at the register is not available yet - member promotions will not trigger.",
+        "type_required": "Choose a promotion type.",
+        "name_required": "Enter a promotion name.",
+        "no_stores_selected": "Pick at least one store or turn on \"All stores\".",
+        "unknown": "Invalid value. Check the promotion settings."
+      }
+    },
     "registers": {
       "title": "Registers",
       "subtitle": "Manage cash registers, employee PINs, statistics and the activity journal",
@@ -1018,6 +1251,7 @@
           "label": "Sales",
           "pos": "POS",
           "registers": "Registers",
+          "promotionRules": "Promotions & discounts",
           "sales": "Sales",
           "customers": "Customers"
         },

@@ -1566,3 +1566,9 @@ F3 camera panel (zxing, check-digit + 2-read + 1.5 s debounce, same pipeline as 
 
 ### TASK-732 - Promotion rules Phase 1 (backend) - review
 Schema+RLS (`AddPromotionRules`, immutable versions), pure `PromotionEngine` + 37 golden vectors (`backend/ShelfGuard.Tests/Promotions/golden-vectors.json`), PosService sub-lines/FEFO/application log, `GET /api/pos/sync/promotions`, catalog `categoryId`. Full test suite green on a migrated scratch DB; dev DB needs the migration applied (start API). Not committed. Лог: `.claude/logs/tasks/732_*`.
+
+### TASK-733 Promotion rules API (Phase 2 backend) - done
+`api/promotion-rules` CRUD/validate/publish/pause/resume/archive/simulate/lookups per contract; superseded unpublished drafts are deleted; store-scoped like registers. Build + full tests green. Log: logs/tasks/733_*.
+
+## TASK-734 Promotion rules web UI — review (frontend-developer, 2026-10-19)
+Wizard + list + simulator under `frontend/features/promotion-rules`, pages `/promotion-rules[/new|/{id}]`, sidebar + uk/en i18n. tsc/eslint/vitest/next build green; API untested (backend parallel). Log: `.claude/logs/tasks/734_2026-10-19_promotion-rules-web-ui_frontend-developer.md`.

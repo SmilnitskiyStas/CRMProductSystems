@@ -74,6 +74,7 @@ services.AddScoped<IAuthService, AuthService>();
         services.AddScoped<Features.Registers.IRegisterService, Features.Registers.RegisterService>();
         services.AddScoped<Features.Registers.IRegisterReportService, Features.Registers.RegisterReportService>();
         services.AddScoped<Features.Registers.IPosSyncService, Features.Registers.PosSyncService>();
+        services.AddScoped<Features.Promotions.IPromotionRuleService, Features.Promotions.PromotionRuleService>();
         services.AddSingleton<Features.Registers.IPinGenerator, Features.Registers.RandomPinGenerator>();
 
         // SaaS Admin Panel (TASK-074)

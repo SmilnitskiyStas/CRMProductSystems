@@ -2091,6 +2091,12 @@ file sealed class FakePromotionRepo : IPromotionRuleRepository
     public Task<PromotionRule?> GetByIdAsync(Guid id, CancellationToken ct = default) => Task.FromResult<PromotionRule?>(null);
     public Task<IReadOnlyList<PromotionRuleVersion>> GetVersionsAsync(Guid ruleId, CancellationToken ct = default) =>
         Task.FromResult<IReadOnlyList<PromotionRuleVersion>>([]);
+    public Task<IReadOnlyList<PromotionRule>> ListAsync(string? status, CancellationToken ct = default) =>
+        Task.FromResult<IReadOnlyList<PromotionRule>>([]);
+    public Task<IReadOnlyList<PromotionRuleVersion>> GetVersionsByIdsAsync(IEnumerable<Guid> ids, CancellationToken ct = default) =>
+        Task.FromResult<IReadOnlyList<PromotionRuleVersion>>([]);
+    public Task RemoveVersionAsync(Guid versionId, CancellationToken ct = default) => Task.CompletedTask;
+    public Task<T> ExecuteInTransactionAsync<T>(Func<Task<T>> work, CancellationToken ct = default) => work();
     public Task AddRuleAsync(PromotionRule rule, CancellationToken ct = default) => Task.CompletedTask;
     public Task AddVersionAsync(PromotionRuleVersion version, CancellationToken ct = default) => Task.CompletedTask;
     public Task SaveChangesAsync(CancellationToken ct = default) => Task.CompletedTask;
