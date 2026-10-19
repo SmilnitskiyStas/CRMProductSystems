@@ -10,6 +10,7 @@ import type {
   OperatorInfo,
   PrintResult,
   PromotionsState,
+  LoyaltyMember,
   PrintSettings,
   QueueEntry,
   QueueSummary,
@@ -32,6 +33,7 @@ import {
 import { AppPrefsStore } from './appPrefs';
 import { CameraPrefsStore } from './cameraPrefs';
 import { PrintService, PrintSettingsStore } from './print/printService';
+import { toLoyaltyResult, type LoyaltyResolveWire } from './loyalty';
 import { PromotionsStore, type SyncPromotionsWire } from './promotions';
 import { mergeServerSale, OutboxSalesGateway, type SalesGateway } from './salesGateway';
 import { SecureConfigStore } from './secureStore';
@@ -478,6 +480,21 @@ export class CashierService {
       throw new Error(res.networkError ? 'Немає зв’язку з сервером' : toApiError(res).message);
     }
     return res.body;
+  }
+
+  /** Online-only: rotating TOTP QR/barcode (replay-protected on the server). Codes are never logged. */
+  async resolveLoyaltyCode(code: string): Promise<Result<LoyaltyMember>> {
+    const res = await this.operatorCall<LoyaltyResolveWire>('/api/loyalty/resolve-code', 'POST', { code: code.trim() });
+    return toLoyaltyResult(res, 'code');
+  }
+
+  async resolveLoyaltyIdentifier(type: 'phone' | 'account' | 'card', value: string): Promise<Result<LoyaltyMember>> {
+    const res = await this.operatorCall<LoyaltyResolveWire>('/api/loyalty/resolve-identifier', 'POST', {
+      identifierType: type,
+      // the backend accepts digits only: strip +, spaces, dashes, brackets typed by the cashier
+      value: value.replace(/\D/g, ''),
+    });
+    return toLoyaltyResult(res, 'identifier');
   }
 
   getPromotions = (): PromotionsState => this.promotions.state();

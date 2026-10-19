@@ -61,6 +61,7 @@ export function receiptLines(r: SaleReceipt, cols: number, opts: Pick<ReceiptOpt
 
   out.push(...wrapText(`Каса №${r.registerNumber ?? '-'}${r.registerName ? ' ' + r.registerName : ''}`, cols));
   if (r.cashierName) out.push(...wrapText(`Касир: ${r.cashierName}`, cols));
+  if (r.customerName) out.push(...wrapText(`Клієнт: ${r.customerName}`, cols));
   out.push(fmtDate(r.createdAt));
   const rcpt = r.localReceiptNo && r.localReceiptNo !== r.receiptNumber
     ? `Чек ${r.receiptNumber} (лок. ${r.localReceiptNo})`
@@ -90,6 +91,13 @@ export function receiptLines(r: SaleReceipt, cols: number, opts: Pick<ReceiptOpt
   out.push(twoCol(card ? 'Картка' : 'Готівка', money(r.paymentAmount), cols));
   if (!card && r.change > 0) out.push(twoCol('Решта', money(r.change), cols));
   out.push(sep);
+  // loyalty: the server's accrual when known, otherwise a promise for offline receipts
+  if (r.loyaltyAccrued !== undefined && r.loyaltyAccrued !== null) {
+    out.push(twoCol('Нараховано бонусів', money(r.loyaltyAccrued), cols));
+    if (r.loyaltyBalance !== undefined && r.loyaltyBalance !== null) out.push(twoCol('Баланс бонусів', money(r.loyaltyBalance), cols));
+  } else if (r.local && (r.customerName || r.tierName)) {
+    out.push(...wrapText('Бонуси будуть нараховані після синхронізації', cols));
+  }
   if (fiscalized) out.push(...wrapText(`Фіскальний номер: ${r.fiscalNumber}`, cols));
   else {
     out.push(center('ЧЕК НЕ ФІСКАЛІЗОВАНО', cols));

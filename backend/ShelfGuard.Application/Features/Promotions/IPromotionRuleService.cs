@@ -13,5 +13,6 @@ public interface IPromotionRuleService
     Task<PromotionOutcome<RuleDetailDto>> ResumeAsync(PromotionRuleCaller caller, Guid id, CancellationToken ct = default);
     Task<PromotionOutcome<RuleDetailDto>> ArchiveAsync(PromotionRuleCaller caller, Guid id, CancellationToken ct = default);
     Task<PromotionOutcome<SimulateResultDto>> SimulateAsync(PromotionRuleCaller caller, SimulateRequest request, CancellationToken ct = default);
+    Task<IReadOnlyList<TierLookupDto>> LookupTiersAsync(PromotionRuleCaller caller, CancellationToken ct = default);
     Task<IReadOnlyList<ItemLookupDto>> LookupItemsAsync(PromotionRuleCaller caller, string? search, Guid? categoryId, int? limit, CancellationToken ct = default, IReadOnlyList<Guid>? ids = null);
 }

@@ -92,6 +92,12 @@ public sealed class PromotionRulesController : ControllerBase
         return Ok(await _rules.LookupItemsAsync(c, search, categoryId, limit, ct, parsed));
     }
 
+    /// <summary>Loyalty tiers for the audience picker (readable by store managers, unlike the settings endpoint).</summary>
+    [HttpGet("lookups/tiers")]
+    [ProducesResponseType(typeof(IReadOnlyList<TierLookupDto>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> LookupTiers(CancellationToken ct) =>
+        TryGetCaller(out var c) ? Ok(await _rules.LookupTiersAsync(c, ct)) : Forbid();
+
     private IActionResult Map<T>(PromotionOutcome<T> outcome)
     {
         if (outcome.Validation is not null) return StatusCode(outcome.Status, outcome.Validation);

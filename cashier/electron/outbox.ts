@@ -11,6 +11,9 @@ export interface OutboxPayload {
   cashierId?: string;
   /** When the sale was made (ISO UTC); lets the server verify the cashier had a session then. */
   occurredAt?: string;
+  /** Loyalty member attached to the sale (the server accrues bonuses; it may reject an inactive one later). */
+  loyaltyMembershipId?: string;
+  customerId?: string;
 }
 
 export interface OutboxRow {

@@ -179,7 +179,10 @@ public sealed record ResolveLoyaltyCodeResult(
     Guid? CustomerId,
     string? CustomerName,
     string? MaskedPhone,
-    decimal Balance);
+    decimal Balance,
+    Guid? TierId = null,
+    string? TierName = null,
+    decimal? TierDiscountPercent = null);
 
 public sealed record ManualLoyaltyAdjustRequest(
     Guid MembershipId,

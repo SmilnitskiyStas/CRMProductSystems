@@ -289,8 +289,9 @@ public sealed class PromotionRuleServiceTests
         }, name: "fp")).Id;
         Assert.Contains((await _svc.ValidateAsync(Admin, notLower)).Value!.Warnings, w => w.Code == "promo_price_not_lower");
 
+        // Cashier loyalty scanning exists: loyalty audiences no longer warn.
         var loyalty = (await CreateAsync(edit: d => d.Audience = new PromotionAudience { Kind = "loyalty_member" }, name: "l")).Id;
-        Assert.Contains((await _svc.ValidateAsync(Admin, loyalty)).Value!.Warnings, w => w.Code == "loyalty_not_available_yet");
+        Assert.DoesNotContain((await _svc.ValidateAsync(Admin, loyalty)).Value!.Warnings, w => w.Code == "loyalty_not_available_yet");
     }
 
     [Fact]
@@ -489,6 +490,13 @@ public sealed class PromotionRuleServiceTests
         var detail = (await _svc.GetAsync(Admin, created.Id)).Value!;
         Assert.Equal(("Rule", original.Id), (detail.Name, detail.CurrentVersion.Id));
         Assert.Equal(original.Id, Assert.Single(_repo.Versions).Id);
+    }
+
+    [Fact]
+    public async Task Lookup_tiers_returns_tenant_tiers_ordered()
+    {
+        var t = Assert.Single(await _svc.LookupTiersAsync(Admin));
+        Assert.Equal((_tierId, "Gold", 0m, 0), (t.Id, t.Name, t.DiscountPercent, t.SortOrder));
     }
 
     // ── in-memory repository (mirrors the DB trigger: no version updates) ──

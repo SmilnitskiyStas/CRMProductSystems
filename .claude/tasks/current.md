@@ -1575,3 +1575,6 @@ Wizard + list + simulator under `frontend/features/promotion-rules`, pages `/pro
 
 ### TASK-735 - Cashier phase 3: promotions (engine mirror + sync + cart/receipt) - review
 TS engine mirror passing all 37 shared golden vectors (+ drift test, `sync-vectors`), catalog `categoryId` with forced one-time resync, etag promotions sync cached in SQLite (offline-safe), cart/payment/receipt priced with promo sub-lines and badges, server receipt shown after online sale with "Ціну перераховано сервером" notice, offline repricing difference on the Черга screen. 141 vitest, build+dist OK; not run against the real backend; not committed. Лог: `.claude/logs/tasks/735_*`.
+
+### TASK-736 - Cashier phase 4: loyalty member at the till - review
+F4 "Клієнт" panel (wedge/camera/manual by phone|card|account), QR decoding only in customer mode, member chip in the cart, member+tier priced through the promotion engine, membership/customer ids in the sale/outbox payload, bonus lines on screen/print receipts, offline promise text. 156 vitest, build+dist OK, mock-API smoke OK; not run against the real backend; not committed. Лог: `.claude/logs/tasks/736_*`.

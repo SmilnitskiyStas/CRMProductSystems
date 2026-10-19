@@ -50,6 +50,8 @@ public sealed record SimulateResultDto(
 public sealed record ItemLookupDto(
     Guid Id, string Name, string? Barcode, decimal? PriceRetail, Guid? CategoryId, string? CategoryName);
 
+public sealed record TierLookupDto(Guid Id, string Name, decimal DiscountPercent, int SortOrder);
+
 /// <summary>Outcome of a service call: a value, or an HTTP status with an error / validation body.</summary>
 public sealed record PromotionOutcome<T>(T? Value, int Status, string? Error = null, RuleValidationDto? Validation = null)
 {

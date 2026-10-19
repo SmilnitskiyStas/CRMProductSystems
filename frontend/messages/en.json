@@ -1099,8 +1099,7 @@
         "loyalty_member": { "title": "Loyalty members", "text": "Only when a loyalty card is attached to the receipt." },
         "loyalty_tier": { "title": "Specific loyalty tiers", "text": "Only for customers on the selected tiers." },
         "tiers": "Loyalty tiers",
-        "noTiers": "No loyalty tiers are configured yet, or you do not have access to them.",
-        "cashierNote": "Loyalty card scanning at the register is not available yet - member promotions will not trigger at the register until it ships."
+        "noTiers": "No loyalty tiers are configured yet, or you do not have access to them."
       },
       "review": {
         "check": "Check",
@@ -1154,7 +1153,6 @@
         "all_stores": "The promotion will run in all stores.",
         "already_expired": "The promotion period has already ended - it will not trigger.",
         "promo_price_not_lower": "The promo price is not lower than the regular price - the customer saves nothing.",
-        "loyalty_not_available_yet": "Loyalty card scanning at the register is not available yet - member promotions will not trigger.",
         "type_required": "Choose a promotion type.",
         "name_required": "Enter a promotion name.",
         "no_stores_selected": "Pick at least one store or turn on \"All stores\".",

@@ -7,7 +7,7 @@ import { useMe } from "@/features/auth/hooks/useAuth";
 import { useLocations } from "@/features/locations/hooks/useLocations";
 import { LocationsMultiSelectDropdown } from "@/features/users/components/LocationsMultiSelectDropdown";
 import { CategoryTypeahead } from "@/features/catalog/components/CategoryTypeahead";
-import { useLoyaltyTiers } from "@/features/consumer-app/hooks/useLoyaltyTiers";
+import { useTierLookup } from "../hooks/usePromotionRules";
 import type { RuleType } from "../types";
 import { isStoreScopedRole, type WizardState } from "../lib/definition";
 import { ItemPicker } from "./ItemPicker";
@@ -362,7 +362,7 @@ export function StepScope({ state, patch }: StepProps) {
 /** Step 5 - audience. */
 export function StepAudience({ state, patch }: StepProps) {
   const t = useTranslations("Dashboard.promotionRules");
-  const { data: tiers = [] } = useLoyaltyTiers(state.audienceKind === "loyalty_tier");
+  const { data: tiers = [] } = useTierLookup(state.audienceKind === "loyalty_tier");
   const toggleTier = (id: string) =>
     patch({ tierIds: state.tierIds.includes(id) ? state.tierIds.filter((x) => x !== id) : [...state.tierIds, id] });
 
@@ -384,13 +384,12 @@ export function StepAudience({ state, patch }: StepProps) {
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
             {tiers.map((tier) => (
               <Chip key={tier.id} active={state.tierIds.includes(tier.id)} onClick={() => toggleTier(tier.id)}>
-                {tier.name}
+                {tier.name} ({tier.discountPercent}%)
               </Chip>
             ))}
           </div>
         </Field>
       )}
-      {state.audienceKind !== "all" && <Note tone="warn">{t("audience.cashierNote")}</Note>}
     </div>
   );
 }

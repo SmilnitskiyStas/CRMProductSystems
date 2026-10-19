@@ -140,6 +140,13 @@ export interface LookupItem {
   categoryName: string | null;
 }
 
+export interface LookupTier {
+  id: string;
+  name: string;
+  discountPercent: number;
+  sortOrder: number;
+}
+
 export interface ItemRef {
   id: string;
   name: string;

@@ -38,6 +38,16 @@ export function useRuleAction() {
   });
 }
 
+export function useTierLookup(enabled = true) {
+  return useQuery({
+    queryKey: [...KEY, "lookup-tiers"],
+    queryFn: () => promotionRulesApi.lookupTiers(),
+    enabled,
+    staleTime: 30_000,
+    retry: false,
+  });
+}
+
 export function useValidateRule() {
   return useMutation({ mutationFn: (id: string) => promotionRulesApi.validate(id) });
 }

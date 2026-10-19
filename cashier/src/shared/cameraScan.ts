@@ -27,6 +27,10 @@ export function isAcceptableCode(code: string): boolean {
   return /^[\x21-\x7e]{4,40}$/.test(code);
 }
 
+/** Customer-scan mode: loyalty QR payloads are long, free-form strings (or a card barcode). */
+export const isAcceptableCustomerCode = (code: string): boolean =>
+  code.length >= 4 && code.length <= 512 && [...code].every((c) => c.charCodeAt(0) >= 0x20);
+
 export interface ScanGateOptions {
   /** Identical consecutive reads needed before a code is accepted. */
   confirmReads: number;
@@ -44,11 +48,14 @@ export class ScanGate {
   private lastReadAt = 0;
   private accepted: { code: string; at: number } | null = null;
 
-  constructor(private readonly opts: ScanGateOptions = DEFAULT_GATE_OPTIONS) {}
+  constructor(
+    private readonly opts: ScanGateOptions = DEFAULT_GATE_OPTIONS,
+    private readonly validate: (code: string) => boolean = isAcceptableCode,
+  ) {}
 
   /** Feed one decoder result (call only when something was decoded). Returns the code once, when accepted. */
   feed(code: string, now: number): string | null {
-    if (!isAcceptableCode(code)) return null;
+    if (!this.validate(code)) return null;
 
     // Cooldown: the product is still in front of the camera - keep the timer alive, add nothing.
     if (this.accepted && this.accepted.code === code && now - this.accepted.at < this.opts.cooldownMs) {

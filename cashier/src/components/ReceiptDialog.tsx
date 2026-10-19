@@ -57,6 +57,16 @@ export function ReceiptDialog({ sale, onDone }: { sale: SaleReceipt; onDone: () 
             </div>
           ))}
         </div>
+        {sale.customerName && (
+          <p className="text-sm text-slate-300">
+            Клієнт: {sale.customerName}
+            {sale.loyaltyAccrued != null
+              ? ` · Нараховано бонусів: ${formatMoney(sale.loyaltyAccrued).replace(' ₴', '')}${sale.loyaltyBalance != null ? ` · Баланс: ${formatMoney(sale.loyaltyBalance).replace(' ₴', '')}` : ''}`
+              : sale.local
+                ? ' · Бонуси будуть нараховані після синхронізації'
+                : ''}
+          </p>
+        )}
         {repriced && (
           <p className="rounded-lg bg-amber-500/10 px-4 py-3 text-amber-300">
             Ціну перераховано сервером: було {formatMoney(sale.localTotal!)}, стало {formatMoney(sale.subtotal)}.

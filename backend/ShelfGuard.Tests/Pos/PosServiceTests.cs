@@ -2323,6 +2323,33 @@ public sealed class PosServicePromotionTests
     }
 
     [Fact]
+    public async Task Loyalty_member_rule_fires_with_a_membership_and_tier_rule_only_for_matching_tier()
+    {
+        async Task<decimal> Sell(string audience, bool withMembership)
+        {
+            var (m, t, p) = PromoCtx.WithTier(0m);
+            var def = "{\"type\":\"percent_off\",\"targets\":{\"itemIds\":[\"" + p.Id + "\"]},\"params\":{\"percent\":20},\"audience\":"
+                + audience.Replace("TIER", m.CurrentTierId!.Value.ToString()) + "}";
+            t.Promotions.Add("aud", def);
+            var (sale, error, _) = await t.Service().CreateSaleAsync(TenantId, CashierId,
+                new CreateSaleRequest(t.Shift.Id, [new SaleItemRequest("TIERPROMO", 1)], "Cash", 100m,
+                    LoyaltyMembershipId: withMembership ? m.Id : null));
+            Assert.Null(error);
+            return sale!.Subtotal;
+        }
+
+        var member = "{\"kind\":\"loyalty_member\"}";
+        Assert.Equal(100m, await Sell(member, false));
+        Assert.Equal(80m, await Sell(member, true));
+
+        var matching = "{\"kind\":\"loyalty_tier\",\"tierIds\":[\"TIER\"]}";
+        var other = "{\"kind\":\"loyalty_tier\",\"tierIds\":[\"" + Guid.NewGuid() + "\"]}";
+        Assert.Equal(80m, await Sell(matching, true));
+        Assert.Equal(100m, await Sell(other, true));
+        Assert.Equal(100m, await Sell(matching, false));
+    }
+
+    [Fact]
     public async Task Batch_sale_is_priced_at_its_OccurredAt()
     {
         var t = new PromoCtx();

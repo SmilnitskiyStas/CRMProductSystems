@@ -90,12 +90,27 @@ export interface SaleLineRequest {
   quantity: number;
 }
 
+/** Loyalty member identified at the till (result of resolve-code / resolve-identifier). */
+export interface LoyaltyMember {
+  membershipId: string;
+  customerId: string | null;
+  customerName: string | null;
+  maskedPhone: string | null;
+  balance: number;
+  tierId: string | null;
+  tierName: string | null;
+  /** Tier discount percent competing with promotions (null/0 = none). */
+  tierDiscountPercent: number | null;
+}
+
 export interface SaleSubmitRequest {
   clientTransactionId: string;
   shiftId: string;
   items: SaleLineRequest[];
   paymentType: PaymentType;
   paymentAmount: number;
+  /** Attached member: ids go to the server; tier data is used for local (offline) pricing and the receipt. */
+  loyaltyMember?: LoyaltyMember | null;
 }
 
 export interface SaleReceipt {
@@ -120,6 +135,12 @@ export interface SaleReceipt {
     /** Shelf price per unit before promotions (struck through in the UI). */
     regularUnitPrice?: number;
   }[];
+  customerName?: string | null;
+  tierName?: string | null;
+  /** From the server's SaleDto; absent for offline/provisional receipts. */
+  loyaltyAccrued?: number | null;
+  loyaltyRedeemed?: number | null;
+  loyaltyBalance?: number | null;
   /** Set when the server re-priced an offline/provisional sale: the total the cashier saw first. */
   localTotal?: number;
   /** True while the receipt number is the provisional local one (L-<register>-<seq>) and not yet confirmed by the server. */
@@ -240,6 +261,8 @@ export interface CashierApi {
   testPrint(): Promise<PrintResult>;
   printReceipt(clientTransactionId: string): Promise<PrintResult>;
   openDrawer(): Promise<PrintResult>;
+  resolveLoyaltyCode(code: string): Promise<Result<LoyaltyMember>>;
+  resolveLoyaltyIdentifier(type: 'phone' | 'account' | 'card', value: string): Promise<Result<LoyaltyMember>>;
   getPromotions(): Promise<PromotionsState>;
   syncPromotions(): Promise<PromotionsState>;
   onPromotionsChange(cb: (state: PromotionsState) => void): () => void;

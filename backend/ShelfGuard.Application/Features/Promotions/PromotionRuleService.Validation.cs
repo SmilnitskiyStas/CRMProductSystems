@@ -111,9 +111,6 @@ public sealed partial class PromotionRuleService
             Warn("all_stores", "scope.storeIds", "The rule applies to every store.");
         if (s.ValidTo is { } end && end <= now)
             Warn("already_expired", "scope.validTo", "The rule period has already ended.");
-        if (def.Audience.Kind != PromotionAudienceKinds.All)
-            Warn("loyalty_not_available_yet", "audience.kind",
-                "Loyalty cards are not scanned at the cashier yet; this rule will not fire until they are.");
 
         foreach (var item in itemsById.Values.Where(i => def.Targets.ItemIds.Contains(i.Id)))
         {

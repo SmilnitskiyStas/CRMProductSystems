@@ -115,8 +115,10 @@ provider manage all. A store-scoped manager cannot save a rule with empty `store
 Validation `code` values: `no_targets`, `missing_param`, `percent_out_of_range`, `price_below_minimum`,
 `invalid_quantity`, `invalid_period`, `unknown_item`, `unknown_category`, `unknown_store`, `unknown_tier`,
 `tier_required`, `store_scope_violation` (errors); `overlaps_other_rule`, `all_stores`, `already_expired`,
-`promo_price_not_lower`, `loyalty_not_available_yet` (warnings; the last one is emitted while cashier loyalty
-scanning is not shipped, for audience ≠ all).
+`promo_price_not_lower` (warnings). `loyalty_not_available_yet` was REMOVED (cashier loyalty scanning shipped).
+- `GET /lookups/tiers` → `[{ id, name, discountPercent, sortOrder }]` (tenant loyalty tiers by sortOrder; AtLeastStoreManager,
+  `pos` module - the settings tiers endpoint is enterprise_admin-only). Loyalty `resolve-code` / `resolve-identifier`
+  results carry `tierId`, `tierName`, `tierDiscountPercent` (null when no tier / program disabled).
 
 ## Validation (errors block publish, warnings do not)
 Errors: no targets; no price param for the type; percent ∉ (0,100]; price < 0.01; buyQty<1/getQty<1;
