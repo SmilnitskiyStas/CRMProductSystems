@@ -23,8 +23,6 @@ import { PosCashierStatsTable } from "@/features/analytics/components/PosCashier
 import { PosPaymentPieChart } from "@/features/analytics/components/PosPaymentPieChart";
 import { PosDayDetailPanel } from "@/features/analytics/components/PosDayDetailPanel";
 import { ProductTrendPanel } from "@/features/analytics/components/ProductTrendPanel";
-import { useQuery } from "@tanstack/react-query";
-import { api } from "@/lib/api";
 import { DateRangePicker, toDateInputValue, parseDateInputValue, type SimpleDateRange } from "@/components/ui/DateRangePicker";
 
 // ── helpers ──────────────────────────────────────────────────────────────────
@@ -43,21 +41,6 @@ function defaultTo(): string {
   return toDateStr(new Date());
 }
 
-// ── Store selector (simple) ───────────────────────────────────────────────────
-
-interface StoreOption {
-  id: string;
-  name: string;
-}
-
-function useStores() {
-  return useQuery<StoreOption[]>({
-    queryKey: ["locations"],
-    queryFn: () => api.get<StoreOption[]>("/api/locations"),
-    staleTime: 5 * 60 * 1000,
-  });
-}
-
 // ── style tokens (match rest of analytics) ────────────────────────────────────
 
 const labelStyle: React.CSSProperties = {
@@ -65,22 +48,6 @@ const labelStyle: React.CSSProperties = {
   fontSize: 12,
   marginBottom: 4,
   display: "block",
-};
-
-const inputStyle: React.CSSProperties = {
-  background: "#0D1117",
-  border: "1px solid #1F2937",
-  borderRadius: 6,
-  color: "#E8EDF5",
-  fontSize: 13,
-  padding: "7px 10px",
-  outline: "none",
-};
-
-const selectStyle: React.CSSProperties = {
-  ...inputStyle,
-  minWidth: 160,
-  cursor: "pointer",
 };
 
 const toggleBtn = (active: boolean): React.CSSProperties => ({
@@ -114,13 +81,10 @@ export default function PosAnalyticsPage() {
 
   const [from, setFrom] = useState<string>(defaultFrom);
   const [to, setTo] = useState<string>(defaultTo);
-  const [storeId, setStoreId] = useState<string>("");
 
-  // Local dropdown wins once the user picks a store here; until then, fall back to the header's
-  // globally selected store (TASK-514/TASK-515 — same fallback pattern as stock/page.tsx's
-  // effectiveStoreId). The local <select> itself is unchanged and its "" = "all stores" option
-  // stays a deliberate per-page override of the header's selection.
-  const effectiveStoreId = storeId || primaryStoreId || undefined;
+  // The store comes only from the header's global store selector (no per-page dropdown): no
+  // selection = all stores (store_id omitted).
+  const effectiveStoreId = primaryStoreId || undefined;
   const [groupBy, setGroupBy] = useState<"day" | "week">("day");
   const [compareEnabled, setCompareEnabled] = useState(false);
   const [compareRange, setCompareRange] = useState<SimpleDateRange | undefined>(undefined);
@@ -131,8 +95,6 @@ export default function PosAnalyticsPage() {
     () => ({ from: parseDateInputValue(from), to: parseDateInputValue(to) }),
     [from, to],
   );
-
-  const { data: stores } = useStores();
 
   const params = useMemo(
     () => ({ from, to, store_id: effectiveStoreId }),
@@ -226,21 +188,6 @@ export default function PosAnalyticsPage() {
           compareRange={compareRange}
           onCompareRangeChange={setCompareRange}
         />
-        <div>
-          <label style={labelStyle}>{t("storeLabel")}</label>
-          <select
-            value={storeId}
-            onChange={(e) => setStoreId(e.target.value)}
-            style={selectStyle}
-          >
-            <option value="">{t("allStores")}</option>
-            {stores?.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.name}
-              </option>
-            ))}
-          </select>
-        </div>
         <div>
           <label style={labelStyle}>{t("trendLabel")}</label>
           <div style={{ display: "flex", gap: 4 }}>

@@ -273,6 +273,11 @@ file sealed class FakeLoyaltyRepo : ILoyaltyRepository
 /// <summary>TASK-405: fake ICustomerRepository backing PosService's Customer.TotalOrders/TotalSpent update.</summary>
 file sealed class FakeCustomerRepo : ICustomerRepository
 {
+    public Task<CustomerActivityStatsRow> GetActivityStatsAsync(Guid customerId, Guid tenantId, DateTime nowUtc, CancellationToken ct) => Task.FromResult(new CustomerActivityStatsRow(0, 0m, null, null, 0, 0m, 0, 0m, 0m));
+    public Task<IReadOnlyList<CustomerStoreActivityRow>> GetStoreActivityAsync(Guid customerId, Guid tenantId, CancellationToken ct) => Task.FromResult<IReadOnlyList<CustomerStoreActivityRow>>([]);
+    public Task<IReadOnlyList<CustomerMonthActivityRow>> GetMonthlyActivityAsync(Guid customerId, Guid tenantId, DateTime fromUtc, CancellationToken ct) => Task.FromResult<IReadOnlyList<CustomerMonthActivityRow>>([]);
+    public Task<IReadOnlyList<CustomerTopProductRow>> GetTopProductsAsync(Guid customerId, Guid tenantId, int take, CancellationToken ct) => Task.FromResult<IReadOnlyList<CustomerTopProductRow>>([]);
+    public Task<(IReadOnlyList<CustomerReceiptRow> Items, int Total)> GetReceiptsPagedAsync(Guid customerId, Guid tenantId, int page, int pageSize, CancellationToken ct) => Task.FromResult<(IReadOnlyList<CustomerReceiptRow>, int)>(([], 0));
     public List<Customer> Customers { get; } = [];
 
     public Task<List<Customer>> GetAllAsync(Guid tenantId, CancellationToken ct) =>

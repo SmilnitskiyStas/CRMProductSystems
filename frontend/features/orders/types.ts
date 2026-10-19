@@ -20,6 +20,14 @@ export interface OrderLine {
   moq: number;
   usq: number;
   rounding: "none" | "moq_floor" | "usq_rounded";
+  /** Product's default supplier (null = none set) — orders are split into one receipt per supplier. */
+  supplierId: string | null;
+  pricePurchase: number | null;
+  /** Part of inTransit whose delivery is late (past its date or postponed) — still counted as in transit. */
+  inTransitDelayed: number;
+  /** Latest expected delivery date of the delayed orders (YYYY-MM-DD). */
+  delayedUntil: string | null;
+  delayPostponed: boolean;
 }
 
 export interface OrderCalcResult {

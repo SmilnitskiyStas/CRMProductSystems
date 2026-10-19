@@ -20,6 +20,23 @@ export function useCustomer(id: string) {
   });
 }
 
+export function useCustomerActivity(id: string) {
+  return useQuery({
+    queryKey: [...CUSTOMERS_KEY, id, "activity"],
+    queryFn: () => customersApi.getActivity(id),
+    enabled: !!id,
+  });
+}
+
+export function useCustomerReceipts(id: string, page: number, pageSize: number) {
+  return useQuery({
+    queryKey: [...CUSTOMERS_KEY, id, "receipts", page, pageSize],
+    queryFn: () => customersApi.getReceipts(id, page, pageSize),
+    enabled: !!id,
+    placeholderData: (prev) => prev,
+  });
+}
+
 /**
  * TASK-621b. `enabled` is driven by the drawer's active tab (the "Історія профілю" tab), not
  * mount — the handoff explicitly asks for lazy-load-on-open since history can be long for an

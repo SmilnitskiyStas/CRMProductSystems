@@ -9,6 +9,9 @@ public sealed class WriteOffRepository : IWriteOffRepository
 {
     private readonly AppDbContext _db;
 
+    /// <summary>Ukrainian-collation ordering only where the provider supports it (Npgsql).</summary>
+    private bool Uk => _db.Database.IsNpgsql();
+
     public WriteOffRepository(AppDbContext db) => _db = db;
 
     public async Task<List<WriteOff>> GetAllAsync(Guid? storeId, string? status, CancellationToken ct = default)
@@ -72,7 +75,7 @@ public sealed class WriteOffRepository : IWriteOffRepository
         return (items, total);
     }
 
-    private static IQueryable<WriteOff> ApplySort(
+    private IQueryable<WriteOff> ApplySort(
         IQueryable<WriteOff> query, string? sortBy, bool? sortDescending)
     {
         var key = WriteOffSortKeys.Normalize(sortBy);
@@ -82,8 +85,8 @@ public sealed class WriteOffRepository : IWriteOffRepository
         {
             ("status", false) => query.OrderBy(w => w.Status),
             ("status", true) => query.OrderByDescending(w => w.Status),
-            ("reason", false) => query.OrderBy(w => w.Reason),
-            ("reason", true) => query.OrderByDescending(w => w.Reason),
+            ("reason", false) => query.OrderByUk(w => w.Reason, Uk),
+            ("reason", true) => query.OrderByDescendingUk(w => w.Reason, Uk),
             ("netloss", false) => query.OrderBy(w => w.TotalLossAmountPurchase.HasValue || w.TotalReimbursementAmount.HasValue
                 ? (w.TotalLossAmountPurchase ?? 0m) - (w.TotalReimbursementAmount ?? 0m)
                 : (decimal?)null),

@@ -3,6 +3,8 @@
 import { useState } from "react";
 import { useTranslations } from "next-intl";
 import { Clock, Filter } from "lucide-react";
+import { useMe } from "@/features/auth/hooks/useAuth";
+import { canAccessTenantSettings } from "@/lib/roles";
 import { NotificationHistoryList } from "@/features/notifications/components/NotificationHistoryList";
 import { NotificationFilterDrawer } from "@/features/notifications/components/NotificationFilterDrawer";
 import type { NotificationHistoryFilters } from "@/features/notifications/types";
@@ -20,6 +22,9 @@ export default function NotificationsPage() {
     pageSize: DEFAULT_PAGE_SIZE,
   });
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const { data: me } = useMe();
+  // Business tenants have no Settings page — no link into it for them.
+  const canOpenSettings = canAccessTenantSettings(me?.role);
   const activeCount = countActiveFilters(filters);
 
   return (
@@ -30,11 +35,17 @@ export default function NotificationsPage() {
             {t("title")}
           </h1>
           <p style={{ color: "#4B5563", fontSize: 14, marginTop: 6 }}>
-            {t("subtitlePrefix")}{" "}
-            <a href="/settings?tab=notifications" style={{ color: "#3B82F6" }}>
-              {t("settingsLinkText")}
-            </a>
-            .
+            {canOpenSettings ? (
+              <>
+                {t("subtitlePrefix")}{" "}
+                <a href="/settings?tab=notifications" style={{ color: "#3B82F6" }}>
+                  {t("settingsLinkText")}
+                </a>
+                .
+              </>
+            ) : (
+              t("subtitleNoSettings")
+            )}
           </p>
         </div>
 

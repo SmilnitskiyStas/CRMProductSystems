@@ -320,3 +320,14 @@ export interface ExportStoreMigrationRequest {
   to: string;
   unmaskPii: boolean;
 }
+
+// ── "Без покупок" drill-down ──────────────────────────────────────────────────────────────
+
+/** Registered customer who never purchased in the selected stores. Phone/email always masked. */
+export interface NoPurchaseCustomerRowDto {
+  customerId: string;
+  name: string;
+  phone: string | null;
+  email: string | null;
+  registeredAt: string;
+}

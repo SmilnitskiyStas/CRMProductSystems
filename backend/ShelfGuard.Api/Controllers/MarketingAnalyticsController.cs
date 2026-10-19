@@ -200,6 +200,23 @@ public sealed class MarketingAnalyticsController : ControllerBase
         return Ok(result);
     }
 
+    /// <summary>"Без покупок" drill-down — registered customers with no purchase in the selected
+    /// stores. PII always masked on screen (same rule as the store-migration list).</summary>
+    [HttpGet("no-purchase/customers")]
+    [ProducesResponseType(typeof(IReadOnlyList<NoPurchaseCustomerRowDto>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetNoPurchaseCustomers(
+        [FromQuery] Guid[]? storeIds,
+        [FromQuery] int limit,
+        CancellationToken ct)
+    {
+        var tenantId = ResolveTenantId();
+        if (tenantId is null) return Forbid();
+
+        var result = await _service.GetNoPurchaseCustomersAsync(
+            tenantId.Value, storeIds, ClampStoreMigrationCustomerLimit(limit), ct);
+        return Ok(result);
+    }
+
     [HttpPost("exports/store-migration")]
     [ProducesResponseType(typeof(FileContentResult), StatusCodes.Status200OK)]
     public async Task<IActionResult> ExportStoreMigration([FromBody] ExportStoreMigrationRequest request, CancellationToken ct)

@@ -50,6 +50,36 @@ public sealed class CustomersController : ControllerBase
     /// history can be long and the customer-detail drawer only loads it when that tab opens.
     /// Empty page (not 404) when the customer has no linked loyalty membership.
     /// </summary>
+    /// <summary>Purchase analytics for the customer page: totals, stores, monthly trend, top products.</summary>
+    [HttpGet("{id:guid}/activity")]
+    [ProducesResponseType(typeof(CustomerActivityDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetActivity(Guid id, CancellationToken ct)
+    {
+        var tenantId = GetTenantId();
+        if (tenantId is null) return Forbid();
+
+        var result = await _customers.GetActivityAsync(id, tenantId.Value, ct);
+        return result is null ? NotFound() : Ok(result);
+    }
+
+    /// <summary>Receipts of the customer (newest first) with their lines; paged.</summary>
+    [HttpGet("{id:guid}/receipts")]
+    [ProducesResponseType(typeof(PagedResult<CustomerReceiptDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetReceipts(
+        Guid id,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 20,
+        CancellationToken ct = default)
+    {
+        var tenantId = GetTenantId();
+        if (tenantId is null) return Forbid();
+
+        var result = await _customers.GetReceiptsAsync(id, tenantId.Value, page, pageSize, ct);
+        return result is null ? NotFound() : Ok(result);
+    }
+
     [HttpGet("{id:guid}/profile-history")]
     [ProducesResponseType(typeof(PagedResult<ConsumerProfileChangeDto>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetProfileHistory(

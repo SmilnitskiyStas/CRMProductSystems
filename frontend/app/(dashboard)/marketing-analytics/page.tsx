@@ -10,10 +10,12 @@ import { CAN_VIEW_ANALYTICS, hasRole } from "@/lib/roles";
 import { useRequireTab } from "@/lib/useRequireTab";
 import { useStoreContext, useStoreScopeReady } from "@/lib/useStoreContext";
 import { useModules } from "@/features/modules/hooks/useModules";
-import { useMarketingAnalyticsOverview } from "@/features/marketing-analytics/hooks/useMarketingAnalytics";
+import { useMarketingAnalyticsOverview, useStoreMigration } from "@/features/marketing-analytics/hooks/useMarketingAnalytics";
+import { useStores } from "@/features/stores/hooks/useStores";
 import { PeriodStoreFilterBar } from "@/features/marketing-analytics/components/PeriodStoreFilterBar";
 import { SegmentGrid } from "@/features/marketing-analytics/components/SegmentGrid";
 import { SegmentDetailPanel } from "@/features/marketing-analytics/components/SegmentDetail/SegmentDetailPanel";
+import { NoPurchasePanel } from "@/features/marketing-analytics/components/NoPurchasePanel";
 import { StoreMigrationSection } from "@/features/marketing-analytics/components/StoreMigration/StoreMigrationSection";
 import type {
   MarketingAnalyticsFilters,
@@ -86,6 +88,9 @@ export default function MarketingAnalyticsPage() {
   const [customTo, setCustomTo] = useState<string>(defaultCustomTo);
   const { selectedStoreIds: storeIds } = useStoreContext();
   const [selectedSegment, setSelectedSegment] = useState<RfmSegmentKey | null>(null);
+  // Store-migration block is opt-in: it opens from its own card in the segment grid.
+  const [showMigration, setShowMigration] = useState(false);
+  const [showNoPurchase, setShowNoPurchase] = useState(false);
 
   // The one filter object every query in this feature keys off of (per the brief) — any
   // change here (period, custom dates, or stores) is a brand-new React Query key, so a
@@ -104,6 +109,23 @@ export default function MarketingAnalyticsPage() {
   const enabled = access === true && moduleActive && ready;
   const { data: overview, isLoading, isFetching } = useMarketingAnalyticsOverview(filters, enabled);
 
+  // The migration card only exists when customers really moved between stores (needs >1 store).
+  const { data: stores = [] } = useStores();
+  const { data: migrationOverview } = useStoreMigration(filters, enabled && stores.length > 1);
+  const migrationCard =
+    migrationOverview && migrationOverview.migratedCustomerCount > 0
+      ? {
+          migratedCount: migrationOverview.migratedCustomerCount,
+          sharePercent: migrationOverview.migratedSharePercent,
+          // Revenue of the migrated customers = sum of the store-to-store flows.
+          revenue: migrationOverview.flows.reduce((sum, f) => sum + f.revenue, 0),
+          revenueSharePercent:
+            overview && overview.periodRevenue > 0
+              ? (migrationOverview.flows.reduce((sum, f) => sum + f.revenue, 0) / overview.periodRevenue) * 100
+              : 0,
+        }
+      : null;
+
   function handleRefresh() {
     queryClient.invalidateQueries({ queryKey: ["marketing-analytics"] });
   }
@@ -112,6 +134,20 @@ export default function MarketingAnalyticsPage() {
     // Clicking the already-open card again collapses it (RFM_ANALYSIS.md §10's close button,
     // mirrored on the card itself for a quicker toggle).
     setSelectedSegment((prev) => (prev === key ? null : key));
+    setShowMigration(false);
+    setShowNoPurchase(false);
+  }
+
+  function handleToggleMigration() {
+    setShowMigration((prev) => !prev);
+    setSelectedSegment(null);
+    setShowNoPurchase(false);
+  }
+
+  function handleToggleNoPurchase() {
+    setShowNoPurchase((prev) => !prev);
+    setSelectedSegment(null);
+    setShowMigration(false);
   }
 
   if (access === null) return null;
@@ -196,7 +232,16 @@ export default function MarketingAnalyticsPage() {
               />
             </div>
 
-            <SegmentGrid overview={overview} selectedKey={selectedSegment} onSelect={handleSelectSegment} />
+            <SegmentGrid
+              overview={overview}
+              selectedKey={selectedSegment}
+              onSelect={handleSelectSegment}
+              migration={migrationCard}
+              migrationSelected={showMigration}
+              onSelectMigration={handleToggleMigration}
+              noPurchaseSelected={showNoPurchase}
+              onSelectNoPurchase={handleToggleNoPurchase}
+            />
           </>
         ) : (
           <div style={{ color: "#4B5563", fontSize: 13 }}>{t("noData")}</div>
@@ -213,7 +258,16 @@ export default function MarketingAnalyticsPage() {
         />
       )}
 
-      <StoreMigrationSection filters={filters} enabled={enabled} />
+      {showNoPurchase && overview && (
+        <NoPurchasePanel
+          storeIds={storeIds}
+          totalCount={overview.noPurchase.customerCount}
+          enabled={enabled}
+          onClose={() => setShowNoPurchase(false)}
+        />
+      )}
+
+      {showMigration && migrationCard && <StoreMigrationSection filters={filters} enabled={enabled} />}
     </div>
   );
 }

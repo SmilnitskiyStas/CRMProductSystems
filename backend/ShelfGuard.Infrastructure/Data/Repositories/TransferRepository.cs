@@ -9,6 +9,9 @@ public sealed class TransferRepository : ITransferRepository
 {
     private readonly AppDbContext _db;
 
+    /// <summary>Ukrainian-collation ordering only where the provider supports it (Npgsql).</summary>
+    private bool Uk => _db.Database.IsNpgsql();
+
     public TransferRepository(AppDbContext db) => _db = db;
 
     public async Task<List<StockTransfer>> GetAllAsync(Guid? storeId, string? status, CancellationToken ct = default)
@@ -71,7 +74,7 @@ public sealed class TransferRepository : ITransferRepository
         return (items, total);
     }
 
-    private static IQueryable<StockTransfer> ApplySort(
+    private IQueryable<StockTransfer> ApplySort(
         IQueryable<StockTransfer> query, string? sortBy, bool? sortDescending)
     {
         var key = TransferSortKeys.Normalize(sortBy);
@@ -81,10 +84,10 @@ public sealed class TransferRepository : ITransferRepository
         {
             ("status", false) => query.OrderBy(t => t.Status),
             ("status", true) => query.OrderByDescending(t => t.Status),
-            ("from", false) => query.OrderBy(t => t.FromStore != null ? t.FromStore.Name : null),
-            ("from", true) => query.OrderByDescending(t => t.FromStore != null ? t.FromStore.Name : null),
-            ("to", false) => query.OrderBy(t => t.ToStore != null ? t.ToStore.Name : null),
-            ("to", true) => query.OrderByDescending(t => t.ToStore != null ? t.ToStore.Name : null),
+            ("from", false) => query.OrderByUk(t => t.FromStore != null ? t.FromStore.Name : null, Uk),
+            ("from", true) => query.OrderByDescendingUk(t => t.FromStore != null ? t.FromStore.Name : null, Uk),
+            ("to", false) => query.OrderByUk(t => t.ToStore != null ? t.ToStore.Name : null, Uk),
+            ("to", true) => query.OrderByDescendingUk(t => t.ToStore != null ? t.ToStore.Name : null, Uk),
             (_, false) => query.OrderBy(t => t.CreatedAt),
             (_, true) => query.OrderByDescending(t => t.CreatedAt),
         };

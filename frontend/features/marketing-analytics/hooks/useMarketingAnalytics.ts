@@ -109,6 +109,14 @@ export function useStoreMigrationCustomers(filters: MarketingAnalyticsFilters, l
   });
 }
 
+export function useNoPurchaseCustomers(storeIds: string[], limit = 100, enabled = true) {
+  return useQuery({
+    queryKey: [KEY, "no-purchase-customers", storeIds, limit],
+    queryFn: () => marketingAnalyticsApi.getNoPurchaseCustomers(storeIds, limit),
+    enabled,
+  });
+}
+
 export function useExportStoreMigration() {
   return useMutation({
     mutationFn: (body: ExportStoreMigrationRequest) => marketingAnalyticsApi.exportStoreMigration(body),

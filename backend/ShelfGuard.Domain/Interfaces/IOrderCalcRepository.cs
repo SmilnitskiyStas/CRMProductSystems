@@ -32,5 +32,14 @@ public interface IOrderCalcRepository
     Task<Dictionary<Guid, (decimal Moq, decimal Usq)>> GetMoqUsqAsync(
         IReadOnlyCollection<Guid> productIds, CancellationToken ct = default);
 
+    /// <summary>
+    /// The part of the draft-receipt in-transit quantity that is LATE: the receipt is past its expected
+    /// date or was postponed. Per product: delayed quantity, the latest expected date among those
+    /// receipts and whether any of them was postponed. Informational — the quantity still counts as
+    /// in transit in <see cref="GetInTransitAsync"/>, so the engine never re-orders it.
+    /// </summary>
+    Task<Dictionary<Guid, (decimal Quantity, DateOnly? ExpectedAt, bool Postponed)>> GetDelayedInTransitAsync(
+        Guid storeId, IReadOnlyCollection<Guid> productIds, DateOnly today, CancellationToken ct = default);
+
     Task<bool> StoreExistsAsync(Guid storeId, CancellationToken ct = default);
 }

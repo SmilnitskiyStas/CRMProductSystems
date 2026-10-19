@@ -8,6 +8,9 @@ public sealed class SupplierRepository : ISupplierRepository
 {
     private readonly AppDbContext _db;
 
+    /// <summary>Ukrainian-collation ordering only where the provider supports it (Npgsql).</summary>
+    private bool Uk => _db.Database.IsNpgsql();
+
     public SupplierRepository(AppDbContext db) => _db = db;
 
     public Task<List<Supplier>> GetAllAsync(bool includeInactive = false, CancellationToken ct = default)
@@ -15,7 +18,7 @@ public sealed class SupplierRepository : ISupplierRepository
         var query = _db.Suppliers.AsQueryable();
         if (!includeInactive)
             query = query.Where(s => s.IsActive);
-        return query.OrderBy(s => s.Name).ToListAsync(ct);
+        return query.OrderByUk(s => s.Name, Uk).ToListAsync(ct);
     }
 
     public async Task<(List<Supplier> Items, int Total)> GetPagedAsync(
@@ -27,7 +30,7 @@ public sealed class SupplierRepository : ISupplierRepository
 
         var total = await query.CountAsync(ct);
         var items = await query
-            .OrderBy(s => s.Name)
+            .OrderByUk(s => s.Name, Uk)
             .Skip((page - 1) * pageSize)
             .Take(pageSize)
             .ToListAsync(ct);

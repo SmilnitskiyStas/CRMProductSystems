@@ -38,6 +38,9 @@ namespace ShelfGuard.Infrastructure.Data.Repositories;
 public sealed class MarketplaceRepository : IMarketplaceRepository
 {
     private readonly AppDbContext _db;
+
+    /// <summary>Ukrainian-collation ordering only where the provider supports it (Npgsql).</summary>
+    private bool Uk => _db.Database.IsNpgsql();
     private readonly IProviderRlsOverride _providerRlsOverride;
 
     public MarketplaceRepository(AppDbContext db, IProviderRlsOverride providerRlsOverride)
@@ -96,7 +99,7 @@ public sealed class MarketplaceRepository : IMarketplaceRepository
                 .Include(i => i.Images)
                 .Include(i => i.PlatformCategory)
                 .Where(i => i.SupplierId == supplierId && i.IsAvailable)
-                .OrderBy(i => i.CustomName ?? (i.Item != null ? i.Item.Name : string.Empty))
+                .OrderByUk(i => i.CustomName ?? (i.Item != null ? i.Item.Name : string.Empty), Uk)
                 .ToListAsync(ct),
             ct);
 
@@ -349,7 +352,7 @@ public sealed class MarketplaceRepository : IMarketplaceRepository
             .Include(i => i.Images)
             .Include(i => i.PlatformCategory)
             .Where(i => i.SupplierId == supplierId)
-            .OrderBy(i => i.CustomName ?? (i.Item != null ? i.Item.Name : string.Empty))
+            .OrderByUk(i => i.CustomName ?? (i.Item != null ? i.Item.Name : string.Empty), Uk)
             .ToListAsync(ct);
 
     // ── Reviews / metrics (v4.1, ADR-016) ────────────────────────────────────
@@ -579,7 +582,7 @@ public sealed class MarketplaceRepository : IMarketplaceRepository
                        (ps, metrics) => new { ps.Profile, ps.Supplier, Metrics = metrics })
             .SelectMany(x => x.Metrics.DefaultIfEmpty(),
                         (x, m) => new { x.Profile, x.Supplier, Metrics = m })
-            .OrderBy(x => x.Supplier.Name)
+            .OrderByUk(x => x.Supplier.Name, Uk)
             .Select(x => new ValueTuple<SupplierProfile, Supplier, SupplierMetrics?>(
                 x.Profile, x.Supplier, x.Metrics));
     }

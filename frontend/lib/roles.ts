@@ -209,6 +209,17 @@ export const TENANT_ROLES = new Set<AppRole>([
 
 // ── Helper ────────────────────────────────────────────────────────────────────
 
+/**
+ * Who gets the tenant "Settings" page. Retail/business tenants are configured by the platform team
+ * (modules, integrations, notification rules) and receive a ready-made site, so the page is hidden
+ * for every tenant role. It stays for the provider team (who configure on a client's behalf) and
+ * for suppliers (their marketplace profile lives only there).
+ */
+export function canAccessTenantSettings(userRole: string | undefined): boolean {
+  if (!userRole) return false;
+  return PROVIDER_TEAM.has(userRole as AppRole) || SUPPLIER_ONLY.has(userRole as AppRole);
+}
+
 export function hasRole(userRole: string | undefined, allowed: Set<AppRole>): boolean {
   if (!userRole) return false;
   return allowed.has(userRole as AppRole);

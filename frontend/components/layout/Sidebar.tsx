@@ -77,8 +77,7 @@ import {
   PROVIDER_TEAM,
   SUPPLIER_ONLY,
   TENANT_ROLES,
-  type AppRole,
-} from "@/lib/roles";
+  type AppRole, canAccessTenantSettings } from "@/lib/roles";
 import {
   SYSTEM_ROLE_PERMISSIONS,
   resolvePermissions,
@@ -193,7 +192,8 @@ export function buildNavGroups(t: SidebarGroupsT): NavGroup[] {
     icon: <Truck size={18} />,
     moduleKey: "procurement",
     items: [
-      { href: "/orders",    label: t("procurement.orders"),   icon: <Calculator size={16} />, roles: AT_LEAST_STORE_MANAGER },
+      { href: "/orders",    label: t("procurement.orders"),   icon: <Calculator size={16} />, roles: AT_LEAST_STORE_MANAGER, exact: true },
+      { href: "/orders/tracking", label: t("procurement.tracking"), icon: <Truck size={16} />, roles: AT_LEAST_STORE_MANAGER },
       { href: "/ai-orders", label: t("procurement.aiOrders"), icon: <Sparkles size={16} />,   roles: AT_LEAST_STORE_MANAGER },
     ],
   },
@@ -1181,8 +1181,10 @@ export function Sidebar({ collapsed, onToggle }: Props) {
           gap: 2,
         }}
       >
-        {/* Settings */}
-        <NavLink item={settingsItem} pathname={pathname} collapsed={collapsed} />
+        {/* Settings — hidden for business tenants (configured by the platform team); see canAccessTenantSettings */}
+        {canAccessTenantSettings(userRole) && (
+          <NavLink item={settingsItem} pathname={pathname} collapsed={collapsed} />
+        )}
 
         {/* Collapse / Expand toggle */}
         <button

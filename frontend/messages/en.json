@@ -961,7 +961,8 @@
         "procurement": {
           "label": "Procurement",
           "orders": "Purchase Orders",
-          "aiOrders": "AI Orders"
+          "aiOrders": "AI Orders",
+          "tracking": "Order tracking"
         },
         "marketplace": {
           "label": "Marketplace",
@@ -1329,6 +1330,7 @@
         "minStock": "Min stock",
         "maxStock": "Max stock",
         "safetyBuffer": "Safety buffer",
+        "levelsFromBuffer": "Calculated from the CDA buffer of the selected store: safety = red zone, min = red + yellow, max = full zone",
         "shelfLifeDays": "Shelf life",
         "shelfLifeDaysSuffix": "days",
         "storageTempMin": "Min temp.",
@@ -1454,6 +1456,7 @@
           "transfer": "Transfers",
           "write_off": "Write-offs",
           "adjustment": "Adjustments",
+          "sold": "Sold",
           "revenue": "Revenue",
           "margin": "Margin (est.)"
         },
@@ -1494,7 +1497,40 @@
         "eventsSummary": "{count} events over {days}d",
         "noMovements": "No movements in the selected period",
         "eventLog": "Event log",
-        "balancePrefix": "balance:"
+        "balancePrefix": "balance:",
+        "incoming": {
+          "title": "Incoming supply",
+          "inTransit": "On the way",
+          "expected": "Expected",
+          "noDate": "no date set",
+          "ordered": "Ordered",
+          "shipped": "shipped",
+          "source": {
+            "receipt": "Internal order",
+            "marketplace": "Marketplace"
+          },
+          "status": {
+            "receipt_draft": "Ordered",
+            "marketplace_new": "New order",
+            "marketplace_confirmed": "Confirmed",
+            "marketplace_shipped": "In transit"
+          }
+        },
+        "log": {
+          "all": "All",
+          "when": "Date & time",
+          "performedBy": "Confirmed by",
+          "store": "Store / location",
+          "quantity": "Quantity",
+          "balance": "Balance (before → after)",
+          "batch": "Batch",
+          "expires": "expires",
+          "unitPrice": "Unit price",
+          "totalAmount": "Total",
+          "document": "Document",
+          "notes": "Notes",
+          "showMore": "Show {count} more"
+        }
       },
       "itemZones": {
         "loading": "Loading zones…",
@@ -2201,7 +2237,25 @@
         "statPositionsToOrder": "Lines to order",
         "selectStoreHint": "Select a specific store at the top of the page to generate an order",
         "emptyTitle": "Select a store and click “Generate order” —",
-        "emptySubtitle": "the system will refresh ADU, rebuild CDA buffers, and calculate order quantities."
+        "emptySubtitle": "the system will refresh ADU, rebuild CDA buffers, and calculate order quantities.",
+        "onlyToOrder": "Only items to order",
+        "selectAll": "Select all to order ({count})",
+        "clearSelection": "Clear selection",
+        "selectedCount": "Selected: {count}",
+        "confirmOrder": "Confirm order ({count})",
+        "toastConfirmed": "Order confirmed: {positions} items, documents: {receipts}",
+        "toastConfirmFailed": "Could not confirm the order: {message}",
+        "confirmDialog": {
+          "title": "Confirm the order?",
+          "body": "Orders to suppliers will be created: {positions} items, suppliers: {suppliers}. Unselected items are not ordered.",
+          "groupLine": "{positions} items · {qty} units",
+          "total": "Total",
+          "cancel": "Cancel",
+          "confirm": "Confirm",
+          "confirming": "Creating…",
+          "noSupplier": "No supplier",
+          "unknownSupplier": "Supplier"
+        }
       },
       "bufferFunnel": {
         "tooltip": "Position {position} of {total} (🔴 {red} · 🟡 {yellow} · 🟢 {green})"
@@ -2225,7 +2279,12 @@
         },
         "actionMenu": {
           "productAnalytics": "Product analytics"
-        }
+        },
+        "selectPage": "Select all on page",
+        "selectLine": "Select item",
+        "delayedTooltip": "Delayed: {qty} units. Still counted as in transit — it will not be ordered again.",
+        "delayedUntil": "late, until",
+        "postponedUntil": "postponed until"
       }
     },
     "pos": {
@@ -2613,7 +2672,22 @@
         "doneButton": "Done",
         "refreshButton": "Refresh"
       },
+      "noPurchase": {
+        "title": "No purchases",
+        "description": "Registered customers who never purchased in the selected stores. Contact data is masked.",
+        "headerName": "Name",
+        "headerPhone": "Phone",
+        "headerEmail": "Email",
+        "headerRegistered": "Registered",
+        "loading": "Loading…",
+        "empty": "No such customers",
+        "close": "Close",
+        "limitNote": "Showing the first {shown} of {total}."
+      },
       "segmentGrid": {
+        "migrationTitle": "Migration",
+        "migrationDescription": "Customers whose last purchase was in a different store than their first in the period.",
+        "migrationHint": "Click to see flows between stores",
         "revenueLabel": "Revenue",
         "noPurchaseTitle": "No purchases",
         "noPurchaseDescription": "Registered, but never converted to a sale — not part of the 11 RFM segments.",
@@ -3366,6 +3440,18 @@
           "createWriteOff": "Create write-off",
           "viewAllStock": "View all stock"
         }
+      },
+      "orders": {
+        "title": "Supplier orders",
+        "viewAll": "All orders",
+        "ordered": "On order",
+        "inTransit": "In transit",
+        "delayed": "Delayed",
+        "units": "units",
+        "delayedList": "Most delayed",
+        "noSupplier": "No supplier",
+        "overdueDays": "+{days} d",
+        "none": "No active orders"
       }
     },
     "autoService": {
@@ -3768,6 +3854,71 @@
           "fullName": "Full name",
           "email": "Email",
           "phone": "Phone"
+        }
+      },
+      "profile": {
+        "back": "Customers",
+        "toList": "Back to list",
+        "notFound": "Customer not found",
+        "rank": "Rank",
+        "phone": "Phone",
+        "email": "Email",
+        "customerSince": "Customer since",
+        "daysAgo": "{days} days ago",
+        "everyDays": "every {days} days",
+        "receiptsCount": "{count} receipts",
+        "kpi": {
+          "receipts": "Receipts",
+          "totalSpent": "Total spent",
+          "averageCheck": "Average check",
+          "lastPurchase": "Last purchase",
+          "firstPurchase": "First purchase",
+          "frequency": "Purchase frequency",
+          "last30": "Last 30 days",
+          "last90": "Last 90 days",
+          "items": "Units bought"
+        },
+        "trend": {
+          "title": "Spend by month (12 mo.)",
+          "empty": "No purchases in the last 12 months",
+          "spent": "Spent",
+          "receipts": "Receipts"
+        },
+        "stores": {
+          "title": "Where they shop",
+          "store": "Store",
+          "receipts": "Receipts",
+          "spent": "Spent",
+          "share": "Share",
+          "first": "First",
+          "last": "Last",
+          "empty": "No purchases"
+        },
+        "products": {
+          "title": "Top products (by spend)",
+          "name": "Product",
+          "quantity": "Qty",
+          "spent": "Spent",
+          "receipts": "Receipts",
+          "last": "Last bought",
+          "empty": "No purchases"
+        },
+        "receipts": {
+          "title": "Receipts",
+          "date": "Date & time",
+          "store": "Store",
+          "number": "Number",
+          "items": "Items",
+          "payment": "Payment",
+          "total": "Total",
+          "empty": "No receipts",
+          "line": {
+            "name": "Product",
+            "quantity": "Qty",
+            "price": "Price",
+            "discount": "Discount",
+            "total": "Total"
+          }
         }
       },
       "paymentType": {
@@ -6764,7 +6915,8 @@
         "subtitlePrefix": "History of sent notifications. Channel settings —",
         "settingsLinkText": "on the Settings page",
         "filtersButton": "Filters",
-        "recentActivityLabel": "Recent activity"
+        "recentActivityLabel": "Recent activity",
+        "subtitleNoSettings": "History of sent notifications."
       },
       "history": {
         "loading": "Loading…",
@@ -7331,6 +7483,72 @@
       "fieldCreated": "Received",
       "fieldProcessed": "Processed",
       "noMessage": "No message left."
+    },
+    "orderTracking": {
+      "title": "Order tracking",
+      "subtitle": "Where your supplier orders are now: created, confirmed, shipped, delivered",
+      "kpi": {
+        "open": "Open",
+        "overdue": "Overdue"
+      },
+      "status": {
+        "new": "New",
+        "confirmed": "Confirmed",
+        "in_transit": "In transit",
+        "delivered": "Delivered",
+        "cancelled": "Cancelled"
+      },
+      "source": {
+        "all": "All sources",
+        "receipt": "Internal order",
+        "marketplace": "Marketplace"
+      },
+      "columns": {
+        "created": "Created",
+        "source": "Type / number",
+        "supplier": "Supplier",
+        "store": "Store",
+        "status": "Status",
+        "expected": "Expected",
+        "quantity": "Qty",
+        "amount": "Amount",
+        "delay": "Delay"
+      },
+      "timeline": {
+        "created": "Created",
+        "confirmed": "Confirmed",
+        "shipped": "Shipped",
+        "delivered": "Received",
+        "cancelled": "Cancelled",
+        "pending": "not yet"
+      },
+      "lines": {
+        "name": "Product",
+        "quantity": "Ordered",
+        "received": "Received",
+        "amount": "Amount"
+      },
+      "overdueDays": "overdue by {days} d",
+      "note": "Note",
+      "searchPlaceholder": "Search by supplier, store, number…",
+      "resetStatuses": "Reset statuses",
+      "loading": "Loading…",
+      "empty": "No orders found",
+      "postponedBadge": "Postponed ×{count}",
+      "postponeAction": "Postpone delivery",
+      "postponedInfo": "Postponed {count} time(s): was {from} → now {to}",
+      "supplierDateHint": "The delivery date of this order is set by the supplier.",
+      "postpone": {
+        "title": "Postpone delivery",
+        "body": "The order stays open and still counts as in transit, so the program will not suggest ordering these items again. It just knows the delivery is late.",
+        "newDate": "New expected date",
+        "reason": "Reason (optional)",
+        "reasonPlaceholder": "e.g. the supplier reported a delay",
+        "cancel": "Cancel",
+        "confirm": "Postpone",
+        "saving": "Saving…",
+        "toastDone": "Delivery postponed to {date}"
+      }
     }
   }
 }

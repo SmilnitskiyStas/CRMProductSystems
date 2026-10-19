@@ -1533,3 +1533,18 @@ merge, ідемпотентна) — застосовано на dev, усі 11 
 `ShipOrderAsync`); `MarketplaceOrderDto` +4 поля. `dotnet build -c Release` чисто; `dotnet test`
 **2350/2350** (RLS-audit green). Фронт — окремим агентом (кнопка cancel для `new|confirmed`, нові
 DTO-поля «Підтвердив/Відвантажив», змінений рядок помилки).
+
+### TASK-716/717 — security + QA review нових фіч (2026-10-16)
+**Status:** done · **Agents:** security-reviewer, qa-tester · Logs: `.claude/logs/tasks/TASK-716_*`, `TASK-717_*`
+
+Ревʼю: order tracking, postpone, customer activity, no-purchase, incoming, daily-sales sort/пагінація, UkOrdering, AI cap (10).
+Security: Critical/High — немає; **Medium** — `MovementRepository.GetIncomingAsync` без явного `ClientTenantId == tenantId`
+(лише RLS); Low — postpone без верхньої межі дати та без activity_log. QA: `dotnet test` 2467/2467, tsc чисто; 4 low-баги
+(no-purchase для неіснуючого storeId → 200; PostponeAsync-DTO без postpone-полів; warning exhaustive-deps в orders/page;
+`productName:null` у movements). Додано `AiOrderCapTests.cs`. Виправлення ще не внесені.
+
+### TASK-718 — виправлення знахідок TASK-716/717 (2026-10-16)
+**Status:** done · **Agent:** backend-developer · Log: `.claude/logs/tasks/TASK-718_*`
+`GetIncomingAsync` + явний `ClientTenantId == tenantId`; `PostponeAsync` ліміт today+365 і запис `receipt.postponed` в activity_log;
+no-purchase для чужого/неіснуючого store → `[]`; `ReceiptDto` + postpone-поля; +6 тестів. Фронт: `allLines` у `useMemo` (orders/page).
+Build чисто, filtered `dotnet test` 566/566.

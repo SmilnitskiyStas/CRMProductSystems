@@ -13,6 +13,9 @@ public sealed class TenantAdminRepository : ITenantAdminRepository
 {
     private readonly AppDbContext _db;
 
+    /// <summary>Ukrainian-collation ordering only where the provider supports it (Npgsql).</summary>
+    private bool Uk => _db.Database.IsNpgsql();
+
     public TenantAdminRepository(AppDbContext db) => _db = db;
 
     // ── Tenants ──────────────────────────────────────────────────────────────
@@ -20,7 +23,7 @@ public sealed class TenantAdminRepository : ITenantAdminRepository
     public async Task<IReadOnlyList<Tenant>> GetAllTenantsAsync(CancellationToken ct) =>
         await _db.Tenants
             .AsNoTracking()
-            .OrderBy(t => t.Name)
+            .OrderByUk(t => t.Name, Uk)
             .ToListAsync(ct);
 
     public async Task<Tenant?> GetTenantByIdAsync(Guid id, CancellationToken ct) =>

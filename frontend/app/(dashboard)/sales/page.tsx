@@ -1,10 +1,11 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { Plus, Upload } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Loader2, Plus, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { useTranslations } from "next-intl";
 import { Btn } from "@/components/ui/Btn";
+import { Pagination } from "@/components/ui/Pagination";
 import { SalesTable } from "@/features/sales/components/SalesTable";
 import { SaleEntryForm } from "@/features/sales/components/SaleEntryForm";
 import { CsvImportDialog } from "@/features/sales/components/CsvImportDialog";
@@ -16,7 +17,9 @@ import {
 } from "@/features/sales/hooks/useSales";
 import { useProducts } from "@/features/inventory/hooks/useProducts";
 import { usePrimaryStoreId, useStoreContext } from "@/lib/useStoreContext";
-import type { UpsertDailySalePayload } from "@/features/sales/types";
+import type { SalesSortBy, UpsertDailySalePayload } from "@/features/sales/types";
+
+const PAGE_SIZE = 50;
 
 function daysAgo(n: number): string {
   const d = new Date();
@@ -47,11 +50,40 @@ export default function SalesPage() {
   const [importOpen, setImportOpen] = useState(false);
 
   const { data: products = [] } = useProducts();
+  const [page, setPage] = useState(1);
+  // Default matches the server: newest day first.
+  const [sortBy, setSortBy] = useState<SalesSortBy>("date");
+  const [sortDescending, setSortDescending] = useState(true);
   const filters = useMemo(
-    () => ({ storeIds: selectedStoreIds, from, to }),
-    [selectedStoreIds, from, to],
+    () => ({ storeIds: selectedStoreIds, from, to, page, pageSize: PAGE_SIZE, sortBy, sortDescending }),
+    [selectedStoreIds, from, to, page, sortBy, sortDescending],
   );
-  const { data: sales = [], isLoading, isError } = useDailySales(filters);
+  const { data, isLoading, isFetching, isError } = useDailySales(filters);
+  const sales = data?.items ?? [];
+  const totalCount = data?.totalCount ?? 0;
+  const totalPages = data?.totalPages ?? 0;
+
+  // Paging: scroll the page back to the very top.
+  const firstRender = useRef(true);
+  useEffect(() => {
+    if (firstRender.current) { firstRender.current = false; return; }
+    window.scrollTo(0, 0);
+  }, [page]);
+
+  // Switching stores also restarts from the first page.
+  useEffect(() => { setPage(1); }, [selectedStoreIds]);
+
+  // Same toggle convention as the Catalog: the same column flips direction, a new column starts
+  // descending (date is the default, newest first). Sorting restarts from page 1.
+  const handleSort = (key: SalesSortBy) => {
+    if (key === sortBy) setSortDescending((d) => !d);
+    else { setSortBy(key); setSortDescending(true); }
+    setPage(1);
+  };
+
+  // A changed filter starts from the first page — otherwise page 7 of the old range may not exist.
+  const changeFrom = (v: string) => { setFrom(v); setPage(1); };
+  const changeTo = (v: string) => { setTo(v); setPage(1); };
 
   const upsert = useUpsertSale();
   const importCsv = useImportCsv();
@@ -132,15 +164,41 @@ export default function SalesPage() {
 
       {/* Filters */}
       <div style={{ display: "flex", gap: 10, marginBottom: 18, alignItems: "center" }}>
-        <input type="date" value={from} max={to} onChange={(e) => setFrom(e.target.value)} style={selectStyle} />
+        <input type="date" value={from} max={to} onChange={(e) => changeFrom(e.target.value)} style={selectStyle} />
         <span style={{ color: "#4B5563" }}>—</span>
-        <input type="date" value={to} min={from} max={daysAgo(0)} onChange={(e) => setTo(e.target.value)} style={selectStyle} />
+        <input type="date" value={to} min={from} max={daysAgo(0)} onChange={(e) => changeTo(e.target.value)} style={selectStyle} />
         <span style={{ color: "#4B5563", fontSize: 12, marginLeft: "auto" }}>
-          {isLoading ? tCommon("loading") : t("recordsCount", { count: sales.length })}
+          {isFetching && (
+            <Loader2 size={14} style={{ animation: "spin 1s linear infinite", marginRight: 6, verticalAlign: "-2px" }} />
+          )}
+          {isLoading ? tCommon("loading") : t("recordsCount", { count: totalCount })}
         </span>
+        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
       </div>
 
-      <SalesTable sales={sales} onToggleAnomaly={handleToggleAnomaly} />
+      <div
+        style={{
+          position: "relative",
+          opacity: isFetching ? 0.55 : 1,
+          transition: "opacity 0.15s",
+          pointerEvents: isFetching ? "none" : undefined,
+        }}
+      >
+        {isFetching && (
+          <div style={{ position: "absolute", top: 60, left: 0, right: 0, display: "flex", justifyContent: "center", zIndex: 2 }}>
+            <Loader2 size={30} color="#3B82F6" style={{ animation: "spin 1s linear infinite" }} />
+          </div>
+        )}
+        <SalesTable
+          sales={sales}
+          onToggleAnomaly={handleToggleAnomaly}
+          sortBy={sortBy}
+          sortDescending={sortDescending}
+          onSort={handleSort}
+        />
+      </div>
+
+      <Pagination page={page} totalPages={totalPages} totalCount={totalCount} onPageChange={setPage} />
 
       {entryOpen && primaryStoreId && (
         <SaleEntryForm

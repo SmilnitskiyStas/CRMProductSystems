@@ -674,6 +674,8 @@ public sealed class AppDbContext : DbContext
             e.Property(r => r.Status).HasMaxLength(30).HasDefaultValue("draft");
             e.Property(r => r.CreatedAt).HasDefaultValueSql("NOW()");
             e.Property(r => r.DestinationStoreId).HasColumnName("DestinationLocationId");
+            e.Property(r => r.PostponeCount).HasDefaultValue(0);
+            e.Property(r => r.DelayReason).HasMaxLength(500);
             // TASK-354: TenantId had no index at all on this table (RLS filters every
             // query by TenantId — same gap pattern as WriteOff had before its
             // idx_write_offs_tenant_store_status index further below).

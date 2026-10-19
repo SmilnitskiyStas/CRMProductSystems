@@ -68,3 +68,51 @@ public sealed record CustomerReviewSummaryDto(
     DateTimeOffset CreatedAt,
     string? ReplyText
 );
+
+// ── Customer activity / analytics page ────────────────────────────────────────────────────────
+
+/// <summary>Everything the customer page needs to analyse one customer's purchase behaviour.</summary>
+public sealed record CustomerActivityDto(
+    CustomerActivityStatsDto Stats,
+    List<CustomerStoreActivityDto> Stores,
+    List<CustomerMonthActivityDto> Months,
+    List<CustomerTopProductDto> TopProducts);
+
+public sealed record CustomerActivityStatsDto(
+    int ReceiptCount,
+    decimal TotalSpent,
+    decimal AverageCheck,
+    decimal ItemsQuantity,
+    DateTime? FirstPurchaseAt,
+    DateTime? LastPurchaseAt,
+    int? DaysSinceLastPurchase,
+    int DaysSinceRegistered,
+    /// <summary>Average days between two consecutive purchases (first→last / (receipts-1)); null when under 2 receipts.</summary>
+    decimal? AverageDaysBetweenPurchases,
+    int Receipts30d,
+    decimal Spent30d,
+    int Receipts90d,
+    decimal Spent90d);
+
+public sealed record CustomerStoreActivityDto(
+    Guid StoreId, string StoreName, int Receipts, decimal Spent, decimal SharePercent, DateTime FirstAt, DateTime LastAt);
+
+public sealed record CustomerMonthActivityDto(string Month, int Receipts, decimal Spent);
+
+public sealed record CustomerTopProductDto(
+    Guid ProductId, string Name, decimal Quantity, decimal Spent, int Receipts, DateTime LastAt);
+
+public sealed record CustomerReceiptLineDto(
+    Guid ProductId, string Name, decimal Quantity, decimal UnitPrice, decimal Discount, decimal Total);
+
+public sealed record CustomerReceiptDto(
+    Guid Id,
+    string ReceiptNumber,
+    string? FiscalNumber,
+    DateTime CreatedAt,
+    Guid StoreId,
+    string StoreName,
+    decimal Total,
+    string PaymentType,
+    string Status,
+    List<CustomerReceiptLineDto> Lines);

@@ -13,6 +13,9 @@ public sealed class TenantRoleRepository : ITenantRoleRepository
 {
     private readonly AppDbContext _db;
 
+    /// <summary>Ukrainian-collation ordering only where the provider supports it (Npgsql).</summary>
+    private bool Uk => _db.Database.IsNpgsql();
+
     public TenantRoleRepository(AppDbContext db) => _db = db;
 
     public Task<TenantRole?> GetByIdAsync(Guid tenantId, Guid roleId, CancellationToken ct = default) =>
@@ -26,7 +29,7 @@ public sealed class TenantRoleRepository : ITenantRoleRepository
         if (!includeInactive)
             query = query.Where(r => r.IsActive);
 
-        return await query.OrderBy(r => r.Name).ToListAsync(ct);
+        return await query.OrderByUk(r => r.Name, Uk).ToListAsync(ct);
     }
 
     public Task<TenantRole?> GetByNameAsync(Guid tenantId, string name, CancellationToken ct = default) =>

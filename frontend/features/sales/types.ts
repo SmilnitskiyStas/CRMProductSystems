@@ -30,6 +30,21 @@ export interface SalesFilters {
   productId?: string;
   from?: string;
   to?: string;
+  /** 1-based page; the server cuts the page in SQL. */
+  page?: number;
+  pageSize?: number;
+  sortBy?: SalesSortBy;
+  sortDescending?: boolean;
+}
+
+export type SalesSortBy = "date" | "product" | "store" | "sold" | "eod" | "source";
+
+export interface PagedSales {
+  items: DailySale[];
+  totalCount: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
 }
 
 export interface CsvImportResult {

@@ -216,6 +216,11 @@ file sealed class RetryFakeLoyaltyRepo : ILoyaltyRepository
 /// <summary>TASK-405: no-op — this file only exercises fiscalization retry, never customer aggregates.</summary>
 file sealed class RetryFakeCustomerRepo : ICustomerRepository
 {
+    public Task<CustomerActivityStatsRow> GetActivityStatsAsync(Guid customerId, Guid tenantId, DateTime nowUtc, CancellationToken ct) => Task.FromResult(new CustomerActivityStatsRow(0, 0m, null, null, 0, 0m, 0, 0m, 0m));
+    public Task<IReadOnlyList<CustomerStoreActivityRow>> GetStoreActivityAsync(Guid customerId, Guid tenantId, CancellationToken ct) => Task.FromResult<IReadOnlyList<CustomerStoreActivityRow>>([]);
+    public Task<IReadOnlyList<CustomerMonthActivityRow>> GetMonthlyActivityAsync(Guid customerId, Guid tenantId, DateTime fromUtc, CancellationToken ct) => Task.FromResult<IReadOnlyList<CustomerMonthActivityRow>>([]);
+    public Task<IReadOnlyList<CustomerTopProductRow>> GetTopProductsAsync(Guid customerId, Guid tenantId, int take, CancellationToken ct) => Task.FromResult<IReadOnlyList<CustomerTopProductRow>>([]);
+    public Task<(IReadOnlyList<CustomerReceiptRow> Items, int Total)> GetReceiptsPagedAsync(Guid customerId, Guid tenantId, int page, int pageSize, CancellationToken ct) => Task.FromResult<(IReadOnlyList<CustomerReceiptRow>, int)>(([], 0));
     public Task<List<Customer>> GetAllAsync(Guid tenantId, CancellationToken ct) => Task.FromResult(new List<Customer>());
     public Task<(List<Customer> Items, int Total)> GetPagedAsync(Guid tenantId, int page, int pageSize, string? search, CancellationToken ct) => Task.FromResult((new List<Customer>(), 0));
     public Task<Customer?> GetByIdAsync(Guid id, Guid tenantId, CancellationToken ct) => Task.FromResult<Customer?>(null);

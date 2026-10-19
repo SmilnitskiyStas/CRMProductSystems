@@ -8,6 +8,9 @@ public sealed class UserRepository : IUserRepository
 {
     private readonly AppDbContext _db;
 
+    /// <summary>Ukrainian-collation ordering only where the provider supports it (Npgsql).</summary>
+    private bool Uk => _db.Database.IsNpgsql();
+
     public UserRepository(AppDbContext db) => _db = db;
 
     public Task<User?> GetByIdAsync(Guid id, CancellationToken ct = default) =>
@@ -22,7 +25,7 @@ public sealed class UserRepository : IUserRepository
     public async Task<IReadOnlyList<User>> GetAllByTenantAsync(Guid tenantId, CancellationToken ct = default) =>
         await _db.Users
             .Where(u => u.TenantId == tenantId)
-            .OrderBy(u => u.FullName)
+            .OrderByUk(u => u.FullName, Uk)
             .ToListAsync(ct);
 
     public async Task<IReadOnlyList<User>> GetByRolesAsync(IEnumerable<string> roles, CancellationToken ct = default)
@@ -30,7 +33,7 @@ public sealed class UserRepository : IUserRepository
         var roleList = roles.ToList();
         return await _db.Users
             .Where(u => roleList.Contains(u.Role))
-            .OrderBy(u => u.FullName)
+            .OrderByUk(u => u.FullName, Uk)
             .ToListAsync(ct);
     }
 

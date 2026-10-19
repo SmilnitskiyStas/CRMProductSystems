@@ -8,6 +8,7 @@ import { AttentionTable } from "@/features/dashboard/components/AttentionTable";
 import { QuickActions } from "@/features/dashboard/components/QuickActions";
 import { StoreMap } from "@/features/dashboard/components/StoreMap";
 import { WeeklyKpiCards } from "@/features/dashboard/components/WeeklyKpiCards";
+import { OrdersOverview } from "@/features/dashboard/components/OrdersOverview";
 import {
   useAttentionItems,
   useDashboardStats,
@@ -16,7 +17,7 @@ import {
   useWeeklyKpi,
 } from "@/features/dashboard/hooks/useDashboard";
 import { useMe } from "@/features/auth/hooks/useAuth";
-import { PROVIDER_TEAM, type AppRole } from "@/lib/roles";
+import { AT_LEAST_STORE_MANAGER, PROVIDER_TEAM, hasRole, type AppRole } from "@/lib/roles";
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -47,6 +48,9 @@ export default function DashboardPage() {
 
       {/* Weekly KPI cards */}
       <WeeklyKpiCards data={weeklyKpi} isLoading={weeklyKpiLoading} />
+
+      {/* Purchase orders: on order / on the way / delayed (store managers and above) */}
+      {hasRole(me?.role, AT_LEAST_STORE_MANAGER) && <OrdersOverview />}
 
       {/* Main content: table + quick actions */}
       <div

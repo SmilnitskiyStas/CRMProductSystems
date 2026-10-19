@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using ShelfGuard.Application.Common;
 using ShelfGuard.Application.Features.Sales;
 using ShelfGuard.Application.Features.Sales.Dtos;
 using ShelfGuard.Infrastructure.Authorization;
@@ -19,15 +20,21 @@ public sealed class DailySalesController : ControllerBase
     // TASK-610: storeIds is a repeated query param (`?storeIds=guid1&storeIds=guid2`) — omitted
     // or empty means "all stores" (same convention as TASK-608's Analytics/Stock endpoints).
     [HttpGet]
-    [ProducesResponseType(typeof(List<DailySaleDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(PagedResult<DailySaleDto>), StatusCodes.Status200OK)]
     public async Task<IActionResult> Get(
         [FromQuery] Guid[]? storeIds,
         [FromQuery] Guid? product_id,
         [FromQuery] DateOnly? from,
         [FromQuery] DateOnly? to,
-        CancellationToken ct)
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 50,
+        [FromQuery] string? sortBy = null,
+        [FromQuery] bool sortDescending = true,
+        CancellationToken ct = default)
     {
-        var sales = await _sales.GetAsync(storeIds, product_id, from, to, ct);
+        var query = new PagedQuery { Page = page, PageSize = pageSize };
+        var sales = await _sales.GetAsync(
+            storeIds, product_id, from, to, query.ClampedPage, query.ClampedPageSize, sortBy, sortDescending, ct);
         return Ok(sales);
     }
 

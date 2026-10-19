@@ -52,6 +52,8 @@ public sealed class OrderCalcService : IOrderCalcService
         var moqUsq = await _repo.GetMoqUsqAsync(productIds, ct);
 
         var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var delayed = await _repo.GetDelayedInTransitAsync(storeId, productIds, today, ct)
+            ?? new Dictionary<Guid, (decimal Quantity, DateOnly? ExpectedAt, bool Postponed)>();
         var activeEvents = await _events.GetCandidatesForDateAsync(storeId, today, ct);
         var todayWeather = await _weather.GetForDateAsync(storeId, today, ct);
         var weatherRules = await _weather.GetCoefficientsAsync(ct);
@@ -97,7 +99,12 @@ public sealed class OrderCalcService : IOrderCalcService
                 moq,
                 usq,
                 calc.Rounding,
-                mpTransit));
+                mpTransit,
+                buffer.Product?.DefaultSupplierId,
+                buffer.Product?.PricePurchase,
+                delayed.TryGetValue(buffer.ProductId, out var dl) ? dl.Quantity : 0m,
+                delayed.TryGetValue(buffer.ProductId, out var dl2) ? dl2.ExpectedAt : null,
+                delayed.TryGetValue(buffer.ProductId, out var dl3) && dl3.Postponed));
         }
 
         var ordered = lines

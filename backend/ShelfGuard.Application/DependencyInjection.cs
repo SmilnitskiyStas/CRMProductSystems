@@ -62,6 +62,7 @@ services.AddScoped<IAuthService, AuthService>();
         services.AddScoped<Features.SupplySchedules.ISupplyScheduleService, Features.SupplySchedules.SupplyScheduleService>();
         services.AddScoped<Features.Buffer.IBufferService, Features.Buffer.BufferService>();
         services.AddScoped<Features.Orders.IOrderCalcService, Features.Orders.OrderCalcService>();
+        services.AddScoped<Features.Orders.IOrderTrackingService, Features.Orders.OrderTrackingService>();
         services.AddScoped<Features.Events.IEventService, Features.Events.EventService>();
         services.AddScoped<Features.Weather.IWeatherService, Features.Weather.WeatherService>();
         services.AddScoped<Features.Cannibalization.ICannibalizationService, Features.Cannibalization.CannibalizationService>();

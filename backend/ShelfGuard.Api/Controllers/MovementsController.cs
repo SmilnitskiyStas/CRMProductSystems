@@ -41,6 +41,24 @@ public sealed class MovementsController : ControllerBase
         return Ok(result);
     }
 
+    /// <summary>
+    /// Open supply for a product that has not reached stock yet (internal orders + B2B marketplace
+    /// orders in new/confirmed/shipped). Optional store_id limits it to one destination store.
+    /// </summary>
+    [HttpGet("incoming")]
+    [ProducesResponseType(typeof(IReadOnlyList<IncomingSupplyDto>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetIncoming(
+        [FromQuery] Guid product_id,
+        [FromQuery] Guid? store_id,
+        CancellationToken ct = default)
+    {
+        var tenantId = GetTenantId();
+        if (tenantId == Guid.Empty) return Forbid();
+        if (product_id == Guid.Empty) return BadRequest(new { error = "product_id is required." });
+
+        return Ok(await _movements.GetIncomingAsync(tenantId, product_id, store_id, ct));
+    }
+
     private Guid GetTenantId()
     {
         var raw = User.FindFirstValue("tenant_id");

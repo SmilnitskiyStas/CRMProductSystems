@@ -14,6 +14,7 @@ import type {
   StoreMigrationOverviewDto,
   StoreMigrationCustomerRowDto,
   ExportStoreMigrationRequest,
+  NoPurchaseCustomerRowDto,
 } from "../types";
 
 /**
@@ -101,6 +102,15 @@ export const marketingAnalyticsApi = {
   // ── Store migration (TASK-503) ──────────────────────────────────────────────────────
   getStoreMigration: (filters: MarketingAnalyticsFilters) =>
     api.get<StoreMigrationOverviewDto>(`/api/marketing-analytics/store-migration${buildFilterQs(filters)}`),
+
+  /** Registered customers with no purchase in the selected stores (PII masked). Period is not
+   * sent: "never purchased" is not period-bound, same as the card's own count. */
+  getNoPurchaseCustomers: (storeIds: string[], limit = 100) => {
+    const qs = new URLSearchParams();
+    for (const id of storeIds) qs.append("storeIds", id);
+    qs.set("limit", String(limit));
+    return api.get<NoPurchaseCustomerRowDto[]>(`/api/marketing-analytics/no-purchase/customers?${qs}`);
+  },
 
   getStoreMigrationCustomers: (filters: MarketingAnalyticsFilters, limit = 100) =>
     api.get<StoreMigrationCustomerRowDto[]>(
