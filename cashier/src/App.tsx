@@ -10,7 +10,8 @@ import { PrintSettingsScreen } from './screens/PrintSettingsScreen';
 import { QueueScreen } from './screens/QueueScreen';
 import { ShiftScreen } from './screens/ShiftScreen';
 
-const IDLE_LOGOUT_MS = 5 * 60 * 1000;
+/** An operator who steps away stays signed in this long; any input (or a camera scan) resets it. */
+const IDLE_LOGOUT_MS = 15 * 60 * 1000;
 
 type View = 'checkout' | 'shift' | 'queue' | 'print';
 

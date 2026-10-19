@@ -1,6 +1,8 @@
 import { useEffect, useRef } from 'react';
 
-const ACTIVITY_EVENTS = ['keydown', 'mousedown', 'mousemove', 'touchstart', 'wheel'] as const;
+/** 'cashier-activity' is dispatched for input that is not a DOM event (e.g. a camera barcode scan). */
+export const CASHIER_ACTIVITY_EVENT = 'cashier-activity';
+const ACTIVITY_EVENTS = ['keydown', 'mousedown', 'mousemove', 'touchstart', 'wheel', CASHIER_ACTIVITY_EVENT] as const;
 
 /** Calls onIdle after `timeoutMs` without any user input while `enabled`. */
 export function useIdleLogout(enabled: boolean, timeoutMs: number, onIdle: () => void): void {
