@@ -161,6 +161,8 @@ export default function AppLayout() {
       <Tabs.Screen name="stock/[id]" options={{ href: null }} />
       <Tabs.Screen name="receipt/[id]" options={{ href: null }} />
       <Tabs.Screen name="inventory/[zoneId]" options={{ href: null }} />
+      <Tabs.Screen name="shelf-check/index" options={{ href: null }} />
+      <Tabs.Screen name="shelf-check/capture" options={{ href: null }} />
       <Tabs.Screen name="write-offs/index" options={{ href: null }} />
       <Tabs.Screen name="write-offs/[id]" options={{ href: null }} />
       <Tabs.Screen name="write-offs/create" options={{ href: null }} />

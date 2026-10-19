@@ -69,6 +69,13 @@ const MODULES: ModuleItem[] = [
     color: '#f59e0b',
   },
   {
+    icon: 'scan-outline',
+    label: 'Перевірка полиць',
+    description: 'Фото полиці та AI-аналіз наявності',
+    href: '/(app)/shelf-check',
+    color: '#0ea5e9',
+  },
+  {
     icon: 'trash-outline',
     label: 'Списання',
     description: 'Акти списання товарів',

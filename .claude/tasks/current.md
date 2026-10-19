@@ -1560,3 +1560,6 @@ ProductImagesSection (grid, downscale upload, labels, primary, delete, max 8) wi
 
 ## TASK-729 — Item multi-image (backend, done)
 `item_images` + `/api/items/{id}/images` CRUD, legacy image endpoints kept, shelf scan uses up to 3 refs/item. Migration AddItemImages not applied anywhere yet. Log: logs/tasks/729_*.
+
+## TASK-731 — Mobile shelf check (done)
+Shelf-check flow in mobile (location > zone > shelf > photo > AI result + history), More menu entry, new deps expo-image-picker/manipulator (new APK needed). tsc/eslint clean; not device-tested. Log: logs/tasks/731_*.
