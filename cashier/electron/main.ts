@@ -1,6 +1,6 @@
 import { app, BrowserWindow, ipcMain, session, shell } from 'electron';
 import { join } from 'node:path';
-import type { PrintSettings, SaleSubmitRequest } from '@shared/types';
+import type { CameraPrefs, PrintSettings, SaleSubmitRequest } from '@shared/types';
 import { CashierService } from './service';
 
 const isDev = !app.isPackaged && !!process.env['ELECTRON_RENDERER_URL'];
@@ -36,6 +36,28 @@ function registerIpc(svc: CashierService): void {
   ipcMain.handle('print:test', () => svc.testPrint());
   ipcMain.handle('print:receipt', (_e, id: string) => svc.printReceipt(String(id)));
   ipcMain.handle('print:drawer', () => svc.openDrawer());
+  ipcMain.handle('connection:retry', () => svc.retryConnection());
+  ipcMain.handle('connection:check', (_e, url: string) => svc.checkServer(String(url)));
+  ipcMain.handle('camera:getPrefs', () => svc.getCameraPrefs());
+  ipcMain.handle('camera:savePrefs', (_e, p: CameraPrefs) => svc.saveCameraPrefs(p));
+}
+
+/**
+ * Camera access (barcode scanning with the laptop webcam): only `media` (video, no audio) and only
+ * for our own window. Everything else - notifications, geolocation, clipboard, any other
+ * webContents - is denied.
+ */
+function installPermissions(): void {
+  const ses = session.defaultSession;
+  const isOurs = (wc: Electron.WebContents | null) => !!win && !win.isDestroyed() && wc === win.webContents;
+  ses.setPermissionRequestHandler((wc, permission, callback, details) => {
+    const types = (details as { mediaTypes?: string[] }).mediaTypes ?? [];
+    callback(permission === 'media' && isOurs(wc) && types.every((t) => t === 'video'));
+  });
+  ses.setPermissionCheckHandler((wc, permission, _origin, details) => {
+    const t = (details as { mediaType?: string }).mediaType;
+    return permission === 'media' && isOurs(wc) && (t === undefined || t === 'video');
+  });
 }
 
 function installCsp(): void {
@@ -48,7 +70,7 @@ function installCsp(): void {
         ...details.responseHeaders,
         'Content-Security-Policy': [
           "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; " +
-            "img-src 'self' data:; connect-src 'self' ws://localhost:* http://localhost:*; object-src 'none'",
+            "img-src 'self' data:; connect-src 'self' ws://localhost:* http://localhost:*; media-src 'self' blob:; object-src 'none'",
         ],
       },
     });
@@ -75,6 +97,7 @@ function createWindow(): void {
   });
 
   win.once('ready-to-show', () => win?.show());
+  win.on('focus', () => service?.probeNow()); // coming back to the app: re-check the server right away
   win.setMenuBarVisibility(false);
 
   // The renderer is a single local page: block navigation and new windows; open links externally.
@@ -99,7 +122,7 @@ if (!app.requestSingleInstanceLock()) {
 
   void app.whenReady().then(async () => {
     service = new CashierService({
-      onlineChange: (v) => send('evt:online', v),
+      onlineChange: (s) => send('evt:online', s),
       sessionExpired: () => send('evt:sessionExpired'),
       catalogChange: (s) => send('evt:catalog', s),
       queueChange: (s) => send('evt:queue', s),
@@ -108,6 +131,7 @@ if (!app.requestSingleInstanceLock()) {
     await service.init();
     registerIpc(service);
     installCsp();
+    installPermissions();
     createWindow();
   });
 

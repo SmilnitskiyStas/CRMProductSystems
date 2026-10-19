@@ -137,7 +137,7 @@ export class MemoryCatalogStore implements CatalogStore {
   private async doSync(): Promise<void> {
     try {
       let cursor: CatalogCursor = {
-        since: this.cursor ? new Date(new Date(this.cursor).getTime() - CURSOR_OVERLAP_MS).toISOString() : null,
+        since: this.cursor && this.items.size > 0 ? new Date(new Date(this.cursor).getTime() - CURSOR_OVERLAP_MS).toISOString() : null,
         afterId: null,
       };
       let lastNextSince: string | null = null;

@@ -13,6 +13,14 @@ export interface RequestOptions {
   headers?: Record<string, string>;
   body?: unknown;
   timeoutMs?: number;
+  /** Connectivity probe: do not report its network errors back to the monitor. */
+  probe?: boolean;
+}
+
+let networkErrorListener: (() => void) | null = null;
+/** The connectivity monitor subscribes here: a failed API call triggers an immediate re-probe. */
+export function setNetworkErrorListener(fn: (() => void) | null): void {
+  networkErrorListener = fn;
 }
 
 const DEFAULT_TIMEOUT_MS = 15_000;
@@ -57,6 +65,7 @@ export async function httpRequest<T>(
     }
     return { status: res.status, body, networkError: false };
   } catch (e) {
+    if (!opts.probe) networkErrorListener?.();
     return { status: 0, body: null, networkError: true, errorMessage: (e as Error).message };
   } finally {
     clearTimeout(timer);

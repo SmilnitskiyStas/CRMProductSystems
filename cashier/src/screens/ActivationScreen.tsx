@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { RegisterInfo } from '@shared/types';
 
 interface Props {
@@ -12,6 +12,26 @@ export function ActivationScreen({ defaultServerUrl, onActivated }: Props) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<RegisterInfo | null>(null);
+  const [server, setServer] = useState<{ reachable: boolean; message: string | null } | null>(null);
+
+  // Background reachability check of the typed URL: retried automatically (4 s while down, 15 s while up),
+  // so starting the app before the API needs no manual re-submit.
+  useEffect(() => {
+    if (done) return;
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout>;
+    const run = async () => {
+      const r = await window.cashier.checkServer(serverUrl);
+      if (cancelled) return;
+      setServer(r);
+      timer = setTimeout(() => void run(), r.reachable ? 15_000 : 4_000);
+    };
+    timer = setTimeout(() => void run(), 400);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [serverUrl, done]);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -70,6 +90,11 @@ export function ActivationScreen({ defaultServerUrl, onActivated }: Props) {
             spellCheck={false}
           />
         </label>
+        {server && (
+          <p className={`rounded-lg px-4 py-2 text-sm ${server.reachable ? 'bg-emerald-500/10 text-emerald-300' : 'bg-amber-500/10 text-amber-300'}`}>
+            {server.reachable ? 'Сервер доступний.' : `${server.message} Перевірка повторюється автоматично…`}
+          </p>
+        )}
         {error && <p className="rounded-lg bg-rose-500/10 px-4 py-3 text-rose-300">{error}</p>}
         <button className="btn-primary w-full" disabled={busy || !code.trim() || !serverUrl.trim()}>
           {busy ? 'Активація…' : 'Активувати'}

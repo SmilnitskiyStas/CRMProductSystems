@@ -13,6 +13,7 @@ import { formatMoney } from '@shared/money';
 import { SaleSubmitter, type SubmissionState } from '@shared/saleSubmission';
 import { PaymentDialog } from '../components/PaymentDialog';
 import { ReceiptDialog } from '../components/ReceiptDialog';
+import { CameraPanel, type ScanOutcome } from '../components/CameraPanel';
 import { useScanner } from '../hooks/useScanner';
 
 interface Props {
@@ -70,30 +71,63 @@ export function CheckoutScreen({ shift, online, onOpenShiftScreen, onOpenQueue, 
   );
 
   const addScanned = useCallback(
-    async (item: CatalogItem, barcode: string) => {
+    async (item: CatalogItem, barcode: string): Promise<boolean> => {
       if (item.price == null) {
         flash(`«${item.name}»: ціну не задано, продаж неможливий.`, 'error');
-        return;
+        return false;
       }
       changeCart((c) => addItem(c, item, barcode));
       setSelected(item.id);
+      return true;
     },
     [changeCart, flash],
   );
 
+  /** One pipeline for every scanner: USB wedge and the webcam both end up here. */
   const onScan = useCallback(
-    async (code: string) => {
-      const item = await window.cashier.lookupBarcode(code);
+    async (code: string): Promise<ScanOutcome> => {
+      let item = await window.cashier.lookupBarcode(code);
+      if (!item && code.length === 12) item = await window.cashier.lookupBarcode('0' + code); // UPC-A stored as EAN-13
       if (!item) {
         flash(`Штрихкод ${code} не знайдено в каталозі.`, 'error');
-        return;
+        return { kind: 'notfound' };
       }
-      await addScanned(item, code);
+      const added = await addScanned(item, code);
+      return added ? { kind: 'added', name: item.name } : { kind: 'noprice', name: item.name };
     },
     [addScanned, flash],
   );
 
   useScanner(!dialogOpen, (code) => void onScan(code));
+
+  // Webcam scanner (panel visibility and last camera are remembered in config)
+  const [cameraOn, setCameraOn] = useState(false);
+  const [cameraDevice, setCameraDevice] = useState<string | null>(null);
+  const [prefsLoaded, setPrefsLoaded] = useState(false);
+  useEffect(() => {
+    void window.cashier.getCameraPrefs().then((p) => {
+      setCameraOn(p.enabled);
+      setCameraDevice(p.deviceId);
+      setPrefsLoaded(true);
+    });
+  }, []);
+  const saveCamera = useCallback((enabled: boolean, deviceId: string | null) => {
+    void window.cashier.saveCameraPrefs({ enabled, deviceId });
+  }, []);
+  const toggleCamera = useCallback(() => {
+    setCameraOn((on) => {
+      saveCamera(!on, cameraDevice);
+      return !on;
+    });
+  }, [saveCamera, cameraDevice]);
+  const onCameraCode = useCallback(
+    async (code: string): Promise<ScanOutcome> => {
+      const out = await onScan(code);
+      if (out.kind === 'added') flash(`Додано: ${out.name}`);
+      return out;
+    },
+    [onScan, flash],
+  );
 
   // Manual search (debounced)
   useEffect(() => {
@@ -167,6 +201,9 @@ export function CheckoutScreen({ shift, online, onOpenShiftScreen, onOpenQueue, 
           searchRef.current?.focus();
           searchRef.current?.select();
           return;
+        case 'F3':
+          e.preventDefault();
+          return toggleCamera();
         case 'F5':
           e.preventDefault();
           return openPayment('Cash');
@@ -201,7 +238,7 @@ export function CheckoutScreen({ shift, online, onOpenShiftScreen, onOpenQueue, 
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [dialogOpen, cart, selected, openPayment, onOpenShiftScreen, onOpenQueue, onLogout, changeCart]);
+  }, [dialogOpen, cart, selected, openPayment, onOpenShiftScreen, onOpenQueue, onLogout, changeCart, toggleCamera]);
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -236,6 +273,13 @@ export function CheckoutScreen({ shift, online, onOpenShiftScreen, onOpenQueue, 
         </div>
         <button className="btn-secondary px-4 py-2 text-base" onClick={() => void window.cashier.syncCatalog()}>
           {catalog?.syncing ? 'Синхронізація…' : `Каталог: ${catalog?.count ?? 0}`}
+        </button>
+        <button
+          className={`px-4 py-2 text-base ${cameraOn ? 'btn-primary' : 'btn-secondary'}`}
+          onClick={toggleCamera}
+          title="Сканувати штрихкод веб-камерою"
+        >
+          Камера (F3)
         </button>
         <button className="btn-secondary px-4 py-2 text-base" onClick={onOpenQueue}>
           Черга (F10)
@@ -348,7 +392,19 @@ export function CheckoutScreen({ shift, online, onOpenShiftScreen, onOpenQueue, 
         </section>
 
         {/* totals + actions */}
-        <aside className="flex w-80 shrink-0 flex-col gap-4 border-l border-slate-800 bg-slate-900/50 p-5">
+        <aside className="flex w-80 shrink-0 flex-col gap-4 overflow-auto border-l border-slate-800 bg-slate-900/50 p-5">
+          {cameraOn && prefsLoaded && (
+            <CameraPanel
+              initialDeviceId={cameraDevice}
+              paused={dialogOpen}
+              onCode={onCameraCode}
+              onDeviceChange={(id) => {
+                setCameraDevice(id);
+                saveCamera(true, id);
+              }}
+              onClose={toggleCamera}
+            />
+          )}
           <div>
             <p className="text-slate-400">Позицій: {cart.length}</p>
             <p className="mt-1 text-slate-400">До сплати</p>
@@ -366,6 +422,7 @@ export function CheckoutScreen({ shift, online, onOpenShiftScreen, onOpenQueue, 
           <div className="mt-auto space-y-1 text-sm text-slate-500">
             <p>Зміна №{shift.shiftNumber || '—'}</p>
             <p>↑↓ вибір · +/− кількість · Del видалити</p>
+            <p>F2 пошук · F3 камера · F5/F6 оплата · F8 очистити · F9 зміна · F10 черга · F12 вийти</p>
           </div>
         </aside>
       </div>

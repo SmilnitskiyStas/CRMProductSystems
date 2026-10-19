@@ -1575,3 +1575,6 @@ better-sqlite3 (pinned 11.10.0, Electron prebuilt) catalog + sales outbox with b
 
 ### TASK-730 - Batch sale cashier attribution - review
 Offline sales flushed by another operator are stored under the real cashier when that cashier had a session on this register (window +5 min tolerance), is active/POS/same store, OccurredAt sane; else failed 403. No migration. Лог: `.claude/logs/tasks/730_*`.
+
+### TASK-731 - Cashier: webcam scanner + connectivity monitor - review
+F3 camera panel (zxing, check-digit + 2-read + 1.5 s debounce, same pipeline as USB wedge, beep/flash, remembered camera, scoped `media` permission) and a main-process connectivity monitor (3 s probe, backoff 5-15 s, auto reconnect: outbox flush + catalog delta + shift refresh, banner with countdown/"Спробувати зараз"). 84 vitest, build+dist OK, smoke with Chromium fake camera OK; real webcam and real-backend start order not verified; not committed. Лог: `.claude/logs/tasks/731_*`.
