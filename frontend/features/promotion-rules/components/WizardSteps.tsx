@@ -7,6 +7,7 @@ import { useMe } from "@/features/auth/hooks/useAuth";
 import { useLocations } from "@/features/locations/hooks/useLocations";
 import { LocationsMultiSelectDropdown } from "@/features/users/components/LocationsMultiSelectDropdown";
 import { CategoryTypeahead } from "@/features/catalog/components/CategoryTypeahead";
+import { isKnownTimeZone, timeZoneKey } from "@/features/locations/lib/timeZones";
 import { useTierLookup } from "../hooks/usePromotionRules";
 import type { RuleType } from "../types";
 import { isStoreScopedRole, type WizardState } from "../lib/definition";
@@ -245,6 +246,18 @@ export function StepScope({ state, patch }: StepProps) {
   const { data: me } = useMe();
   // Store/network managers can only manage their own stores; useLocations() is already scoped server-side.
   const restricted = isStoreScopedRole(me?.role);
+  const tLoc = useTranslations("Dashboard.locations.form");
+  // Which store's clock applies: the single chosen store, else "each store's own time".
+  const effectiveIds = state.allStores ? stores.map((s) => s.id) : state.storeIds;
+  const singleStore = effectiveIds.length === 1 ? stores.find((s) => s.id === effectiveIds[0]) : undefined;
+  const zoneId = singleStore?.timeZone;
+  const zoneText = singleStore
+    ? t("scope.zoneOne", {
+        zone: zoneId && isKnownTimeZone(zoneId)
+          ? tLoc(`timeZones.${timeZoneKey(zoneId)}`).replace(/\s*\(.*\)$/, "")
+          : (zoneId ?? ""),
+      })
+    : t("scope.zoneMany");
   const [advanced, setAdvanced] = useState(false);
   const toggleDay = (d: number) =>
     patch({ weekdays: state.weekdays.includes(d) ? state.weekdays.filter((x) => x !== d) : [...state.weekdays, d] });
@@ -333,7 +346,7 @@ export function StepScope({ state, patch }: StepProps) {
           />
         </Field>
       </div>
-      <div style={{ ...helpStyle, marginTop: -8, marginBottom: 16 }}>{t("scope.timeHelp")}</div>
+      <div style={{ ...helpStyle, marginTop: -8, marginBottom: 16 }}>{t("scope.timeHelp", { zone: zoneText })}</div>
 
       <button
         type="button"

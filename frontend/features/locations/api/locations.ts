@@ -9,6 +9,7 @@ export interface CreateLocationDto {
   locationType: LocationType;
   legalEntityId?: string | null;
   regionCode?: string | null;
+  timeZone?: string;
 }
 
 export interface UpdateLocationDto {
@@ -20,6 +21,7 @@ export interface UpdateLocationDto {
   isActive: boolean;
   legalEntityId?: string | null;
   regionCode?: string | null;
+  timeZone?: string;
 }
 
 export interface GeocodeAddressResult {

@@ -255,6 +255,7 @@ export class SqlitePromotionsPersistence implements PromotionsPersistence {
         rules: JSON.parse(raw),
         etag: this.kv.get('promotions.etag'),
         fetchedAt: this.kv.get('promotions.fetchedAt'),
+        storeTimeZone: this.kv.get('promotions.storeTimeZone'), // additive kv key; null for caches written before it existed
       };
     } catch {
       return null;
@@ -265,11 +266,13 @@ export class SqlitePromotionsPersistence implements PromotionsPersistence {
     this.kv.set('promotions.rules', JSON.stringify(s.rules));
     this.kv.set('promotions.etag', s.etag);
     this.kv.set('promotions.fetchedAt', s.fetchedAt);
+    this.kv.set('promotions.storeTimeZone', s.storeTimeZone ?? null);
   }
 
   clear(): void {
     this.kv.set('promotions.rules', null);
     this.kv.set('promotions.etag', null);
     this.kv.set('promotions.fetchedAt', null);
+    this.kv.set('promotions.storeTimeZone', null);
   }
 }

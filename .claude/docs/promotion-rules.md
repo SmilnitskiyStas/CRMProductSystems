@@ -135,3 +135,13 @@ no stores selected (= all stores); rule already expired; getPrice ≥ regular pr
    offline behaviour, re-pricing report.
 4. Cashier loyalty: scan/enter member code → membership + tier in the sale → loyalty-audience rules and tier
    discount; `ResolveLoyaltyCodeResult` gets `tierId`.
+
+## Store time zone (scope semantics)
+- `locations.TimeZone` (IANA id, NOT NULL, default `Europe/Kyiv`; migration `AddLocationTimeZone`). Carried as `timeZone` on
+  LocationDto / create / update (blank on update = keep, unknown id = 400 "Invalid time zone").
+- `scope.weekdays` and `scope.timeFrom/timeTo` are evaluated in the STORE's local time incl. DST; `validFrom/validTo`
+  stay absolute UTC instants. Engine: `PromotionContext.StoreTimeZone` (null/unknown -> UTC + legacy `utcOffsetMinutes`).
+- Midnight-crossing window (`timeFrom > timeTo`) belongs to the local day it STARTS on: `weekdays:[1]`, 22:00-02:00 covers
+  Mon 22:00 -> Tue 02:00 (the after-midnight part is checked against the previous local day's weekday).
+- `GET /api/pos/sync/promotions` gains `storeTimeZone` (string|null) of the register's store; the etag includes it.
+- PosService (shift's store) and `/simulate` (request.storeId) pass the store zone. Golden vectors: `context.storeTimeZone`.

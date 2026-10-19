@@ -17,9 +17,12 @@ public sealed record PromotionLineInput(
 public sealed record PromotionMembership(Guid Id, Guid? TierId, decimal TierPercent = 0m);
 
 /// <param name="At">Pricing instant (UTC).</param>
-/// <param name="UtcOffsetMinutes">Store-local offset used for weekday / time-of-day scope.</param>
+/// <param name="UtcOffsetMinutes">Fixed store-local offset, used only when <paramref name="StoreTimeZone"/> is null/unknown.</param>
+/// <param name="StoreTimeZone">IANA id of the store (e.g. "Europe/Kyiv"); weekday / time-of-day scope is evaluated in
+/// its local time incl. DST. Null/unknown = UTC (+ UtcOffsetMinutes) as before.</param>
 public sealed record PromotionContext(
-    Guid StoreId, DateTimeOffset At, int UtcOffsetMinutes = 0, PromotionMembership? Membership = null);
+    Guid StoreId, DateTimeOffset At, int UtcOffsetMinutes = 0, PromotionMembership? Membership = null,
+    string? StoreTimeZone = null);
 
 /// <param name="RuleId">Rule that priced these units; null = regular price or loyalty tier price.</param>
 public sealed record PromotionSegment(decimal Quantity, decimal UnitPrice, Guid? RuleId = null, string? Label = null);
@@ -337,16 +340,27 @@ public static class PromotionEngine
         if (s.ValidFrom is DateTimeOffset from && ctx.At < from) return false;
         if (s.ValidTo is DateTimeOffset to && ctx.At >= to) return false;
 
-        var local = ctx.At.UtcDateTime.AddMinutes(ctx.UtcOffsetMinutes);
-        if (s.Weekdays.Count > 0)
-        {
-            var iso = local.DayOfWeek == DayOfWeek.Sunday ? 7 : (int)local.DayOfWeek;
-            if (!s.Weekdays.Contains(iso)) return false;
-        }
+        // Weekdays and the time window are evaluated in store-local time: the IANA zone (DST
+        // aware) when known, otherwise the fixed UtcOffsetMinutes (UTC when 0).
+        var local = StoreTimeZones.Resolve(ctx.StoreTimeZone) is { } tz
+            ? TimeZoneInfo.ConvertTime(ctx.At, tz).DateTime
+            : ctx.At.UtcDateTime.AddMinutes(ctx.UtcOffsetMinutes);
 
         var tFrom = PromotionDefinitionJson.ParseTime(s.TimeFrom);
         var tTo = PromotionDefinitionJson.ParseTime(s.TimeTo);
         var t = local.TimeOfDay;
+
+        // A window crossing midnight (timeFrom > timeTo) belongs to the day it STARTS on:
+        // Mon 22:00-02:00 covers Mon 22:00 -> Tue 02:00, so in its after-midnight part the
+        // weekday that counts is the previous local day.
+        var weekdayDate = local.Date;
+        if (tFrom is TimeSpan wf && tTo is TimeSpan we && wf > we && t < we) weekdayDate = weekdayDate.AddDays(-1);
+        if (s.Weekdays.Count > 0)
+        {
+            var iso = weekdayDate.DayOfWeek == DayOfWeek.Sunday ? 7 : (int)weekdayDate.DayOfWeek;
+            if (!s.Weekdays.Contains(iso)) return false;
+        }
+
         if (tFrom is TimeSpan f && tTo is TimeSpan e)
             return f <= e ? t >= f && t < e : t >= f || t < e;
         if (tFrom is TimeSpan f2) return t >= f2;

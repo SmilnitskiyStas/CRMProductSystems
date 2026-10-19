@@ -290,7 +290,9 @@ public sealed partial class PromotionRuleService : IPromotionRuleService
             ? null
             : new PromotionMembership(Guid.Empty, request.Membership.TierId);
         var at = request.At ?? DateTimeOffset.UtcNow;
-        var result = PromotionEngine.Evaluate(inputs, [ruleInput], new PromotionContext(request.StoreId, at, 0, membership));
+        var store = await _locations.GetByIdAsync(request.StoreId, ct);
+        var storeTimeZone = store is not null && store.TenantId == caller.TenantId ? store.TimeZone : null;
+        var result = PromotionEngine.Evaluate(inputs, [ruleInput], new PromotionContext(request.StoreId, at, 0, membership, storeTimeZone));
 
         var lines = new List<SimulateLineDto>();
         decimal total = 0m, regularTotal = 0m;

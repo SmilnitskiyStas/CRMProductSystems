@@ -116,4 +116,6 @@ export interface LocationDto {
   legalEntityId: string | null;
   /** Структурований код регіону України (ISO 3166-2:UA область або місто), nullable (TASK-658). */
   regionCode: string | null;
+  /** IANA time zone id of the store (default "Europe/Kyiv"). */
+  timeZone: string;
 }

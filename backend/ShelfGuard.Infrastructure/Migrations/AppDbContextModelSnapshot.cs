@@ -2043,6 +2043,13 @@ namespace ShelfGuard.Infrastructure.Migrations
                     b.Property<Guid>("TenantId")
                         .HasColumnType("uuid");
 
+                    b.Property<string>("TimeZone")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasDefaultValue("Europe/Kyiv");
+
                     b.Property<string>("Type")
                         .IsRequired()
                         .HasMaxLength(50)
