@@ -11,6 +11,7 @@ import {
 } from '@shared/cart';
 import { formatMoney } from '@shared/money';
 import { SaleSubmitter, type SubmissionState } from '@shared/saleSubmission';
+import { CASHIER_ACTIVITY_EVENT } from '../hooks/useIdleLogout';
 import { PaymentDialog } from '../components/PaymentDialog';
 import { ReceiptDialog } from '../components/ReceiptDialog';
 import { CameraPanel, type ScanOutcome } from '../components/CameraPanel';
@@ -122,6 +123,7 @@ export function CheckoutScreen({ shift, online, onOpenShiftScreen, onOpenQueue, 
   }, [saveCamera, cameraDevice]);
   const onCameraCode = useCallback(
     async (code: string): Promise<ScanOutcome> => {
+      window.dispatchEvent(new Event(CASHIER_ACTIVITY_EVENT)); // a camera scan counts as activity
       const out = await onScan(code);
       if (out.kind === 'added') flash(`Додано: ${out.name}`);
       return out;
