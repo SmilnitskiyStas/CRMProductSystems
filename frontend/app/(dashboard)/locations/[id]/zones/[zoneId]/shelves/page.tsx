@@ -5,7 +5,7 @@ import { createPortal } from "react-dom";
 import { useParams, useRouter } from "next/navigation";
 import { useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { ArrowLeft, LayoutGrid, Link2, Plus, Save, Trash2, Unlink2 } from "lucide-react";
+import { ArrowLeft, Camera, LayoutGrid, Link2, Plus, Save, Trash2 } from "lucide-react";
 import {
   DndContext,
   PointerSensor,
@@ -24,15 +24,20 @@ import {
   useZoneItemStatusCounts,
 } from "@/features/locations/hooks/useFloorPlan";
 import { STATUS_CONFIG, worstStatus } from "@/features/locations/components/FloorPlanCanvas";
+import { invalidateShelfItems, useShelfItems, useShelfScans } from "@/features/locations/hooks/useShelves";
+import { shelvesApi } from "@/features/locations/api/shelves";
 import type {
+  PlanogramEntry,
   ShelfItemPlacement,
   ShelfPlanLayout,
+  ShelfScanDto,
+  ShelfScanItemStatus,
   ZoneItemSummary,
 } from "@/features/locations/types";
 import { productsApi } from "@/features/inventory/api/products";
 import { useProductsByIds } from "@/features/inventory/hooks/useProducts";
 import { ShelfProductModal } from "@/features/locations/components/ShelfProductModal";
-import type { Product } from "@/features/inventory/types";
+import { ShelfScanPanel, SCAN_STATUS_COLOR } from "@/features/locations/components/ShelfScanPanel";
 
 const DEFAULT_SECTION_W = 200;
 const DEFAULT_SECTION_H = 80;
@@ -61,13 +66,11 @@ const iconButtonStyle: React.CSSProperties = {
 // deleting the box, never auto-removes the zone tag — that stays a manual action from the
 // product's own Zones section (confirmed in the approved plan, not a bug to "fix" into symmetry).
 async function syncZoneTags(
-  plan: ShelfPlanLayout,
+  allItemIds: string[],
   zoneId: string,
   queryClient: QueryClient
 ): Promise<string | null> {
-  const itemIds = Array.from(
-    new Set(plan.items.map((i) => i.itemId).filter((id): id is string => Boolean(id)))
-  );
+  const itemIds = Array.from(new Set(allItemIds));
   if (itemIds.length === 0) return null;
 
   const results = await Promise.allSettled(
@@ -107,6 +110,19 @@ export default function ShelvesPage() {
   // shelfId of the section whose detail/pick modal is open; null = none open. A single value
   // naturally keeps at most one section's modal open at a time.
   const [modalShelfId, setModalShelfId] = useState<string | null>(null);
+  // Relational planogram (TASK-726): shelfId -> items with expected facings. The JSON `itemId`
+  // on each section is kept as the first item for backward compatibility only.
+  const [planogram, setPlanogram] = useState<Record<string, PlanogramEntry[]>>({});
+  const serverPlanogramRef = useRef<Record<string, PlanogramEntry[]>>({});
+  const deletedShelfIdsRef = useRef<Set<string>>(new Set());
+  const planogramInitForRef = useRef<string | null>(null);
+  const [scanOpen, setScanOpen] = useState(false);
+  const [activeScanId, setActiveScanId] = useState<string | null>(null);
+
+  const shelfItemsQuery = useShelfItems(locationId, zoneId);
+  const { data: scans = [] } = useShelfScans(locationId, zoneId);
+  const activeScan: ShelfScanDto | null =
+    scans.find((s) => s.id === activeScanId) ?? scans[0] ?? null;
 
   useEffect(() => {
     if (zone) {
@@ -118,16 +134,30 @@ export default function ShelvesPage() {
 
   const queryClient = useQueryClient();
 
+  // Load the planogram once per zone: server rows win; sections without rows fall back to the
+  // single `itemId` stored in the layout JSON (pre-planogram data).
+  useEffect(() => {
+    if (!zone || planogramInitForRef.current === zone.id) return;
+    if (!shelfItemsQuery.isSuccess && !shelfItemsQuery.isError) return;
+    const server: Record<string, PlanogramEntry[]> = {};
+    for (const row of shelfItemsQuery.data ?? []) {
+      (server[row.shelfId] ??= []).push({ itemId: row.itemId, expectedFacings: row.expectedFacings });
+    }
+    const merged: Record<string, PlanogramEntry[]> = { ...server };
+    for (const it of parseShelfPlan(zone.position).items) {
+      if (!merged[it.shelfId] && it.itemId) merged[it.shelfId] = [{ itemId: it.itemId, expectedFacings: 1 }];
+    }
+    serverPlanogramRef.current = server;
+    planogramInitForRef.current = zone.id;
+    setPlanogram(merged);
+  }, [zone, shelfItemsQuery.isSuccess, shelfItemsQuery.isError, shelfItemsQuery.data]);
+
   // Resolve display names for every linked product in one batched call (not one query per shelf
   // box — TASK-716 brief).
   const linkedItemIds = useMemo(
     () =>
-      Array.from(
-        new Set(
-          (plan?.items ?? []).map((i) => i.itemId).filter((id): id is string => Boolean(id))
-        )
-      ),
-    [plan]
+      Array.from(new Set(Object.values(planogram).flatMap((es) => es.map((e) => e.itemId)))),
+    [planogram]
   );
   const { data: linkedProducts = [] } = useProductsByIds(linkedItemIds);
   const productNameById = useMemo(
@@ -188,6 +218,12 @@ export default function ShelvesPage() {
   }
 
   function handleDeleteSection(shelfId: string) {
+    deletedShelfIdsRef.current.add(shelfId);
+    setPlanogram((prev) => {
+      const { [shelfId]: _removed, ...rest } = prev;
+      void _removed;
+      return rest;
+    });
     patchPlan((prev) => ({ ...prev, items: prev.items.filter((i) => i.shelfId !== shelfId) }));
   }
 
@@ -209,32 +245,66 @@ export default function ShelvesPage() {
     patchPlan((prev) => ({ ...prev, canvasW: w, canvasH: h }));
   }
 
-  function handleLinkProduct(shelfId: string, product: Product) {
-    patchPlan((prev) => ({
-      ...prev,
-      items: prev.items.map((i) => (i.shelfId === shelfId ? { ...i, itemId: product.id } : i)),
-    }));
-    // Modal stays open — it switches to showing the just-linked product's own detail view,
-    // which doubles as confirmation of what was just picked.
+  function handlePlanogramChange(shelfId: string, entries: PlanogramEntry[]) {
+    setPlanogram((prev) => ({ ...prev, [shelfId]: entries }));
+    setDirty(true);
   }
 
-  function handleUnlinkProduct(shelfId: string) {
-    patchPlan((prev) => ({
-      ...prev,
-      items: prev.items.map((i) => (i.shelfId === shelfId ? { ...i, itemId: null } : i)),
-    }));
+  async function savePlanogram(currentPlan: ShelfPlanLayout): Promise<string | null> {
+    const ids = new Set(currentPlan.items.map((i) => i.shelfId));
+    const targets = [...ids, ...deletedShelfIdsRef.current];
+    const changed = targets.filter((id) => {
+      const next = ids.has(id) ? planogram[id] ?? [] : [];
+      const prev = serverPlanogramRef.current[id] ?? [];
+      return JSON.stringify(next) !== JSON.stringify(prev);
+    });
+    const results = await Promise.allSettled(
+      changed.map((id) =>
+        shelvesApi.setShelfItems(locationId, zoneId, id, ids.has(id) ? planogram[id] ?? [] : [])
+      )
+    );
+    let error: string | null = null;
+    results.forEach((r, i) => {
+      const id = changed[i];
+      if (r.status === "fulfilled") {
+        if (r.value.length) {
+          serverPlanogramRef.current[id] = r.value.map((v) => ({
+            itemId: v.itemId,
+            expectedFacings: v.expectedFacings,
+          }));
+        } else {
+          delete serverPlanogramRef.current[id];
+        }
+        deletedShelfIdsRef.current.delete(id);
+      } else {
+        error = r.reason instanceof Error ? r.reason.message : String(r.reason);
+      }
+    });
+    invalidateShelfItems(queryClient, locationId, zoneId);
+    return error;
   }
 
   function handleSave() {
     if (!plan || !zone) return;
-    const layoutToSync = plan;
+    // Keep the layout JSON `itemId` = first planogram item (backward compatibility).
+    const layoutToSave: ShelfPlanLayout = {
+      ...plan,
+      items: plan.items.map((i) => ({ ...i, itemId: planogram[i.shelfId]?.[0]?.itemId ?? null })),
+    };
+    const syncIds = Object.values(planogram).flatMap((es) => es.map((e) => e.itemId));
     updateZonePosition.mutate(
-      { zone, shelfLayout: plan },
+      { zone, shelfLayout: layoutToSave },
       {
         onSuccess: async () => {
           setDirty(false);
-          toast.success(t("toastSaved"));
-          const errorMessage = await syncZoneTags(layoutToSync, zoneId, queryClient);
+          const planogramError = await savePlanogram(layoutToSave);
+          if (planogramError) {
+            setDirty(true);
+            toast.error(t("planogramSaveError", { message: planogramError }));
+          } else {
+            toast.success(t("toastSaved"));
+          }
+          const errorMessage = await syncZoneTags(syncIds, zoneId, queryClient);
           if (errorMessage) toast.error(t("zoneSyncError", { message: errorMessage }));
         },
         onError: (e) => toast.error(t("toastError", { message: e.message })),
@@ -249,6 +319,27 @@ export default function ShelvesPage() {
       </div>
     );
   }
+
+  // Per-section result of the active scan: worst of missing/low among that section's planogram
+  // items. A scan limited to one section only colours that section.
+  const scanStatusByShelf = new Map<string, ShelfScanItemStatus>();
+  if (activeScan && activeScan.status !== "failed") {
+    const byItem = new Map(activeScan.items.map((it) => [it.itemId, it.status]));
+    for (const sec of plan.items) {
+      if (activeScan.shelfId && activeScan.shelfId !== sec.shelfId) continue;
+      let worst: ShelfScanItemStatus | null = null;
+      for (const e of planogram[sec.shelfId] ?? []) {
+        const st = byItem.get(e.itemId);
+        if (st === "missing") worst = "missing";
+        else if (st === "low" && worst !== "missing") worst = "low";
+      }
+      if (worst) scanStatusByShelf.set(sec.shelfId, worst);
+    }
+  }
+  const sectionLabelOf = (item: ShelfItemPlacement) => {
+    const first = planogram[item.shelfId]?.[0];
+    return (first && productNameById.get(first.itemId)) ?? item.label;
+  };
 
   const modalItem = modalShelfId ? plan.items.find((i) => i.shelfId === modalShelfId) ?? null : null;
 
@@ -284,6 +375,26 @@ export default function ShelvesPage() {
           </p>
         </div>
 
+        <div style={{ display: "flex", gap: 10 }}>
+        <button
+          onClick={() => setScanOpen(true)}
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 8,
+            background: "#0d1f3a",
+            border: "1px solid #1D4ED8",
+            color: "#60A5FA",
+            borderRadius: 8,
+            padding: "9px 16px",
+            fontSize: 13,
+            fontWeight: 600,
+            cursor: "pointer",
+          }}
+        >
+          <Camera size={15} />
+          {t("scanButton")}
+        </button>
         <button
           onClick={handleSave}
           disabled={!dirty || updateZonePosition.isPending}
@@ -304,6 +415,7 @@ export default function ShelvesPage() {
           <Save size={15} />
           {updateZonePosition.isPending ? t("saving") : t("save")}
         </button>
+        </div>
       </div>
 
       {/* Canvas + panel */}
@@ -317,6 +429,8 @@ export default function ShelvesPage() {
           productNames={productNameById}
           productUnits={productUnitById}
           itemStatusCounts={itemStatusCounts}
+          planogram={planogram}
+          scanStatusByShelf={scanStatusByShelf}
           onRequestLink={(shelfId) => setModalShelfId(shelfId)}
         />
 
@@ -389,15 +503,17 @@ export default function ShelvesPage() {
             ) : (
               <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                 {plan.items.map((item) => {
-                  const productName = item.itemId ? productNameById.get(item.itemId) : undefined;
-                  const status = item.itemId ? worstStatus(itemStatusCounts.get(item.itemId)?.counts) : null;
+                  const entries = planogram[item.shelfId] ?? [];
+                  const productName = entries[0] ? productNameById.get(entries[0].itemId) : undefined;
+                  const status = entries[0] ? worstStatus(itemStatusCounts.get(entries[0].itemId)?.counts) : null;
+                  const scanSt = scanStatusByShelf.get(item.shelfId);
                   const notPlaced = item.placed === false;
                   return (
                     <div
                       key={item.shelfId}
                       style={{
                         background: "#0B0E14",
-                        border: `1px solid ${notPlaced ? "#854D0E" : "#1F2937"}`,
+                        border: `1px solid ${scanSt ? SCAN_STATUS_COLOR[scanSt].border : notPlaced ? "#854D0E" : "#1F2937"}`,
                         borderRadius: 8,
                         padding: "7px 10px",
                       }}
@@ -425,6 +541,9 @@ export default function ShelvesPage() {
                             }}
                           >
                             {productName ?? item.label}
+                            {entries.length > 1 && (
+                              <span style={{ color: "#6B7280" }}> +{entries.length - 1}</span>
+                            )}
                           </span>
                         </div>
                         <div style={{ display: "flex", alignItems: "center", gap: 2, flexShrink: 0 }}>
@@ -441,21 +560,11 @@ export default function ShelvesPage() {
                           <button
                             type="button"
                             onClick={() => setModalShelfId(item.shelfId)}
-                            title={item.itemId ? t("changeProduct") : t("linkProduct")}
+                            title={entries.length ? t("changeProduct") : t("linkProduct")}
                             style={iconButtonStyle}
                           >
                             <Link2 size={13} />
                           </button>
-                          {item.itemId && (
-                            <button
-                              type="button"
-                              onClick={() => handleUnlinkProduct(item.shelfId)}
-                              title={t("unlinkProduct")}
-                              style={iconButtonStyle}
-                            >
-                              <Unlink2 size={13} />
-                            </button>
-                          )}
                           <button
                             type="button"
                             onClick={() => handleDeleteSection(item.shelfId)}
@@ -485,10 +594,21 @@ export default function ShelvesPage() {
           onClose={() => setModalShelfId(null)}
           storeId={locationId}
           zoneId={zoneId}
-          sectionLabel={(modalItem.itemId && productNameById.get(modalItem.itemId)) ?? modalItem.label}
-          currentProductId={modalItem.itemId ?? null}
-          onLink={(product) => handleLinkProduct(modalItem.shelfId, product)}
-          onUnlink={() => handleUnlinkProduct(modalItem.shelfId)}
+          sectionLabel={sectionLabelOf(modalItem)}
+          entries={planogram[modalItem.shelfId] ?? []}
+          onChange={(entries) => handlePlanogramChange(modalItem.shelfId, entries)}
+        />
+      )}
+
+      {scanOpen && (
+        <ShelfScanPanel
+          onClose={() => setScanOpen(false)}
+          locationId={locationId}
+          zoneId={zoneId}
+          sections={plan.items.map((i) => ({ shelfId: i.shelfId, label: sectionLabelOf(i) }))}
+          scans={scans}
+          activeScan={activeScan}
+          onSelectScan={setActiveScanId}
         />
       )}
     </div>
@@ -502,6 +622,8 @@ interface ShelfCanvasProps {
   productNames: Map<string, string>;
   productUnits: Map<string, string>;
   itemStatusCounts: Map<string, ZoneItemSummary>;
+  planogram: Record<string, PlanogramEntry[]>;
+  scanStatusByShelf: Map<string, ShelfScanItemStatus>;
   onRequestLink: (shelfId: string) => void;
 }
 
@@ -512,6 +634,8 @@ function ShelfCanvas({
   productNames,
   productUnits,
   itemStatusCounts,
+  planogram,
+  scanStatusByShelf,
   onRequestLink,
 }: ShelfCanvasProps) {
   const t = useTranslations("Dashboard.locations.shelvesPage");
@@ -561,9 +685,11 @@ function ShelfCanvas({
               grid={grid}
               onResize={onResize}
               onRequestLink={() => onRequestLink(item.shelfId)}
-              productName={item.itemId ? productNames.get(item.itemId) : undefined}
-              productUnit={item.itemId ? productUnits.get(item.itemId) : undefined}
-              summary={item.itemId ? itemStatusCounts.get(item.itemId) : undefined}
+              entries={planogram[item.shelfId] ?? []}
+              productNames={productNames}
+              productUnits={productUnits}
+              itemStatusCounts={itemStatusCounts}
+              scanStatus={scanStatusByShelf.get(item.shelfId)}
             />
           ))}
           {plan.items.length === 0 && (
@@ -607,9 +733,11 @@ interface ShelfItemBoxProps {
   grid: number;
   onResize: (shelfId: string, w: number, h: number) => void;
   onRequestLink: () => void;
-  productName?: string;
-  productUnit?: string;
-  summary?: ZoneItemSummary;
+  entries: PlanogramEntry[];
+  productNames: Map<string, string>;
+  productUnits: Map<string, string>;
+  itemStatusCounts: Map<string, ZoneItemSummary>;
+  scanStatus?: ShelfScanItemStatus;
 }
 
 interface PopPos {
@@ -622,14 +750,28 @@ function ShelfItemBox({
   grid,
   onResize,
   onRequestLink,
-  productName,
-  productUnit,
-  summary,
+  entries,
+  productNames,
+  productUnits,
+  itemStatusCounts,
+  scanStatus,
 }: ShelfItemBoxProps) {
   const t = useTranslations("Dashboard.locations.shelvesPage");
   const tZoneStatus = useTranslations("Dashboard.locations.zoneStatus");
   const tOverdue = useTranslations("Dashboard.shelf.stockTable");
-  const status = summary ? worstStatus(summary.counts) : undefined;
+  const productName = entries[0] ? productNames.get(entries[0].itemId) : undefined;
+  // Worst batch status across all items of the section.
+  const totalCounts = { safe: 0, warning: 0, critical: 0, expired: 0 };
+  for (const e of entries) {
+    const c = itemStatusCounts.get(e.itemId)?.counts;
+    if (!c) continue;
+    totalCounts.safe += c.safe;
+    totalCounts.warning += c.warning;
+    totalCounts.critical += c.critical;
+    totalCounts.expired += c.expired;
+  }
+  const status = entries.length ? worstStatus(totalCounts) : undefined;
+  const scanColors = scanStatus ? SCAN_STATUS_COLOR[scanStatus] : null;
 
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: item.shelfId,
@@ -706,7 +848,7 @@ function ShelfItemBox({
       onClick={handleClick}
       onMouseEnter={showPopover}
       onMouseLeave={hidePopoverSoon}
-      title={item.itemId ? t("clickToChange") : t("clickToAdd")}
+      title={entries.length ? t("clickToChange") : t("clickToAdd")}
       style={{
         position: "absolute",
         left: item.x,
@@ -714,8 +856,8 @@ function ShelfItemBox({
         width: item.w,
         height: item.h,
         transform: transform ? `translate(${transform.x}px, ${transform.y}px)` : undefined,
-        background: "#1e1b4b",
-        border: "1px solid #4F46E5",
+        background: scanColors ? scanColors.bg : "#1e1b4b",
+        border: `${scanColors ? 2 : 1}px solid ${scanColors ? scanColors.fg : "#4F46E5"}`,
         borderRadius: 8,
         padding: "10px 12px",
         cursor: isDragging ? "grabbing" : "pointer",
@@ -741,10 +883,16 @@ function ShelfItemBox({
         }}
       >
         {productName ?? item.label}
+        {entries.length > 1 && ` +${entries.length - 1}`}
       </div>
       <div style={{ color: "#6366f1", fontSize: 10 }}>
         {item.w} × {item.h}
       </div>
+      {scanColors && scanStatus && (
+        <div style={{ color: scanColors.fg, fontSize: 10, fontWeight: 700 }}>
+          {t(`scanStatus_${scanStatus}`)}
+        </div>
+      )}
 
       {/* Linked-product status badge (TASK-716) */}
       {status && (
@@ -800,37 +948,52 @@ function ShelfItemBox({
               maxWidth: 260,
             }}
           >
-            {summary ? (
-              <>
-                <div style={{ color: "#E8EDF5", fontSize: 12, fontWeight: 600, marginBottom: 6 }}>
-                  {productName}
-                </div>
-                <div style={{ color: "#9CA3AF", fontSize: 12, marginBottom: 4 }}>
-                  {t("hoverQuantity", { qty: summary.totalQuantity, unit: productUnit ?? "" })}
-                </div>
-                {summary.nearestExpiryDate && summary.nearestExpiryDays !== null && (
-                  <div style={{ fontSize: 12, marginBottom: 6, color: "#9CA3AF" }}>
-                    {t("hoverExpiry", { date: formatExpiryDate(summary.nearestExpiryDate) })}{" "}
-                    <span style={{ color: daysColor(summary.nearestExpiryDays), fontWeight: 600 }}>
-                      (
-                      {summary.nearestExpiryDays <= 0
-                        ? tOverdue("overdue", { days: Math.abs(summary.nearestExpiryDays) })
-                        : summary.nearestExpiryDays}
-                      )
-                    </span>
+            {entries.length > 0 ? (
+              entries.map((e, idx) => {
+                const summary = itemStatusCounts.get(e.itemId);
+                return (
+                  <div
+                    key={e.itemId}
+                    style={{ paddingTop: idx ? 8 : 0, marginTop: idx ? 8 : 0, borderTop: idx ? "1px solid #1F2937" : undefined }}
+                  >
+                    <div style={{ color: "#E8EDF5", fontSize: 12, fontWeight: 600, marginBottom: 4 }}>
+                      {productNames.get(e.itemId) ?? "…"}{" "}
+                      <span style={{ color: "#6B7280", fontWeight: 400 }}>
+                        {t("facingsShort", { n: e.expectedFacings })}
+                      </span>
+                    </div>
+                    {summary ? (
+                      <>
+                        <div style={{ color: "#9CA3AF", fontSize: 12, marginBottom: 4 }}>
+                          {t("hoverQuantity", { qty: summary.totalQuantity, unit: productUnits.get(e.itemId) ?? "" })}
+                        </div>
+                        {summary.nearestExpiryDate && summary.nearestExpiryDays !== null && (
+                          <div style={{ fontSize: 12, marginBottom: 4, color: "#9CA3AF" }}>
+                            {t("hoverExpiry", { date: formatExpiryDate(summary.nearestExpiryDate) })}{" "}
+                            <span style={{ color: daysColor(summary.nearestExpiryDays), fontWeight: 600 }}>
+                              (
+                              {summary.nearestExpiryDays <= 0
+                                ? tOverdue("overdue", { days: Math.abs(summary.nearestExpiryDays) })
+                                : summary.nearestExpiryDays}
+                              )
+                            </span>
+                          </div>
+                        )}
+                        <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                          {(["expired", "critical", "warning", "safe"] as const)
+                            .filter((s) => summary.counts[s] > 0)
+                            .map((s) => (
+                              <div key={s} style={{ display: "flex", justifyContent: "space-between", gap: 12, fontSize: 11 }}>
+                                <span style={{ color: STATUS_CONFIG[s].color }}>{tZoneStatus(s)}</span>
+                                <span style={{ color: "#9CA3AF", fontFamily: "monospace" }}>{summary.counts[s]}</span>
+                              </div>
+                            ))}
+                        </div>
+                      </>
+                    ) : null}
                   </div>
-                )}
-                <div style={{ display: "flex", flexDirection: "column", gap: 2, paddingTop: 6, borderTop: "1px solid #1F2937" }}>
-                  {(["expired", "critical", "warning", "safe"] as const)
-                    .filter((s) => summary.counts[s] > 0)
-                    .map((s) => (
-                      <div key={s} style={{ display: "flex", justifyContent: "space-between", gap: 12, fontSize: 11 }}>
-                        <span style={{ color: STATUS_CONFIG[s].color }}>{tZoneStatus(s)}</span>
-                        <span style={{ color: "#9CA3AF", fontFamily: "monospace" }}>{summary.counts[s]}</span>
-                      </div>
-                    ))}
-                </div>
-              </>
+                );
+              })
             ) : (
               <div style={{ color: "#6B7280", fontSize: 12 }}>{t("clickToAdd")}</div>
             )}

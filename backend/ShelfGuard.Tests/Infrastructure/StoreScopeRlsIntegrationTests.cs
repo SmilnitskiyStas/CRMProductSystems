@@ -83,7 +83,7 @@ public sealed class StoreScopeRlsIntegrationTests : IAsyncLifetime
     /// this test exists to catch if a future edit ever drops the AS RESTRICTIVE keyword.
     /// </summary>
     [Fact]
-    public async Task AllNineScopedTables_HaveRestrictiveStoreScopePolicy()
+    public async Task AllScopedTables_HaveRestrictiveStoreScopePolicy()
     {
         if (!_dbAvailable) return; // soft-skip, see class remarks
 
@@ -91,6 +91,7 @@ public sealed class StoreScopeRlsIntegrationTests : IAsyncLifetime
         {
             "product_stock", "daily_sales", "pos_shifts", "pos_transactions",
             "write_offs", "discounts", "stock_receipts", "stock_movements", "stock_transfers",
+            "shelf_items", "shelf_scans", // AddShelfItemsAndScans
         };
 
         const string sql = @"

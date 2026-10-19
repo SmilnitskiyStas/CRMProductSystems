@@ -20,6 +20,16 @@ public interface IAiChatClient
 /// to this schema (Anthropic <c>OutputConfig</c> / OpenAI <c>response_format: json_schema</c>);
 /// null = plain text.
 /// </param>
-public sealed record AiChatRequest(string SystemPrompt, string UserPrompt, int MaxTokens, string? JsonSchema = null);
+/// <param name="Images">
+/// Optional images sent alongside <paramref name="UserPrompt"/> (vision). Null/empty = text only.
+/// Both Claude and OpenAI-compatible clients build image content blocks from these.
+/// </param>
+public sealed record AiChatRequest(
+    string SystemPrompt, string UserPrompt, int MaxTokens, string? JsonSchema = null,
+    IReadOnlyList<AiImage>? Images = null);
+
+/// <summary>Raw image bytes + IANA media type (image/jpeg, image/png, image/webp).</summary>
+/// <param name="Caption">Optional text sent immediately before the image (images are sent in list order, then the user prompt).</param>
+public sealed record AiImage(byte[] Data, string MediaType, string? Caption = null);
 
 public sealed record AiChatResult(string Text, string Model, int TokensUsed);

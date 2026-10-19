@@ -36,7 +36,20 @@ export type IotOfflinePayload = {
   deviceName: string;
 };
 
-type NotificationPayload = ExpiryAlertPayload | TempAlertPayload | IotOfflinePayload;
+export type ShelfEmptyPayload = {
+  type: "shelf_empty";
+  scanId: string;
+  tenantId: string;
+  storeId: string;
+  zoneId: string;
+  missingCount: number;
+  lowCount: number;
+  missingItems: string[];
+  lowItems: string[];
+  summary: string | null;
+};
+
+type NotificationPayload = ExpiryAlertPayload | TempAlertPayload | IotOfflinePayload | ShelfEmptyPayload;
 
 // ── EventType keys must match backend ValidEventTypes and frontend types.ts ──
 
@@ -292,6 +305,115 @@ function handleIotOffline(p: IotOfflinePayload): Promise<void> {
   return handleIotAlert(p.tenantId, p.storeId, ["store_manager"], "iot.offline", text, p);
 }
 
+// ── Shelf photo check (shelf.empty) ────────────────────────────────────────
+
+const SHELF_EMPTY_ROLES = ["merchandiser", "store_manager", "network_manager", "enterprise_admin"];
+const SHELF_EMPTY_DEFAULT_CHANNELS = ["telegram", "email"];
+
+function escapeHtml(s: string): string {
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+function itemList(names: string[], max = 15): string {
+  const shown = names.slice(0, max).map(escapeHtml).join(", ");
+  return names.length > max ? `${shown} і ще ${names.length - max}` : shown;
+}
+
+export function formatShelfEmptyText(p: ShelfEmptyPayload, storeName: string, zoneName: string): string {
+  const lines: string[] = [
+    "🛒 <b>ShelfGuard — порожня полиця</b>",
+    "",
+    `<b>Магазин:</b> ${escapeHtml(storeName)}`,
+    `<b>Зона:</b> ${escapeHtml(zoneName)}`,
+  ];
+  if (p.missingItems.length > 0) lines.push(`<b>Відсутні (${p.missingCount}):</b> ${itemList(p.missingItems)}`);
+  if (p.lowItems.length > 0) lines.push(`<b>Закінчуються (${p.lowCount}):</b> ${itemList(p.lowItems)}`);
+  if (p.missingItems.length === 0 && p.lowItems.length === 0) {
+    lines.push(`<b>Відсутні:</b> ${p.missingCount}, <b>закінчуються:</b> ${p.lowCount}`);
+  }
+  if (p.summary) lines.push("", escapeHtml(p.summary));
+  return lines.join("\n");
+}
+
+async function handleShelfEmpty(p: ShelfEmptyPayload): Promise<void> {
+  const eventType = "shelf.empty";
+  const client = await db.connect();
+  try {
+    await client.query("SET app.role = 'worker'");
+
+    const metaRes = await client.query<{ store_name: string; zone_name: string }>(
+      `SELECT l."Name" AS store_name, z."Name" AS zone_name
+       FROM locations l
+       LEFT JOIN location_zones z ON z."Id" = $2
+       WHERE l."Id" = $1`,
+      [p.storeId, p.zoneId]
+    );
+    const storeName = metaRes.rows[0]?.store_name ?? "Невідомий магазин";
+    const zoneName  = metaRes.rows[0]?.zone_name  ?? "—";
+
+    const usersRes = await client.query<{ id: string; email: string; telegram_chat_id: string | null }>(
+      `SELECT "Id" AS id, "Email" AS email, "TelegramChatId" AS telegram_chat_id
+       FROM users
+       WHERE "TenantId" = $1
+         AND "Role" = ANY($2::text[])
+         AND "IsActive" = true
+         AND ("TelegramChatId" IS NOT NULL OR "Email" IS NOT NULL)`,
+      [p.tenantId, SHELF_EMPTY_ROLES]
+    );
+    if (usersRes.rows.length === 0) return;
+
+    const settingsRes = await client.query<{ user_id: string; channel: string }>(
+      `SELECT "UserId" AS user_id, "Channel" AS channel
+       FROM notification_settings
+       WHERE "UserId" = ANY($1::uuid[]) AND "EventType" = $2 AND "IsEnabled" = true`,
+      [usersRes.rows.map((u) => u.id), eventType]
+    );
+    const enabledMap = new Map<string, Set<string>>();
+    for (const row of settingsRes.rows) {
+      if (!enabledMap.has(row.user_id)) enabledMap.set(row.user_id, new Set());
+      enabledMap.get(row.user_id)!.add(row.channel);
+    }
+
+    const telegramText = formatShelfEmptyText(p, storeName, zoneName);
+    const emailContent = {
+      subject: `[ShelfGuard] Порожня полиця: ${storeName} / ${zoneName}`,
+      html: telegramText.split("\n").join("<br>"),
+    };
+
+    for (const user of usersRes.rows) {
+      const userChannels = enabledMap.get(user.id) ?? new Set(SHELF_EMPTY_DEFAULT_CHANNELS);
+      const activeChannels = Array.from(userChannels).filter((c) => SHELF_EMPTY_DEFAULT_CHANNELS.includes(c));
+
+      const outcomes: DeliveryOutcome[] = [];
+      for (const channel of activeChannels) {
+        if (channel === "telegram") {
+          outcomes.push(
+            user.telegram_chat_id
+              ? await deliver("telegram", () => sendTelegramMessage(user.telegram_chat_id!, telegramText))
+              : { channel: "telegram", status: "skipped", error: "no telegram_chat_id" }
+          );
+        } else if (channel === "email") {
+          outcomes.push(
+            user.email
+              ? await deliver("email", () => sendEmail({ to: user.email, ...emailContent }))
+              : { channel: "email", status: "skipped", error: "no email" }
+          );
+        }
+      }
+      if (outcomes.length === 0) continue;
+
+      for (const o of outcomes) {
+        if (o.status === "failed") {
+          console.error(`[notifications] ${o.channel} send failed for user ${user.id}: ${o.error}`);
+        }
+      }
+      await logNotifications(client, { tenantId: p.tenantId, userId: user.id, eventType, payload: p, outcomes });
+    }
+  } finally {
+    client.release();
+  }
+}
+
 // ── Worker ─────────────────────────────────────────────────────────────────
 
 export function startNotificationWorker(): Worker {
@@ -306,6 +428,8 @@ export function startNotificationWorker(): Worker {
         await handleTempAlert(job.data);
       } else if (job.data.type === "iot_offline") {
         await handleIotOffline(job.data);
+      } else if (job.data.type === "shelf_empty") {
+        await handleShelfEmpty(job.data);
       } else {
         console.warn(`[notifications] unknown job type: ${(job.data as any).type}`);
       }

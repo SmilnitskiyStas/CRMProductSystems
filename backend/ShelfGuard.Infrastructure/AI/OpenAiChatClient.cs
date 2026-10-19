@@ -35,7 +35,26 @@ internal sealed class OpenAiChatClient : IAiChatClient
         var messages = new List<object>(2);
         if (!string.IsNullOrEmpty(req.SystemPrompt))
             messages.Add(new { role = "system", content = req.SystemPrompt });
-        messages.Add(new { role = "user", content = req.UserPrompt });
+        if (req.Images is { Count: > 0 })
+        {
+            var parts = new List<object>(req.Images.Count * 2 + 1);
+            foreach (var img in req.Images)
+            {
+                if (!string.IsNullOrWhiteSpace(img.Caption))
+                    parts.Add(new { type = "text", text = img.Caption });
+                parts.Add(new
+                {
+                    type = "image_url",
+                    image_url = new { url = $"data:{img.MediaType};base64,{Convert.ToBase64String(img.Data)}" },
+                });
+            }
+            parts.Add(new { type = "text", text = req.UserPrompt });
+            messages.Add(new { role = "user", content = parts });
+        }
+        else
+        {
+            messages.Add(new { role = "user", content = req.UserPrompt });
+        }
 
         var body = new Dictionary<string, object?>
         {

@@ -9,44 +9,45 @@ import { Btn } from "@/components/ui/Btn";
 import { ApiError } from "@/lib/api";
 import { ProductSearchPicker } from "@/features/inventory/components/ProductSearchPicker";
 import { productsApi } from "@/features/inventory/api/products";
-import { useProduct, useProducts } from "@/features/inventory/hooks/useProducts";
+import { useProducts, useProductsByIds } from "@/features/inventory/hooks/useProducts";
 import { useStock } from "@/features/shelf/hooks/useStock";
 import { StatusBadge } from "@/features/shelf/components/StatusBadge";
 import { useProductSalesTrend } from "@/features/analytics/hooks/usePosAnalytics";
 import type { Product } from "@/features/inventory/types";
+import type { PlanogramEntry } from "../types";
 
 interface Props {
   onClose: () => void;
   storeId: string;
   zoneId: string;
   sectionLabel: string;
-  currentProductId: string | null;
-  onLink: (product: Product) => void;
-  onUnlink: () => void;
+  entries: PlanogramEntry[];
+  onChange: (entries: PlanogramEntry[]) => void;
 }
 
 /**
- * Section detail/pick modal for the shelf-builder canvas. Replaces the old inline
- * "expand a search box in the Sections list" flow — clicking a canvas box or a Sections-list
- * row now opens this instead, so picking a product comes with the same rich context (stock,
- * expiry, recent sales, promo, similar products) whether you're looking at what's already
- * there or comparing a candidate before committing.
+ * Section planogram modal for the shelf-builder canvas. A section holds several items, each with
+ * an expected number of facings (how many units/rows of it should be visible on the shelf).
  *
- * Three steps, `list`/`preview` shared by both "linking a fresh section" and "changing an
- * existing one":
- *   view    — the section's currently linked product's detail (skipped if nothing linked yet)
- *   list    — ProductSearchPicker
+ * Steps:
+ *   list    — the section's items with facings inputs (edit / remove / open detail)
+ *   pick    — ProductSearchPicker
  *   preview — the searched candidate's detail, with a confirm/back pair
+ *   view    — detail of an already-added item
+ * Edits are applied to the page state immediately; the page's "Save" persists them.
  */
-export function ShelfProductModal({ onClose, storeId, zoneId, sectionLabel, currentProductId, onLink, onUnlink }: Props) {
+export function ShelfProductModal({ onClose, storeId, zoneId, sectionLabel, entries, onChange }: Props) {
   const t = useTranslations("Dashboard.locations.shelvesPage");
   const queryClient = useQueryClient();
 
-  const [step, setStep] = useState<"view" | "list" | "preview">(currentProductId ? "view" : "list");
-  const [activeProductId, setActiveProductId] = useState(currentProductId);
+  const [step, setStep] = useState<"list" | "pick" | "preview" | "view">(entries.length ? "list" : "pick");
   const [previewProduct, setPreviewProduct] = useState<Product | null>(null);
+  const [viewId, setViewId] = useState<string | null>(null);
 
-  const { data: activeProduct } = useProduct(activeProductId ?? "");
+  const ids = entries.map((e) => e.itemId);
+  const { data: products = [] } = useProductsByIds(ids);
+  const productById = new Map(products.map((p) => [p.id, p]));
+  const viewProduct = viewId ? productById.get(viewId) ?? null : null;
 
   function handlePick(product: Product) {
     setPreviewProduct(product);
@@ -54,19 +55,16 @@ export function ShelfProductModal({ onClose, storeId, zoneId, sectionLabel, curr
   }
 
   // Confirming here persists the item_zone_assignments tag immediately (productsApi.assignZone)
-  // rather than waiting for the page's own "Save" — that button only ever persisted the shelf
-  // *layout* JSON, and shelves/page.tsx's syncZoneTags ran afterward as a batch. A merchandiser
-  // who links a product here reasonably expects "this product is now in this zone" to already be
-  // true elsewhere (catalog Zones column, the product's own Zones section) even if they never
-  // click that unrelated Save button. A 400 (already tagged — e.g. this exact zone was assigned
-  // on a previous save) is expected and not surfaced as an error.
+  // so "this product is in this zone" is already true elsewhere even before the page's Save.
+  // A 400 (already tagged) is expected and not surfaced as an error.
   async function confirmLink() {
     if (!previewProduct) return;
     const product = previewProduct;
-    onLink(product);
-    setActiveProductId(product.id);
+    if (!entries.some((e) => e.itemId === product.id)) {
+      onChange([...entries, { itemId: product.id, expectedFacings: 1 }]);
+    }
     setPreviewProduct(null);
-    setStep("view");
+    setStep("list");
 
     try {
       await productsApi.assignZone(product.id, zoneId);
@@ -81,35 +79,104 @@ export function ShelfProductModal({ onClose, storeId, zoneId, sectionLabel, curr
     queryClient.invalidateQueries({ queryKey: ["products"] });
   }
 
-  function handleUnlink() {
-    onUnlink();
-    onClose();
+  function setFacings(itemId: string, raw: string) {
+    const n = Math.min(99, Math.max(1, Math.floor(Number(raw)) || 1));
+    onChange(entries.map((e) => (e.itemId === itemId ? { ...e, expectedFacings: n } : e)));
+  }
+
+  function removeEntry(itemId: string) {
+    onChange(entries.filter((e) => e.itemId !== itemId));
   }
 
   return (
     <Modal title={t("modalTitle", { label: sectionLabel })} onClose={onClose} width={640}>
-      {step === "view" && activeProduct && (
-        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-          <ProductInfoPanel product={activeProduct} storeId={storeId} />
+      {step === "list" && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          {entries.length === 0 ? (
+            <p style={hintTextStyle}>{t("planogramEmpty")}</p>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              {entries.map((e) => (
+                <div
+                  key={e.itemId}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 10,
+                    padding: "8px 10px",
+                    background: "#0B0E14",
+                    border: "1px solid #1F2937",
+                    borderRadius: 8,
+                  }}
+                >
+                  <button
+                    type="button"
+                    onClick={() => { setViewId(e.itemId); setStep("view"); }}
+                    style={{
+                      flex: 1,
+                      minWidth: 0,
+                      textAlign: "left",
+                      background: "transparent",
+                      border: "none",
+                      color: "#E8EDF5",
+                      fontSize: 13,
+                      cursor: "pointer",
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      whiteSpace: "nowrap",
+                      padding: 0,
+                    }}
+                  >
+                    {productById.get(e.itemId)?.name ?? "…"}
+                  </button>
+                  <label style={{ display: "flex", alignItems: "center", gap: 6, color: "#9CA3AF", fontSize: 12 }}>
+                    {t("facings")}
+                    <input
+                      type="number"
+                      min={1}
+                      max={99}
+                      value={e.expectedFacings}
+                      onChange={(ev) => setFacings(e.itemId, ev.target.value)}
+                      style={{
+                        width: 60,
+                        background: "#161B26",
+                        border: "1px solid #1F2937",
+                        borderRadius: 6,
+                        color: "#E8EDF5",
+                        padding: "4px 6px",
+                        fontSize: 12,
+                      }}
+                    />
+                  </label>
+                  <Btn variant="danger" onClick={() => removeEntry(e.itemId)}>
+                    {t("removeItem")}
+                  </Btn>
+                </div>
+              ))}
+            </div>
+          )}
           <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
-            <Btn variant="danger" onClick={handleUnlink}>
-              {t("unlinkProduct")}
-            </Btn>
-            <Btn variant="ghost" onClick={() => setStep("list")}>
-              {t("addProduct")}
-            </Btn>
+            <Btn variant="ghost" onClick={() => setStep("pick")}>{t("addProduct")}</Btn>
+            <Btn onClick={onClose}>{t("done")}</Btn>
           </div>
         </div>
       )}
 
-      {step === "list" && (
+      {step === "view" && viewProduct && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+          <ProductInfoPanel product={viewProduct} storeId={storeId} />
+          <div style={{ display: "flex", justifyContent: "flex-end" }}>
+            <Btn variant="ghost" onClick={() => setStep("list")}>{t("backToList")}</Btn>
+          </div>
+        </div>
+      )}
+
+      {step === "pick" && (
         <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-          <ProductSearchPicker excludeIds={[]} onPick={handlePick} />
-          {currentProductId && (
+          <ProductSearchPicker excludeIds={ids} onPick={handlePick} />
+          {entries.length > 0 && (
             <div style={{ display: "flex", justifyContent: "flex-end" }}>
-              <Btn variant="ghost" onClick={() => setStep("view")}>
-                {t("backToProduct")}
-              </Btn>
+              <Btn variant="ghost" onClick={() => setStep("list")}>{t("backToList")}</Btn>
             </div>
           )}
         </div>
@@ -119,7 +186,7 @@ export function ShelfProductModal({ onClose, storeId, zoneId, sectionLabel, curr
         <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
           <ProductInfoPanel product={previewProduct} storeId={storeId} />
           <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
-            <Btn variant="ghost" onClick={() => { setPreviewProduct(null); setStep("list"); }}>
+            <Btn variant="ghost" onClick={() => { setPreviewProduct(null); setStep("pick"); }}>
               {t("backToSearch")}
             </Btn>
             <Btn onClick={confirmLink}>{t("confirmLink")}</Btn>

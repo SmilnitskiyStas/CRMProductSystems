@@ -34,7 +34,7 @@ internal sealed class AnthropicChatClient : IAiChatClient
             Model = _model,
             MaxTokens = req.MaxTokens,
             System = req.SystemPrompt,
-            Messages = [new() { Role = Role.User, Content = req.UserPrompt }],
+            Messages = [new() { Role = Role.User, Content = BuildContent(req) }],
             OutputConfig = req.JsonSchema is null
                 ? null
                 : new OutputConfig { Format = new JsonOutputFormat { Schema = ParseSchema(req.JsonSchema) } },
@@ -56,6 +56,37 @@ internal sealed class AnthropicChatClient : IAiChatClient
 
         return new AiChatResult(text, _model, tokens);
     }
+
+    private static MessageParamContent BuildContent(AiChatRequest req)
+    {
+        if (req.Images is not { Count: > 0 })
+            return req.UserPrompt;
+
+        var blocks = new List<ContentBlockParam>();
+        foreach (var img in req.Images)
+        {
+            if (!string.IsNullOrWhiteSpace(img.Caption))
+                blocks.Add(new TextBlockParam { Text = img.Caption });
+            blocks.Add(new ImageBlockParam
+            {
+                Source = new Base64ImageSource
+                {
+                    Data = Convert.ToBase64String(img.Data),
+                    MediaType = ToMediaType(img.MediaType),
+                },
+            });
+        }
+        blocks.Add(new TextBlockParam { Text = req.UserPrompt });
+        return blocks;
+    }
+
+    private static MediaType ToMediaType(string mediaType) => mediaType.ToLowerInvariant() switch
+    {
+        "image/png" => MediaType.ImagePng,
+        "image/webp" => MediaType.ImageWebP,
+        "image/gif" => MediaType.ImageGif,
+        _ => MediaType.ImageJpeg,
+    };
 
     private static Dictionary<string, JsonElement> ParseSchema(string schemaJson)
     {

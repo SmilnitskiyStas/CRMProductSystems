@@ -183,6 +183,20 @@ builder.Services.AddRateLimiter(options =>
     // request. Partitioned by consumer_account_id (falls back to IP for an odd tokenless
     // hit) — 6 questions / 3 min per consumer keeps a single account from running up the
     // provider's model bill while leaving room for a normal back-and-forth.
+    // Shelf-photo AI check: one paid vision call per upload; partitioned per user.
+    options.AddPolicy("shelf-scan-ai", httpContext =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: httpContext.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value
+                          ?? httpContext.User.FindFirst("sub")?.Value
+                          ?? httpContext.Connection.RemoteIpAddress?.ToString()
+                          ?? "unknown",
+            factory: _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 10,
+                Window      = TimeSpan.FromMinutes(3),
+                QueueLimit  = 0,
+            }));
+
     options.AddPolicy("consumer-ai", httpContext =>
         RateLimitPartition.GetFixedWindowLimiter(
             partitionKey: httpContext.User.FindFirst("consumer_account_id")?.Value

@@ -1,6 +1,6 @@
 import { api } from "@/lib/api";
 import type { PagedResult } from "@/lib/api-types";
-import type { BarcodeProductLookup, CreateProductPayload, ItemZone, Product, UpdateProductPayload } from "../types";
+import type { BarcodeProductLookup, CreateProductPayload, ItemImage, ItemZone, Product, UpdateItemImagePayload, UpdateProductPayload } from "../types";
 
 export const productsApi = {
   getAll: (params?: {
@@ -45,6 +45,17 @@ export const productsApi = {
     form.append("file", file);
     return api.postForm<{ imageUrl: string }>(`/api/items/${id}/image`, form);
   },
+  // Multi-photo gallery.
+  getImages: (id: string) => api.get<ItemImage[]>(`/api/items/${id}/images`),
+  addImage: (id: string, file: File, label?: string) => {
+    const form = new FormData();
+    form.append("file", file);
+    if (label) form.append("label", label);
+    return api.postForm<ItemImage>(`/api/items/${id}/images`, form);
+  },
+  updateImage: (id: string, imageId: string, payload: UpdateItemImagePayload) =>
+    api.patch<ItemImage>(`/api/items/${id}/images/${imageId}`, payload),
+  deleteImage: (id: string, imageId: string) => api.delete<void>(`/api/items/${id}/images/${imageId}`),
   // Product↔zone tagging (TASK-715, backend from TASK-714).
   getZones: (id: string) => api.get<ItemZone[]>(`/api/items/${id}/zones`),
   assignZone: (id: string, zoneId: string) => api.post<ItemZone>(`/api/items/${id}/zones`, { zoneId }),

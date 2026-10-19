@@ -12,6 +12,7 @@ import { productsApi } from "../api/products";
 import { useCategories } from "../hooks/useCategories";
 import { CategorySelect } from "./CategorySelect";
 import { ProductZonesSection } from "./ProductZonesSection";
+import { ProductImagesSection } from "./ProductImagesSection";
 import { CollapsibleSection } from "@/components/ui/CollapsibleSection";
 
 export const PERISHABILITY_CLASS_VALUES = ["fresh", "chilled", "standard", "durable"] as const;
@@ -73,7 +74,6 @@ interface Props {
   onCancel: () => void;
   onCreate: (payload: CreateProductPayload) => void;
   onUpdate: (id: string, payload: UpdateProductPayload) => void;
-  onImageUpload?: (id: string, file: File) => void;
 }
 
 const inputStyle: React.CSSProperties = {
@@ -155,7 +155,7 @@ const promoNoteStyle: React.CSSProperties = {
   lineHeight: 1.5,
 };
 
-export function ProductForm({ product, isPending, onCancel, onCreate, onUpdate, onImageUpload }: Props) {
+export function ProductForm({ product, isPending, onCancel, onCreate, onUpdate }: Props) {
   const t = useTranslations("Dashboard.inventory.form");
   const tItemTypes = useTranslations("Dashboard.inventory.itemTypes");
   const tCommon = useTranslations("Common");
@@ -165,8 +165,6 @@ export function ProductForm({ product, isPending, onCancel, onCreate, onUpdate, 
 
   const [barcodes, setBarcodes] = useState<string[]>([]);
   const [barcodeInput, setBarcodeInput] = useState("");
-  const [imageFile, setImageFile] = useState<File | null>(null);
-  const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [lookupLoading, setLookupLoading] = useState(false);
   const [lookupError, setLookupError] = useState<string | null>(null);
 
@@ -271,12 +269,9 @@ export function ProductForm({ product, isPending, onCancel, onCreate, onUpdate, 
     );
     if (product) {
       setBarcodes(product.barcodes ?? []);
-      setImagePreview(product.imageUrl ?? null);
     } else {
       setBarcodes([]);
-      setImagePreview(null);
     }
-    setImageFile(null);
     setBarcodeInput("");
     setLookupError(null);
   }, [product, reset]);
@@ -310,7 +305,6 @@ export function ProductForm({ product, isPending, onCancel, onCreate, onUpdate, 
       if (data.unit) setValue("unit", data.unit);
       if (data.shelfLifeDays) setValue("shelfLifeDays", data.shelfLifeDays);
       if (data.barcodes.length > 0) setBarcodes(data.barcodes);
-      if (data.imageUrl) setImagePreview(data.imageUrl);
     } catch {
       setLookupError(t("lookupError"));
     } finally {
@@ -340,9 +334,6 @@ export function ProductForm({ product, isPending, onCancel, onCreate, onUpdate, 
 
     if (isEditing) {
       onUpdate(product.id, { ...payload, isActive: values.isActive });
-      if (imageFile && onImageUpload) {
-        onImageUpload(product.id, imageFile);
-      }
     } else {
       onCreate(payload);
     }
@@ -482,41 +473,16 @@ export function ProductForm({ product, isPending, onCancel, onCreate, onUpdate, 
             {lookupError && <p style={{ color: "#EF4444", fontSize: 11, marginTop: 4 }}>{lookupError}</p>}
           </div>
 
-          {/* Зображення */}
+          {/* Зображення — галерея ракурсів (окремий віджет, свої мутації) */}
           <div>
             <label style={labelStyle}>{t("imageLabel")}</label>
-            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-              {imagePreview && (
-                <img
-                  src={imagePreview} alt="preview"
-                  style={{ width: 60, height: 60, objectFit: "cover", borderRadius: 8, border: "1px solid #1F2937" }}
-                />
-              )}
-              <label style={{
-                padding: "8px 14px", borderRadius: 8, cursor: "pointer",
-                background: "#111827", border: "1px solid #374151",
-                color: "#9CA3AF", fontSize: 12,
-              }}>
-                {imagePreview ? t("imageChange") : t("imageUpload")}
-                <input
-                  type="file"
-                  accept="image/*"
-                  style={{ display: "none" }}
-                  onChange={e => {
-                    const file = e.target.files?.[0];
-                    if (!file) return;
-                    setImageFile(file);
-                    setImagePreview(URL.createObjectURL(file));
-                  }}
-                />
-              </label>
-              {imagePreview && (
-                <button type="button" onClick={() => { setImageFile(null); setImagePreview(null); }}
-                  style={{ background: "none", border: "none", color: "#EF4444", cursor: "pointer", fontSize: 12 }}>
-                  {t("imageRemove")}
-                </button>
-              )}
-            </div>
+            {product ? (
+              <ProductImagesSection productId={product.id} />
+            ) : (
+              <p style={{ color: "#4B5563", fontSize: 12, margin: 0, lineHeight: 1.5 }}>
+                {t("imagesCreateHint")}
+              </p>
+            )}
           </div>
 
           {/* Category */}

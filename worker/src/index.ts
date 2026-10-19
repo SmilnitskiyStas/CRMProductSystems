@@ -19,7 +19,14 @@ import { startSupplierMetricsRecomputeWorker } from "./jobs/supplier-metrics-rec
 import { startReplenishmentRecomputeWorker } from "./jobs/replenishment-recompute.job";
 import { startCustomerMessagePushWorker } from "./jobs/customer-message-push.job";
 
+import { startShelfAlertWorker } from "./jobs/shelf-alert.job";
+
 async function scheduleRecurringJobs(): Promise<void> {
+  // TASK-728: every minute — turn shelf_scans.AlertPending rows (AI shelf-photo check found
+  // missing/low items) into `shelf_empty` notifications and clear the flag.
+  const shelfAlertQueue = new Queue("shelf-alert", { connection: redisConnection });
+  await shelfAlertQueue.upsertJobScheduler("shelf-alert-cron", { pattern: "* * * * *" }, { name: "shelf-alert" });
+
   const expiryQueue = new Queue("expiry-check", { connection: redisConnection });
   // Drop the legacy scheduler id left in Redis by an older worker version —
   // otherwise the job fires twice every hour.
@@ -136,6 +143,7 @@ async function main(): Promise<void> {
   startNotificationDispatchWorker();
   startPermissionGrantExpiryWorker();
   startCustomerMessagePushWorker();
+  startShelfAlertWorker();
 
   console.log("[worker] All workers started. Waiting for jobs…");
 }

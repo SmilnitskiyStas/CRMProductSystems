@@ -117,3 +117,49 @@ export interface LocationDto {
   /** Структурований код регіону України (ISO 3166-2:UA область або місто), nullable (TASK-658). */
   regionCode: string | null;
 }
+
+// ── Shelf planogram + AI photo check ────────────────────────────────────────────────────────
+export interface ShelfItemDto {
+  id: string;
+  shelfId: string;
+  itemId: string;
+  itemName: string;
+  barcode: string | null;
+  expectedFacings: number;
+}
+
+/** One planogram entry of a shelf section (client-side edit shape). */
+export interface PlanogramEntry {
+  itemId: string;
+  expectedFacings: number;
+}
+
+export type ShelfScanItemStatus = "present" | "low" | "missing";
+
+export interface ShelfScanItemDto {
+  itemId: string;
+  name: string;
+  status: ShelfScanItemStatus;
+  estimatedCount: number;
+  /** 0..1 — indicative AI confidence, needs human verification. */
+  confidence: number;
+  note: string | null;
+}
+
+export interface ShelfScanDto {
+  id: string;
+  locationId: string;
+  zoneId: string;
+  shelfId: string | null;
+  imageUrl: string;
+  status: string;
+  missingCount: number;
+  lowCount: number;
+  alertPending: boolean;
+  summary: string | null;
+  items: ShelfScanItemDto[];
+  model: string | null;
+  errorMessage: string | null;
+  createdBy: string | null;
+  createdAt: string;
+}

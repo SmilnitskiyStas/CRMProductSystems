@@ -31,6 +31,10 @@ public sealed class AppDbContext : DbContext
     public DbSet<ProductSupplierSetting> ProductSupplierSettings => Set<ProductSupplierSetting>();
     // TASK-714: product ↔ store-zone tags (floor-plan canvas groundwork, TASK-715/716)
     public DbSet<ItemZoneAssignment> ItemZoneAssignments => Set<ItemZoneAssignment>();
+    public DbSet<ItemImage> ItemImages => Set<ItemImage>();
+    // Shelf planogram + AI shelf-photo scans
+    public DbSet<ShelfItem> ShelfItems => Set<ShelfItem>();
+    public DbSet<ShelfScan> ShelfScans => Set<ShelfScan>();
 
     // Stock
     public DbSet<ProductStock> ProductStocks => Set<ProductStock>();
@@ -554,6 +558,59 @@ public sealed class AppDbContext : DbContext
             e.HasOne(a => a.Item).WithMany()
              .HasForeignKey(a => a.ItemId).OnDelete(DeleteBehavior.Cascade);
             e.HasOne(a => a.Zone).WithMany()
+             .HasForeignKey(a => a.ZoneId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // ── ItemImage (several reference photos per item; one primary) ──────
+        builder.Entity<ItemImage>(e =>
+        {
+            e.ToTable("item_images");
+            e.HasKey(a => a.Id);
+            e.Property(a => a.Id).HasDefaultValueSql("gen_random_uuid()");
+            e.Property(a => a.ImageUrl).HasMaxLength(500).IsRequired();
+            e.Property(a => a.Label).HasMaxLength(50);
+            e.Property(a => a.CreatedAt).HasDefaultValueSql("NOW()");
+            e.HasIndex(a => new { a.TenantId, a.ItemId }).HasDatabaseName("idx_item_images_tenant_item");
+            e.HasIndex(a => a.ItemId).IsUnique().HasFilter("\"IsPrimary\" = true")
+             .HasDatabaseName("ux_item_images_one_primary");
+            e.HasOne(a => a.Item).WithMany()
+             .HasForeignKey(a => a.ItemId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // ── ShelfItem (planogram: item expected on a shelf section) ─────────
+        builder.Entity<ShelfItem>(e =>
+        {
+            e.ToTable("shelf_items");
+            e.HasKey(a => a.Id);
+            e.Property(a => a.Id).HasDefaultValueSql("gen_random_uuid()");
+            e.Property(a => a.ExpectedFacings).HasDefaultValue(1);
+            e.Property(a => a.CreatedAt).HasDefaultValueSql("NOW()");
+            e.HasIndex(a => new { a.ZoneId, a.ShelfId, a.ItemId }).IsUnique();
+            e.HasIndex(a => new { a.TenantId, a.ZoneId })
+             .HasDatabaseName("idx_shelf_items_tenant_zone");
+            e.HasOne(a => a.Item).WithMany()
+             .HasForeignKey(a => a.ItemId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(a => a.Zone).WithMany()
+             .HasForeignKey(a => a.ZoneId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // ── ShelfScan (AI shelf-photo check) ────────────────────────────────
+        builder.Entity<ShelfScan>(e =>
+        {
+            e.ToTable("shelf_scans");
+            e.HasKey(a => a.Id);
+            e.Property(a => a.Id).HasDefaultValueSql("gen_random_uuid()");
+            e.Property(a => a.ImagePath).HasMaxLength(500).IsRequired();
+            e.Property(a => a.Status).HasMaxLength(20).HasDefaultValue("completed");
+            e.Property(a => a.ResultJson).HasColumnType("jsonb");
+            e.Property(a => a.ErrorMessage).HasMaxLength(1000);
+            e.Property(a => a.Model).HasMaxLength(100);
+            e.Property(a => a.CreatedAt).HasDefaultValueSql("NOW()");
+            e.HasIndex(a => new { a.TenantId, a.ZoneId, a.CreatedAt })
+             .HasDatabaseName("idx_shelf_scans_tenant_zone_created");
+            e.HasIndex(a => a.AlertPending).HasFilter("\"AlertPending\" = true")
+             .HasDatabaseName("idx_shelf_scans_alert_pending");
+            e.HasOne<LocationZone>().WithMany()
              .HasForeignKey(a => a.ZoneId).OnDelete(DeleteBehavior.Cascade);
         });
 

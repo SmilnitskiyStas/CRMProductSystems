@@ -5,7 +5,7 @@ import { ArrowLeft, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { useTranslations } from "next-intl";
 import { ProductForm } from "@/features/inventory/components/ProductForm";
-import { useProduct, useUpdateProduct, useUploadProductImage } from "@/features/inventory/hooks/useProducts";
+import { useProduct, useUpdateProduct } from "@/features/inventory/hooks/useProducts";
 import type { UpdateProductPayload } from "@/features/inventory/types";
 
 // TASK-718 — product edit moved off the ProductForm modal onto its own route. Mirrors the
@@ -20,7 +20,6 @@ export default function EditProductPage() {
 
   const { data: product, isLoading } = useProduct(id);
   const updateProduct = useUpdateProduct();
-  const uploadImage = useUploadProductImage();
 
   const handleUpdate = (productId: string, payload: UpdateProductPayload) => {
     updateProduct.mutate(
@@ -33,10 +32,6 @@ export default function EditProductPage() {
         onError: (err) => toast.error(err.message),
       },
     );
-  };
-
-  const handleImageUpload = (productId: string, file: File) => {
-    uploadImage.mutate({ id: productId, file }, { onError: (err) => toast.error(err.message) });
   };
 
   if (isLoading) {
@@ -83,7 +78,6 @@ export default function EditProductPage() {
         // Edit-only page — ProductForm only calls onCreate when `product` is null.
         onCreate={() => {}}
         onUpdate={handleUpdate}
-        onImageUpload={handleImageUpload}
       />
     </div>
   );
