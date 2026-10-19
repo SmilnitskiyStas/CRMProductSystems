@@ -156,7 +156,7 @@ describe('offline sale priced with promotions + server re-pricing report', () =>
           createdAt: '2026-10-21T10:00:01Z',
           items: [
             { productName: 'Bread Kyivkhlib', barcode: '111', quantity: 2, unitPrice: 42.73, discountAmount: 0, total: 85.46 },
-            { productName: 'Bread Kyivkhlib', barcode: '111', quantity: 1, unitPrice: 0.01, discountAmount: 0, total: 0.01, promotionRuleId: rule.id, promotionLabel: 'Акція 2+1' },
+            { productName: 'Bread Kyivkhlib', barcode: '111', quantity: 1, unitPrice: 42.73, discountAmount: 42.72, total: 0.01, promotionRuleId: rule.id, promotionLabel: 'Акція 2+1' },
           ],
         },
       })),
@@ -166,6 +166,8 @@ describe('offline sale priced with promotions + server re-pricing report', () =>
     expect(row.receipt.localTotal).toBeUndefined();
     expect(row.receipt.items[1].promoLabel).toBe('Акція 2+1');
     expect(row.receipt.items[1].regularUnitPrice).toBe(42.73);
+    expect(row.receipt.items[1].unitPrice).toBe(0.01); // server UnitPrice is the regular price; net = total / quantity
+    expect(row.receipt.items[1].discount).toBeUndefined();
     expect(row.receipt.change).toBe(14.53);
     expect(toEntry(row).totalDifference).toBeNull();
   });
