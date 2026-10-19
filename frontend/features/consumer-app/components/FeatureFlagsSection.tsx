@@ -3,7 +3,8 @@
 import { useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
 import { toast } from "sonner";
-import { AlertTriangle } from "lucide-react";
+import { Info } from "lucide-react";
+import Link from "next/link";
 import { Switch } from "@/components/ui/switch";
 import { Btn } from "@/components/ui/Btn";
 import { extractDraftValidationErrors } from "../api/mobileConfigDraft";
@@ -67,30 +68,8 @@ function buildSeedDocument(): MobileConfigDocument {
   };
 }
 
-/**
- * TASK-557: "Функції" section of the Retailer Admin shell (fills the `/consumer-app/features`
- * placeholder TASK-535 scaffolded — no task in the original Stage D breakdown ever scheduled this
- * UI; TASK-543 only built the backend `IConsumerFeatureFlagService`). Editing the tenant's
- * `features` object on the same whole-document draft AppBuilderCanvas.tsx (TASK-539/541),
- * ThemeEditorSection.tsx (TASK-537) and NavigationBuilderSection.tsx (TASK-542) already
- * read/write, via the same `useMobileConfigDraft`/`useSaveMobileConfigDraft` hooks (TASK-538b).
- * This screen only ever touches `document.features` — `navigation`/`pages`/`schemaVersion` are
- * carried through untouched on every save (kept in `restOfDoc` state, merged back in on submit),
- * same read-modify-write shape as `NavigationBuilderSection.tsx`'s `restOfDoc`, just for a fixed
- * 8-key boolean map instead of a variable-length array — no react-hook-form/zod needed here, a
- * plain `useState` is enough (matches `BonusProgramSection.tsx`'s simpler `Switch`-only pattern,
- * not `NavigationBuilderSection.tsx`'s array-validation one).
- *
- * REQUIRED WARNING (per TASK-557 brief, grounded in `IConsumerFeatureFlagService`'s own doc
- * comments, not paraphrased from memory): as of this task, `RequireConsumerFeatureAttribute`/
- * `IConsumerFeatureFlagService` are registered in DI and unit-tested, but no controller — not
- * `ConsumerContentController`, not `ConsumerLoyaltyController`, nor any other consumer-facing
- * endpoint — actually calls them (verified: zero references under `ShelfGuard.Api`). So unlike
- * every other section here, this one deliberately does NOT show the usual "takes effect after
- * publish" `draftNotice` — that would imply publishing matters, when today it doesn't: saving
- * (and even publishing) these toggles has no effect on the live consumer app at all, because
- * nothing reads them yet.
- */
+/** Edits published app-section flags. Loyalty activation belongs to Bonus Program;
+ * the legacy loyalty field is preserved for old documents but is never edited here. */
 export function FeatureFlagsSection() {
   const t = useTranslations("Dashboard.consumerApp.featureFlags");
   const draftQuery = useMobileConfigDraft();
@@ -154,19 +133,16 @@ export function FeatureFlagsSection() {
     }
   }
 
-  if (draftQuery.isLoading || !features) {
-    return <div style={{ ...cardStyle, color: "#4B5563", fontSize: 13 }}>{t("loading")}</div>;
-  }
   if (draftQuery.isError) {
     return <div style={{ ...cardStyle, color: "#F87171", fontSize: 13 }}>{t("loadError")}</div>;
+  }
+  if (draftQuery.isLoading || !features) {
+    return <div style={{ ...cardStyle, color: "#4B5563", fontSize: 13 }}>{t("loading")}</div>;
   }
 
   return (
     <div style={{ ...cardStyle, maxWidth: 720 }}>
-      {/* Required warning — not the usual blue "draftNotice" (see this component's doc comment
-          for why): amber/AlertTriangle matches TemporaryPasswordBanner.tsx's established
-          "actionable warning" convention, stronger than the neutral Info-icon notices the other
-          three editor screens use for their ordinary draft/publish caveat. */}
+      {/* Other section flags take effect after publishing. */}
       <div
         style={{
           display: "flex",
@@ -179,14 +155,14 @@ export function FeatureFlagsSection() {
           marginBottom: 16,
         }}
       >
-        <AlertTriangle size={16} style={{ color: "#F59E0B", flexShrink: 0, marginTop: 1 }} />
+        <Info size={16} style={{ color: "#F59E0B", flexShrink: 0, marginTop: 1 }} />
         <p style={{ color: "#D1D5DB", fontSize: 12, margin: 0 }}>
           <strong style={{ color: "#F59E0B" }}>{t("warningTitle")}</strong> {t("warningText")}
         </p>
       </div>
 
       <div style={{ display: "flex", flexDirection: "column" }}>
-        {MOBILE_CONFIG_FEATURE_KEYS.map((key) => (
+        {MOBILE_CONFIG_FEATURE_KEYS.filter((key) => key !== "loyalty").map((key) => (
           <div key={key} style={rowStyle}>
             <div>
               <div style={{ color: "#E8EDF5", fontSize: 13, fontWeight: 500 }}>
@@ -204,6 +180,13 @@ export function FeatureFlagsSection() {
           </div>
         ))}
       </div>
+
+      <p style={{ color: "#9CA3AF", fontSize: 12, marginTop: 16 }}>
+        {t("loyaltyManagedHint")}{" "}
+        <Link href="/consumer-app" style={{ color: "#60A5FA" }}>
+          {t("bonusProgramLink")}
+        </Link>
+      </p>
 
       {saveError && <p style={{ color: "#F87171", fontSize: 12, marginTop: 12 }}>{saveError}</p>}
 

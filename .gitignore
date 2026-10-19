@@ -47,3 +47,9 @@ Thumbs.db
 
 # Local-only scratch working directories (not source code — e.g. local DB data dirs)
 /PchilkaPosAnalytics/
+
+# ── Cashier desktop app ──────────────────────────────────────────────────────
+cashier/node_modules/
+cashier/out/
+cashier/dist/
+cashier/release/

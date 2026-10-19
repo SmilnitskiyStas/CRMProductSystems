@@ -7,9 +7,14 @@ namespace ShelfGuard.Application.Features.MobileConfig;
 public sealed class ConsumerFeatureFlagService : IConsumerFeatureFlagService
 {
     private readonly IMobileConfigPublishedReadService _publishedRead;
+    private readonly ILoyaltyProgramAvailability _loyalty;
 
-    public ConsumerFeatureFlagService(IMobileConfigPublishedReadService publishedRead) =>
+    public ConsumerFeatureFlagService(
+        IMobileConfigPublishedReadService publishedRead, ILoyaltyProgramAvailability loyalty)
+    {
         _publishedRead = publishedRead;
+        _loyalty = loyalty;
+    }
 
     public async Task<bool> IsEnabledAsync(Guid tenantId, string flagKey, CancellationToken ct = default)
     {
@@ -20,6 +25,11 @@ public sealed class ConsumerFeatureFlagService : IConsumerFeatureFlagService
                 string.Join(", ", MobileConfigWhitelists.FeatureKeys),
                 nameof(flagKey));
         }
+
+        // Loyalty is controlled immediately by Bonus Program, even without a published
+        // mobile document. Ignore old draft/published features.loyalty values.
+        if (flagKey == "loyalty")
+            return await _loyalty.IsEnabledAsync(tenantId, ct);
 
         // Delegates to the same published-version lookup TASK-534 already built — tenant
         // existence check, RLS-scoped read via ITenantSessionOverride, draft/archived versions

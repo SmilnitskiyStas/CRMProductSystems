@@ -644,6 +644,92 @@ namespace ShelfGuard.Infrastructure.Migrations
                     b.ToTable("banner_products", (string)null);
                 });
 
+            modelBuilder.Entity("ShelfGuard.Domain.Entities.CashRegister", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasDefaultValueSql("gen_random_uuid()");
+
+                    b.Property<DateTime?>("ActivatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("ActivationCodeExpiresAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("ActivationCodeHash")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("AppVersion")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("NOW()");
+
+                    b.Property<string>("DeviceTokenHash")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<DateTime?>("LastSeenAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<int>("Number")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("PinFailCount")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("PinFailDailyCount")
+                        .HasColumnType("integer");
+
+                    b.Property<DateOnly?>("PinFailDay")
+                        .HasColumnType("date");
+
+                    b.Property<DateTime?>("PinFailWindowStart")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasDefaultValue("pending");
+
+                    b.Property<Guid>("StoreId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("LocationId");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Type")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasDefaultValue("line");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("StoreId");
+
+                    b.HasIndex("TenantId", "Number")
+                        .IsUnique();
+
+                    b.HasIndex("TenantId", "StoreId");
+
+                    b.ToTable("cash_registers", (string)null);
+                });
+
             modelBuilder.Entity("ShelfGuard.Domain.Entities.ChatMessage", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1676,6 +1762,11 @@ namespace ShelfGuard.Infrastructure.Migrations
                         .HasColumnType("character varying(20)")
                         .HasDefaultValue("шт");
 
+                    b.Property<DateTime>("UpdatedAt")
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("NOW()");
+
                     b.Property<decimal>("VatRate")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("decimal(5,2)")
@@ -1701,6 +1792,9 @@ namespace ShelfGuard.Infrastructure.Migrations
                     b.HasIndex("SegmentId");
 
                     b.HasIndex("SourceSupplierItemId");
+
+                    b.HasIndex("TenantId", "UpdatedAt", "Id")
+                        .HasDatabaseName("idx_items_tenant_updated");
 
                     b.HasIndex("TenantId", "CategoryId", "SegmentId", "IsActive")
                         .HasDatabaseName("idx_items_tenant_category_segment_active");
@@ -3438,6 +3532,9 @@ namespace ShelfGuard.Infrastructure.Migrations
                     b.Property<decimal?>("OpeningCash")
                         .HasColumnType("decimal(12,2)");
 
+                    b.Property<Guid?>("RegisterId")
+                        .HasColumnType("uuid");
+
                     b.Property<int>("ShiftNumber")
                         .HasColumnType("integer");
 
@@ -3460,9 +3557,14 @@ namespace ShelfGuard.Infrastructure.Migrations
 
                     b.HasIndex("CashierId");
 
+                    b.HasIndex("RegisterId")
+                        .IsUnique()
+                        .HasDatabaseName("uq_pos_shifts_open_per_register")
+                        .HasFilter("\"ClosedAt\" IS NULL AND \"RegisterId\" IS NOT NULL");
+
                     b.HasIndex("StoreId")
                         .IsUnique()
-                        .HasFilter("\"ClosedAt\" IS NULL");
+                        .HasFilter("\"ClosedAt\" IS NULL AND \"RegisterId\" IS NULL");
 
                     b.HasIndex("TenantId", "StoreId", "OpenedAt");
 
@@ -3480,6 +3582,9 @@ namespace ShelfGuard.Infrastructure.Migrations
                         .HasColumnType("uuid");
 
                     b.Property<Guid?>("CashierId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("ClientTransactionId")
                         .HasColumnType("uuid");
 
                     b.Property<DateTime>("CreatedAt")
@@ -3532,10 +3637,15 @@ namespace ShelfGuard.Infrastructure.Migrations
                     b.Property<Guid>("TenantId")
                         .HasColumnType("uuid");
 
+                    b.Property<decimal?>("TenderedAmount")
+                        .HasColumnType("decimal(12,2)");
+
                     b.Property<decimal>("TotalAmount")
                         .HasColumnType("decimal(12,2)");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("CashRegisterId");
 
                     b.HasIndex("CustomerId")
                         .HasDatabaseName("idx_pos_tx_customer")
@@ -3551,6 +3661,11 @@ namespace ShelfGuard.Infrastructure.Migrations
                         .HasFilter("\"Status\" = 'pending_fiscalization'");
 
                     b.HasIndex("StoreId");
+
+                    b.HasIndex("TenantId", "ClientTransactionId")
+                        .IsUnique()
+                        .HasDatabaseName("uq_pos_transactions_client_tx")
+                        .HasFilter("\"ClientTransactionId\" IS NOT NULL");
 
                     b.HasIndex("TenantId", "ReceiptNumber")
                         .IsUnique();
@@ -4702,6 +4817,49 @@ namespace ShelfGuard.Infrastructure.Migrations
                     b.HasIndex("UserId");
 
                     b.ToTable("refresh_tokens", (string)null);
+                });
+
+            modelBuilder.Entity("ShelfGuard.Domain.Entities.RegisterSession", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasDefaultValueSql("gen_random_uuid()");
+
+                    b.Property<Guid>("CashierId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("EndReason")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<DateTime?>("EndedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("RegisterId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("StartedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("NOW()");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CashierId");
+
+                    b.HasIndex("RegisterId")
+                        .HasDatabaseName("idx_register_sessions_open")
+                        .HasFilter("\"EndedAt\" IS NULL");
+
+                    b.HasIndex("TenantId");
+
+                    b.HasIndex("RegisterId", "StartedAt");
+
+                    b.ToTable("register_sessions", (string)null);
                 });
 
             modelBuilder.Entity("ShelfGuard.Domain.Entities.ScheduleShift", b =>
@@ -6874,6 +7032,19 @@ namespace ShelfGuard.Infrastructure.Migrations
                         .HasMaxLength(20)
                         .HasColumnType("character varying(20)");
 
+                    b.Property<int>("PosPinFailedAttempts")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("PosPinHash")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<DateTime?>("PosPinLockoutUntil")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("PosPinSetAt")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<string>("PreferredLocale")
                         .HasMaxLength(5)
                         .HasColumnType("character varying(5)");
@@ -7551,6 +7722,23 @@ namespace ShelfGuard.Infrastructure.Migrations
                         .HasForeignKey("ItemId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+                });
+
+            modelBuilder.Entity("ShelfGuard.Domain.Entities.CashRegister", b =>
+                {
+                    b.HasOne("ShelfGuard.Domain.Entities.Location", "Store")
+                        .WithMany()
+                        .HasForeignKey("StoreId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("ShelfGuard.Domain.Entities.Tenant", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Store");
                 });
 
             modelBuilder.Entity("ShelfGuard.Domain.Entities.ChatMessage", b =>
@@ -8312,6 +8500,11 @@ namespace ShelfGuard.Infrastructure.Migrations
                         .HasForeignKey("CashierId")
                         .OnDelete(DeleteBehavior.SetNull);
 
+                    b.HasOne("ShelfGuard.Domain.Entities.CashRegister", null)
+                        .WithMany()
+                        .HasForeignKey("RegisterId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("ShelfGuard.Domain.Entities.Location", "Store")
                         .WithMany()
                         .HasForeignKey("StoreId")
@@ -8325,6 +8518,11 @@ namespace ShelfGuard.Infrastructure.Migrations
 
             modelBuilder.Entity("ShelfGuard.Domain.Entities.PosTransaction", b =>
                 {
+                    b.HasOne("ShelfGuard.Domain.Entities.CashRegister", null)
+                        .WithMany()
+                        .HasForeignKey("CashRegisterId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
                     b.HasOne("ShelfGuard.Domain.Entities.Customer", "Customer")
                         .WithMany("Transactions")
                         .HasForeignKey("CustomerId")
@@ -8759,6 +8957,31 @@ namespace ShelfGuard.Infrastructure.Migrations
                         .IsRequired();
 
                     b.Navigation("User");
+                });
+
+            modelBuilder.Entity("ShelfGuard.Domain.Entities.RegisterSession", b =>
+                {
+                    b.HasOne("ShelfGuard.Domain.Entities.User", "Cashier")
+                        .WithMany()
+                        .HasForeignKey("CashierId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("ShelfGuard.Domain.Entities.CashRegister", "Register")
+                        .WithMany()
+                        .HasForeignKey("RegisterId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("ShelfGuard.Domain.Entities.Tenant", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Cashier");
+
+                    b.Navigation("Register");
                 });
 
             modelBuilder.Entity("ShelfGuard.Domain.Entities.ScheduleShift", b =>

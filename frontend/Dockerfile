@@ -30,4 +30,9 @@ COPY --from=build /app/public ./public
 
 EXPOSE 3100
 ENV PORT=3100
+# Next standalone binds to $HOSTNAME, and Docker sets that to the container id -> it listens on
+# the container IP only, so the 127.0.0.1 HEALTHCHECK below was refused. Bind all interfaces.
+ENV HOSTNAME=0.0.0.0
+HEALTHCHECK --interval=15s --timeout=5s --start-period=30s --retries=3 \
+  CMD wget -q --spider http://127.0.0.1:3100/ || exit 1
 CMD ["node", "server.js"]

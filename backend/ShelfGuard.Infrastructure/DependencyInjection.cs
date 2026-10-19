@@ -9,6 +9,7 @@ using ShelfGuard.Domain.Interfaces;
 using ShelfGuard.Infrastructure.Data;
 using ShelfGuard.Infrastructure.Data.Repositories;
 using ShelfGuard.Infrastructure.Interceptors;
+using ShelfGuard.Infrastructure.Resilience;
 using ShelfGuard.Infrastructure.Integrations.Prro;
 using ShelfGuard.Infrastructure.Services;
 
@@ -118,6 +119,13 @@ public static class DependencyInjection
 
         // v3.2 - POS (TASK-068)
         services.AddScoped<IPosRepository, PosRepository>();
+        services.AddScoped<ICashRegisterRepository, CashRegisterRepository>();
+        services.AddScoped<IRegisterReportRepository, RegisterReportRepository>();
+        services.AddMemoryCache();
+        services.AddSingleton<Services.OperatorSessionValidator>();
+        services.AddSingleton<Application.Services.IOperatorSessionValidator>(sp => sp.GetRequiredService<Services.OperatorSessionValidator>());
+        services.AddSingleton<Application.Services.IOperatorSessionCache>(sp => sp.GetRequiredService<Services.OperatorSessionValidator>());
+        services.AddScoped<ICatalogSyncRepository, CatalogSyncRepository>();
 
         // v2 - Daily sales (ADU source data)
         services.AddScoped<IDailySalesRepository, DailySalesRepository>();
@@ -144,8 +152,15 @@ public static class DependencyInjection
         services.AddScoped<Application.Services.IAiClientFactory, AI.AiClientFactory>();
         services.AddScoped<Application.Services.IAiConnectivityTester, AI.AiConnectivityTester>();
         services.AddHttpClient("openai", http => http.Timeout = TimeSpan.FromSeconds(60));
-        services.AddHttpClient<Domain.Interfaces.IOpenMeteoClient, Integrations.OpenMeteoClient>();
-        services.AddHttpClient<Domain.Interfaces.IGeocodingClient, Integrations.NominatimGeocodingClient>();
+        // Stage 2 resilience: optional dependencies get retry (GET only) + circuit breaker +
+        // attempt timeout, and surface as ExternalServiceUnavailableException when down.
+        services.AddHttpClient<Domain.Interfaces.IOpenMeteoClient, Integrations.OpenMeteoClient>()
+            .AddUnavailableTranslation("weather")
+            .AddExternalResilience("open-meteo", TimeSpan.FromSeconds(10), maxRetries: 2);
+        // Nominatim has a strict usage policy — one retry at most.
+        services.AddHttpClient<Domain.Interfaces.IGeocodingClient, Integrations.NominatimGeocodingClient>()
+            .AddUnavailableTranslation("geocoder")
+            .AddExternalResilience("nominatim", TimeSpan.FromSeconds(8), maxRetries: 1);
 
         // v3.2 - ПРРО fiscalization (ADR-013): per-tenant factory replaces the startup-time
         // PRRO:PROVIDER switch. The factory reads each tenant's integration_configs row and
@@ -157,7 +172,11 @@ public static class DependencyInjection
         {
             var opts = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<PrroOptions>>().Value;
             http.Timeout = TimeSpan.FromSeconds(opts.TimeoutSeconds > 0 ? opts.TimeoutSeconds : 30);
-        });
+        })
+        // No retry: POST receipts/sell is not idempotent (a retry could fiscalize twice) — the
+        // fiscalization-retry job already re-submits safely. Breaker + timeout only, so a
+        // Checkbox outage fails fast into the offline-first queue (ADR-011).
+        .AddExternalResilience("checkbox", TimeSpan.FromSeconds(25), maxRetries: 0);
         services.AddSingleton<IFiscalServiceFactory, FiscalServiceFactory>();
 
         // Provider panel (super admin)
@@ -349,12 +368,27 @@ public static class DependencyInjection
         // (ConsumerSupportHub, mapped in Program.cs at /api/hubs/consumer-support). Keep-alive/
         // client-timeout set explicitly (spec §5 "бажано додати keep-alive") — these values match
         // the framework defaults, made explicit so the choice is documented rather than implicit.
-        services.AddSignalR(options =>
+        var signalR = services.AddSignalR(options =>
         {
             options.KeepAliveInterval = TimeSpan.FromSeconds(15);
             options.ClientTimeoutInterval = TimeSpan.FromSeconds(30);
             options.HandshakeTimeout = TimeSpan.FromSeconds(15);
         });
+        // Stage 3b: with the API split into role instances (core/consumer/provider) staff replies
+        // published from CORE must reach hub clients connected to CONSUMER, so a Redis backplane is
+        // used when SignalR:RedisConnection is set. AbortOnConnectFail=false: a Redis outage degrades
+        // realtime only and never prevents the API from starting.
+        var signalRRedis = configuration["SignalR:RedisConnection"];
+        if (!string.IsNullOrWhiteSpace(signalRRedis))
+        {
+            signalR.AddStackExchangeRedis(o =>
+            {
+                var opts = StackExchange.Redis.ConfigurationOptions.Parse(signalRRedis);
+                opts.AbortOnConnectFail = false;
+                opts.ChannelPrefix = StackExchange.Redis.RedisChannel.Literal("shelfguard");
+                o.Configuration = opts;
+            });
+        }
         services.AddScoped<Application.Features.CustomerSupport.IConsumerSupportRealtimeNotifier,
             Realtime.ConsumerSupportRealtimeNotifier>();
 

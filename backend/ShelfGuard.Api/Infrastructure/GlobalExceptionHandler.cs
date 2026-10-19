@@ -28,6 +28,23 @@ public sealed class GlobalExceptionHandler : IExceptionHandler
     public async ValueTask<bool> TryHandleAsync(
         HttpContext httpContext, Exception exception, CancellationToken cancellationToken)
     {
+        // An optional dependency (AI, weather, geocoder) is down / its breaker is open: that is
+        // a degraded feature, not a server bug — 503 with a stable code the UI can key off.
+        if (exception is ShelfGuard.Application.Services.ExternalServiceUnavailableException unavailable)
+        {
+            _logger.LogWarning(
+                "External service '{Service}' unavailable on {Method} {Path}",
+                unavailable.Service, httpContext.Request.Method, httpContext.Request.Path);
+
+            httpContext.Response.StatusCode = StatusCodes.Status503ServiceUnavailable;
+            httpContext.Response.Headers.RetryAfter = "30";
+            httpContext.Response.ContentType = "application/json";
+            await httpContext.Response.WriteAsJsonAsync(
+                new { error = "Service temporarily unavailable. Try again shortly.", code = "service_unavailable", service = unavailable.Service },
+                cancellationToken);
+            return true;
+        }
+
         _logger.LogError(
             exception, "Unhandled exception on {Method} {Path}",
             httpContext.Request.Method, httpContext.Request.Path);

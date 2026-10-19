@@ -74,6 +74,17 @@ file sealed class RetryFakePosRepo : IPosRepository
     public Task<PosShift?> GetShiftByIdAsync(Guid shiftId, CancellationToken ct = default) =>
         Task.FromResult<PosShift?>(null);
 
+    public Task<PosShift?> GetOpenShiftForRegisterAsync(Guid registerId, CancellationToken ct = default) =>
+        Task.FromResult<PosShift?>(null);
+
+    public Task<int> GetNextShiftNumberAsync(Guid tenantId, Guid? registerId, CancellationToken ct = default) =>
+        Task.FromResult(1);
+
+    public Task<PosTransaction?> GetTransactionByClientIdAsync(Guid tenantId, Guid clientTransactionId, CancellationToken ct = default) =>
+        Task.FromResult<PosTransaction?>(null);
+
+    public void DiscardPendingChanges() { }
+
     public Task AddShiftAsync(PosShift shift, CancellationToken ct = default) => Task.CompletedTask;
     public void UpdateShift(PosShift shift) { }
 

@@ -24,7 +24,12 @@ builder.Configuration.AddEnvironmentVariables();
 // All error responses follow the { "error": "..." } contract (api-contracts.md):
 // - InvalidModelStateResponseFactory covers automatic 400s from model binding/validation
 // - ErrorBodyClientErrorFactory covers body-less results (bare NotFound(), Forbid(), ...)
+// Stage 3b: API_ROLE (core|consumer|provider|all, default all) selects which controllers this
+// instance exposes; see RoleControllerFeatureProvider.
+var apiRole = RoleControllerFeatureProvider.Normalize(builder.Configuration["API_ROLE"]);
 builder.Services.AddControllers()
+    .ConfigureApplicationPartManager(m =>
+        m.FeatureProviders.Add(new RoleControllerFeatureProvider(apiRole)))
     .ConfigureApiBehaviorOptions(options =>
         options.InvalidModelStateResponseFactory = context =>
         {
@@ -174,6 +179,41 @@ builder.Services.AddRateLimiter(options =>
                 QueueLimit  = 0,
             }));
 
+    // Cashier app: register activation (single-use code) - 10 req/min per client IP.
+    options.AddPolicy("register-activate", httpContext =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            factory: _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 10,
+                Window      = TimeSpan.FromMinutes(1),
+                QueueLimit  = 0,
+            }));
+
+    // Cashier app: PIN sign-in - 20 req/min per client IP (a till shares one IP; per-user and
+    // per-register lockouts in RegisterService are the real brute-force defence).
+    options.AddPolicy("register-session", httpContext =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            factory: _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 20,
+                Window      = TimeSpan.FromMinutes(1),
+                QueueLimit  = 0,
+            }));
+
+    // Cashier app: PIN generate/clear by managers - 10 req/min per acting user.
+    options.AddPolicy("register-pin-manage", httpContext =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: httpContext.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value
+                          ?? httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            factory: _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 10,
+                Window      = TimeSpan.FromMinutes(1),
+                QueueLimit  = 0,
+            }));
+
     // managed-AI Phase 4b: the consumer AI assistant makes a real (paid) model call per
     // request. Partitioned by consumer_account_id (falls back to IP for an odd tokenless
     // hit) — 6 questions / 3 min per consumer keeps a single account from running up the
@@ -210,7 +250,13 @@ builder.Services
             ValidateLifetime         = true,
             ValidateIssuerSigningKey = true,
             ValidIssuer              = builder.Configuration["Jwt:Issuer"],
-            ValidAudience            = builder.Configuration["Jwt:Audience"],
+            // Staff/consumer tokens use the base audience; cashier-app operator tokens a separate one
+            // that OperatorTokenValidation only lets through on [AllowOperatorToken] endpoints.
+            ValidAudiences           = new[]
+            {
+                builder.Configuration["Jwt:Audience"],
+                builder.Configuration["Jwt:Audience"] + ShelfGuard.Application.Services.JwtAudiences.RegisterSuffix,
+            },
             IssuerSigningKey         = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSecret)),
             ClockSkew                = TimeSpan.Zero,
         };
@@ -221,8 +267,10 @@ builder.Services
         // exactly the Hub path — without the PathStartsWithSegments guard this would accept a
         // bearer token via query string on every endpoint in the API, which is a token-leakage
         // risk (query strings land in access logs, proxy logs, and browser history).
+        var registerAudience = builder.Configuration["Jwt:Audience"] + ShelfGuard.Application.Services.JwtAudiences.RegisterSuffix;
         options.Events = new JwtBearerEvents
         {
+            OnTokenValidated = ctx => OperatorTokenValidation.ValidateAsync(ctx, registerAudience),
             OnMessageReceived = context =>
             {
                 var accessToken = context.Request.Query["access_token"];
@@ -250,13 +298,20 @@ builder.Services.AddCors(options =>
               .AllowAnyMethod()
               .AllowCredentials()));
 
+// Health probes (DbReadinessHealthCheck is in ShelfGuard.Api.Infrastructure): "live" = process is up (no dependencies, so a DB blip never restarts the API),
+// "ready" = the DB answers. Used by Docker HEALTHCHECK and the deploy.sh health gate.
+builder.Services.AddHealthChecks()
+    .AddCheck<DbReadinessHealthCheck>("database", tags: new[] { "ready" });
+
 var app = builder.Build();
 
-// Auto-apply pending migrations on startup (dev convenience)
+// Auto-apply pending migrations on startup. Set Migrations:RunOnStartup=false to run them as a
+// separate step instead (the RLS-role guard below still runs either way).
 using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-    await db.Database.MigrateAsync();
+    if (builder.Configuration.GetValue("Migrations:RunOnStartup", true))
+        await db.Database.MigrateAsync();
 
     // KI-028: fail fast if the app connects as a role that bypasses RLS. RLS is the sole
     // tenant-isolation layer for single-object reads (Get*ByIdAsync repos have no app-level
@@ -348,10 +403,23 @@ app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
 
+app.MapHealthChecks("/health/live", new Microsoft.AspNetCore.Diagnostics.HealthChecks.HealthCheckOptions
+{
+    Predicate = _ => false,
+}).AllowAnonymous();
+app.MapHealthChecks("/health/ready", new Microsoft.AspNetCore.Diagnostics.HealthChecks.HealthCheckOptions
+{
+    Predicate = check => check.Tags.Contains("ready"),
+}).AllowAnonymous();
+
 // TASK-625: realtime transport for consumer support ticket threads (see ConsumerSupportHub's
 // own doc for the Join/LeaveTicket authorization model). WebSocket is the primary transport;
 // SignalR falls back to Server-Sent Events / long polling automatically when WebSocket isn't
 // available, per the default AddSignalR() transport list — no extra config needed for that.
-app.MapHub<ConsumerSupportHub>(ConsumerSupportHubPath);
+if (apiRole is "consumer" or "all")
+{
+    app.MapHub<ConsumerSupportHub>(ConsumerSupportHubPath);
+}
+app.Logger.LogInformation("API role: {ApiRole}", apiRole);
 
 app.Run();

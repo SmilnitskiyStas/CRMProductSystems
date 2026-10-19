@@ -41,13 +41,16 @@ public sealed class MobileConfigPublishedReadService : IMobileConfigPublishedRea
     private readonly IMobileConfigurationRepository _repo;
     private readonly ITenantRepository _tenants;
     private readonly ITenantSessionOverride _tenantScope;
+    private readonly ILoyaltyProgramAvailability _loyalty;
 
     public MobileConfigPublishedReadService(
-        IMobileConfigurationRepository repo, ITenantRepository tenants, ITenantSessionOverride tenantScope)
+        IMobileConfigurationRepository repo, ITenantRepository tenants, ITenantSessionOverride tenantScope,
+        ILoyaltyProgramAvailability loyalty)
     {
         _repo = repo;
         _tenants = tenants;
         _tenantScope = tenantScope;
+        _loyalty = loyalty;
     }
 
     public async Task<(string? DocumentJson, string? ETag, MobileConfigReadError? Error)> GetPublishedConfigAsync(
@@ -80,7 +83,14 @@ public sealed class MobileConfigPublishedReadService : IMobileConfigPublishedRea
             return (null, null, NoPublishedConfigurationError);
         }
 
-        var documentJson = BuildDocument(tenant, publishedVersion, parsedBody, config!.Id, tenantId).ToJsonString();
+        var document = BuildDocument(tenant, publishedVersion, parsedBody, config!.Id, tenantId);
+        // Keep the existing mobile contract, but derive loyalty from its sole live setting.
+        // Compute the ETag afterwards so changing Bonus Program invalidates client caches
+        // without republishing any layout or rewriting historical configuration versions.
+        var features = document["features"] as JsonObject ?? new JsonObject();
+        features["loyalty"] = await _loyalty.IsEnabledAsync(tenantId, ct);
+        document["features"] = features;
+        var documentJson = document.ToJsonString();
         var etag = ComputeETag(documentJson);
 
         return (documentJson, etag, null);

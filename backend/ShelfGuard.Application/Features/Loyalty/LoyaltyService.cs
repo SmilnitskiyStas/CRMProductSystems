@@ -204,10 +204,9 @@ public sealed class LoyaltyService : ILoyaltyService
     }
 
     /// <summary>
-    /// TASK-559 (Option A): alongside the existing B2B <c>HasModule("loyalty")</c>/
-    /// <c>LoyaltyProgramSettings.IsEnabled</c> filters, also excludes any tenant that has
-    /// published <c>features.loyalty: false</c> (TASK-543/558 consumer-app flag,
-    /// <see cref="IConsumerFeatureFlagService"/>) — a discovery-only cut, never applied to an
+    /// The licensed loyalty module and Bonus Program's IsEnabled setting determine discovery.
+    /// The loyalty feature resolver uses those same live settings; legacy published
+    /// features.loyalty values are ignored. This is a discovery-only cut, never applied to an
     /// existing member's own data (see this file's other consumer-facing methods, none of which
     /// call <see cref="_featureFlags"/>). Checked first, before the tenant-scoped settings/store
     /// load below, so a disabled tenant skips that second per-tenant round trip entirely — this

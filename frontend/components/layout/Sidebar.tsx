@@ -68,7 +68,6 @@ import {
   AppRoles,
   AT_LEAST_ENTERPRISE_ADMIN,
   AT_LEAST_STORE_MANAGER,
-  CAN_ACCESS_POS,
   CAN_MANAGE_WAREHOUSE,
   CAN_VIEW_ANALYTICS,
   CAN_VIEW_WAREHOUSE,
@@ -168,7 +167,7 @@ export function buildNavGroups(t: SidebarGroupsT): NavGroup[] {
     icon: <TrendingUp size={18} />,
     moduleKey: "pos",
     items: [
-      { href: "/pos",       label: t("sales.pos"),       icon: <CreditCard size={16} />,   roles: CAN_ACCESS_POS },
+      { href: "/registers", label: t("sales.registers"), icon: <CreditCard size={16} />,   roles: AT_LEAST_STORE_MANAGER },
       { href: "/sales",     label: t("sales.sales"),     icon: <TrendingUp size={16} />,   roles: AT_LEAST_STORE_MANAGER },
       { href: "/customers", label: t("sales.customers"), icon: <Users size={16} />,        roles: AT_LEAST_STORE_MANAGER },
     ],

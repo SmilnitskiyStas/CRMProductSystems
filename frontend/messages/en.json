@@ -928,6 +928,72 @@
     "rangeTo": "to"
   },
   "Dashboard": {
+    "registers": {
+      "title": "Registers",
+      "subtitle": "Manage cash registers, employee PINs, statistics and the activity journal",
+      "cancel": "Cancel",
+      "empty": "No registers yet. Create the first one.",
+      "tabs": { "registers": "Registers", "pins": "Employee PINs", "stats": "Statistics", "journal": "Journal" },
+      "columns": {
+        "number": "#", "name": "Name", "store": "Store", "type": "Type", "status": "Status",
+        "lastSeen": "Last seen", "appVersion": "App version", "operator": "Current operator"
+      },
+      "type": { "line": "Line register", "self_checkout": "Self-checkout" },
+      "status": { "pending": "Pending activation", "active": "Active", "locked": "Locked", "revoked": "Revoked" },
+      "roles": {
+        "enterprise_admin": "Administrator", "network_manager": "Network manager", "store_manager": "Store manager",
+        "storekeeper": "Storekeeper", "cashier": "Cashier"
+      },
+      "actions": { "create": "Create register", "edit": "Edit", "issueCode": "Activation code", "revoke": "Revoke", "unlock": "Unlock" },
+      "form": {
+        "createTitle": "New register", "editTitle": "Edit register", "name": "Name", "namePlaceholder": "e.g. Register 1",
+        "store": "Store", "number": "Number (optional)", "numberPlaceholder": "Assigned automatically",
+        "type": "Register type", "comingSoon": "coming soon", "save": "Save", "cancel": "Cancel",
+        "errorName": "Enter a name (up to 100 characters)",
+        "codeHint": "After creation you will get a one-time activation code for the register app."
+      },
+      "code": {
+        "title": "Activation code: {name}",
+        "hint": "Enter this code in the register app. Valid until {expires} (24 hours), single use.",
+        "reissueWarning": "Warning: activating with this code signs out the register's current device."
+      },
+      "reissue": {
+        "title": "Issue a new code?",
+        "text": "Register \"{name}\" is already activated. A new activation replaces the current device and signs it out.",
+        "confirm": "Issue code"
+      },
+      "revoke": {
+        "title": "Revoke register?",
+        "text": "Register \"{name}\" will be disconnected and all cashier sessions ended. This cannot be undone.",
+        "confirm": "Revoke"
+      },
+      "toast": { "updated": "Register updated", "unlocked": "Register unlocked", "revoked": "Register revoked" },
+      "secret": {
+        "copy": "Copy", "copied": "Copied", "copyFailed": "Could not copy",
+        "shownOnce": "This value is shown only once and cannot be retrieved later.", "close": "Close"
+      },
+      "pins": {
+        "store": "Store", "hint": "PINs are unique per store. Stored PINs are never displayed: a generated PIN is shown once.",
+        "empty": "No employees with register access in this store.",
+        "columns": { "name": "Employee", "role": "Role", "pin": "PIN", "pinSetAt": "Set on" },
+        "set": "Set", "notSet": "Not set", "lockedOut": "Temporarily locked",
+        "generate": "Generate PIN", "regenerate": "Generate new", "clear": "Reset PIN", "cleared": "PIN reset",
+        "pinTitle": "PIN: {name}", "pinHint": "Give this PIN to the employee. They need it to sign in to the register.",
+        "resetTitle": "Generate a new PIN?", "resetText": "The current PIN of \"{name}\" will stop working."
+      },
+      "stats": {
+        "period": { "today": "Today", "7d": "7 days", "30d": "30 days" },
+        "columns": { "register": "Register / cashier", "turnover": "Turnover", "receipts": "Receipts", "average": "Avg. receipt", "cash": "Cash", "card": "Card", "mixed": "Mixed" },
+        "loading": "Loading…", "empty": "No data", "unknownOperator": "Unknown cashier",
+        "note": "Cancelled receipts are excluded. \"Mixed\" covers receipts paid partly in cash and partly by card."
+      },
+      "journal": {
+        "register": "Register", "noRegisters": "No registers yet.",
+        "reasons": { "logout": "Sign-out", "idle": "Inactivity", "revoked": "Register revoked", "replaced": "New sign-in on the register" },
+        "sessions": { "title": "Cashier sessions", "cashier": "Cashier", "start": "Started", "end": "Ended", "reason": "End reason", "open": "In progress", "empty": "No sessions yet" },
+        "shifts": { "title": "Shifts and sales", "number": "Shift", "cashier": "Cashier", "opened": "Opened", "closed": "Closed", "open": "Open", "receipts": "Receipts", "total": "Total", "empty": "No shifts yet" }
+      }
+    },
     "layout": {
       "loading": "Loading…"
     },
@@ -951,6 +1017,7 @@
         "sales": {
           "label": "Sales",
           "pos": "POS",
+          "registers": "Registers",
           "sales": "Sales",
           "customers": "Customers"
         },
@@ -2028,6 +2095,7 @@
         "geocodeButton": "Resolve coordinates",
         "geocodeResolving": "Resolving…",
         "geocodeError": "Could not resolve coordinates for this address.",
+        "geocodeUnavailable": "The address lookup service is temporarily unavailable. Enter coordinates manually or try again later.",
         "geocodeResolvedTo": "Found: {name}"
       },
       "types": {
@@ -2401,6 +2469,7 @@
         "selectStoreHint": "Select a specific store at the top of the page to generate an order",
         "generate": "Generate now",
         "generating": "Claude is analyzing…",
+        "serviceUnavailable": "The AI service is temporarily unavailable. Try again later — the rest of the system keeps working.",
         "emptyHistory": "No suggestions yet — click “Generate now” or wait for the daily generation at 05:00.",
         "toastGenerated": "AI suggestion ready: {count} items",
         "itemsAbbrev": "items"
@@ -6260,8 +6329,10 @@
       "featureFlags": {
         "loading": "Loading…",
         "loadError": "Failed to load app features",
-        "warningTitle": "Not wired up yet:",
-        "warningText": "these toggles are saved for real — in the draft and after publishing — but today they have zero effect on the consumer app: no consumer app endpoint checks these flags yet. Publishing this draft won't change anything for shoppers either, until that check is added on the backend.",
+        "warningTitle": "Publishing changes:",
+        "warningText": "changes to these features take effect after publishing the app configuration.",
+        "loyaltyManagedHint": "Loyalty activation and bonus rules are managed in one place —",
+        "bonusProgramLink": "Bonus Program",
         "keys": {
           "loyalty": "Loyalty Program",
           "promotions": "Promotions",
@@ -6295,7 +6366,7 @@
         "loading": "Loading…",
         "loadError": "Failed to load bonus program settings",
         "enabledLabel": "Bonus program active",
-        "enabledHint": "Enables bonus accrual and redemption at checkout for this network.",
+        "enabledHint": "Controls availability to new shoppers in the app and bonus accrual and redemption at checkout. Takes effect on save without publishing the app configuration.",
         "accrualRateLabel": "Accrual rate, %",
         "accrualRateHint": "Percentage of the receipt total accrued to the customer as bonus points.",
         "redemptionCapLabel": "Redemption cap, %",
@@ -7261,6 +7332,7 @@
         "noCoordsBody": "To see weather on the calendar, set coordinates for the location “{location}”.",
         "noCoordsCta": "Set coordinates",
         "noCoordsNoPermission": "Coordinates are added by a company admin",
+        "unavailable": "Weather is temporarily unavailable — the calendar works without it, try again later.",
         "forecastBadge": "forecast",
         "actualBadge": "actual",
         "tempMax": "Maximum",

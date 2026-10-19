@@ -36,11 +36,14 @@ public sealed class MobileConfigPreviewService : IMobileConfigPreviewService
 {
     private readonly IMobileConfigurationRepository _repo;
     private readonly ITenantRepository _tenants;
+    private readonly ILoyaltyProgramAvailability _loyalty;
 
-    public MobileConfigPreviewService(IMobileConfigurationRepository repo, ITenantRepository tenants)
+    public MobileConfigPreviewService(
+        IMobileConfigurationRepository repo, ITenantRepository tenants, ILoyaltyProgramAvailability loyalty)
     {
         _repo = repo;
         _tenants = tenants;
+        _loyalty = loyalty;
     }
 
     public async Task<string> GetPreviewAsync(Guid tenantId, CancellationToken ct = default)
@@ -55,6 +58,9 @@ public sealed class MobileConfigPreviewService : IMobileConfigPreviewService
 
         var document = BuildDocument(
             hasDraft: draft is not null, parsedBody, theme, tenant, configVersion: draft?.Version ?? 0);
+        var features = document["features"] as JsonObject ?? new JsonObject();
+        features["loyalty"] = await _loyalty.IsEnabledAsync(tenantId, ct);
+        document["features"] = features;
 
         return document.ToJsonString();
     }

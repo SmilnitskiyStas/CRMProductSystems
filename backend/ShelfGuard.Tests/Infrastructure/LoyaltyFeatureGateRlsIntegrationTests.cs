@@ -24,21 +24,8 @@ using Xunit.Abstractions;
 namespace ShelfGuard.Tests.Infrastructure;
 
 /// <summary>
-/// TASK-559 — live-Postgres proof for Option A (discovery-only gate, chosen by the user over
-/// Option B's hard gate — see .claude/tasks/mobile-roadmap.md TASK-559): <c>features.loyalty</c>
-/// (TASK-543/558, <see cref="IConsumerFeatureFlagService"/>) hides a tenant from NEW
-/// discovery/joining (<c>ConsumerLoyaltyController.Join</c>'s
-/// <c>[RequireConsumerFeature("loyalty")]</c>, <see cref="LoyaltyService.GetAvailableNetworksAsync"/>)
-/// but never revokes an EXISTING member's access to their own balance/code/history.
-///
-/// Same real-Postgres, real-service, no-mocks rigor as TASK-558's
-/// <see cref="ConsumerContentFeatureGateRlsIntegrationTests"/> and TASK-417's
-/// <see cref="LoyaltyJoinRlsIntegrationTests"/>: real <see cref="LoyaltyService"/> composed from
-/// real repositories/<see cref="TenantSessionOverride"/>, real
-/// <see cref="ConsumerFeatureFlagService"/> composed from a real
-/// <see cref="MobileConfigPublishedReadService"/>, against actual dev Postgres switched to the
-/// throwaway <c>rls_audit_test_role</c>. Same skip-when-no-DB, <c>TENANT_ISOLATION_TESTS</c>
-/// collection convention as every other file in this folder.
+/// Tests the real RLS-scoped loyalty gate: Bonus Program controls discovery and joining,
+/// while legacy published flags cannot override it. Existing members retain their data.
 /// </summary>
 [Collection("TENANT_ISOLATION_TESTS")]
 public sealed class LoyaltyFeatureGateRlsIntegrationTests : IAsyncLifetime
@@ -130,10 +117,9 @@ public sealed class LoyaltyFeatureGateRlsIntegrationTests : IAsyncLifetime
         }
     }
 
-    /// <summary>Converse: a tenant that HAS published <c>features.loyalty: false</c> must be
-    /// rejected with the filter's documented 403 shape when attempting to join.</summary>
+    /// <summary>Legacy flags cannot block a program enabled in Bonus Program.</summary>
     [Fact]
-    public async Task Explicit_false_in_a_published_config_returns_403_through_the_real_join_gate()
+    public async Task Legacy_published_false_does_not_block_the_real_join_gate()
     {
         if (!_dbAvailable) { _output.WriteLine("DB not available — skipped."); return; }
 
@@ -150,10 +136,7 @@ public sealed class LoyaltyFeatureGateRlsIntegrationTests : IAsyncLifetime
                 Task.FromResult(new ActionExecutedContext(
                     context, new List<IFilterMetadata>(), controller: new object())));
 
-            var result = Assert.IsType<ObjectResult>(context.Result);
-            Assert.Equal(StatusCodes.Status403Forbidden, result.StatusCode);
-            var errorProp = result.Value!.GetType().GetProperty("error");
-            Assert.Equal("Feature not enabled", errorProp!.GetValue(result.Value));
+            Assert.Null(context.Result);
         }
         finally
         {
@@ -188,13 +171,13 @@ public sealed class LoyaltyFeatureGateRlsIntegrationTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task GetAvailableNetworksAsync_excludes_tenant_with_published_features_loyalty_false()
+    public async Task GetAvailableNetworksAsync_excludes_tenant_with_disabled_bonus_program()
     {
         if (!_dbAvailable) { _output.WriteLine("DB not available — skipped."); return; }
 
         var gatedTenant = await SeedTenantAsync("loyalty");
         var controlTenant = await SeedTenantAsync("loyalty");
-        await SeedPublishedConfigAsync(gatedTenant.Id, enabled: false);
+        await DisableBonusProgramAsync(gatedTenant.Id);
 
         try
         {
@@ -217,17 +200,7 @@ public sealed class LoyaltyFeatureGateRlsIntegrationTests : IAsyncLifetime
 
     // ── THE Option-A-vs-B proof ────────────────────────────────────────────────────────────────
 
-    /// <summary>
-    /// THE test that actually distinguishes Option A (chosen) from Option B (rejected): a
-    /// consumer joins a tenant's loyalty program WHILE <c>features.loyalty</c> is still enabled
-    /// (or unpublished, same thing) — a real <see cref="LoyaltyMembership"/> row is created. The
-    /// tenant THEN publishes <c>features.loyalty: false</c>. Under Option A, that pre-existing
-    /// member must keep full access to their own membership/code/history/preferred-store —
-    /// exactly what this test proves against the real service + real DB, alongside proving the
-    /// same tenant has in fact dropped out of discovery (<see cref="GetAvailableNetworksAsync"/>)
-    /// and now rejects a brand-new join through the real <see cref="RequireConsumerFeatureFilter"/>
-    /// — the contrast is the whole point: discovery/join are gated, this existing member is not.
-    /// </summary>
+    /// <summary>Disabling Bonus Program gates new joining but preserves members' data.</summary>
     [Fact]
     public async Task OptionA_existing_member_keeps_full_access_after_tenant_later_disables_loyalty_discovery()
     {
@@ -250,8 +223,8 @@ public sealed class LoyaltyFeatureGateRlsIntegrationTests : IAsyncLifetime
                 membership = joined;
             }
 
-            // 2. The tenant NOW publishes features.loyalty: false — after the membership exists.
-            await SeedPublishedConfigAsync(tenant.Id, enabled: false);
+            // 2. Disable Bonus Program after the membership exists.
+            await DisableBonusProgramAsync(tenant.Id);
 
             // 3. Discovery/new-join are gated: the tenant drops out of GetAvailableNetworksAsync,
             //    and a brand-new Join attempt is rejected by the real filter with 403.
@@ -312,16 +285,20 @@ public sealed class LoyaltyFeatureGateRlsIntegrationTests : IAsyncLifetime
     private static RequireConsumerFeatureFilter BuildRealFilter(AppDbContext db)
     {
         var publishedRead = new MobileConfigPublishedReadService(
-            new MobileConfigurationRepository(db), new TenantRepository(db), new TenantSessionOverride(db));
-        var flagService = new ConsumerFeatureFlagService(publishedRead);
+            new MobileConfigurationRepository(db), new TenantRepository(db), new TenantSessionOverride(db),
+            new LoyaltyProgramAvailability(new TenantRepository(db), new LoyaltyRepository(db), new TenantSessionOverride(db)));
+        var flagService = new ConsumerFeatureFlagService(publishedRead,
+            new LoyaltyProgramAvailability(new TenantRepository(db), new LoyaltyRepository(db), new TenantSessionOverride(db)));
         return new RequireConsumerFeatureFilter("loyalty", flagService);
     }
 
     private static LoyaltyService BuildLoyaltyService(AppDbContext db)
     {
         var publishedRead = new MobileConfigPublishedReadService(
-            new MobileConfigurationRepository(db), new TenantRepository(db), new TenantSessionOverride(db));
-        var flagService = new ConsumerFeatureFlagService(publishedRead);
+            new MobileConfigurationRepository(db), new TenantRepository(db), new TenantSessionOverride(db),
+            new LoyaltyProgramAvailability(new TenantRepository(db), new LoyaltyRepository(db), new TenantSessionOverride(db)));
+        var flagService = new ConsumerFeatureFlagService(publishedRead,
+            new LoyaltyProgramAvailability(new TenantRepository(db), new LoyaltyRepository(db), new TenantSessionOverride(db)));
 
         return new LoyaltyService(
             new LoyaltyRepository(db),
@@ -398,6 +375,13 @@ public sealed class LoyaltyFeatureGateRlsIntegrationTests : IAsyncLifetime
         return location.Id;
     }
 
+    private async Task DisableBonusProgramAsync(Guid tenantId)
+    {
+        await using var db = NewContext();
+        db.LoyaltyProgramSettings.Add(new LoyaltyProgramSettings { TenantId = tenantId, IsEnabled = false });
+        await db.SaveChangesAsync();
+    }
+
     private async Task SeedPublishedConfigAsync(Guid tenantId, bool enabled)
     {
         await using var db = NewContext();
@@ -464,6 +448,8 @@ public sealed class LoyaltyFeatureGateRlsIntegrationTests : IAsyncLifetime
     private async Task CleanupTenantDataAsync(Guid tenantId)
     {
         await using var db = NewContext();
+        await db.Database.ExecuteSqlInterpolatedAsync(
+            $"DELETE FROM loyalty_program_settings WHERE \"TenantId\" = {tenantId}");
         await db.Database.ExecuteSqlInterpolatedAsync(
             $"DELETE FROM loyalty_ledger_entries WHERE \"TenantId\" = {tenantId}");
         await db.Database.ExecuteSqlInterpolatedAsync(

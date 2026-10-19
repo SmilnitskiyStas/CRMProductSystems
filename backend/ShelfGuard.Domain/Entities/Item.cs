@@ -39,6 +39,11 @@ public sealed class Item
     public string ItemType { get; set; } = "product";
     public bool IsActive { get; set; } = true;
     public DateTime CreatedAt { get; init; } = DateTime.UtcNow;
+    /// <summary>
+    /// Last modification time, maintained by a DB trigger (items_set_updated_at) so every write path
+    /// bumps it. Backs the register delta-catalog sync (GET /api/pos/sync/catalog?since=).
+    /// </summary>
+    public DateTime UpdatedAt { get; private set; } = DateTime.UtcNow;
 
     public Tenant? Tenant { get; init; }
     public PlatformCategory? Category { get; init; }

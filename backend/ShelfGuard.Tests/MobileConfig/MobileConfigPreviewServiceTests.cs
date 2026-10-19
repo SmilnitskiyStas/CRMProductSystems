@@ -17,6 +17,7 @@ public sealed class MobileConfigPreviewServiceTests
 {
     private readonly IMobileConfigurationRepository _repo = Substitute.For<IMobileConfigurationRepository>();
     private readonly ITenantRepository _tenants = Substitute.For<ITenantRepository>();
+    private readonly ILoyaltyProgramAvailability _loyalty = Substitute.For<ILoyaltyProgramAvailability>();
     private readonly MobileConfigPreviewService _sut;
 
     private static readonly Guid TenantId = Guid.NewGuid();
@@ -33,7 +34,11 @@ public sealed class MobileConfigPreviewServiceTests
     }
     """;
 
-    public MobileConfigPreviewServiceTests() => _sut = new MobileConfigPreviewService(_repo, _tenants);
+    public MobileConfigPreviewServiceTests()
+    {
+        _loyalty.IsEnabledAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns(true);
+        _sut = new MobileConfigPreviewService(_repo, _tenants, _loyalty);
+    }
 
     [Fact]
     public async Task Returns_empty_default_document_when_tenant_has_no_MobileConfiguration_row_yet()
@@ -50,7 +55,7 @@ public sealed class MobileConfigPreviewServiceTests
         Assert.False(root.GetProperty("hasDraft").GetBoolean());
         Assert.Equal(0, root.GetProperty("configVersion").GetInt32());
         Assert.Equal(MobileConfigWhitelists.CurrentSchemaVersion, root.GetProperty("schemaVersion").GetInt32());
-        Assert.Empty(root.GetProperty("features").EnumerateObject());
+        Assert.True(root.GetProperty("features").GetProperty("loyalty").GetBoolean());
         Assert.Equal(0, root.GetProperty("navigation").GetArrayLength());
         Assert.Empty(root.GetProperty("pages").EnumerateObject());
 
@@ -107,6 +112,20 @@ public sealed class MobileConfigPreviewServiceTests
         Assert.False(features.GetProperty("news").GetBoolean());
         Assert.Equal(2, root.GetProperty("navigation").GetArrayLength());
         Assert.True(root.GetProperty("pages").TryGetProperty("home", out _));
+    }
+
+    [Fact]
+    public async Task Preview_uses_live_bonus_setting_instead_of_draft_flag()
+    {
+        var tenant = SeedTenant();
+        var config = SeedDraftConfig(tenant.Id, DraftDocumentJson, version: 1);
+        _tenants.GetByIdAsync(tenant.Id, Arg.Any<CancellationToken>()).Returns(tenant);
+        _repo.GetByTenantIdAsync(tenant.Id, Arg.Any<CancellationToken>()).Returns(config);
+        _loyalty.IsEnabledAsync(tenant.Id, Arg.Any<CancellationToken>()).Returns(false);
+
+        using var doc = JsonDocument.Parse(await _sut.GetPreviewAsync(tenant.Id));
+        Assert.False(doc.RootElement.GetProperty("features").GetProperty("loyalty").GetBoolean());
+        Assert.Contains("\"loyalty\": true", config.DraftVersion!.ConfigurationJson);
     }
 
     [Fact]

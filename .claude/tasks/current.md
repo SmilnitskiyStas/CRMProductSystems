@@ -1548,3 +1548,30 @@ Security: Critical/High — немає; **Medium** — `MovementRepository.GetIn
 `GetIncomingAsync` + явний `ClientTenantId == tenantId`; `PostponeAsync` ліміт today+365 і запис `receipt.postponed` в activity_log;
 no-purchase для чужого/неіснуючого store → `[]`; `ReceiptDto` + postpone-поля; +6 тестів. Фронт: `allLines` у `useMemo` (orders/page).
 Build чисто, filtered `dotnet test` 566/566.
+
+### TASK-722 — Resilience stage 1 (health checks, limits, deploy) — review
+`/health/live|ready` в API, HEALTHCHECK у 3 Dockerfile, ліміти в prod compose, deploy.sh: build до down + health-gate. Тести 2467/2467; не задеплоєно. Лог: `.claude/logs/tasks/722_*`.
+
+### TASK-723 — Resilience stage 2 (Polly для зовнішніх залежностей) — review
+Open-Meteo/Nominatim/Checkbox: retry(GET)/breaker/timeout; AI: breaker per endpoint; Telegram (worker): timeout+breaker; 503 замість 500. Тести 2474/2474; не задеплоєно. Лог: `.claude/logs/tasks/723_*`.
+
+### TASK-724 — Frontend service_unavailable (геокодер, AI, погода) — review
+`isServiceUnavailable` + м'які повідомлення; погода більше не плутає 503 з відсутніми координатами. tsc/vitest OK; не перевірено в браузері. Лог: `.claude/logs/tasks/724_*`.
+
+### TASK-725 — Resilience stage 3b (API ролі + gateway) — review
+API_ROLE core/consumer/provider, nginx gateway :5100, SignalR Redis backplane. dotnet test 2491/2491, nginx-маршрути перевірені на dummy-апстрімах; НЕ запускалось end-to-end, НЕ задеплоєно. Перед продом: Maximum Pool Size=30, RAM, staging. Лог: `.claude/logs/tasks/725_*`.
+
+### TASK-726 - Cashier app backend Phase 1 (registers, PIN sessions, idempotent sales, delta catalog) - review
+`cash_registers`/`register_sessions` + RLS, device-token activation, PIN operator JWT, `ClientTransactionId` idempotency, `POST /pos/sales/batch`, `GET /pos/sync/catalog`, `items.UpdatedAt` trigger. Migration AddCashRegisters applied to dev; dotnet test 2527/2527; not committed. Лог: `.claude/logs/tasks/726_*`.
+
+### TASK-727 - Web "Каси" management page - review
+`/registers` (tabs: каси, PIN, статистика, журнал) + sidebar item in `sales` group. New read endpoints under `api/pos/registers`: `operators`, `stats`, `{id}/sessions`, `{id}/shifts`, `employees` (RegisterReportService, store-scoped). tsc/lint clean, dotnet Register tests 59/59; not committed. Лог: `.claude/logs/tasks/727_*`.
+
+### TASK-728 - Cashier desktop app slice 3a (`/cashier`) - review
+Electron+React+TS+Tailwind (electron-vite, NSIS): activation, PIN pad, shift open/close + Z summary, checkout (scanner wedge, cart, cash/card, idempotent sale w/ retry), status bar; `CatalogStore`/`SalesGateway` seams for Phase 4. tsc/lint/24 vitest/build/dist OK -> `cashier/release/ShelfGuard Cashier Setup 0.1.0.exe`; smoke-tested vs mock API, not vs real backend; not committed. Лог: `.claude/logs/tasks/728_*`.
+
+### TASK-729 - Cashier phase 4: offline queue + ESC/POS printing - review
+better-sqlite3 (pinned 11.10.0, Electron prebuilt) catalog + sales outbox with batch sync/backoff, queue screen, offline restart; own ESC/POS builder (CP866/1125/1251/UTF-8, 58/80mm), Windows RAW/TCP/COM/file transports, print settings. 54 vitest, build+dist OK, packaged smoke vs mock API OK; not tested on real backend/printer; not committed. Лог: `.claude/logs/tasks/729_*`.
+
+### TASK-730 - Batch sale cashier attribution - review
+Offline sales flushed by another operator are stored under the real cashier when that cashier had a session on this register (window +5 min tolerance), is active/POS/same store, OccurredAt sane; else failed 403. No migration. Лог: `.claude/logs/tasks/730_*`.
