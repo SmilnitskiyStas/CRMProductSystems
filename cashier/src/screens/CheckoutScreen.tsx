@@ -61,10 +61,15 @@ export function CheckoutScreen({ shift, online, onOpenShiftScreen, onOpenQueue, 
   // Published promotion rules (synced + cached in main, so they also apply offline). The cart is priced
   // through the same engine the server uses; the server stays authoritative at sale time.
   const [promoRules, setPromoRules] = useState<PromotionRule[]>([]);
+  const [storeTimeZone, setStoreTimeZone] = useState<string | null>(null);
   const [tick, setTick] = useState(() => Date.now());
   useEffect(() => {
-    void window.cashier.getPromotions().then((p) => setPromoRules(p.rules));
-    const off = window.cashier.onPromotionsChange((p) => setPromoRules(p.rules));
+    const apply = (p: { rules: PromotionRule[]; storeTimeZone: string | null }) => {
+      setPromoRules(p.rules);
+      setStoreTimeZone(p.storeTimeZone ?? null);
+    };
+    void window.cashier.getPromotions().then(apply);
+    const off = window.cashier.onPromotionsChange(apply);
     const t = setInterval(() => setTick(Date.now()), 30_000); // time-window rules flip on the minute
     return () => {
       off();
@@ -76,11 +81,12 @@ export function CheckoutScreen({ shift, online, onOpenShiftScreen, onOpenQueue, 
       priceCart(cart, promoRules, {
         storeId: shift.storeId,
         at: tick,
+        storeTimeZone,
         membership: member
           ? { id: member.membershipId, tierId: member.tierId, tierPercent: member.tierDiscountPercent ?? 0 }
           : null,
       }),
-    [cart, promoRules, shift.storeId, tick, member],
+    [cart, promoRules, shift.storeId, tick, member, storeTimeZone],
   );
   const total = priced.total;
   const dialogOpen = payment !== null || submission.status === 'completed' || confirmClear;

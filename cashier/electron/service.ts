@@ -164,6 +164,7 @@ export class CashierService {
       },
       Date.now,
       () => this.promotions.state().rules,
+      () => this.promotions.state().storeTimeZone,
     );
 
     this.printSettings = new PrintSettingsStore(join(app.getPath('userData'), 'print-settings.json'));

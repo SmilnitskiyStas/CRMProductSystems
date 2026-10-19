@@ -218,6 +218,8 @@ export interface PromotionsState {
   rules: PromotionRule[];
   etag: string | null;
   fetchedAt: string | null;
+  /** IANA zone of the store, for weekday/time-window promotion scope. */
+  storeTimeZone: string | null;
   syncing: boolean;
   error: string | null;
 }

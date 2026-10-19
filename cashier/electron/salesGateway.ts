@@ -92,6 +92,7 @@ export class OutboxSalesGateway implements SalesGateway {
     private readonly context: () => ReceiptContext | null,
     private readonly now: () => number = Date.now,
     private readonly rules: () => readonly PromotionRule[] = () => [],
+    private readonly storeTimeZone: () => string | null = () => null,
   ) {}
 
   async submit(request: SaleSubmitRequest): Promise<SaleGatewayResult> {
@@ -120,6 +121,7 @@ export class OutboxSalesGateway implements SalesGateway {
     const segments = applyPromotions(resolved.map((r) => r.line), this.rules(), {
       storeId: ctx.storeId,
       at: this.now(),
+      storeTimeZone: this.storeTimeZone(),
       membership: member
         ? { id: member.membershipId, tierId: member.tierId, tierPercent: member.tierDiscountPercent ?? 0 }
         : null,

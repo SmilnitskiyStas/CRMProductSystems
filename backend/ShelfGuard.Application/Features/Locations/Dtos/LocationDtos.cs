@@ -14,7 +14,9 @@ public sealed record LocationDto(
     /// <summary>Optional legal entity this location is registered under (TASK-321).</summary>
     Guid? LegalEntityId = null,
     /// <summary>Structured Ukraine region code (ISO 3166-2:UA oblast or city code), nullable (TASK-658).</summary>
-    string? RegionCode = null
+    string? RegionCode = null,
+    /// <summary>IANA time zone of the store (default Europe/Kyiv).</summary>
+    string TimeZone = "Europe/Kyiv"
 );
 
 public sealed record LocationZoneDto(
@@ -36,7 +38,8 @@ public sealed record CreateLocationRequest(
     decimal? Longitude,
     string LocationType,
     Guid? LegalEntityId = null,
-    string? RegionCode = null
+    string? RegionCode = null,
+    string? TimeZone = null
 );
 
 public sealed record UpdateLocationRequest(
@@ -47,7 +50,8 @@ public sealed record UpdateLocationRequest(
     string LocationType,
     bool IsActive,
     Guid? LegalEntityId = null,
-    string? RegionCode = null
+    string? RegionCode = null,
+    string? TimeZone = null
 );
 
 public sealed record UpdateFloorPlanRequest(

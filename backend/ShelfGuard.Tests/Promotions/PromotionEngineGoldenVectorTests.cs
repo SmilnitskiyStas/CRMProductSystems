@@ -33,6 +33,7 @@ public sealed class PromotionEngineGoldenVectorTests
         public Guid StoreId { get; set; }
         public DateTimeOffset At { get; set; }
         public int UtcOffsetMinutes { get; set; }
+        public string? StoreTimeZone { get; set; }
         public VectorMembership? Membership { get; set; }
     }
 
@@ -100,7 +101,8 @@ public sealed class PromotionEngineGoldenVectorTests
         var lines = v.Lines.Select(l => new PromotionLineInput(
             l.ItemId, l.CategoryId, l.UnitPrice, l.Quantity, l.HasStockDiscount, l.RegularPrice)).ToList();
         var ctx = new PromotionContext(v.Context.StoreId, v.Context.At, v.Context.UtcOffsetMinutes,
-            v.Context.Membership is { } m ? new PromotionMembership(m.Id, m.TierId, m.TierPercent) : null);
+            v.Context.Membership is { } m ? new PromotionMembership(m.Id, m.TierId, m.TierPercent) : null,
+            v.Context.StoreTimeZone);
 
         var result = PromotionEngine.Evaluate(lines, rules, ctx);
 

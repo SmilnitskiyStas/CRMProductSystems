@@ -8,3 +8,6 @@
 - Notes: `price_below_minimum` also covers fixed_off amount and getPrice < 0.01; `invalid_period` also covers bad weekdays/time format; unknown type/audience kind/matchMode => `missing_param`. Publish validation failure => 400 with `{errors, warnings}`; other 400s `{error}`.
 - Tests: `Promotions/PromotionRuleServiceTests.cs` (fakes), `PromotionRuleFlowIntegrationTests.cs` (real Postgres, incl. PosSyncService). FakePromotionRepo in PosServiceTests got the 3 new members.
 - Build OK; full `dotnet test`: 2666 passed, 0 failed.
+
+## Follow-ups (same task)
+- Store time zone slice: migration `AddLocationTimeZone`; `StoreTimeZones` helper (Europe/Kyiv, Kiev alias fallback); engine `StoreTimeZone`; PosService/simulate/sync wiring; 16 new golden vectors; tests in `Promotions/StoreTimeZoneTests.cs`. Production Dockerfile uses mcr aspnet:8.0 (Debian, ships tzdata) - no change needed.

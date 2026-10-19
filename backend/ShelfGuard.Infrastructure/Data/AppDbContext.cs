@@ -374,6 +374,7 @@ public sealed class AppDbContext : DbContext
             // TASK-649: structured Ukraine region code; varchar(20) fits the longest
             // city code shape "UA-XX-LONGTRANSLIT" (e.g. UA-12-KRYVYI-RIH).
             e.Property(s => s.RegionCode).HasMaxLength(20);
+            e.Property(s => s.TimeZone).HasMaxLength(64).IsRequired().HasDefaultValue("Europe/Kyiv");
             e.Property(s => s.FloorPlan).HasColumnType("jsonb");
             e.Property(s => s.Latitude).HasColumnType("decimal(10,7)");
             e.Property(s => s.Longitude).HasColumnType("decimal(10,7)");

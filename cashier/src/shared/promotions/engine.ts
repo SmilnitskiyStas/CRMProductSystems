@@ -66,7 +66,10 @@ export interface PromotionContext {
   storeId: string;
   /** Pricing instant (ISO string, Date or epoch ms). */
   at: string | Date | number;
+  /** Legacy fixed store-local offset, used only when storeTimeZone is null/unknown. */
   utcOffsetMinutes?: number;
+  /** IANA zone of the store (e.g. Europe/Kyiv): weekday/time-window scope is evaluated in it, DST aware. */
+  storeTimeZone?: string | null;
   membership?: PromotionMembership | null;
 }
 
@@ -240,20 +243,76 @@ function normalize(rule: PromotionRule): Norm | null {
   };
 }
 
-function inScope(r: Norm, storeId: string, atMs: number, offsetMin: number): boolean {
+// ── store-local time ─────────────────────────────────────────────────────────
+
+const formatters = new Map<string, Intl.DateTimeFormat | null>();
+
+/** Intl formatter for an IANA zone; null when blank/unknown (same fallback as StoreTimeZones.Resolve in C#). */
+function zoneFormatter(id: string | null | undefined): Intl.DateTimeFormat | null {
+  if (!id || id.trim() === '') return null;
+  const key = id.trim();
+  if (formatters.has(key)) return formatters.get(key)!;
+  const candidates = key === 'Europe/Kyiv' ? [key, 'Europe/Kiev'] : key === 'Europe/Kiev' ? [key, 'Europe/Kyiv'] : [key];
+  let f: Intl.DateTimeFormat | null = null;
+  for (const tz of candidates) {
+    try {
+      f = new Intl.DateTimeFormat('en-US', {
+        timeZone: tz, hourCycle: 'h23', year: 'numeric', month: 'numeric', day: 'numeric',
+        hour: 'numeric', minute: 'numeric', second: 'numeric',
+      });
+      break;
+    } catch {
+      f = null;
+    }
+  }
+  formatters.set(key, f);
+  return f;
+}
+
+interface LocalTime {
+  /** Local calendar date as a UTC-midnight epoch (only used for weekday arithmetic). */
+  dateMs: number;
+  /** Time of day in ms. */
+  timeMs: number;
+}
+
+/** Instant -> store-local date + time of day: the IANA zone (DST aware) when known, else UTC + fixed offset. */
+function toLocal(atMs: number, zone: string | null | undefined, offsetMin: number): LocalTime {
+  const f = zoneFormatter(zone);
+  if (f) {
+    const p: Record<string, number> = {};
+    for (const part of f.formatToParts(new Date(atMs))) if (part.type !== 'literal') p[part.type] = Number(part.value);
+    const ms = ((atMs % 1000) + 1000) % 1000;
+    return {
+      dateMs: Date.UTC(p.year, p.month - 1, p.day),
+      timeMs: ((p.hour % 24) * 3600 + p.minute * 60 + p.second) * 1000 + ms,
+    };
+  }
+  const localMs = atMs + offsetMin * 60_000;
+  const timeMs = ((localMs % 86_400_000) + 86_400_000) % 86_400_000;
+  return { dateMs: localMs - timeMs, timeMs };
+}
+
+function inScope(r: Norm, storeId: string, atMs: number, offsetMin: number, zone: string | null | undefined): boolean {
   if (r.storeIds.size > 0 && !r.storeIds.has(lc(storeId))) return false;
   if (r.validFromMs !== null && atMs < r.validFromMs) return false;
   if (r.validToMs !== null && atMs >= r.validToMs) return false;
 
-  const localMs = atMs + offsetMin * 60_000;
+  const local = toLocal(atMs, zone, offsetMin);
+  const t = local.timeMs;
+  const f = r.timeFromMs;
+  const e = r.timeToMs;
+
+  // A window crossing midnight (timeFrom > timeTo) belongs to the day it STARTS on: in its
+  // after-midnight part the weekday that counts is the previous local day.
+  let weekdayDateMs = local.dateMs;
+  if (f !== null && e !== null && f > e && t < e) weekdayDateMs -= 86_400_000;
   if (r.weekdays.length > 0) {
-    const dow = new Date(localMs).getUTCDay(); // 0 = Sunday
+    const dow = new Date(weekdayDateMs).getUTCDay(); // 0 = Sunday
     const iso = dow === 0 ? 7 : dow;
     if (!r.weekdays.includes(iso)) return false;
   }
-  const t = ((localMs % 86_400_000) + 86_400_000) % 86_400_000;
-  const f = r.timeFromMs;
-  const e = r.timeToMs;
+
   if (f !== null && e !== null) return f <= e ? t >= f && t < e : t >= f || t < e;
   if (f !== null) return t >= f;
   if (e !== null) return t < e;
@@ -348,7 +407,7 @@ export function applyPromotions(
 
   let active: Norm[] = rules
     .map(normalize)
-    .filter((r): r is Norm => r !== null && inScope(r, ctx.storeId, atMs, offset) && audienceMatch(r, ctx.membership))
+    .filter((r): r is Norm => r !== null && inScope(r, ctx.storeId, atMs, offset, ctx.storeTimeZone) && audienceMatch(r, ctx.membership))
     .sort(
       (a, b) =>
         cmp(a.priority, b.priority) ||

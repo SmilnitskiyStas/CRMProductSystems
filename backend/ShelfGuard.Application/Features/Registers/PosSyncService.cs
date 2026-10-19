@@ -14,12 +14,15 @@ public sealed class PosSyncService : IPosSyncService
     private readonly ICatalogSyncRepository _catalog;
     private readonly IPromotionRuleRepository? _promotions;
     private readonly ICashRegisterRepository? _registers;
+    private readonly ILocationRepository? _locations;
 
     public PosSyncService(
         ICatalogSyncRepository catalog,
         IPromotionRuleRepository? promotions = null,
-        ICashRegisterRepository? registers = null)
+        ICashRegisterRepository? registers = null,
+        ILocationRepository? locations = null)
     {
+        _locations = locations;
         _catalog = catalog;
         _promotions = promotions;
         _registers = registers;
@@ -67,6 +70,7 @@ public sealed class PosSyncService : IPosSyncService
             return (null, "storeId is required.", 400);
         }
 
+        var storeTimeZone = _locations is null ? null : (await _locations.GetByIdAsync(storeId, ct))?.TimeZone;
         var serverTime = DateTime.UtcNow;
         var now = new DateTimeOffset(serverTime, TimeSpan.Zero);
         var rows = _promotions is null ? [] : await _promotions.GetPublishedAsync(tenantId, ct);
@@ -81,11 +85,13 @@ public sealed class PosSyncService : IPosSyncService
             .OrderBy(x => x.Row.RuleId)
             .ToList();
 
+        // The store time zone is part of the etag: changing it changes how scope is evaluated.
         var current = ComputeEtag(applicable.Select(x =>
-            $"{x.Row.RuleId:D}|{x.Row.VersionId:D}|{x.Row.Name}|{x.Def!.Scope.ValidFrom:O}|{x.Def.Scope.ValidTo:O}"));
+                $"{x.Row.RuleId:D}|{x.Row.VersionId:D}|{x.Row.Name}|{x.Def!.Scope.ValidFrom:O}|{x.Def.Scope.ValidTo:O}")
+            .Append($"tz|{storeTimeZone}"));
 
         if (string.Equals(etag, current, StringComparison.Ordinal))
-            return (new SyncPromotionsResponse(current, true, serverTime, []), null, null);
+            return (new SyncPromotionsResponse(current, true, serverTime, [], storeTimeZone), null, null);
 
         var rules = applicable.Select(x =>
         {
@@ -95,7 +101,7 @@ public sealed class PosSyncService : IPosSyncService
                 DateTime.SpecifyKind(x.Row.CreatedAt, DateTimeKind.Utc), doc.RootElement.Clone());
         }).ToList();
 
-        return (new SyncPromotionsResponse(current, false, serverTime, rules), null, null);
+        return (new SyncPromotionsResponse(current, false, serverTime, rules, storeTimeZone), null, null);
     }
 
     /// <summary>Hash of the applicable set (rule ids, immutable version ids, names, valid windows).</summary>

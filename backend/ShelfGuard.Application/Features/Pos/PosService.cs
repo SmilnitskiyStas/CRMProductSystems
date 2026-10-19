@@ -37,6 +37,7 @@ public sealed class PosService : IPosService
     private readonly IUserRepository? _users;
     private readonly ICashRegisterRepository? _registers;
     private readonly IPromotionRuleRepository? _promotions;
+    private readonly ILocationRepository? _locations;
 
     // Offline-sale attribution window (batch sync).
     public static readonly TimeSpan MaxFutureSkew = TimeSpan.FromMinutes(5);
@@ -54,8 +55,10 @@ public sealed class PosService : IPosService
         ILogger<PosService> log,
         IUserRepository? users = null,
         ICashRegisterRepository? registers = null,
-        IPromotionRuleRepository? promotions = null)
+        IPromotionRuleRepository? promotions = null,
+        ILocationRepository? locations = null)
     {
+        _locations = locations;
         _users = users;
         _registers = registers;
         _promotions = promotions;
@@ -1214,12 +1217,9 @@ public sealed class PosService : IPosService
         return at <= now + MaxFutureSkew && at >= now - MaxSaleAge ? at : now;
     }
 
-    /// <summary>
-    /// Store-local offset for weekday/time-of-day rule scope. Locations carry no time zone yet,
-    /// so this is UTC (0) for now - a "18:00-20:00" window is evaluated in UTC until a store
-    /// time zone exists (the cashier mirror must use the same offset).
-    /// </summary>
-    private static int StoreUtcOffsetMinutes(Guid storeId) => 0;
+    /// <summary>The store's IANA time zone (locations.TimeZone); null when unavailable (engine then uses UTC).</summary>
+    private async Task<string?> GetStoreTimeZoneAsync(Guid storeId, CancellationToken ct) =>
+        _locations is null ? null : (await _locations.GetByIdAsync(storeId, ct))?.TimeZone;
 
     private async Task<PromotionOutcome?> EvaluatePromotionsAsync(
         Guid tenantId, Guid storeId, DateTime pricingAt, List<ResolvedSaleItem> items,
@@ -1240,7 +1240,7 @@ public sealed class PosService : IPosService
 
         var result = PromotionEngine.Evaluate(lines, rules,
             new PromotionContext(storeId, new DateTimeOffset(pricingAt, TimeSpan.Zero),
-                StoreUtcOffsetMinutes(storeId), membership));
+                0, membership, await GetStoreTimeZoneAsync(storeId, ct)));
 
         var segments = result.Lines
             .Select(l => l.Segments.Any(s => s.RuleId.HasValue) ? l.Segments : null)

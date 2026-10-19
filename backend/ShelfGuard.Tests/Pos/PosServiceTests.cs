@@ -2148,10 +2148,10 @@ file sealed class PromoCtx
         return b;
     }
 
-    public PosService Service(bool withPromotions = true) => new(
+    public PosService Service(bool withPromotions = true, ILocationRepository? locations = null) => new(
         Pos, Stock, Catalog, new FakeDiscountRepo(), new FakeFiscalFactory(new NoopFiscalService()),
         Loyalty, new FakeCustomerRepo(), NullLogger<PosService>.Instance,
-        promotions: withPromotions ? Promotions : null);
+        promotions: withPromotions ? Promotions : null, locations: locations);
 
     public static (LoyaltyMembership Membership, PromoCtx T, Item Product) WithTier(decimal tierPercent)
     {
@@ -2352,6 +2352,35 @@ public sealed class PosServicePromotionTests
         Assert.Equal(80m, await Sell(matching, true));
         Assert.Equal(100m, await Sell(other, true));
         Assert.Equal(100m, await Sell(matching, false));
+    }
+
+    [Fact]
+    public async Task Sale_evaluates_rule_time_windows_in_the_store_time_zone()
+    {
+        // Pacific/Kiritimati is UTC+14: a window around ITS current local hour is never open in UTC.
+        var zone = "Pacific/Kiritimati";
+        var tz = TimeZoneInfo.FindSystemTimeZoneById(zone);
+        var h = TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow, tz).Hour;
+        var from = $"{h:00}:00";
+        var to = $"{(h + 2) % 24:00}:00";
+
+        async Task<decimal> Sell(bool withZone)
+        {
+            var t = new PromoCtx();
+            var product = t.AddProduct("TZ-WIN", 50m);
+            t.AddBatch(product.Id, 10m, days: 10);
+            t.Promotions.Add("window", "{\"type\":\"percent_off\",\"targets\":{\"itemIds\":[\"" + product.Id + "\"]},\"params\":{\"percent\":20},\"scope\":{\"timeFrom\":\"" + from + "\",\"timeTo\":\"" + to + "\"}}");
+            var locations = Substitute.For<ILocationRepository>();
+            locations.GetByIdAsync(StoreId, Arg.Any<CancellationToken>())
+                .Returns(new Location { Id = StoreId, TenantId = TenantId, Name = "S", TimeZone = zone });
+            var (sale, error, _) = await t.Service(locations: withZone ? locations : null).CreateSaleAsync(TenantId, CashierId,
+                new CreateSaleRequest(t.Shift.Id, [new SaleItemRequest("TZ-WIN", 1)], "Cash", 50m));
+            Assert.Null(error);
+            return sale!.Subtotal;
+        }
+
+        Assert.Equal(40m, await Sell(true));
+        Assert.Equal(50m, await Sell(false));
     }
 
     [Fact]

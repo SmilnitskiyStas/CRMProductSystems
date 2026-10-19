@@ -118,4 +118,5 @@ public sealed record SyncPromotionsResponse(
     string Etag,
     bool NotModified,
     DateTime ServerTime,
-    IReadOnlyList<SyncPromotionRuleDto> Rules);
+    IReadOnlyList<SyncPromotionRuleDto> Rules,
+    string? StoreTimeZone = null);

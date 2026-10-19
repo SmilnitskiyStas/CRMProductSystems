@@ -105,6 +105,7 @@ export default function LocationsPage() {
     isActive: boolean;
     legalEntityId: string | null;
     regionCode: string | null;
+    timeZone: string;
   }) {
     if (dialog === "create") {
       create.mutate(
@@ -116,6 +117,7 @@ export default function LocationsPage() {
           locationType: values.locationType,
           legalEntityId: values.legalEntityId,
           regionCode: values.regionCode,
+          timeZone: values.timeZone,
         },
         {
           onSuccess: () => {

@@ -6,6 +6,8 @@ export interface SyncPromotionsWire {
   etag: string;
   notModified: boolean;
   serverTime: string;
+  /** IANA zone of the register's store; null/absent on older servers. */
+  storeTimeZone?: string | null;
   rules: { id: string; versionId: string; name: string; createdAt: string; definition: PromotionDefinition }[];
 }
 
@@ -13,6 +15,7 @@ export interface StoredPromotions {
   rules: PromotionRule[];
   etag: string | null;
   fetchedAt: string | null;
+  storeTimeZone?: string | null;
 }
 
 /** Durable side: SQLite kv in the app, in-memory in tests. */
@@ -46,6 +49,7 @@ export class PromotionsStore {
   private rules: PromotionRule[] = [];
   private etag: string | null = null;
   private fetchedAt: string | null = null;
+  private storeTimeZone: string | null = null;
   private error: string | null = null;
   private syncing: Promise<PromotionsState> | null = null;
 
@@ -63,6 +67,7 @@ export class PromotionsStore {
         this.rules = s.rules;
         this.etag = s.etag;
         this.fetchedAt = s.fetchedAt;
+        this.storeTimeZone = s.storeTimeZone ?? null;
       }
     } catch {
       /* unreadable cache: start empty */
@@ -74,6 +79,7 @@ export class PromotionsStore {
       rules: this.rules,
       etag: this.etag,
       fetchedAt: this.fetchedAt,
+      storeTimeZone: this.storeTimeZone,
       syncing: this.syncing !== null,
       error: this.error,
     };
@@ -95,6 +101,7 @@ export class PromotionsStore {
     try {
       const res = await this.fetchRules(this.etag);
       this.fetchedAt = this.now().toISOString();
+      if (res.storeTimeZone !== undefined) this.storeTimeZone = res.storeTimeZone; // absent on old servers: keep what we had
       if (!res.notModified) {
         this.rules = res.rules.map((r) => ({
           id: r.id,
@@ -106,7 +113,12 @@ export class PromotionsStore {
         this.etag = res.etag;
       }
       this.error = null;
-      this.persistence.save({ rules: this.rules, etag: this.etag, fetchedAt: this.fetchedAt });
+      this.persistence.save({
+        rules: this.rules,
+        etag: this.etag,
+        fetchedAt: this.fetchedAt,
+        storeTimeZone: this.storeTimeZone,
+      });
     } catch (e) {
       this.error = (e as Error).message; // keep the cached rules
     }
@@ -116,6 +128,7 @@ export class PromotionsStore {
     this.rules = [];
     this.etag = null;
     this.fetchedAt = null;
+    this.storeTimeZone = null;
     this.error = null;
     this.persistence.clear();
     this.onChange?.(this.state());
