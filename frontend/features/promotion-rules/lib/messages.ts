@@ -18,7 +18,6 @@ export const ISSUE_CODES = [
   "all_stores",
   "already_expired",
   "promo_price_not_lower",
-  "loyalty_not_available_yet",
 ] as const;
 
 /** Client-only codes (stepProblems) share the same `issues` namespace. */

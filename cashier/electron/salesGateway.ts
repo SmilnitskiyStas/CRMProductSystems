@@ -24,6 +24,10 @@ export interface SaleItemWire {
   promotionLabel?: string | null;
 }
 export interface SaleWire {
+  loyaltyAccrued?: number | null;
+  loyaltyRedeemed?: number | null;
+  loyaltyBalance?: number | null;
+  customerName?: string | null;
   transactionId: string;
   receiptNumber: string;
   subtotal: number;
@@ -49,6 +53,10 @@ export function mergeServerSale(row: OutboxRow, sale: unknown | null): SaleRecei
     fiscalNumber: w.fiscalNumber,
     createdAt: w.createdAt,
     local: false,
+    customerName: w.customerName ?? row.receipt.customerName,
+    loyaltyAccrued: w.loyaltyAccrued ?? undefined,
+    loyaltyRedeemed: w.loyaltyRedeemed ?? undefined,
+    loyaltyBalance: w.loyaltyBalance ?? undefined,
     // the server's lines are authoritative (promotions split a line into sub-lines)
     items: w.items.map((i) => ({
       name: i.productName,
@@ -94,6 +102,7 @@ export class OutboxSalesGateway implements SalesGateway {
     if (!ctx) return { ok: false, kind: 'unauthorized', message: 'Сесію завершено. Увійдіть за PIN-кодом знову.' };
     if (request.items.length === 0) return { ok: false, kind: 'failed', message: 'Кошик порожній.' };
 
+    const member = request.loyaltyMember ?? null;
     // price through the promotion engine (server re-prices authoritatively at sync time)
     const resolved: { name: string; barcode: string; regular: number; line: PromotionLine }[] = [];
     for (const line of request.items) {
@@ -108,7 +117,13 @@ export class OutboxSalesGateway implements SalesGateway {
         line: { itemId: item.id, categoryId: item.categoryId ?? null, unitPrice: item.price, quantity: line.quantity },
       });
     }
-    const segments = applyPromotions(resolved.map((r) => r.line), this.rules(), { storeId: ctx.storeId, at: this.now() });
+    const segments = applyPromotions(resolved.map((r) => r.line), this.rules(), {
+      storeId: ctx.storeId,
+      at: this.now(),
+      membership: member
+        ? { id: member.membershipId, tierId: member.tierId, tierPercent: member.tierDiscountPercent ?? 0 }
+        : null,
+    });
     let totalKop = 0;
     const items: SaleReceipt['items'] = [];
     resolved.forEach((r, i) => {
@@ -153,6 +168,8 @@ export class OutboxSalesGateway implements SalesGateway {
       registerNumber: ctx.registerNumber,
       registerName: ctx.registerName,
       cashierName: ctx.cashierName,
+      customerName: member?.customerName ?? null,
+      tierName: member?.tierName ?? null,
     };
     const row: OutboxRow = {
       clientTransactionId: request.clientTransactionId,
@@ -164,6 +181,7 @@ export class OutboxSalesGateway implements SalesGateway {
         clientTransactionId: request.clientTransactionId,
         cashierId: ctx.cashierId,
         occurredAt: receipt.createdAt,
+        ...(member ? { loyaltyMembershipId: member.membershipId, ...(member.customerId ? { customerId: member.customerId } : {}) } : {}),
       },
       status: 'pending',
       attempts: 0,

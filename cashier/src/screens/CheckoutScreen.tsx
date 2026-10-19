@@ -1,5 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { CatalogItem, CatalogStatus, PaymentType, ShiftInfo } from '@shared/types';
+import type { CatalogItem, CatalogStatus, LoyaltyMember, PaymentType, Result, ShiftInfo } from '@shared/types';
+import { routeScan } from '@shared/scanRouting';
+import { playTone } from '../lib/beep';
+import { CustomerPanel } from '../components/CustomerPanel';
 import {
   addItem,
   priceCart,
@@ -39,6 +42,13 @@ export function CheckoutScreen({ shift, online, onOpenShiftScreen, onOpenQueue, 
   const [catalog, setCatalog] = useState<CatalogStatus | null>(null);
   const [payment, setPayment] = useState<PaymentType | null>(null);
   const [confirmClear, setConfirmClear] = useState(false);
+  // Loyalty member attached to THIS cart (detached on sale completion, cart clear, logout/unmount)
+  const [member, setMember] = useState<LoyaltyMember | null>(null);
+  const [customerMode, setCustomerMode] = useState(false);
+  const [customerBusy, setCustomerBusy] = useState(false);
+  const [customerError, setCustomerError] = useState<string | null>(null);
+  const customerModeRef = useRef(false);
+  customerModeRef.current = customerMode;
   const [submission, setSubmission] = useState<SubmissionState>({ status: 'idle' });
   const searchRef = useRef<HTMLInputElement>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout>>();
@@ -62,8 +72,15 @@ export function CheckoutScreen({ shift, online, onOpenShiftScreen, onOpenQueue, 
     };
   }, []);
   const priced = useMemo(
-    () => priceCart(cart, promoRules, { storeId: shift.storeId, at: tick }),
-    [cart, promoRules, shift.storeId, tick],
+    () =>
+      priceCart(cart, promoRules, {
+        storeId: shift.storeId,
+        at: tick,
+        membership: member
+          ? { id: member.membershipId, tierId: member.tierId, tierPercent: member.tierDiscountPercent ?? 0 }
+          : null,
+      }),
+    [cart, promoRules, shift.storeId, tick, member],
   );
   const total = priced.total;
   const dialogOpen = payment !== null || submission.status === 'completed' || confirmClear;
@@ -102,8 +119,7 @@ export function CheckoutScreen({ shift, online, onOpenShiftScreen, onOpenQueue, 
     [changeCart, flash],
   );
 
-  /** One pipeline for every scanner: USB wedge and the webcam both end up here. */
-  const onScan = useCallback(
+  const lookupProduct = useCallback(
     async (code: string): Promise<ScanOutcome> => {
       let item = await window.cashier.lookupBarcode(code);
       if (!item && code.length === 12) item = await window.cashier.lookupBarcode('0' + code); // UPC-A stored as EAN-13
@@ -115,6 +131,38 @@ export function CheckoutScreen({ shift, online, onOpenShiftScreen, onOpenQueue, 
       return added ? { kind: 'added', name: item.name } : { kind: 'noprice', name: item.name };
     },
     [addScanned, flash],
+  );
+
+  /** Resolves a loyalty member (never logs the code); on success the member is attached to the cart. */
+  const resolveMember = useCallback(
+    async (p: Promise<Result<LoyaltyMember>>): Promise<ScanOutcome> => {
+      setCustomerBusy(true);
+      window.dispatchEvent(new Event(CASHIER_ACTIVITY_EVENT)); // customer scans count as activity (idle logout)
+      const r = await p;
+      setCustomerBusy(false);
+      if (r.ok) {
+        setMember(r.data);
+        setCustomerMode(false);
+        setCustomerError(null);
+        flash(`Клієнт: ${r.data.customerName ?? 'учасник програми лояльності'}`);
+        playTone('ok');
+        return { kind: 'customer', name: r.data.customerName ?? '' };
+      }
+      setCustomerError(r.error.message);
+      playTone('error');
+      return { kind: 'customer_error' };
+    },
+    [flash],
+  );
+
+  /** One pipeline for every scanner (USB wedge and webcam): customer-armed scans never hit the catalog. */
+  const onScan = useCallback(
+    (code: string): Promise<ScanOutcome> =>
+      routeScan(customerModeRef.current, code, {
+        product: lookupProduct,
+        customer: (c) => resolveMember(window.cashier.resolveLoyaltyCode(c)),
+      }),
+    [lookupProduct, resolveMember],
   );
 
   useScanner(!dialogOpen, (code) => void onScan(code));
@@ -199,6 +247,7 @@ export function CheckoutScreen({ shift, online, onOpenShiftScreen, onOpenQueue, 
       items: cart.map((l) => ({ barcode: l.barcode, quantity: l.quantity })),
       paymentType: type,
       paymentAmount,
+      loyaltyMember: member,
     });
   };
 
@@ -207,6 +256,7 @@ export function CheckoutScreen({ shift, online, onOpenShiftScreen, onOpenQueue, 
     setCart([]);
     setSelected(null);
     setPayment(null);
+    setMember(null); // the member belongs to the finished sale
     searchRef.current?.focus();
   }, [submitter]);
 
@@ -224,6 +274,10 @@ export function CheckoutScreen({ shift, online, onOpenShiftScreen, onOpenQueue, 
         case 'F3':
           e.preventDefault();
           return toggleCamera();
+        case 'F4':
+          e.preventDefault();
+          setCustomerError(null);
+          return setCustomerMode((on) => !on);
         case 'F5':
           e.preventDefault();
           return openPayment('Cash');
@@ -301,6 +355,16 @@ export function CheckoutScreen({ shift, online, onOpenShiftScreen, onOpenQueue, 
         >
           Камера (F3)
         </button>
+        <button
+          className={`px-4 py-2 text-base ${member || customerMode ? 'btn-primary' : 'btn-secondary'}`}
+          onClick={() => {
+            setCustomerError(null);
+            setCustomerMode((on) => !on);
+          }}
+          title="Ідентифікувати клієнта (картка / QR / телефон)"
+        >
+          Клієнт (F4)
+        </button>
         <button className="btn-secondary px-4 py-2 text-base" onClick={onOpenQueue}>
           Черга (F10)
         </button>
@@ -326,9 +390,41 @@ export function CheckoutScreen({ shift, online, onOpenShiftScreen, onOpenQueue, 
         </p>
       )}
 
+      {customerMode && (
+        <CustomerPanel
+          online={online}
+          busy={customerBusy}
+          error={customerError}
+          cameraOn={cameraOn}
+          onResolveIdentifier={(type, value) => void resolveMember(window.cashier.resolveLoyaltyIdentifier(type, value))}
+          onToggleCamera={toggleCamera}
+          onClose={() => setCustomerMode(false)}
+        />
+      )}
+
       {/* body */}
       <div className="flex min-h-0 flex-1">
         <section className="flex min-w-0 flex-1 flex-col">
+          {member && (
+            <div className="flex items-center gap-3 border-b border-slate-800 bg-sky-500/10 px-5 py-2">
+              <span className="font-semibold text-sky-200">{member.customerName ?? 'Клієнт'}</span>
+              {member.maskedPhone && <span className="text-slate-400">{member.maskedPhone}</span>}
+              <span className="text-slate-300">Бонуси: {formatMoney(member.balance).replace(' ₴', '')}</span>
+              {member.tierName && (
+                <span className="rounded-md bg-sky-500/20 px-2 py-0.5 text-sm font-semibold text-sky-300">
+                  {member.tierName}
+                  {member.tierDiscountPercent ? ` −${member.tierDiscountPercent}%` : ''}
+                </span>
+              )}
+              <button
+                className="ml-auto rounded-lg px-2 py-1 text-slate-400 hover:bg-slate-800"
+                title="Відв’язати клієнта"
+                onClick={() => setMember(null)}
+              >
+                ✕
+              </button>
+            </div>
+          )}
           <div className="grid grid-cols-[1fr_9rem_8rem_8rem_3rem] gap-3 border-b border-slate-800 px-5 py-2 text-sm text-slate-500">
             <span>Товар</span>
             <span className="text-center">Кількість</span>
@@ -444,6 +540,7 @@ export function CheckoutScreen({ shift, online, onOpenShiftScreen, onOpenQueue, 
                 saveCamera(true, id);
               }}
               onClose={toggleCamera}
+              qrMode={customerMode}
             />
           )}
           <div>
@@ -466,7 +563,7 @@ export function CheckoutScreen({ shift, online, onOpenShiftScreen, onOpenQueue, 
           <div className="mt-auto space-y-1 text-sm text-slate-500">
             <p>Зміна №{shift.shiftNumber || '—'}</p>
             <p>↑↓ вибір · +/− кількість · Del видалити</p>
-            <p>F2 пошук · F3 камера · F5/F6 оплата · F8 очистити · F9 зміна · F10 черга · F12 вийти</p>
+            <p>F2 пошук · F3 камера · F4 клієнт · F5/F6 оплата · F8 очистити · F9 зміна · F10 черга · F12 вийти</p>
           </div>
         </aside>
       </div>
@@ -496,6 +593,7 @@ export function CheckoutScreen({ shift, online, onOpenShiftScreen, onOpenQueue, 
                 onClick={() => {
                   changeCart(() => []);
                   setSelected(null);
+                  setMember(null);
                   setConfirmClear(false);
                 }}
               >

@@ -187,3 +187,18 @@ describe('demo barcode images (dev-assets/barcodes)', () => {
     }
   });
 });
+
+describe('QR decoding (customer-scan mode only)', () => {
+  const payload = 'loyalty:v1:' + 'AbC123-_.'.repeat(8);
+  it('decodes a loyalty QR in QR mode but ignores it in product mode (no catalog false positives)', async () => {
+    const png = await bwipjs.toBuffer({ bcid: 'qrcode', text: payload, scale: 4, backgroundcolor: 'ffffff', paddingwidth: 12, paddingheight: 12 });
+    const img = PNG.sync.read(png);
+    const px = new Uint8ClampedArray(img.data);
+    expect(new FrameDecoder(3, true).decode(px, img.width, img.height)).toBe(payload);
+    expect(new FrameDecoder(3, false).decode(px, img.width, img.height)).toBeNull();
+  });
+  it('QR mode still reads product barcodes', async () => {
+    const { data, w, h } = await barcodePixels('ean13', '482311750645');
+    expect(new FrameDecoder(3, true).decode(data, w, h)).toBe('4823117506458');
+  });
+});

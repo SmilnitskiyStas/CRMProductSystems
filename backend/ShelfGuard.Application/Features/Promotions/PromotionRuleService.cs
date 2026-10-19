@@ -340,6 +340,13 @@ public sealed partial class PromotionRuleService : IPromotionRuleService
             .ToList();
     }
 
+    public async Task<IReadOnlyList<TierLookupDto>> LookupTiersAsync(PromotionRuleCaller caller, CancellationToken ct = default) =>
+        (await _loyalty.GetTierLadderAsync(caller.TenantId, ct))
+            .Where(t => t.TenantId == caller.TenantId)
+            .OrderBy(t => t.SortOrder)
+            .Select(t => new TierLookupDto(t.Id, t.Name, t.DiscountPercent, t.SortOrder))
+            .ToList();
+
     // ── helpers ────────────────────────────────────────────────────────────
 
     private static PromotionOutcome<T> NotFound<T>() => PromotionOutcome<T>.Fail(404, "Rule not found.");

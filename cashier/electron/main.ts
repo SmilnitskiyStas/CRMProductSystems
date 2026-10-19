@@ -36,6 +36,10 @@ function registerIpc(svc: CashierService): void {
   ipcMain.handle('print:test', () => svc.testPrint());
   ipcMain.handle('print:receipt', (_e, id: string) => svc.printReceipt(String(id)));
   ipcMain.handle('print:drawer', () => svc.openDrawer());
+  ipcMain.handle('loyalty:resolveCode', (_e, code: string) => svc.resolveLoyaltyCode(String(code)));
+  ipcMain.handle('loyalty:resolveIdentifier', (_e, type: string, value: string) =>
+    svc.resolveLoyaltyIdentifier(type === 'account' || type === 'card' ? type : 'phone', String(value)),
+  );
   ipcMain.handle('promotions:get', () => svc.getPromotions());
   ipcMain.handle('promotions:sync', () => svc.syncPromotions());
   ipcMain.handle('connection:retry', () => svc.retryConnection());

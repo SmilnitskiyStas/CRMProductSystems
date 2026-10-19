@@ -1,6 +1,7 @@
 import { api } from "@/lib/api";
 import type {
   LookupItem,
+  LookupTier,
   RuleDetail,
   RuleListItem,
   RuleStatus,
@@ -34,6 +35,7 @@ export const promotionRulesApi = {
   simulate: (data: SimulatePayload) => api.post<SimulateResult>(`${BASE}/simulate`, data),
   lookupItems: (search: string, categoryId?: string, limit = 20) =>
     api.get<LookupItem[]>(`${BASE}/lookups/items${qs({ search, categoryId, limit })}`),
+  lookupTiers: () => api.get<LookupTier[]>(`${BASE}/lookups/tiers`),
   /** Contract extension: `?ids=a,b,c` (max 50) resolves items by id; `search` is ignored then. */
   lookupItemsByIds: (ids: string[]) =>
     api.get<LookupItem[]>(`${BASE}/lookups/items${qs({ ids: ids.slice(0, 50).join(",") })}`),

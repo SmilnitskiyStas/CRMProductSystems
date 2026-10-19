@@ -1,10 +1,15 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ScanGate } from '@shared/cameraScan';
+import { isAcceptableCustomerCode, ScanGate } from '@shared/cameraScan';
 import { FrameDecoder } from '../lib/barcodeDecoder';
 import { playTone } from '../lib/beep';
 import { CameraController, type CameraStatus } from '../lib/cameraController';
 
-export type ScanOutcome = { kind: 'added'; name: string } | { kind: 'notfound' } | { kind: 'noprice'; name: string };
+export type ScanOutcome =
+  | { kind: 'added'; name: string }
+  | { kind: 'notfound' }
+  | { kind: 'noprice'; name: string }
+  | { kind: 'customer'; name: string }
+  | { kind: 'customer_error' };
 
 interface Props {
   /** Remembered camera (from config). */
@@ -15,12 +20,14 @@ interface Props {
   onCode: (code: string) => Promise<ScanOutcome>;
   onDeviceChange: (deviceId: string) => void;
   onClose: () => void;
+  /** Customer-scan mode is armed: also decode QR codes (loyalty) and accept free-form payloads. */
+  qrMode?: boolean;
 }
 
 const TICK_MS = 110; // ~9 fps
 const MAX_WIDTH = 640;
 
-export function CameraPanel({ initialDeviceId, paused, onCode, onDeviceChange, onClose }: Props) {
+export function CameraPanel({ initialDeviceId, paused, onCode, onDeviceChange, onClose, qrMode = false }: Props) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const controller = useRef<CameraController | null>(null);
   const [status, setStatus] = useState<CameraStatus>('requesting');
@@ -78,8 +85,8 @@ export function CameraPanel({ initialDeviceId, paused, onCode, onDeviceChange, o
   // Decode loop.
   useEffect(() => {
     if (status !== 'scanning') return;
-    const gate = new ScanGate();
-    const decoder = new FrameDecoder();
+    const gate = new ScanGate(undefined, qrMode ? isAcceptableCustomerCode : undefined);
+    const decoder = new FrameDecoder(3, qrMode);
     const canvas = document.createElement('canvas');
     const g = canvas.getContext('2d', { willReadFrequently: true });
     let busy = false;
@@ -98,7 +105,7 @@ export function CameraPanel({ initialDeviceId, paused, onCode, onDeviceChange, o
         const accepted = text ? gate.feed(text, performance.now()) : null;
         if (accepted) {
           void onCodeRef.current(accepted).then((outcome) => {
-            if (outcome.kind === 'added') {
+            if (outcome.kind === 'added' || outcome.kind === 'customer') {
               playTone('ok');
               showFlash('ok');
             } else {
@@ -112,7 +119,7 @@ export function CameraPanel({ initialDeviceId, paused, onCode, onDeviceChange, o
       }
     }, TICK_MS);
     return () => clearInterval(timer);
-  }, [status, showFlash]);
+  }, [status, showFlash, qrMode]);
 
   const ring = flash === 'ok' ? 'ring-4 ring-emerald-400' : flash === 'error' ? 'ring-4 ring-rose-500' : 'ring-1 ring-slate-700';
 
