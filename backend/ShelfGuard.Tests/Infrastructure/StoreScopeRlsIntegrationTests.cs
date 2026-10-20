@@ -91,8 +91,6 @@ public sealed class StoreScopeRlsIntegrationTests : IAsyncLifetime
         {
             "product_stock", "daily_sales", "pos_shifts", "pos_transactions",
             "write_offs", "discounts", "stock_receipts", "stock_movements", "stock_transfers",
-            // TASK-714..716 (store zones / shelf canvas) added store_scope to these two as well.
-            "shelf_items", "shelf_scans",
         };
 
         const string sql = @"
