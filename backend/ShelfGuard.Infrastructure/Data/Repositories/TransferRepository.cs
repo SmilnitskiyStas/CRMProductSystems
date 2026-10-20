@@ -41,7 +41,8 @@ public sealed class TransferRepository : ITransferRepository
             .Include(t => t.Items).ThenInclude(i => i.Product)
             .Include(t => t.FromStore)
             .Include(t => t.ToStore)
-            .AsQueryable();
+            .AsNoTracking()
+            .AsSplitQuery();
 
         if (storeId.HasValue)
             query = query.Where(t => t.FromStoreId == storeId || t.ToStoreId == storeId);

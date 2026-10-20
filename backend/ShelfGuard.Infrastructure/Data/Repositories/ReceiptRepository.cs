@@ -43,7 +43,8 @@ public sealed class ReceiptRepository : IReceiptRepository
             .Include(r => r.Items).ThenInclude(i => i.Product)
             .Include(r => r.Supplier)
             .Include(r => r.DestinationStore)
-            .AsQueryable();
+            .AsNoTracking()
+            .AsSplitQuery();
 
         if (storeId.HasValue)
             query = query.Where(r => r.DestinationStoreId == storeId);
