@@ -1,6 +1,9 @@
 import type { Metadata } from "next";
 import { getTranslations, setRequestLocale } from "next-intl/server";
 import { routing } from "@/i18n/routing";
+import { buildPageMetadata } from "@/features/landing/page-meta";
+import { JsonLd } from "@/features/landing/components/JsonLd";
+import { SITE_URL } from "@/lib/site";
 import { LandingShell } from "@/features/landing/components/LandingShell";
 import { MiniRoadmapSection } from "@/features/landing/components/MiniRoadmapSection";
 import { HeroSection } from "@/features/landing/components/HeroSection";
@@ -24,29 +27,7 @@ export async function generateMetadata({
   params: Promise<{ locale: string }>;
 }): Promise<Metadata> {
   const { locale } = await params;
-  const t = await getTranslations({ locale, namespace: "Landing.meta" });
-
-  return {
-    metadataBase: new URL("https://agrusystems.pp.ua"),
-    title: t("title"),
-    description: t("description"),
-    openGraph: {
-      title: t("title"),
-      description: t("description"),
-      url: locale === "en" ? "/en" : "/",
-      siteName: t("ogSiteName"),
-      locale: locale === "en" ? "en_US" : "uk_UA",
-      type: "website",
-      images: [
-        {
-          url: "/landing/dashboard-1.jpg",
-          width: 1280,
-          height: 574,
-          alt: t("ogImageAlt"),
-        },
-      ],
-    },
-  };
+  return buildPageMetadata(locale, "Landing.meta", "/");
 }
 
 // Public marketing landing. Server component — prerendered for SEO;
@@ -58,9 +39,45 @@ export default async function LandingPage({
 }) {
   const { locale } = await params;
   setRequestLocale(locale);
+  const t = await getTranslations({ locale, namespace: "Landing.meta" });
+  const inLanguage = locale === "en" ? "en" : "uk";
+  const homeUrl = locale === "en" ? `${SITE_URL}/en` : `${SITE_URL}/`;
 
   return (
     <LandingShell>
+      <JsonLd
+        data={{
+          "@context": "https://schema.org",
+          "@graph": [
+            {
+              "@type": "Organization",
+              "@id": `${SITE_URL}/#organization`,
+              name: "AgruSystems",
+              url: `${SITE_URL}/`,
+              logo: `${SITE_URL}/icon.svg`,
+            },
+            {
+              "@type": "WebSite",
+              "@id": `${SITE_URL}/#website`,
+              name: "ShelfGuard",
+              url: homeUrl,
+              inLanguage,
+              publisher: { "@id": `${SITE_URL}/#organization` },
+            },
+            {
+              "@type": "SoftwareApplication",
+              "@id": `${SITE_URL}/#software`,
+              name: "ShelfGuard",
+              description: t("description"),
+              applicationCategory: "BusinessApplication",
+              operatingSystem: "Web",
+              url: homeUrl,
+              inLanguage,
+              publisher: { "@id": `${SITE_URL}/#organization` },
+            },
+          ],
+        }}
+      />
       <HeroSection />
       <ProblemSection />
       <FeaturesSection />
