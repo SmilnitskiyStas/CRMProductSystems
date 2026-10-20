@@ -20,6 +20,19 @@ public sealed class PosRepository : IPosRepository
             .Where(s => s.TenantId == tenantId && s.ClosedAt == null)
             .FirstOrDefaultAsync(ct);
 
+    public Task<PosShift?> GetOpenShiftForRegisterAsync(Guid registerId, CancellationToken ct = default) =>
+        _db.PosShifts
+            .Include(s => s.Store)
+            .Include(s => s.Cashier)
+            .Where(s => s.RegisterId == registerId && s.ClosedAt == null)
+            .FirstOrDefaultAsync(ct);
+
+    public async Task<int> GetNextShiftNumberAsync(Guid tenantId, Guid? registerId, CancellationToken ct = default)
+    {
+        var shifts = _db.PosShifts.Where(s => s.TenantId == tenantId && s.RegisterId == registerId);
+        return (await shifts.MaxAsync(s => (int?)s.ShiftNumber, ct) ?? 0) + 1;
+    }
+
     public Task<PosShift?> GetShiftByIdAsync(Guid shiftId, CancellationToken ct = default) =>
         _db.PosShifts
             .Include(s => s.Store)
@@ -37,6 +50,14 @@ public sealed class PosRepository : IPosRepository
         _db.PosTransactions
             .Include(t => t.Items).ThenInclude(i => i.Product)
             .FirstOrDefaultAsync(t => t.Id == id, ct);
+
+    public Task<PosTransaction?> GetTransactionByClientIdAsync(
+        Guid tenantId, Guid clientTransactionId, CancellationToken ct = default) =>
+        _db.PosTransactions
+            .Include(t => t.Items).ThenInclude(i => i.Product)
+            .Include(t => t.Customer)
+            .FirstOrDefaultAsync(
+                t => t.TenantId == tenantId && t.ClientTransactionId == clientTransactionId, ct);
 
     public Task<List<PosTransaction>> GetTransactionsByShiftAsync(Guid shiftId, CancellationToken ct = default) =>
         _db.PosTransactions
@@ -94,5 +115,15 @@ public sealed class PosRepository : IPosRepository
             throw new ConcurrencyConflictException(
                 "One or more rows were modified concurrently by another operation.", ex);
         }
+        catch (DbUpdateException ex) when (
+            ex.InnerException is Npgsql.PostgresException { SqlState: "23505" } pg &&
+            pg.ConstraintName == "uq_pos_transactions_client_tx")
+        {
+            // Same offline sale (ClientTransactionId) submitted twice concurrently.
+            throw new DuplicateClientTransactionException(
+                "A sale with this ClientTransactionId already exists.", ex);
+        }
     }
+
+    public void DiscardPendingChanges() => _db.ChangeTracker.Clear();
 }

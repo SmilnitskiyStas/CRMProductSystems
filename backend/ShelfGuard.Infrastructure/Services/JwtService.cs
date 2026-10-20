@@ -15,6 +15,7 @@ public sealed class JwtService : IJwtService
     private readonly string _audience;
     private readonly int _accessTokenMinutes;
     private readonly int _consumerAccessTokenDays;
+    private readonly int _operatorTokenMinutes;
 
     public JwtService(IConfiguration config)
     {
@@ -25,6 +26,7 @@ public sealed class JwtService : IJwtService
         // TASK-405: ConsumerAccount has no refresh-token flow (see interface doc) — a
         // longer-lived access token is the deliberate tradeoff instead.
         _consumerAccessTokenDays = int.Parse(config["Jwt:ConsumerAccessTokenDays"] ?? "30");
+        _operatorTokenMinutes = int.Parse(config["Jwt:OperatorTokenMinutes"] ?? "480");
     }
 
     public string GenerateAccessToken(Guid userId, string email, string role, Guid? tenantId, Guid? storeId, string? fullName = null,
@@ -126,6 +128,39 @@ public sealed class JwtService : IJwtService
             signingCredentials: credentials);
 
         return new JwtSecurityTokenHandler().WriteToken(token);
+    }
+
+    /// <inheritdoc/>
+    public (string Token, DateTime ExpiresAt) GenerateOperatorToken(
+        Guid userId, string email, string? fullName, Guid tenantId, Guid storeId, Guid registerId, Guid sessionId)
+    {
+        var key         = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_secret));
+        var credentials = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
+        var expiresAt   = DateTime.UtcNow.AddMinutes(_operatorTokenMinutes);
+
+        var claims = new List<Claim>
+        {
+            new(JwtRegisteredClaimNames.Sub,   userId.ToString()),
+            new(JwtRegisteredClaimNames.Email, email),
+            new(ClaimTypes.Role,               "cashier"),
+            new("tenant_id",                   tenantId.ToString()),
+            new("store_id",                    storeId.ToString()),
+            new("register_id",                 registerId.ToString()),
+            new("cashier_id",                  userId.ToString()),
+            new("session_id",                  sessionId.ToString()),
+            new(JwtRegisteredClaimNames.Jti,   Guid.NewGuid().ToString()),
+        };
+        if (!string.IsNullOrWhiteSpace(fullName))
+            claims.Add(new Claim("full_name", fullName));
+
+        var token = new JwtSecurityToken(
+            issuer:             _issuer,
+            audience:           _audience + JwtAudiences.RegisterSuffix, // separate audience, see OperatorTokenValidation
+            claims:             claims,
+            expires:            expiresAt,
+            signingCredentials: credentials);
+
+        return (new JwtSecurityTokenHandler().WriteToken(token), expiresAt);
     }
 
     public (string RawToken, string TokenHash) GenerateRefreshToken()

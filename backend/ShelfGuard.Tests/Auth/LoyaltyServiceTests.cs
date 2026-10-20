@@ -801,6 +801,34 @@ public sealed class LoyaltyServiceTests
         _attempts.Received(1).Reset(membershipId);
     }
 
+    [Theory]
+    [InlineData(true, true, true)]    // tier from ladder, program enabled -> tier fields
+    [InlineData(true, false, false)]  // program disabled -> no tier
+    [InlineData(false, true, false)]  // no tier yet -> no tier
+    public async Task ResolveCodeAsync_returns_tier_fields_only_when_tiered_and_enabled(bool hasTier, bool enabled, bool expectTier)
+    {
+        var tenantId = Guid.NewGuid();
+        var membershipId = Guid.NewGuid();
+        var tier = new LoyaltyTierDefinition { TenantId = tenantId, Name = "Gold", SortOrder = 1, DiscountPercent = 7.5m };
+        _loyalty.GetMembershipByIdAsync(membershipId, tenantId, default).Returns(new LoyaltyMembership
+        {
+            Id = membershipId, TenantId = tenantId, Status = LoyaltyMembershipStatus.Active, TotpSecret = "S",
+            ConsumerAccountId = Guid.NewGuid(), CurrentTierId = hasTier ? tier.Id : null,
+        });
+        _totp.VerifyCode("S", "123456").Returns(1L);
+        _loyalty.TryClaimTimestepAsync(membershipId, tenantId, 1L, default).Returns(true);
+        _loyalty.GetSettingsAsync(tenantId, default).Returns(new LoyaltyProgramSettings { TenantId = tenantId, IsEnabled = enabled });
+        _loyalty.GetTierLadderAsync(tenantId, default).Returns(new List<LoyaltyTierDefinition> { tier });
+
+        var (result, error, _) = await _sut.ResolveCodeAsync(tenantId, Guid.NewGuid(), $"SGLOY1.{membershipId}.123456");
+
+        Assert.Null(error);
+        if (expectTier)
+            Assert.Equal((tier.Id, "Gold", (decimal?)7.5m), (result!.TierId, result.TierName, result.TierDiscountPercent));
+        else
+            Assert.Equal((null, null, null), (result!.TierId, result.TierName, result.TierDiscountPercent));
+    }
+
     // ── ManualAdjustAsync ──────────────────────────────────────────────────
 
     [Fact]

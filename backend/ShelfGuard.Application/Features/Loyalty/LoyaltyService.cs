@@ -667,9 +667,11 @@ public sealed class LoyaltyService : ILoyaltyService
         }
 
         var maskedPhone = MaskPhone(consumer.Phone);
+        var (tierId, tierName, tierPct) = await ResolveTierAsync(tenantId, membership, ct);
 
         return (new ResolveLoyaltyCodeResult(
-            membership.Id, membership.CustomerId, customerName, maskedPhone, membership.Balance), null, null);
+            membership.Id, membership.CustomerId, customerName, maskedPhone, membership.Balance,
+            tierId, tierName, tierPct), null, null);
     }
 
     public async Task<(ResolveLoyaltyCodeResult? Result, string? Error, int? StatusCode)> ResolveNumericIdentifierAsync(
@@ -716,8 +718,9 @@ public sealed class LoyaltyService : ILoyaltyService
         var customer = membership.CustomerId.HasValue
             ? await _customers.GetByIdAsync(membership.CustomerId.Value, tenantId, ct)
             : null;
+        var (tierId, tierName, tierPct) = await ResolveTierAsync(tenantId, membership, ct);
         return (new ResolveLoyaltyCodeResult(membership.Id, membership.CustomerId, customer?.Name,
-            MaskPhone(consumer.Phone), membership.Balance), null, null);
+            MaskPhone(consumer.Phone), membership.Balance, tierId, tierName, tierPct), null, null);
     }
 
 
@@ -758,8 +761,26 @@ public sealed class LoyaltyService : ILoyaltyService
             ? await _customers.GetByIdAsync(membership.CustomerId.Value, tenantId, ct)
             : null;
         var consumer = await _consumerAccounts.GetByIdAsync(membership.ConsumerAccountId, ct);
+        var (tierId, tierName, tierPct) = await ResolveTierAsync(tenantId, membership, ct);
         return (new ResolveLoyaltyCodeResult(membership.Id, membership.CustomerId, customer?.Name,
-            consumer is null ? null : MaskPhone(consumer.Phone), membership.Balance), null, null);
+            consumer is null ? null : MaskPhone(consumer.Phone), membership.Balance,
+            tierId, tierName, tierPct), null, null);
+    }
+
+    /// <summary>
+    /// The membership's current tier for the POS (same gating as PosService: program must be
+    /// enabled; no settings row = proposed defaults = enabled). All null when untiered/disabled.
+    /// The tier is read from the ladder when the repository did not include the navigation.
+    /// </summary>
+    private async Task<(Guid? TierId, string? Name, decimal? DiscountPercent)> ResolveTierAsync(
+        Guid tenantId, LoyaltyMembership membership, CancellationToken ct)
+    {
+        if (membership.CurrentTierId is not { } tierId) return (null, null, null);
+        var settings = await _loyalty.GetSettingsAsync(tenantId, ct) ?? new LoyaltyProgramSettings { TenantId = tenantId };
+        if (!settings.IsEnabled) return (null, null, null);
+        var tier = membership.CurrentTier
+            ?? (await _loyalty.GetTierLadderAsync(tenantId, ct)).FirstOrDefault(t => t.Id == tierId);
+        return tier is null ? (null, null, null) : (tier.Id, tier.Name, tier.DiscountPercent);
     }
 
     public async Task<(LoyaltyMembershipSummaryDto? Membership, string? Error, int? StatusCode)> ManualAdjustAsync(

@@ -74,6 +74,17 @@ file sealed class RetryFakePosRepo : IPosRepository
     public Task<PosShift?> GetShiftByIdAsync(Guid shiftId, CancellationToken ct = default) =>
         Task.FromResult<PosShift?>(null);
 
+    public Task<PosShift?> GetOpenShiftForRegisterAsync(Guid registerId, CancellationToken ct = default) =>
+        Task.FromResult<PosShift?>(null);
+
+    public Task<int> GetNextShiftNumberAsync(Guid tenantId, Guid? registerId, CancellationToken ct = default) =>
+        Task.FromResult(1);
+
+    public Task<PosTransaction?> GetTransactionByClientIdAsync(Guid tenantId, Guid clientTransactionId, CancellationToken ct = default) =>
+        Task.FromResult<PosTransaction?>(null);
+
+    public void DiscardPendingChanges() { }
+
     public Task AddShiftAsync(PosShift shift, CancellationToken ct = default) => Task.CompletedTask;
     public void UpdateShift(PosShift shift) { }
 
@@ -139,6 +150,7 @@ file sealed class RetryFakeCatalogRepo : IItemRepository
     public Task<List<Item>> GetAllAsync(Guid? c, Guid? s, string? m, bool? uncategorized = null, CancellationToken ct = default) => Task.FromResult(new List<Item>());
     public Task<(List<Item> Items, int Total)> GetPagedAsync(Guid? categoryId, Guid? segmentId, string? managementType, string? search, IReadOnlyList<Guid>? ids, string? sortBy, bool? sortDescending, int page, int pageSize, decimal? minPrice = null, decimal? maxPrice = null, bool? uncategorized = null, CancellationToken ct = default) =>
         Task.FromResult((new List<Item>(), 0));
+    public Task<List<Item>> SearchByBarcodeFragmentAsync(Guid tenantId, string digits, int take, CancellationToken ct = default) => Task.FromResult(new List<Item>());
     public Task<Item?> GetByIdAsync(Guid id, CancellationToken ct = default) => Task.FromResult<Item?>(null);
     public Task<Item?> GetForBarcodeMergeAsync(Guid id, CancellationToken ct = default) => Task.FromResult<Item?>(null);
     public Task<IReadOnlyDictionary<Guid, ItemPromoInfo>> GetPromoStatesAsync(IReadOnlyList<Guid> productIds, int upcomingWithinDays, CancellationToken ct = default) =>

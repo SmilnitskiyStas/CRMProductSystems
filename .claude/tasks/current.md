@@ -1545,3 +1545,36 @@ Open-Meteo/Nominatim/Checkbox: retry(GET)/breaker/timeout; AI: breaker per endpo
 
 ### TASK-725 — Resilience stage 3b (API ролі + gateway) — review
 API_ROLE core/consumer/provider, nginx gateway :5100, SignalR Redis backplane. dotnet test 2491/2491, nginx-маршрути перевірені на dummy-апстрімах; НЕ запускалось end-to-end, НЕ задеплоєно. Перед продом: Maximum Pool Size=30, RAM, staging. Лог: `.claude/logs/tasks/725_*`.
+
+### TASK-726 - Cashier app backend Phase 1 (registers, PIN sessions, idempotent sales, delta catalog) - review
+`cash_registers`/`register_sessions` + RLS, device-token activation, PIN operator JWT, `ClientTransactionId` idempotency, `POST /pos/sales/batch`, `GET /pos/sync/catalog`, `items.UpdatedAt` trigger. Migration AddCashRegisters applied to dev; dotnet test 2527/2527; not committed. Лог: `.claude/logs/tasks/726_*`.
+
+### TASK-727 - Web "Каси" management page - review
+`/registers` (tabs: каси, PIN, статистика, журнал) + sidebar item in `sales` group. New read endpoints under `api/pos/registers`: `operators`, `stats`, `{id}/sessions`, `{id}/shifts`, `employees` (RegisterReportService, store-scoped). tsc/lint clean, dotnet Register tests 59/59; not committed. Лог: `.claude/logs/tasks/727_*`.
+
+### TASK-728 - Cashier desktop app slice 3a (`/cashier`) - review
+Electron+React+TS+Tailwind (electron-vite, NSIS): activation, PIN pad, shift open/close + Z summary, checkout (scanner wedge, cart, cash/card, idempotent sale w/ retry), status bar; `CatalogStore`/`SalesGateway` seams for Phase 4. tsc/lint/24 vitest/build/dist OK -> `cashier/release/ShelfGuard Cashier Setup 0.1.0.exe`; smoke-tested vs mock API, not vs real backend; not committed. Лог: `.claude/logs/tasks/728_*`.
+
+### TASK-729 - Cashier phase 4: offline queue + ESC/POS printing - review
+better-sqlite3 (pinned 11.10.0, Electron prebuilt) catalog + sales outbox with batch sync/backoff, queue screen, offline restart; own ESC/POS builder (CP866/1125/1251/UTF-8, 58/80mm), Windows RAW/TCP/COM/file transports, print settings. 54 vitest, build+dist OK, packaged smoke vs mock API OK; not tested on real backend/printer; not committed. Лог: `.claude/logs/tasks/729_*`.
+
+### TASK-730 - Batch sale cashier attribution - review
+Offline sales flushed by another operator are stored under the real cashier when that cashier had a session on this register (window +5 min tolerance), is active/POS/same store, OccurredAt sane; else failed 403. No migration. Лог: `.claude/logs/tasks/730_*`.
+
+### TASK-731 - Cashier: webcam scanner + connectivity monitor - review
+F3 camera panel (zxing, check-digit + 2-read + 1.5 s debounce, same pipeline as USB wedge, beep/flash, remembered camera, scoped `media` permission) and a main-process connectivity monitor (3 s probe, backoff 5-15 s, auto reconnect: outbox flush + catalog delta + shift refresh, banner with countdown/"Спробувати зараз"). 84 vitest, build+dist OK, smoke with Chromium fake camera OK; real webcam and real-backend start order not verified; not committed. Лог: `.claude/logs/tasks/731_*`.
+
+### TASK-732 - Promotion rules Phase 1 (backend) - review
+Schema+RLS (`AddPromotionRules`, immutable versions), pure `PromotionEngine` + 37 golden vectors (`backend/ShelfGuard.Tests/Promotions/golden-vectors.json`), PosService sub-lines/FEFO/application log, `GET /api/pos/sync/promotions`, catalog `categoryId`. Full test suite green on a migrated scratch DB; dev DB needs the migration applied (start API). Not committed. Лог: `.claude/logs/tasks/732_*`.
+
+### TASK-733 Promotion rules API (Phase 2 backend) - done
+`api/promotion-rules` CRUD/validate/publish/pause/resume/archive/simulate/lookups per contract; superseded unpublished drafts are deleted; store-scoped like registers. Build + full tests green. Log: logs/tasks/733_*.
+
+## TASK-734 Promotion rules web UI — review (frontend-developer, 2026-10-19)
+Wizard + list + simulator under `frontend/features/promotion-rules`, pages `/promotion-rules[/new|/{id}]`, sidebar + uk/en i18n. tsc/eslint/vitest/next build green; API untested (backend parallel). Log: `.claude/logs/tasks/734_2026-10-19_promotion-rules-web-ui_frontend-developer.md`.
+
+### TASK-735 - Cashier phase 3: promotions (engine mirror + sync + cart/receipt) - review
+TS engine mirror passing all 37 shared golden vectors (+ drift test, `sync-vectors`), catalog `categoryId` with forced one-time resync, etag promotions sync cached in SQLite (offline-safe), cart/payment/receipt priced with promo sub-lines and badges, server receipt shown after online sale with "Ціну перераховано сервером" notice, offline repricing difference on the Черга screen. 141 vitest, build+dist OK; not run against the real backend; not committed. Лог: `.claude/logs/tasks/735_*`.
+
+### TASK-736 - Cashier phase 4: loyalty member at the till - review
+F4 "Клієнт" panel (wedge/camera/manual by phone|card|account), QR decoding only in customer mode, member chip in the cart, member+tier priced through the promotion engine, membership/customer ids in the sale/outbox payload, bonus lines on screen/print receipts, offline promise text. 156 vitest, build+dist OK, mock-API smoke OK; not run against the real backend; not committed. Лог: `.claude/logs/tasks/736_*`.

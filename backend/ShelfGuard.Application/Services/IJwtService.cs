@@ -53,4 +53,13 @@ public interface IJwtService
     /// silent-refresh path; default 30 days, configurable via Jwt:ConsumerAccessTokenDays.
     /// </summary>
     string GenerateConsumerAccessToken(Guid consumerAccountId, string? fullName = null);
+
+    /// <summary>
+    /// Cashier-app operator token issued after a register PIN sign-in. Role is fixed to
+    /// "cashier" regardless of the user's own role (a PIN grants till access only). Claims:
+    /// sub/cashier_id=userId, tenant_id, store_id, register_id, session_id. Lifetime from
+    /// Jwt:OperatorTokenMinutes (default 480); no refresh token.
+    /// </summary>
+    (string Token, DateTime ExpiresAt) GenerateOperatorToken(
+        Guid userId, string email, string? fullName, Guid tenantId, Guid storeId, Guid registerId, Guid sessionId);
 }
