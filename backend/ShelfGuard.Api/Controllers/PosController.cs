@@ -17,7 +17,9 @@ namespace ShelfGuard.Api.Controllers;
 [ApiController]
 [Route("api/pos")]
 [Authorize(Policy = AppPolicies.CanAccessPos)]
-[RequireModule("pos")]
+// NOTE: no class-level [RequireModule("pos")]: the legacy shift/sale endpoints (mobile POS) and the
+// worker fiscalization-retry cron (service account of a tenant that may lack "pos") never had a
+// module gate; only the cashier-app endpoints below are gated.
 [AllowOperatorToken]
 public sealed class PosController : ControllerBase
 {
@@ -144,6 +146,7 @@ public sealed class PosController : ControllerBase
     /// overall status is 200 even when some items failed.
     /// </summary>
     [HttpPost("sales/batch")]
+    [RequireModule("pos")]
     [ProducesResponseType(typeof(BatchSalesResultDto), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(object), StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> CreateSalesBatch([FromBody] BatchSalesRequest request, CancellationToken ct)
@@ -163,6 +166,7 @@ public sealed class PosController : ControllerBase
     /// so the till can drop them. Omit since for a full initial download.
     /// </summary>
     [HttpGet("sync/catalog")]
+    [RequireModule("pos")]
     [ProducesResponseType(typeof(SyncCatalogResponse), StatusCodes.Status200OK)]
     public async Task<IActionResult> SyncCatalog(
         [FromQuery] DateTime? since, [FromQuery] Guid? afterId, [FromQuery] int? limit, CancellationToken ct)
@@ -180,6 +184,7 @@ public sealed class PosController : ControllerBase
     /// token's store_id is used).
     /// </summary>
     [HttpGet("sync/promotions")]
+    [RequireModule("pos")]
     [ProducesResponseType(typeof(SyncPromotionsResponse), StatusCodes.Status200OK)]
     public async Task<IActionResult> SyncPromotions(
         [FromQuery] string? etag, [FromQuery] Guid? storeId, CancellationToken ct)
