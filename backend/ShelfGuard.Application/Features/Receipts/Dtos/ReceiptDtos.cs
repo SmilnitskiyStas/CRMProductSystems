@@ -12,7 +12,11 @@ public sealed record ReceiptDto(
     DateTime? ReceivedAt,
     string? Notes,
     DateTime CreatedAt,
-    List<ReceiptItemDto> Items
+    List<ReceiptItemDto> Items,
+    int PostponeCount = 0,
+    DateOnly? OriginalExpectedAt = null,
+    DateTime? PostponedAt = null,
+    string? DelayReason = null
 );
 
 public sealed record ReceiptItemDto(
@@ -28,6 +32,9 @@ public sealed record ReceiptItemDto(
     string? DiscrepancyNotes,
     bool IsProcessed
 );
+
+/// <summary>Move the expected delivery date of an open (not yet received) receipt to a later day.</summary>
+public sealed record PostponeReceiptRequest(DateOnly NewExpectedAt, string? Reason);
 
 public sealed record CreateReceiptRequest(
     Guid? SupplierId,

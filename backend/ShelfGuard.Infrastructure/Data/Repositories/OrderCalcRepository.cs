@@ -39,6 +39,23 @@ public sealed class OrderCalcRepository : IOrderCalcRepository
             .ToDictionaryAsync(x => x.ProductId, x => x.Qty, ct);
     }
 
+    public async Task<Dictionary<Guid, (decimal Quantity, DateOnly? ExpectedAt, bool Postponed)>> GetDelayedInTransitAsync(
+        Guid storeId, IReadOnlyCollection<Guid> productIds, DateOnly today, CancellationToken ct = default)
+    {
+        var rows = await _db.StockReceipts
+            .Where(r => r.DestinationStoreId == storeId && r.Status == "draft"
+                        && (r.PostponeCount > 0 || (r.ExpectedAt != null && r.ExpectedAt < today)))
+            .SelectMany(r => r.Items.Where(i => productIds.Contains(i.ProductId))
+                .Select(i => new { i.ProductId, i.QuantityOrdered, r.ExpectedAt, r.PostponeCount }))
+            .ToListAsync(ct);
+
+        return rows
+            .GroupBy(x => x.ProductId)
+            .ToDictionary(
+                g => g.Key,
+                g => (g.Sum(x => x.QuantityOrdered), g.Max(x => x.ExpectedAt), g.Any(x => x.PostponeCount > 0)));
+    }
+
     // Phase 4 (plan D5): open B2B marketplace orders the buyer has placed but not yet received —
     // invisible to the replenishment engine until now, which is the "double order" bug.
     private static readonly string[] OpenMarketplaceStatuses = ["new", "confirmed", "shipped"];

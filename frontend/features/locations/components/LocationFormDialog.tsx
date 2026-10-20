@@ -11,6 +11,7 @@ import { useModules } from "@/features/modules/hooks/useModules";
 import { useLegalEntities } from "@/features/legal-entities/hooks/useLegalEntities";
 import { RegionSelect } from "@/features/geo/components/RegionSelect";
 import { isServiceUnavailable } from "@/lib/api";
+import { DEFAULT_TIME_ZONE, TIME_ZONES, isKnownTimeZone, timeZoneKey } from "../lib/timeZones";
 import { locationsApi } from "../api/locations";
 import { LOCATION_TYPE_VALUES, type LocationDto, type LocationType } from "../types";
 
@@ -36,6 +37,7 @@ function buildSchema(t: ReturnType<typeof useTranslations>) {
     isActive: z.boolean(),
     legalEntityId: z.string().optional(),
     regionCode: z.string().nullable().optional(),
+    timeZone: z.string().min(1),
   });
 }
 
@@ -57,6 +59,7 @@ interface Props {
     isActive: boolean;
     legalEntityId: string | null;
     regionCode: string | null;
+    timeZone: string;
   }) => void;
 }
 
@@ -108,6 +111,7 @@ export function LocationFormDialog({ location, isPending, onClose, onSubmit }: P
       isActive: true,
       legalEntityId: "",
       regionCode: null,
+      timeZone: DEFAULT_TIME_ZONE,
     },
   });
 
@@ -127,6 +131,7 @@ export function LocationFormDialog({ location, isPending, onClose, onSubmit }: P
         isActive: location.isActive,
         legalEntityId: location.legalEntityId ?? "",
         regionCode: location.regionCode ?? null,
+        timeZone: location.timeZone || DEFAULT_TIME_ZONE,
       });
     } else {
       reset({
@@ -138,6 +143,7 @@ export function LocationFormDialog({ location, isPending, onClose, onSubmit }: P
         isActive: true,
         legalEntityId: "",
         regionCode: null,
+        timeZone: DEFAULT_TIME_ZONE,
       });
     }
   }, [location, reset]);
@@ -152,6 +158,7 @@ export function LocationFormDialog({ location, isPending, onClose, onSubmit }: P
       isActive: values.isActive,
       legalEntityId: values.legalEntityId || null,
       regionCode: values.regionCode ?? null,
+      timeZone: values.timeZone,
     });
   }
 
@@ -290,6 +297,21 @@ export function LocationFormDialog({ location, isPending, onClose, onSubmit }: P
               }
               placeholder={t("regionPlaceholder")}
             />
+          </Field>
+
+          {/* Time zone */}
+          <Field label={t("timeZoneLabel")} error={errors.timeZone?.message}>
+            <select {...register("timeZone")} style={inputStyle}>
+              {location && location.timeZone && !isKnownTimeZone(location.timeZone) && (
+                <option value={location.timeZone}>{location.timeZone}</option>
+              )}
+              {TIME_ZONES.map((z) => (
+                <option key={z} value={z}>
+                  {t(`timeZones.${timeZoneKey(z)}`)}
+                </option>
+              ))}
+            </select>
+            <span style={{ color: "#6B7280", fontSize: 11 }}>{t("timeZoneHelp")}</span>
           </Field>
 
           {/* Legal entity */}

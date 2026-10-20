@@ -121,6 +121,14 @@ public static class DependencyInjection
 
         // v3.2 - POS (TASK-068)
         services.AddScoped<IPosRepository, PosRepository>();
+        services.AddScoped<ICashRegisterRepository, CashRegisterRepository>();
+        services.AddScoped<IRegisterReportRepository, RegisterReportRepository>();
+        services.AddMemoryCache();
+        services.AddSingleton<Services.OperatorSessionValidator>();
+        services.AddSingleton<Application.Services.IOperatorSessionValidator>(sp => sp.GetRequiredService<Services.OperatorSessionValidator>());
+        services.AddSingleton<Application.Services.IOperatorSessionCache>(sp => sp.GetRequiredService<Services.OperatorSessionValidator>());
+        services.AddScoped<ICatalogSyncRepository, CatalogSyncRepository>();
+        services.AddScoped<IPromotionRuleRepository, PromotionRuleRepository>();
 
         // v2 - Daily sales (ADU source data)
         services.AddScoped<IDailySalesRepository, DailySalesRepository>();
@@ -131,6 +139,7 @@ public static class DependencyInjection
         services.AddScoped<ISupplyScheduleRepository, SupplyScheduleRepository>();
         services.AddScoped<IBufferRepository, BufferRepository>();
         services.AddScoped<IOrderCalcRepository, OrderCalcRepository>();
+        services.AddScoped<IOrderTrackingRepository, OrderTrackingRepository>();
         services.AddScoped<IEventRepository, EventRepository>();
         services.AddScoped<IWeatherRepository, WeatherRepository>();
         services.AddScoped<ICannibalizationRepository, CannibalizationRepository>();

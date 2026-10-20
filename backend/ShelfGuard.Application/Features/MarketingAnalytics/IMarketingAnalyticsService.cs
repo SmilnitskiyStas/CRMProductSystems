@@ -68,5 +68,9 @@ public interface IMarketingAnalyticsService
     Task<IReadOnlyList<StoreMigrationCustomerRowDto>> GetStoreMigrationCustomersAsync(
         Guid tenantId, IReadOnlyList<Guid>? storeIds, DateOnly from, DateOnly to, int limit, CancellationToken ct = default);
 
+    /// <summary>"Без покупок" drill-down: registered customers who never purchased (masked PII).</summary>
+    Task<IReadOnlyList<NoPurchaseCustomerRowDto>> GetNoPurchaseCustomersAsync(
+        Guid tenantId, IReadOnlyList<Guid>? storeIds, int limit, CancellationToken ct = default);
+
     Task<RfmExportResult> ExportStoreMigrationAsync(Guid tenantId, Guid userId, ExportStoreMigrationRequest request, CancellationToken ct = default);
 }

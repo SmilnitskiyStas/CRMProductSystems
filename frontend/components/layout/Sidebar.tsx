@@ -9,6 +9,7 @@ import {
   ClipboardList,
   ArrowLeftRight,
   CalendarDays,
+  Tag,
   Trash2,
   TrendingUp,
   BarChart2,
@@ -68,7 +69,6 @@ import {
   AppRoles,
   AT_LEAST_ENTERPRISE_ADMIN,
   AT_LEAST_STORE_MANAGER,
-  CAN_ACCESS_POS,
   CAN_MANAGE_WAREHOUSE,
   CAN_VIEW_ANALYTICS,
   CAN_VIEW_WAREHOUSE,
@@ -77,8 +77,7 @@ import {
   PROVIDER_TEAM,
   SUPPLIER_ONLY,
   TENANT_ROLES,
-  type AppRole,
-} from "@/lib/roles";
+  type AppRole, canAccessTenantSettings } from "@/lib/roles";
 import {
   SYSTEM_ROLE_PERMISSIONS,
   resolvePermissions,
@@ -169,8 +168,9 @@ export function buildNavGroups(t: SidebarGroupsT): NavGroup[] {
     icon: <TrendingUp size={18} />,
     moduleKey: "pos",
     items: [
-      { href: "/pos",       label: t("sales.pos"),       icon: <CreditCard size={16} />,   roles: CAN_ACCESS_POS },
-      { href: "/sales",     label: t("sales.sales"),     icon: <TrendingUp size={16} />,   roles: AT_LEAST_STORE_MANAGER },
+      { href: "/registers", label: t("sales.registers"), icon: <CreditCard size={16} />,   roles: AT_LEAST_STORE_MANAGER },
+      { href: "/promotion-rules", label: t("sales.promotionRules"), icon: <Tag size={16} />,   roles: AT_LEAST_STORE_MANAGER },
+      { href: "/sales",     label: t("sales.sales"),    icon: <TrendingUp size={16} />,   roles: AT_LEAST_STORE_MANAGER },
       { href: "/customers", label: t("sales.customers"), icon: <Users size={16} />,        roles: AT_LEAST_STORE_MANAGER },
     ],
   },
@@ -193,7 +193,8 @@ export function buildNavGroups(t: SidebarGroupsT): NavGroup[] {
     icon: <Truck size={18} />,
     moduleKey: "procurement",
     items: [
-      { href: "/orders",    label: t("procurement.orders"),   icon: <Calculator size={16} />, roles: AT_LEAST_STORE_MANAGER },
+      { href: "/orders",    label: t("procurement.orders"),   icon: <Calculator size={16} />, roles: AT_LEAST_STORE_MANAGER, exact: true },
+      { href: "/orders/tracking", label: t("procurement.tracking"), icon: <Truck size={16} />, roles: AT_LEAST_STORE_MANAGER },
       { href: "/ai-orders", label: t("procurement.aiOrders"), icon: <Sparkles size={16} />,   roles: AT_LEAST_STORE_MANAGER },
     ],
   },
@@ -1181,8 +1182,10 @@ export function Sidebar({ collapsed, onToggle }: Props) {
           gap: 2,
         }}
       >
-        {/* Settings */}
-        <NavLink item={settingsItem} pathname={pathname} collapsed={collapsed} />
+        {/* Settings — hidden for business tenants (configured by the platform team); see canAccessTenantSettings */}
+        {canAccessTenantSettings(userRole) && (
+          <NavLink item={settingsItem} pathname={pathname} collapsed={collapsed} />
+        )}
 
         {/* Collapse / Expand toggle */}
         <button

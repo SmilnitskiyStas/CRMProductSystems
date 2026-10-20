@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { salesApi } from "../api/sales";
 import { useStoreScopeReady } from "@/lib/useStoreContext";
 import type { SalesFilters, UpsertDailySalePayload } from "../types";
@@ -11,6 +11,8 @@ export function useDailySales(filters: SalesFilters, enabled = true) {
     queryKey: [...SALES_KEY, filters],
     queryFn: () => salesApi.getAll(filters),
     enabled: enabled && ready,
+    // Keep the previous page on screen while the next one loads — no table flash on paging.
+    placeholderData: keepPreviousData,
   });
   return { ...query, isLoading: !ready || query.isLoading };
 }

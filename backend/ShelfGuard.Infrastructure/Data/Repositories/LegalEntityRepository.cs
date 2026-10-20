@@ -8,12 +8,15 @@ public sealed class LegalEntityRepository : ILegalEntityRepository
 {
     private readonly AppDbContext _db;
 
+    /// <summary>Ukrainian-collation ordering only where the provider supports it (Npgsql).</summary>
+    private bool Uk => _db.Database.IsNpgsql();
+
     public LegalEntityRepository(AppDbContext db) => _db = db;
 
     public Task<List<LegalEntity>> GetAllByTenantAsync(Guid tenantId, CancellationToken ct = default) =>
         _db.LegalEntities
             .Where(x => x.TenantId == tenantId)
-            .OrderBy(x => x.LegalName)
+            .OrderByUk(x => x.LegalName, Uk)
             .ToListAsync(ct);
 
     public Task<LegalEntity?> GetByIdAsync(Guid id, CancellationToken ct = default) =>

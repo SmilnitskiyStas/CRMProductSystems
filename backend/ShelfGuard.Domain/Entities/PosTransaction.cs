@@ -14,6 +14,8 @@ public sealed class PosTransaction
     public string PaymentType { get; init; } = "cash"; // cash / card / mixed
     public decimal TotalAmount { get; set; }
     public decimal TaxAmount { get; set; }
+    /// <summary>Amount handed over by the customer; lets a replayed sale reproduce the same change (null for legacy rows).</summary>
+    public decimal? TenderedAmount { get; init; }
     // completed / pending_fiscalization / fiscalized / fiscalization_failed / cancelled
     public string Status { get; set; } = "pending_fiscalization";
     /// <summary>
@@ -29,8 +31,14 @@ public sealed class PosTransaction
     /// <summary>Present when the customer identified themselves at checkout with the loyalty code from the mobile app.</summary>
     public Guid? LoyaltyMembershipId { get; set; }
 
-    /// <summary>TASK-613: reserved for future register-hardware integration. No FK (no register entity exists yet) — intentionally unwired.</summary>
+    /// <summary>Register the sale was rung up on (FK to cash_registers; null for mobile/legacy sales).</summary>
     public Guid? CashRegisterId { get; set; }
+
+    /// <summary>
+    /// Client-generated idempotency key (offline-first register apps). Unique per tenant when set:
+    /// replaying the same sale returns the already-stored transaction instead of duplicating it.
+    /// </summary>
+    public Guid? ClientTransactionId { get; init; }
 
     public ICollection<PosTransactionItem> Items { get; init; } = new List<PosTransactionItem>();
 

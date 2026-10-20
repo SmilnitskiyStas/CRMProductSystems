@@ -1,3 +1,4 @@
+using ShelfGuard.Application.Common;
 using ShelfGuard.Application.Features.Sales.Dtos;
 
 namespace ShelfGuard.Application.Features.Sales;
@@ -7,11 +8,15 @@ public interface IDailySalesService
     /// <summary>
     /// TASK-610: storeIds is a repeated query param — omitted or empty means "all stores".
     /// </summary>
-    Task<List<DailySaleDto>> GetAsync(
+    Task<PagedResult<DailySaleDto>> GetAsync(
         Guid[]? storeIds,
         Guid? productId,
         DateOnly? from,
         DateOnly? to,
+        int page,
+        int pageSize,
+        string? sortBy = null,
+        bool sortDescending = true,
         CancellationToken ct = default);
 
     /// <summary>Creates or updates the (store, product, date) row. Source = manual.</summary>

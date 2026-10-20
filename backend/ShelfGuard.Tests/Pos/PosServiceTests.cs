@@ -1,7 +1,10 @@
+using NSubstitute;
+using ShelfGuard.Domain.Constants;
 using Microsoft.Extensions.Logging.Abstractions;
 using ShelfGuard.Application.Features.Pos;
 using ShelfGuard.Application.Features.Pos.Dtos;
 using ShelfGuard.Application.Features.Pos.Fiscal;
+using ShelfGuard.Application.Features.Promotions;
 using ShelfGuard.Domain.Entities;
 using ShelfGuard.Domain.Exceptions;
 using ShelfGuard.Domain.Interfaces;
@@ -10,6 +13,12 @@ using Xunit;
 namespace ShelfGuard.Tests.Pos;
 
 // ── Fakes ──────────────────────────────────────────────────────────────────
+
+file static class PosServiceTestsIds
+{
+    public static readonly Guid TenantId = Guid.NewGuid();
+    public static readonly Guid StoreId = Guid.NewGuid();
+}
 
 file sealed class FakePosRepo : IPosRepository
 {
@@ -27,6 +36,19 @@ file sealed class FakePosRepo : IPosRepository
 
     public Task<PosShift?> GetShiftByIdAsync(Guid shiftId, CancellationToken ct = default) =>
         Task.FromResult(Shifts.FirstOrDefault(s => s.Id == shiftId));
+
+    public Task<PosShift?> GetOpenShiftForRegisterAsync(Guid registerId, CancellationToken ct = default) =>
+        Task.FromResult(Shifts.FirstOrDefault(s => s.RegisterId == registerId && s.ClosedAt is null));
+
+    public Task<int> GetNextShiftNumberAsync(Guid tenantId, Guid? registerId, CancellationToken ct = default) =>
+        Task.FromResult(Shifts.Where(s => s.TenantId == tenantId && s.RegisterId == registerId)
+            .Select(s => s.ShiftNumber).DefaultIfEmpty(0).Max() + 1);
+
+    public Task<PosTransaction?> GetTransactionByClientIdAsync(Guid tenantId, Guid clientTransactionId, CancellationToken ct = default) =>
+        Task.FromResult(Transactions.FirstOrDefault(t => t.TenantId == tenantId && t.ClientTransactionId == clientTransactionId));
+
+    public int DiscardCount { get; private set; }
+    public void DiscardPendingChanges() => DiscardCount++;
 
     public Task AddShiftAsync(PosShift shift, CancellationToken ct = default)
     {
@@ -77,6 +99,12 @@ file sealed class FakePosRepo : IPosRepository
             throw new ConcurrencyConflictException("simulated concurrent write conflict");
         return Task.CompletedTask;
     }
+}
+
+file static class AttributionAccess
+{
+    public static IReadOnlyList<PosTransaction> Transactions(object repo) => ((FakePosRepo)repo).Transactions;
+    public static IReadOnlyList<StockEvent> Events(object repo) => ((FakePosRepo)repo).Events;
 }
 
 file sealed class FakeStockRepo : IStockRepository
@@ -133,6 +161,7 @@ file sealed class FakeCatalogRepo : IItemRepository
     public Task<(List<Item> Items, int Total)> GetPagedAsync(Guid? categoryId, Guid? segmentId, string? managementType, string? search, IReadOnlyList<Guid>? ids, string? sortBy, bool? sortDescending, int page, int pageSize, decimal? minPrice = null, decimal? maxPrice = null, bool? uncategorized = null, CancellationToken ct = default) =>
         Task.FromResult((Products, Products.Count));
 
+    public Task<List<Item>> SearchByBarcodeFragmentAsync(Guid tenantId, string digits, int take, CancellationToken ct = default) => Task.FromResult(new List<Item>());
     public Task<Item?> GetByIdAsync(Guid id, CancellationToken ct = default) =>
         Task.FromResult(Products.FirstOrDefault(p => p.Id == id));
 
@@ -273,6 +302,11 @@ file sealed class FakeLoyaltyRepo : ILoyaltyRepository
 /// <summary>TASK-405: fake ICustomerRepository backing PosService's Customer.TotalOrders/TotalSpent update.</summary>
 file sealed class FakeCustomerRepo : ICustomerRepository
 {
+    public Task<CustomerActivityStatsRow> GetActivityStatsAsync(Guid customerId, Guid tenantId, DateTime nowUtc, CancellationToken ct) => Task.FromResult(new CustomerActivityStatsRow(0, 0m, null, null, 0, 0m, 0, 0m, 0m));
+    public Task<IReadOnlyList<CustomerStoreActivityRow>> GetStoreActivityAsync(Guid customerId, Guid tenantId, CancellationToken ct) => Task.FromResult<IReadOnlyList<CustomerStoreActivityRow>>([]);
+    public Task<IReadOnlyList<CustomerMonthActivityRow>> GetMonthlyActivityAsync(Guid customerId, Guid tenantId, DateTime fromUtc, CancellationToken ct) => Task.FromResult<IReadOnlyList<CustomerMonthActivityRow>>([]);
+    public Task<IReadOnlyList<CustomerTopProductRow>> GetTopProductsAsync(Guid customerId, Guid tenantId, int take, CancellationToken ct) => Task.FromResult<IReadOnlyList<CustomerTopProductRow>>([]);
+    public Task<(IReadOnlyList<CustomerReceiptRow> Items, int Total)> GetReceiptsPagedAsync(Guid customerId, Guid tenantId, int page, int pageSize, CancellationToken ct) => Task.FromResult<(IReadOnlyList<CustomerReceiptRow>, int)>(([], 0));
     public List<Customer> Customers { get; } = [];
 
     public Task<List<Customer>> GetAllAsync(Guid tenantId, CancellationToken ct) =>
@@ -349,13 +383,45 @@ file sealed class FakeSuccessfulFiscalService : IFiscalService
             providerReceiptId, FiscalReceiptStatus.Done, "FN-12345", DateTimeOffset.UtcNow, null, null));
 }
 
+file sealed record Seeded(FakePosRepo Pos, FakeStockRepo Stock, FakeCatalogRepo Catalog, PosShift Shift, ProductStock Batch)
+{
+    public void Deconstruct(out FakePosRepo pos, out FakeStockRepo stock, out FakeCatalogRepo catalog, out PosShift shift, out ProductStock batch)
+    {
+        pos = Pos; stock = Stock; catalog = Catalog; shift = Shift; batch = Batch;
+    }
+}
+
+file static class SaleSeeder
+{
+    public static Seeded Seed(string barcode, decimal stockQty = 10m, Guid? registerId = null)
+    {
+        var tenantId = PosServiceTestsIds.TenantId;
+        var storeId = PosServiceTestsIds.StoreId;
+        var pos = new FakePosRepo();
+        var shift = new PosShift { TenantId = tenantId, StoreId = storeId, RegisterId = registerId };
+        pos.Shifts.Add(shift);
+        var product = new Item { Id = Guid.NewGuid(), TenantId = tenantId, Barcodes = [barcode], Name = "Seed", PriceRetail = 10m };
+        var catalog = new FakeCatalogRepo();
+        catalog.Products.Add(product);
+        var stock = new FakeStockRepo();
+        var batch = new ProductStock
+        {
+            Id = Guid.NewGuid(), TenantId = tenantId, ProductId = product.Id, StoreId = storeId,
+            Quantity = stockQty, QuantityInitial = stockQty,
+            ExpiryDate = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(30)), Status = "safe",
+        };
+        stock.Batches.Add(batch);
+        return new Seeded(pos, stock, catalog, shift, batch);
+    }
+}
+
 // ── Tests ──────────────────────────────────────────────────────────────────
 
 public sealed class PosServiceTests
 {
-    private static readonly Guid TenantId = Guid.NewGuid();
+    private static readonly Guid TenantId = PosServiceTestsIds.TenantId;
     private static readonly Guid CashierId = Guid.NewGuid();
-    private static readonly Guid StoreId = Guid.NewGuid();
+    private static readonly Guid StoreId = PosServiceTestsIds.StoreId;
 
     private static PosService BuildService(
         IPosRepository? pos = null,
@@ -364,7 +430,9 @@ public sealed class PosServiceTests
         IDiscountRepository? discounts = null,
         IFiscalService? fiscal = null,
         ILoyaltyRepository? loyalty = null,
-        ICustomerRepository? customers = null)
+        ICustomerRepository? customers = null,
+        IUserRepository? users = null,
+        ICashRegisterRepository? registers = null)
     {
         return new PosService(
             pos ?? new FakePosRepo(),
@@ -374,7 +442,9 @@ public sealed class PosServiceTests
             new FakeFiscalFactory(fiscal ?? new NoopFiscalService()),
             loyalty ?? new FakeLoyaltyRepo(),
             customers ?? new FakeCustomerRepo(),
-            NullLogger<PosService>.Instance);
+            NullLogger<PosService>.Instance,
+            users,
+            registers);
     }
 
     private static Item MakeProduct(string barcode = "123", decimal price = 10m) =>
@@ -1547,5 +1617,790 @@ public sealed class PosServiceTests
         Assert.Equal(8m, sale.LoyaltyAccrued);
         Assert.Equal(20m, sale.LoyaltyRedeemed); // positive, sign flipped from the stored -20m
         Assert.Equal(38m, sale.LoyaltyBalance);  // last entry (accrual) wins, not redemption's 30m
+    }
+    // ── Cashier app: register binding, idempotency, batch sync ─────────────
+
+    [Fact]
+    public async Task CreateSale_same_ClientTransactionId_twice_creates_one_transaction()
+    {
+        var (pos, stock, catalog, shift, batch) = SaleSeeder.Seed("IDEMP-1");
+        var svc = BuildService(pos: pos, stock: stock, catalog: catalog);
+        var clientId = Guid.NewGuid();
+        var request = new CreateSaleRequest(
+            shift.Id, [new SaleItemRequest("IDEMP-1", 2)], "Cash", 20, ClientTransactionId: clientId);
+
+        var (first, err1, _) = await svc.CreateSaleAsync(TenantId, CashierId, request);
+        var (second, err2, _) = await svc.CreateSaleAsync(TenantId, CashierId, request);
+
+        Assert.Null(err1);
+        Assert.Null(err2);
+        Assert.Single(pos.Transactions);
+        Assert.Equal(first!.TransactionId, second!.TransactionId);
+        Assert.Equal(first.ReceiptNumber, second.ReceiptNumber);
+        Assert.Equal(8m, batch.Quantity); // FEFO write-down happened exactly once
+        Assert.Equal(clientId, pos.Transactions[0].ClientTransactionId);
+    }
+
+    [Fact]
+    public async Task CreateSale_replay_returns_same_tendered_amount_and_change()
+    {
+        var (pos, stock, catalog, shift, _) = SaleSeeder.Seed("IDEMP-CHG");
+        var svc = BuildService(pos: pos, stock: stock, catalog: catalog);
+        var request = new CreateSaleRequest(
+            shift.Id, [new SaleItemRequest("IDEMP-CHG", 1)], "Cash", 100, ClientTransactionId: Guid.NewGuid());
+
+        var (first, _, _) = await svc.CreateSaleAsync(TenantId, CashierId, request);
+        var (second, _, _) = await svc.CreateSaleAsync(TenantId, CashierId, request);
+
+        Assert.True(first!.Change > 0);
+        Assert.Equal(100m, second!.PaymentAmount);
+        Assert.Equal(first.Change, second.Change);
+    }
+
+    [Fact]
+    public async Task OpenShift_assigns_local_sequential_number_per_register()
+    {
+        var pos = new FakePosRepo();
+        var svc = BuildService(pos: pos);
+        var regA = Guid.NewGuid();
+
+        var (a, _, _) = await svc.OpenShiftAsync(TenantId, CashierId, new OpenShiftRequest(StoreId), registerId: regA);
+        await svc.CloseShiftAsync(TenantId, registerId: regA);
+        var (a2, _, _) = await svc.OpenShiftAsync(TenantId, CashierId, new OpenShiftRequest(StoreId), registerId: regA);
+
+        Assert.Equal(1, a!.ShiftNumber);
+        Assert.Equal(2, a2!.ShiftNumber);
+    }
+
+    [Fact]
+    public async Task CreateSale_without_ClientTransactionId_is_not_deduplicated()
+    {
+        var (pos, stock, catalog, shift, _) = SaleSeeder.Seed("IDEMP-2");
+        var svc = BuildService(pos: pos, stock: stock, catalog: catalog);
+        var request = new CreateSaleRequest(shift.Id, [new SaleItemRequest("IDEMP-2", 1)], "Cash", 10);
+
+        await svc.CreateSaleAsync(TenantId, CashierId, request);
+        await svc.CreateSaleAsync(TenantId, CashierId, request);
+
+        Assert.Equal(2, pos.Transactions.Count);
+    }
+
+    [Fact]
+    public async Task CreateSale_stamps_register_and_rejects_shift_of_another_register()
+    {
+        var registerId = Guid.NewGuid();
+        var (pos, stock, catalog, shift, _) = SaleSeeder.Seed("REG-1", registerId: registerId);
+        var svc = BuildService(pos: pos, stock: stock, catalog: catalog);
+        var request = new CreateSaleRequest(shift.Id, [new SaleItemRequest("REG-1", 1)], "Cash", 10);
+
+        var (sale, error, _) = await svc.CreateSaleAsync(TenantId, CashierId, request, registerId: registerId);
+        Assert.Null(error);
+        Assert.NotNull(sale);
+        Assert.Equal(registerId, pos.Transactions.Single().CashRegisterId);
+
+        var (rejected, err2, status) = await svc.CreateSaleAsync(
+            TenantId, CashierId, request, registerId: Guid.NewGuid());
+        Assert.Null(rejected);
+        Assert.Equal(409, status);
+        Assert.NotNull(err2);
+    }
+
+    [Fact]
+    public async Task OpenShift_is_scoped_per_register()
+    {
+        var pos = new FakePosRepo();
+        var svc = BuildService(pos: pos);
+        var regA = Guid.NewGuid();
+        var regB = Guid.NewGuid();
+
+        var (a, errA, _) = await svc.OpenShiftAsync(TenantId, CashierId, new OpenShiftRequest(StoreId), registerId: regA);
+        var (b, errB, _) = await svc.OpenShiftAsync(TenantId, CashierId, new OpenShiftRequest(StoreId), registerId: regB);
+        var (dup, _, dupStatus) = await svc.OpenShiftAsync(TenantId, CashierId, new OpenShiftRequest(StoreId), registerId: regA);
+
+        Assert.Null(errA);
+        Assert.Null(errB);
+        Assert.NotNull(a);
+        Assert.NotNull(b);
+        Assert.Null(dup);
+        Assert.Equal(409, dupStatus);
+        Assert.Equal(regA, pos.Shifts[0].RegisterId);
+        Assert.Equal(2, pos.Shifts.Count);
+    }
+
+    [Fact]
+    public async Task BatchSales_reports_partial_failure_and_duplicates_per_item()
+    {
+        var (pos, stock, catalog, shift, batch) = SaleSeeder.Seed("BATCH-1");
+        var svc = BuildService(pos: pos, stock: stock, catalog: catalog);
+
+        var okId = Guid.NewGuid();
+        var badId = Guid.NewGuid();
+        var batchRequest = new BatchSalesRequest(
+        [
+            new CreateSaleRequest(shift.Id, [new SaleItemRequest("BATCH-1", 1)], "Cash", 10, ClientTransactionId: okId),
+            new CreateSaleRequest(shift.Id, [new SaleItemRequest("NO-SUCH-BARCODE", 1)], "Cash", 10, ClientTransactionId: badId),
+            new CreateSaleRequest(shift.Id, [new SaleItemRequest("BATCH-1", 1)], "Cash", 10, ClientTransactionId: okId), // replay
+            new CreateSaleRequest(shift.Id, [new SaleItemRequest("BATCH-1", 1)], "Cash", 10), // no client id
+        ]);
+
+        var (result, error, _) = await svc.CreateSalesBatchAsync(TenantId, CashierId, batchRequest);
+
+        Assert.Null(error);
+        var r = result!.Results;
+        Assert.Equal(4, r.Count);
+        Assert.Equal("created", r[0].Status);
+        Assert.Equal("failed", r[1].Status);
+        Assert.Equal(400, r[1].ErrorStatusCode);
+        Assert.Equal("duplicate", r[2].Status);
+        Assert.Equal(r[0].Sale!.TransactionId, r[2].Sale!.TransactionId);
+        Assert.Equal("failed", r[3].Status);
+        Assert.Equal(400, r[3].ErrorStatusCode);
+
+        Assert.Single(pos.Transactions);   // only the first item persisted a sale
+        Assert.Equal(9m, batch.Quantity);  // sold once
+        Assert.True(pos.DiscardCount >= 1); // the failed item's pending changes were dropped
+    }
+
+    [Fact]
+    public async Task BatchSales_rejects_empty_and_oversized_batches()
+    {
+        var svc = BuildService();
+
+        var (_, emptyErr, emptyStatus) = await svc.CreateSalesBatchAsync(TenantId, CashierId, new BatchSalesRequest([]));
+        Assert.Equal(400, emptyStatus);
+        Assert.NotNull(emptyErr);
+
+        var tooMany = Enumerable.Range(0, PosService.MaxBatchSales + 1)
+            .Select(_ => new CreateSaleRequest(Guid.NewGuid(), [new SaleItemRequest("X", 1)], "Cash", 1, ClientTransactionId: Guid.NewGuid()))
+            .ToList();
+        var (_, bigErr, bigStatus) = await svc.CreateSalesBatchAsync(TenantId, CashierId, new BatchSalesRequest(tooMany));
+        Assert.Equal(400, bigStatus);
+        Assert.NotNull(bigErr);
+    }
+    // ── Idempotency hardening: a reused key must not "succeed" with a different sale ─────
+
+    [Fact]
+    public async Task Replay_with_different_items_is_409_not_the_stored_sale()
+    {
+        var (pos, stock, catalog, shift, _) = SaleSeeder.Seed("KEY-1");
+        var other = new Item { Id = Guid.NewGuid(), TenantId = TenantId, Barcodes = ["KEY-2"], Name = "Other", PriceRetail = 5m };
+        catalog.Products.Add(other);
+        stock.Batches.Add(new ProductStock
+        {
+            Id = Guid.NewGuid(), TenantId = TenantId, ProductId = other.Id, StoreId = StoreId,
+            Quantity = 10, QuantityInitial = 10,
+            ExpiryDate = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(30)), Status = "safe",
+        });
+        var svc = BuildService(pos: pos, stock: stock, catalog: catalog);
+        var key = Guid.NewGuid();
+
+        var (first, e1, _) = await svc.CreateSaleAsync(TenantId, CashierId,
+            new CreateSaleRequest(shift.Id, [new SaleItemRequest("KEY-1", 1)], "Cash", 10, ClientTransactionId: key));
+        Assert.Null(e1);
+
+        var differentItem = await svc.CreateSaleAsync(TenantId, CashierId,
+            new CreateSaleRequest(shift.Id, [new SaleItemRequest("KEY-2", 1)], "Cash", 10, ClientTransactionId: key));
+        var differentQty = await svc.CreateSaleAsync(TenantId, CashierId,
+            new CreateSaleRequest(shift.Id, [new SaleItemRequest("KEY-1", 3)], "Cash", 30, ClientTransactionId: key));
+        var differentPayment = await svc.CreateSaleAsync(TenantId, CashierId,
+            new CreateSaleRequest(shift.Id, [new SaleItemRequest("KEY-1", 1)], "Card", 10, ClientTransactionId: key));
+
+        foreach (var r in new[] { differentItem, differentQty, differentPayment })
+        {
+            Assert.Null(r.Sale);
+            Assert.Equal(409, r.StatusCode);
+        }
+
+        Assert.Single(pos.Transactions);
+        Assert.Equal(first!.TransactionId, pos.Transactions[0].Id);
+    }
+
+    [Fact]
+    public async Task Replay_from_another_register_is_409_and_batch_reports_it_as_failed()
+    {
+        var registerA = Guid.NewGuid();
+        var (pos, stock, catalog, shift, _) = SaleSeeder.Seed("KEY-REG", registerId: registerA);
+        var svc = BuildService(pos: pos, stock: stock, catalog: catalog);
+        var key = Guid.NewGuid();
+        var request = new CreateSaleRequest(shift.Id, [new SaleItemRequest("KEY-REG", 1)], "Cash", 10, ClientTransactionId: key);
+
+        var (sale, err, _) = await svc.CreateSaleAsync(TenantId, CashierId, request, registerId: registerA);
+        Assert.Null(err);
+
+        var sameRegister = await svc.CreateSaleAsync(TenantId, CashierId, request, registerId: registerA);
+        Assert.Equal(sale!.TransactionId, sameRegister.Sale!.TransactionId);
+
+        var otherRegister = await svc.CreateSaleAsync(TenantId, CashierId, request, registerId: Guid.NewGuid());
+        Assert.Equal(409, otherRegister.StatusCode);
+
+        var (batch, _, _) = await svc.CreateSalesBatchAsync(
+            TenantId, CashierId, new BatchSalesRequest([request]), registerId: Guid.NewGuid());
+        var item = Assert.Single(batch!.Results);
+        Assert.Equal("failed", item.Status);
+        Assert.Equal(409, item.ErrorStatusCode);
+        Assert.Single(pos.Transactions);
+    }
+    // ── Offline sync attribution (TASK-730) ────────────────────────────────
+
+    private sealed class Attribution
+    {
+        public Guid RegisterId { get; } = Guid.NewGuid();
+        public List<RegisterSession> Sessions { get; } = [];
+        public Dictionary<Guid, User> Users { get; } = [];
+        public PosService Svc { get; }
+        public FakePosRepoHandle Pos { get; }
+        public PosShift Shift { get; }
+        public ProductStock Batch { get; }
+        public readonly Guid TokenCashier = Guid.NewGuid();
+
+        public Attribution(string barcode)
+        {
+            var (pos, stock, catalog, shift, batch) = SaleSeeder.Seed(barcode, stockQty: 50m, registerId: RegisterId);
+            Shift = shift;
+            Batch = batch;
+            Pos = new FakePosRepoHandle(pos);
+
+            var registers = Substitute.For<ICashRegisterRepository>();
+            registers.GetByIdAsync(RegisterId, Arg.Any<CancellationToken>())
+                .Returns(new CashRegister { Id = RegisterId, TenantId = TenantId, StoreId = StoreId, Number = 1, Name = "r" });
+            registers.HadSessionAtAsync(default, default, default, default, default).ReturnsForAnyArgs(ci =>
+            {
+                var (reg, cashier, at, tol) = (ci.ArgAt<Guid>(0), ci.ArgAt<Guid>(1), ci.ArgAt<DateTime>(2), ci.ArgAt<TimeSpan>(3));
+                return Sessions.Any(x => x.RegisterId == reg && x.CashierId == cashier && x.StartedAt <= at
+                                         && (x.EndedAt == null || x.EndedAt >= at - tol));
+            });
+
+            var users = Substitute.For<IUserRepository>();
+            users.GetByIdAsync(default, default).ReturnsForAnyArgs(ci => Users.GetValueOrDefault(ci.ArgAt<Guid>(0)));
+
+            Svc = BuildService(pos: pos, stock: stock, catalog: catalog, users: users, registers: registers);
+        }
+
+        public User AddUser(string role = AppRoles.Cashier, Guid? storeId = null, bool active = true)
+        {
+            var u = User.Create(TenantId, $"{Guid.NewGuid():N}@x.test", "Colleague", "pw", role, storeId ?? StoreId);
+            if (!active) u.Deactivate();
+            Users[u.Id] = u;
+            return u;
+        }
+
+        public void AddSession(Guid cashier, DateTime start, DateTime? end = null) =>
+            Sessions.Add(new RegisterSession { TenantId = TenantId, RegisterId = RegisterId, CashierId = cashier, StartedAt = start, EndedAt = end });
+
+        public CreateSaleRequest Sale(string barcode, Guid? cashier = null, DateTime? at = null, Guid? key = null) =>
+            new(Shift.Id, [new SaleItemRequest(barcode, 1)], "Cash", 10,
+                ClientTransactionId: key ?? Guid.NewGuid(), CashierId: cashier, OccurredAt: at);
+
+        public async Task<BatchSaleItemResultDto> Flush(CreateSaleRequest sale)
+        {
+            var (result, error, _) = await Svc.CreateSalesBatchAsync(
+                TenantId, TokenCashier, new BatchSalesRequest([sale]), registerId: RegisterId);
+            Assert.Null(error);
+            return Assert.Single(result!.Results);
+        }
+    }
+
+    // The repo is a file-local fake; expose just what the attribution tests read.
+    private sealed class FakePosRepoHandle(object inner)
+    {
+        public IReadOnlyList<PosTransaction> Transactions => AttributionAccess.Transactions(inner);
+        public IReadOnlyList<StockEvent> Events => AttributionAccess.Events(inner);
+    }
+
+    [Fact]
+    public async Task Batch_sale_of_cashier_A_flushed_by_B_is_recorded_under_A()
+    {
+        var t = new Attribution("ATTR-1");
+        var a = t.AddUser();
+        var now = DateTime.UtcNow;
+        t.AddSession(a.Id, now.AddHours(-3), now.AddHours(-1));          // A worked, then B signed in
+        t.AddSession(t.TokenCashier, now.AddHours(-1));
+
+        var item = await t.Flush(t.Sale("ATTR-1", cashier: a.Id, at: now.AddHours(-2)));
+
+        Assert.Equal("created", item.Status);
+        var tx = Assert.Single(t.Pos.Transactions);
+        Assert.Equal(a.Id, tx.CashierId);
+        Assert.All(t.Pos.Events, e => Assert.Equal(a.Id, e.PerformedBy));
+    }
+
+    [Fact]
+    public async Task Batch_sale_without_or_with_own_CashierId_is_recorded_under_the_token_cashier()
+    {
+        var t = new Attribution("ATTR-2");
+
+        await t.Flush(t.Sale("ATTR-2"));
+        await t.Flush(t.Sale("ATTR-2", cashier: t.TokenCashier));
+
+        Assert.All(t.Pos.Transactions, tx => Assert.Equal(t.TokenCashier, tx.CashierId));
+        Assert.Equal(2, t.Pos.Transactions.Count);
+    }
+
+    [Fact]
+    public async Task Batch_sale_for_a_cashier_with_no_session_on_this_register_fails()
+    {
+        var t = new Attribution("ATTR-3");
+        var stranger = t.AddUser();
+
+        var item = await t.Flush(t.Sale("ATTR-3", cashier: stranger.Id, at: DateTime.UtcNow.AddMinutes(-10)));
+
+        Assert.Equal("failed", item.Status);
+        Assert.Equal(403, item.ErrorStatusCode);
+        Assert.Empty(t.Pos.Transactions);
+    }
+
+    [Fact]
+    public async Task Batch_attribution_respects_the_session_window_with_5_minute_end_tolerance()
+    {
+        var t = new Attribution("ATTR-4");
+        var a = t.AddUser();
+        var now = DateTime.UtcNow;
+        t.AddSession(a.Id, now.AddHours(-3), now.AddHours(-2));
+
+        var before = await t.Flush(t.Sale("ATTR-4", a.Id, now.AddHours(-4)));                         // before session start
+        var withinTolerance = await t.Flush(t.Sale("ATTR-4", a.Id, now.AddHours(-2).AddMinutes(3)));  // 3 min after end
+        var afterTolerance = await t.Flush(t.Sale("ATTR-4", a.Id, now.AddHours(-2).AddMinutes(10)));  // 10 min after end
+
+        Assert.Equal("failed", before.Status);
+        Assert.Equal("created", withinTolerance.Status);
+        Assert.Equal("failed", afterTolerance.Status);
+    }
+
+    [Fact]
+    public async Task Batch_attribution_without_OccurredAt_uses_now_and_needs_an_open_or_just_ended_session()
+    {
+        var t = new Attribution("ATTR-5");
+        var open = t.AddUser();
+        var longGone = t.AddUser();
+        t.AddSession(open.Id, DateTime.UtcNow.AddHours(-1));
+        t.AddSession(longGone.Id, DateTime.UtcNow.AddHours(-5), DateTime.UtcNow.AddHours(-4));
+
+        Assert.Equal("created", (await t.Flush(t.Sale("ATTR-5", open.Id))).Status);
+        Assert.Equal("failed", (await t.Flush(t.Sale("ATTR-5", longGone.Id))).Status);
+    }
+
+    [Fact]
+    public async Task Batch_attribution_rejects_other_store_inactive_and_non_pos_users()
+    {
+        var t = new Attribution("ATTR-6");
+        var now = DateTime.UtcNow;
+        var otherStore = t.AddUser(storeId: Guid.NewGuid());
+        var inactive = t.AddUser(active: false);
+        var merch = t.AddUser(role: AppRoles.Merchandiser);
+        foreach (var u in new[] { otherStore, inactive, merch })
+            t.AddSession(u.Id, now.AddHours(-2)); // even with a session row, the user checks fail
+
+        foreach (var u in new[] { otherStore.Id, inactive.Id, merch.Id, Guid.NewGuid() /* unknown */ })
+        {
+            var item = await t.Flush(t.Sale("ATTR-6", u, now.AddMinutes(-30)));
+            Assert.Equal("failed", item.Status);
+            Assert.Equal(403, item.ErrorStatusCode);
+        }
+
+        Assert.Empty(t.Pos.Transactions);
+    }
+
+    [Fact]
+    public async Task Batch_attribution_rejects_future_and_too_old_OccurredAt()
+    {
+        var t = new Attribution("ATTR-7");
+        var a = t.AddUser();
+        var now = DateTime.UtcNow;
+        t.AddSession(a.Id, now.AddDays(-30));
+
+        var future = await t.Flush(t.Sale("ATTR-7", a.Id, now.AddMinutes(10)));
+        var skewOk = await t.Flush(t.Sale("ATTR-7", a.Id, now.AddMinutes(3)));
+        var tooOld = await t.Flush(t.Sale("ATTR-7", a.Id, now.AddDays(-15)));
+        var oldButOk = await t.Flush(t.Sale("ATTR-7", a.Id, now.AddDays(-13)));
+
+        Assert.Equal("failed", future.Status);
+        Assert.Equal("created", skewOk.Status);
+        Assert.Equal("failed", tooOld.Status);
+        Assert.Equal("created", oldButOk.Status);
+    }
+
+    [Fact]
+    public async Task Batch_attribution_needs_a_register_token()
+    {
+        var t = new Attribution("ATTR-8");
+        var a = t.AddUser();
+        t.AddSession(a.Id, DateTime.UtcNow.AddHours(-1));
+
+        var (result, _, _) = await t.Svc.CreateSalesBatchAsync(
+            TenantId, t.TokenCashier, new BatchSalesRequest([t.Sale("ATTR-8", a.Id)]), registerId: null);
+
+        Assert.Equal("failed", result!.Results.Single().Status);
+        Assert.Empty(t.Pos.Transactions);
+    }
+
+    [Fact]
+    public async Task Single_sale_with_a_foreign_CashierId_is_400_and_own_id_is_fine_and_OccurredAt_is_ignored()
+    {
+        var t = new Attribution("ATTR-9");
+        var someoneElse = t.AddUser();
+
+        var foreign = await t.Svc.CreateSaleAsync(TenantId, t.TokenCashier,
+            t.Sale("ATTR-9", cashier: someoneElse.Id), registerId: t.RegisterId);
+        Assert.Equal(400, foreign.StatusCode);
+        Assert.Empty(t.Pos.Transactions);
+
+        var own = await t.Svc.CreateSaleAsync(TenantId, t.TokenCashier,
+            t.Sale("ATTR-9", cashier: t.TokenCashier, at: DateTime.UtcNow.AddDays(-400)), registerId: t.RegisterId);
+        Assert.Null(own.Error); // absurd OccurredAt is simply ignored here
+        Assert.Equal(t.TokenCashier, t.Pos.Transactions.Single().CashierId);
+    }
+
+    [Fact]
+    public async Task Replay_keeps_its_original_cashier_and_a_different_CashierId_is_a_mismatch()
+    {
+        var t = new Attribution("ATTR-10");
+        var a = t.AddUser();
+        var c = t.AddUser();
+        var now = DateTime.UtcNow;
+        t.AddSession(a.Id, now.AddHours(-3), now.AddHours(-1));
+        t.AddSession(c.Id, now.AddHours(-3), now.AddHours(-1));
+        var key = Guid.NewGuid();
+
+        var first = await t.Flush(t.Sale("ATTR-10", a.Id, now.AddHours(-2), key));
+        var sameReplay = await t.Flush(t.Sale("ATTR-10", a.Id, now.AddHours(-2), key));
+        var otherCashierReplay = await t.Flush(t.Sale("ATTR-10", c.Id, now.AddHours(-2), key));
+
+        Assert.Equal("created", first.Status);
+        Assert.Equal("duplicate", sameReplay.Status);
+        Assert.Equal(first.Sale!.TransactionId, sameReplay.Sale!.TransactionId);
+        Assert.Equal("failed", otherCashierReplay.Status);
+        Assert.Equal(409, otherCashierReplay.ErrorStatusCode);
+        Assert.Single(t.Pos.Transactions);
+        Assert.Equal(a.Id, t.Pos.Transactions[0].CashierId);
+    }
+}
+
+// ── Promotion rules (promotion-rules.md, Phase 1) ──────────────────────────
+
+file sealed class FakePromotionRepo : IPromotionRuleRepository
+{
+    public List<PublishedPromotionRuleRow> Published { get; } = [];
+    public List<PromotionRuleApplication> Applications { get; } = [];
+
+    public Task<IReadOnlyList<PublishedPromotionRuleRow>> GetPublishedAsync(Guid tenantId, CancellationToken ct = default) =>
+        Task.FromResult<IReadOnlyList<PublishedPromotionRuleRow>>(Published);
+
+    public Task AddApplicationsAsync(IEnumerable<PromotionRuleApplication> applications, CancellationToken ct = default)
+    {
+        Applications.AddRange(applications);
+        return Task.CompletedTask;
+    }
+
+    public Task<IReadOnlyList<PromotionRuleApplication>> GetApplicationsForTransactionAsync(Guid transactionId, CancellationToken ct = default) =>
+        Task.FromResult<IReadOnlyList<PromotionRuleApplication>>(Applications.Where(a => a.TransactionId == transactionId).ToList());
+
+    public Task<PromotionRule?> GetByIdAsync(Guid id, CancellationToken ct = default) => Task.FromResult<PromotionRule?>(null);
+    public Task<IReadOnlyList<PromotionRuleVersion>> GetVersionsAsync(Guid ruleId, CancellationToken ct = default) =>
+        Task.FromResult<IReadOnlyList<PromotionRuleVersion>>([]);
+    public Task<IReadOnlyList<PromotionRule>> ListAsync(string? status, CancellationToken ct = default) =>
+        Task.FromResult<IReadOnlyList<PromotionRule>>([]);
+    public Task<IReadOnlyList<PromotionRuleVersion>> GetVersionsByIdsAsync(IEnumerable<Guid> ids, CancellationToken ct = default) =>
+        Task.FromResult<IReadOnlyList<PromotionRuleVersion>>([]);
+    public Task RemoveVersionAsync(Guid versionId, CancellationToken ct = default) => Task.CompletedTask;
+    public Task<T> ExecuteInTransactionAsync<T>(Func<Task<T>> work, CancellationToken ct = default) => work();
+    public Task AddRuleAsync(PromotionRule rule, CancellationToken ct = default) => Task.CompletedTask;
+    public Task AddVersionAsync(PromotionRuleVersion version, CancellationToken ct = default) => Task.CompletedTask;
+    public Task SaveChangesAsync(CancellationToken ct = default) => Task.CompletedTask;
+
+    public PublishedPromotionRuleRow Add(string name, string definitionJson)
+    {
+        var row = new PublishedPromotionRuleRow(Guid.NewGuid(), name, DateTime.UtcNow.AddDays(-1), Guid.NewGuid(), definitionJson);
+        Published.Add(row);
+        return row;
+    }
+}
+
+file sealed class PromoCtx
+{
+    public FakePosRepo Pos { get; } = new();
+    public FakeStockRepo Stock { get; } = new();
+    public FakeCatalogRepo Catalog { get; } = new();
+    public FakeLoyaltyRepo Loyalty { get; } = new();
+    public FakePromotionRepo Promotions { get; } = new();
+    public PosShift Shift { get; }
+
+    public PromoCtx()
+    {
+        Shift = new PosShift { TenantId = PosServiceTestsIds.TenantId, StoreId = PosServiceTestsIds.StoreId };
+        Pos.Shifts.Add(Shift);
+    }
+
+    public Item AddProduct(string barcode, decimal price)
+    {
+        var p = new Item { Id = Guid.NewGuid(), TenantId = PosServiceTestsIds.TenantId, Barcodes = [barcode], Name = "P-" + barcode, PriceRetail = price };
+        Catalog.Products.Add(p);
+        return p;
+    }
+
+    public ProductStock AddBatch(Guid productId, decimal qty, int days)
+    {
+        var b = new ProductStock
+        {
+            Id = Guid.NewGuid(), TenantId = PosServiceTestsIds.TenantId, ProductId = productId, StoreId = PosServiceTestsIds.StoreId,
+            Quantity = qty, QuantityInitial = qty,
+            ExpiryDate = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(days)), Status = "safe",
+        };
+        Stock.Batches.Add(b);
+        return b;
+    }
+
+    public PosService Service(bool withPromotions = true, ILocationRepository? locations = null) => new(
+        Pos, Stock, Catalog, new FakeDiscountRepo(), new FakeFiscalFactory(new NoopFiscalService()),
+        Loyalty, new FakeCustomerRepo(), NullLogger<PosService>.Instance,
+        promotions: withPromotions ? Promotions : null, locations: locations);
+
+    public static (LoyaltyMembership Membership, PromoCtx T, Item Product) WithTier(decimal tierPercent)
+    {
+        var t = new PromoCtx();
+        var product = t.AddProduct("TIERPROMO", 100m);
+        t.AddBatch(product.Id, 10m, days: 10);
+        var tier = new LoyaltyTierDefinition
+        {
+            TenantId = PosServiceTestsIds.TenantId, Name = "Gold", SortOrder = 1, AccrualMultiplier = 0m, DiscountPercent = tierPercent,
+        };
+        var membership = new LoyaltyMembership
+        {
+            TenantId = PosServiceTestsIds.TenantId, Balance = 0m, Status = LoyaltyMembershipStatus.Active,
+            CurrentTierId = tier.Id, CurrentTier = tier,
+        };
+        t.Loyalty.Memberships.Add(membership);
+        t.Loyalty.Settings.Add(new LoyaltyProgramSettings { TenantId = PosServiceTestsIds.TenantId, IsEnabled = true, AccrualRatePercent = 0m });
+        return (membership, t, product);
+    }
+
+    public PosTransaction SingleTx => Pos.Transactions.Single();
+    public IReadOnlyList<StockEvent> Events => Pos.Events;
+}
+
+public sealed class PosServicePromotionTests
+{
+    private static readonly Guid TenantId = PosServiceTestsIds.TenantId;
+    private static readonly Guid StoreId = PosServiceTestsIds.StoreId;
+    private static readonly Guid CashierId = Guid.NewGuid();
+
+    private static string TwoPlusOne(Guid itemId) =>
+        $$$"""{"type":"buy_n_get_m","targets":{"itemIds":["{{{itemId}}}"]},"params":{"buyQty":2,"getQty":1,"getPrice":0.01}}""";
+
+    private static string PercentOff(Guid itemId, decimal percent) =>
+        $$$"""{"type":"percent_off","targets":{"itemIds":["{{{itemId}}}"]},"params":{"percent":{{{percent.ToString(System.Globalization.CultureInfo.InvariantCulture)}}}}}""";
+
+    [Fact]
+    public async Task Two_plus_one_splits_the_line_into_sub_lines_keeps_FEFO_logs_and_replays_idempotently()
+    {
+        var t = new PromoCtx();
+        var product = t.AddProduct("PROMO-21", 30m);
+        var early = t.AddBatch(product.Id, 2m, days: 5);
+        var late = t.AddBatch(product.Id, 10m, days: 30);
+        var rule = t.Promotions.Add("2+1", TwoPlusOne(product.Id));
+        var svc = t.Service();
+        var request = new CreateSaleRequest(t.Shift.Id, [new SaleItemRequest("PROMO-21", 3)], "Cash", 100m,
+            ClientTransactionId: Guid.NewGuid());
+
+        var (sale, error, _) = await svc.CreateSaleAsync(TenantId, CashierId, request);
+
+        Assert.Null(error);
+        Assert.Equal(60.01m, sale!.Subtotal);
+        Assert.Equal(39.99m, sale.Change);
+        var tx = t.SingleTx;
+        Assert.Equal(60.01m, tx.TotalAmount);
+        Assert.Equal(tx.TotalAmount, tx.Items.Sum(i => Math.Round(i.PriceFinal * i.Quantity, 2)));
+        Assert.Equal(2, tx.Items.Count);
+
+        var regular = tx.Items.ElementAt(0);
+        Assert.Equal((2m, 30m, 0m, 30m), (regular.Quantity, regular.PriceRetail, regular.DiscountAmount, regular.PriceFinal));
+        Assert.Null(regular.PromotionRuleId);
+        Assert.Equal(early.Id, regular.ProductStockId);
+
+        var promo = tx.Items.ElementAt(1);
+        Assert.Equal((1m, 30m, 29.99m, 0.01m), (promo.Quantity, promo.PriceRetail, promo.DiscountAmount, promo.PriceFinal));
+        Assert.Equal(rule.RuleId, promo.PromotionRuleId);
+        Assert.Equal("2+1", promo.PromotionLabel);
+        Assert.Equal(late.Id, promo.ProductStockId); // 3rd unit came from the later batch
+
+        // FEFO for the total quantity: 2 from the early batch, 1 from the later one.
+        Assert.Equal(0m, early.Quantity);
+        Assert.Equal(9m, late.Quantity);
+        Assert.Equal([-2m, -1m], t.Events.Select(e => e.QuantityDelta).ToArray());
+
+        Assert.Equal(new[] { "2+1" }, sale.Items.Where(i => i.PromotionLabel is not null).Select(i => i.PromotionLabel!).ToArray());
+
+        var app = Assert.Single(t.Promotions.Applications);
+        Assert.Equal((rule.RuleId, rule.VersionId, tx.Id, StoreId), (app.RuleId, app.VersionId, app.TransactionId, app.StoreId));
+        Assert.Equal(1m, app.Units);
+        Assert.Equal(29.99m, app.DiscountAmount);
+
+        // Idempotent replay: the same request (1 line) matches the stored 2 sub-lines.
+        var (again, againError, _) = await svc.CreateSaleAsync(TenantId, CashierId, request);
+        Assert.Null(againError);
+        Assert.Equal(sale.TransactionId, again!.TransactionId);
+        Assert.Equal(60.01m, again.Subtotal);
+        Assert.Single(t.Pos.Transactions);
+        Assert.Single(t.Promotions.Applications);
+        Assert.Equal(9m, late.Quantity);
+
+        var batch = await svc.CreateSalesBatchAsync(TenantId, CashierId, new BatchSalesRequest([request]));
+        Assert.Equal("duplicate", Assert.Single(batch.Result!.Results).Status);
+
+        // A replay with another quantity is still a conflict.
+        var (_, conflictError, conflictStatus) = await svc.CreateSaleAsync(TenantId, CashierId,
+            request with { Items = [new SaleItemRequest("PROMO-21", 4)] });
+        Assert.NotNull(conflictError);
+        Assert.Equal(409, conflictStatus);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Sale_without_applicable_rules_is_identical_to_the_legacy_path(bool withRules)
+    {
+        var t = new PromoCtx();
+        var product = t.AddProduct("PLAIN", 12.35m);
+        t.AddBatch(product.Id, 10m, days: 10);
+        if (withRules)
+        {
+            t.Promotions.Add("other item", PercentOff(Guid.NewGuid(), 50m));
+            t.Promotions.Add("other store", $$$"""{"type":"percent_off","targets":{"itemIds":["{{{product.Id}}}"]},"params":{"percent":50},"scope":{"storeIds":["{{{Guid.NewGuid()}}}"]}}""");
+            t.Promotions.Add("expired", $$$"""{"type":"percent_off","targets":{"itemIds":["{{{product.Id}}}"]},"params":{"percent":50},"scope":{"validTo":"2020-01-01T00:00:00Z"}}""");
+            t.Promotions.Add("2+1 needs 3", TwoPlusOne(product.Id));
+            t.Promotions.Add("broken json", "{oops");
+        }
+
+        var (sale, error, _) = await t.Service(withPromotions: withRules).CreateSaleAsync(TenantId, CashierId,
+            new CreateSaleRequest(t.Shift.Id, [new SaleItemRequest("PLAIN", 2)], "Card", 24.70m));
+
+        Assert.Null(error);
+        var item = Assert.Single(t.SingleTx.Items);
+        Assert.Equal((2m, 12.35m, 0m, 12.35m), (item.Quantity, item.PriceRetail, item.DiscountAmount, item.PriceFinal));
+        Assert.Null(item.PromotionRuleId);
+        Assert.Null(item.PromotionLabel);
+        Assert.Equal(24.70m, t.SingleTx.TotalAmount);
+        Assert.Equal(4.12m, t.SingleTx.TaxAmount);
+        Assert.Equal(24.70m, sale!.Subtotal);
+        Assert.Empty(t.Promotions.Applications);
+    }
+
+    [Fact]
+    public async Task Loyalty_tier_competes_with_a_promo_and_the_cheaper_one_wins_without_stacking()
+    {
+        // Tier 25% vs promo 10%: tier wins, line priced exactly like the legacy tier path.
+        var (m1, t1, p1) = PromoCtx.WithTier(25m);
+        t1.Promotions.Add("-10%", PercentOff(p1.Id, 10m));
+        var (s1, e1, _) = await t1.Service().CreateSaleAsync(TenantId, CashierId,
+            new CreateSaleRequest(t1.Shift.Id, [new SaleItemRequest("TIERPROMO", 1)], "Cash", 100m, LoyaltyMembershipId: m1.Id));
+        Assert.Null(e1);
+        var i1 = Assert.Single(t1.SingleTx.Items);
+        Assert.Equal((25m, 75m), (i1.DiscountAmount, i1.PriceFinal));
+        Assert.Null(i1.PromotionRuleId);
+        Assert.Equal(75m, s1!.Subtotal);
+        Assert.Empty(t1.Promotions.Applications);
+
+        // Tier 25% vs promo 30%: promo wins, the tier is NOT added on top (70, not 45).
+        var (m2, t2, p2) = PromoCtx.WithTier(25m);
+        var rule = t2.Promotions.Add("-30%", PercentOff(p2.Id, 30m));
+        var (s2, e2, _) = await t2.Service().CreateSaleAsync(TenantId, CashierId,
+            new CreateSaleRequest(t2.Shift.Id, [new SaleItemRequest("TIERPROMO", 1)], "Cash", 100m, LoyaltyMembershipId: m2.Id));
+        Assert.Null(e2);
+        var i2 = Assert.Single(t2.SingleTx.Items);
+        Assert.Equal((30m, 70m), (i2.DiscountAmount, i2.PriceFinal));
+        Assert.Equal(rule.RuleId, i2.PromotionRuleId);
+        Assert.Equal(70m, s2!.Subtotal);
+        Assert.Equal(30m, Assert.Single(t2.Promotions.Applications).DiscountAmount);
+    }
+
+    [Fact]
+    public async Task Loyalty_only_rule_needs_a_membership()
+    {
+        var t = new PromoCtx();
+        var product = t.AddProduct("MEMBERS", 50m);
+        t.AddBatch(product.Id, 10m, days: 10);
+        t.Promotions.Add("members", $$$"""{"type":"percent_off","targets":{"itemIds":["{{{product.Id}}}"]},"params":{"percent":20},"audience":{"kind":"loyalty_member"}}""");
+
+        var (sale, error, _) = await t.Service().CreateSaleAsync(TenantId, CashierId,
+            new CreateSaleRequest(t.Shift.Id, [new SaleItemRequest("MEMBERS", 1)], "Cash", 50m));
+
+        Assert.Null(error);
+        Assert.Equal(50m, sale!.Subtotal);
+        Assert.Null(Assert.Single(t.SingleTx.Items).PromotionRuleId);
+    }
+
+    [Fact]
+    public async Task Loyalty_member_rule_fires_with_a_membership_and_tier_rule_only_for_matching_tier()
+    {
+        async Task<decimal> Sell(string audience, bool withMembership)
+        {
+            var (m, t, p) = PromoCtx.WithTier(0m);
+            var def = "{\"type\":\"percent_off\",\"targets\":{\"itemIds\":[\"" + p.Id + "\"]},\"params\":{\"percent\":20},\"audience\":"
+                + audience.Replace("TIER", m.CurrentTierId!.Value.ToString()) + "}";
+            t.Promotions.Add("aud", def);
+            var (sale, error, _) = await t.Service().CreateSaleAsync(TenantId, CashierId,
+                new CreateSaleRequest(t.Shift.Id, [new SaleItemRequest("TIERPROMO", 1)], "Cash", 100m,
+                    LoyaltyMembershipId: withMembership ? m.Id : null));
+            Assert.Null(error);
+            return sale!.Subtotal;
+        }
+
+        var member = "{\"kind\":\"loyalty_member\"}";
+        Assert.Equal(100m, await Sell(member, false));
+        Assert.Equal(80m, await Sell(member, true));
+
+        var matching = "{\"kind\":\"loyalty_tier\",\"tierIds\":[\"TIER\"]}";
+        var other = "{\"kind\":\"loyalty_tier\",\"tierIds\":[\"" + Guid.NewGuid() + "\"]}";
+        Assert.Equal(80m, await Sell(matching, true));
+        Assert.Equal(100m, await Sell(other, true));
+        Assert.Equal(100m, await Sell(matching, false));
+    }
+
+    [Fact]
+    public async Task Sale_evaluates_rule_time_windows_in_the_store_time_zone()
+    {
+        // Pacific/Kiritimati is UTC+14: a window around ITS current local hour is never open in UTC.
+        var zone = "Pacific/Kiritimati";
+        var tz = TimeZoneInfo.FindSystemTimeZoneById(zone);
+        var h = TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow, tz).Hour;
+        var from = $"{h:00}:00";
+        var to = $"{(h + 2) % 24:00}:00";
+
+        async Task<decimal> Sell(bool withZone)
+        {
+            var t = new PromoCtx();
+            var product = t.AddProduct("TZ-WIN", 50m);
+            t.AddBatch(product.Id, 10m, days: 10);
+            t.Promotions.Add("window", "{\"type\":\"percent_off\",\"targets\":{\"itemIds\":[\"" + product.Id + "\"]},\"params\":{\"percent\":20},\"scope\":{\"timeFrom\":\"" + from + "\",\"timeTo\":\"" + to + "\"}}");
+            var locations = Substitute.For<ILocationRepository>();
+            locations.GetByIdAsync(StoreId, Arg.Any<CancellationToken>())
+                .Returns(new Location { Id = StoreId, TenantId = TenantId, Name = "S", TimeZone = zone });
+            var (sale, error, _) = await t.Service(locations: withZone ? locations : null).CreateSaleAsync(TenantId, CashierId,
+                new CreateSaleRequest(t.Shift.Id, [new SaleItemRequest("TZ-WIN", 1)], "Cash", 50m));
+            Assert.Null(error);
+            return sale!.Subtotal;
+        }
+
+        Assert.Equal(40m, await Sell(true));
+        Assert.Equal(50m, await Sell(false));
+    }
+
+    [Fact]
+    public async Task Batch_sale_is_priced_at_its_OccurredAt()
+    {
+        var t = new PromoCtx();
+        var product = t.AddProduct("WINDOW", 40m);
+        t.AddBatch(product.Id, 10m, days: 10);
+        var end = DateTime.UtcNow.AddHours(-1);
+        t.Promotions.Add("ended an hour ago", $$$"""{"type":"percent_off","targets":{"itemIds":["{{{product.Id}}}"]},"params":{"percent":50},"scope":{"validTo":"{{{end:O}}}"}}""");
+
+        var during = new CreateSaleRequest(t.Shift.Id, [new SaleItemRequest("WINDOW", 1)], "Cash", 40m,
+            ClientTransactionId: Guid.NewGuid(), OccurredAt: end.AddMinutes(-30));
+        var after = during with { ClientTransactionId = Guid.NewGuid(), OccurredAt = DateTime.UtcNow.AddMinutes(-1) };
+
+        var batch = await t.Service().CreateSalesBatchAsync(TenantId, CashierId, new BatchSalesRequest([during, after]));
+
+        Assert.Equal(["created", "created"], batch.Result!.Results.Select(r => r.Status).ToArray());
+        Assert.Equal(20m, batch.Result.Results[0].Sale!.Subtotal);
+        Assert.Equal(40m, batch.Result.Results[1].Sale!.Subtotal);
     }
 }

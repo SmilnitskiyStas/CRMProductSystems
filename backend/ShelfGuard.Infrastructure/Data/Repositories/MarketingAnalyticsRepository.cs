@@ -653,6 +653,40 @@ public sealed class MarketingAnalyticsRepository : IMarketingAnalyticsRepository
         }, ct);
     }
 
+    public Task<IReadOnlyList<NoPurchaseCustomerRow>> GetNoPurchaseCustomersAsync(
+        Guid tenantId, IReadOnlyList<Guid>? storeIds, int limit, CancellationToken ct = default)
+    {
+        return _analyticsRlsOverride.ExecuteAsync<IReadOnlyList<NoPurchaseCustomerRow>>(async () =>
+        {
+            var stores = Normalize(storeIds);
+
+            // Params: {0}=tenantId {1}=stores {2}=limit
+            // Same predicate as GetCustomerBaseCountsAsync's EverPurchasedCount, negated.
+            const string sql = """
+                SELECT c."Id" AS "CustomerId", c."Name" AS "Name", c."Phone" AS "Phone",
+                       c."Email" AS "Email", c."CreatedAt" AS "RegisteredAt"
+                FROM customers c
+                WHERE c."TenantId" = {0}
+                  AND (cardinality({1}::uuid[]) = 0 OR EXISTS (
+                      SELECT 1 FROM locations l
+                      WHERE l."TenantId" = {0} AND l."Id" = ANY({1}::uuid[])))
+                  AND NOT EXISTS (
+                      SELECT 1 FROM pos_transactions t
+                      WHERE t."TenantId" = {0}
+                        AND t."CustomerId" = c."Id"
+                        AND t."Status" <> 'fiscalization_failed'
+                        AND (cardinality({1}::uuid[]) = 0 OR t."LocationId" = ANY({1}::uuid[])))
+                ORDER BY c."CreatedAt" DESC, c."Id"
+                LIMIT {2}
+                """;
+
+            IReadOnlyList<NoPurchaseCustomerRow> rows = await _db.Database
+                .SqlQueryRaw<NoPurchaseCustomerRow>(sql, tenantId, stores, limit)
+                .ToListAsync(ct);
+            return rows;
+        }, ct);
+    }
+
     public Task<IReadOnlyList<StoreMigrationCustomerRow>> GetStoreMigrationCustomersAsync(
         Guid tenantId, IReadOnlyList<Guid>? storeIds, DateOnly from, DateOnly to, int limit, CancellationToken ct = default)
     {

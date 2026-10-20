@@ -23,7 +23,17 @@ const sectionTitle: React.CSSProperties = { color: "#E8EDF5", fontSize: 15, font
 // `app/(dashboard)/marketing-analytics/page.tsx`. Duplicated rather than shared, matching this
 // codebase's existing convention (price-segments/page.tsx, FrequencyKpiCards.tsx,
 // AllTimeKpiCards.tsx each define their own small local copy instead of a shared component).
-function KpiCard({ label, value, sub, color }: { label: string; value: string; sub?: string; color?: string }) {
+function KpiCard({
+  label, value, sub, color, text,
+}: {
+  label: string;
+  value: string;
+  sub?: string;
+  color?: string;
+  /** Text value (e.g. a store name): smaller proportional font that wraps, instead of the 24px
+   * monospace used for numbers — a long name would otherwise take over the whole card. */
+  text?: boolean;
+}) {
   return (
     <div
       style={{
@@ -39,7 +49,14 @@ function KpiCard({ label, value, sub, color }: { label: string; value: string; s
       <div style={{ color: "#4B5563", fontSize: 12, fontWeight: 500, textTransform: "uppercase", letterSpacing: "0.05em" }}>
         {label}
       </div>
-      <div style={{ color: color ?? "#E8EDF5", fontSize: 24, fontWeight: 700, fontFamily: "monospace", lineHeight: 1.1 }}>
+      <div
+        title={text ? value : undefined}
+        style={
+          text
+            ? { color: color ?? "#E8EDF5", fontSize: 14, fontWeight: 600, lineHeight: 1.35, wordBreak: "break-word" }
+            : { color: color ?? "#E8EDF5", fontSize: 24, fontWeight: 700, fontFamily: "monospace", lineHeight: 1.1 }
+        }
+      >
         {value}
       </div>
       {sub && <div style={{ color: "#4B5563", fontSize: 11 }}>{sub}</div>}
@@ -112,12 +129,14 @@ export function StoreMigrationSection({ filters, enabled }: Props) {
             />
             <KpiCard
               label={t("kpi.bestGain")}
+              text
               value={bestGain ? bestGain.storeName : "—"}
               sub={bestGain ? t("kpi.netCustomers", { net: `+${bestGain.net.toLocaleString(intlLocale)}` }) : undefined}
               color="#4ADE80"
             />
             <KpiCard
               label={t("kpi.worstLoss")}
+              text
               value={worstLoss ? worstLoss.storeName : "—"}
               sub={worstLoss ? t("kpi.netCustomers", { net: worstLoss.net.toLocaleString(intlLocale) }) : undefined}
               color="#F87171"

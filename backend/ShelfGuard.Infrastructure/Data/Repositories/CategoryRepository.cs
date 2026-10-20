@@ -8,6 +8,9 @@ public sealed class CategoryRepository : ICategoryRepository
 {
     private readonly AppDbContext _db;
 
+    /// <summary>Ukrainian-collation ordering only where the provider supports it (Npgsql).</summary>
+    private bool Uk => _db.Database.IsNpgsql();
+
     public CategoryRepository(AppDbContext db) => _db = db;
 
     // B1: `platform_categories` is a global, provider-curated table — no TenantId, no RLS.
@@ -17,13 +20,13 @@ public sealed class CategoryRepository : ICategoryRepository
     public Task<List<PlatformCategory>> GetAllActiveAsync(CancellationToken ct = default) =>
         _db.PlatformCategories
             .Where(c => c.IsActive)
-            .OrderBy(c => c.Name)
+            .OrderByUk(c => c.Name, Uk)
             .ToListAsync(ct);
 
     public Task<List<PlatformCategory>> GetAllAsync(CancellationToken ct = default) =>
         _db.PlatformCategories
             .OrderBy(c => c.SortOrder)
-            .ThenBy(c => c.Name)
+            .ThenByUk(c => c.Name, Uk)
             .ToListAsync(ct);
 
     // Phase 6e: typeahead over active categories. `platform_categories` has no RLS (global
@@ -40,7 +43,7 @@ public sealed class CategoryRepository : ICategoryRepository
         if (t.Length > 0)
             q = q.Where(c => EF.Functions.ILike(c.Name, $"%{t}%"));
 
-        var cats = await q.OrderBy(c => c.Name).Take(limit).ToListAsync(ct);
+        var cats = await q.OrderByUk(c => c.Name, Uk).Take(limit).ToListAsync(ct);
         if (cats.Count == 0)
             return Array.Empty<CategorySearchRow>();
 

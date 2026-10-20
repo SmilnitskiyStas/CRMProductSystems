@@ -3,12 +3,15 @@
 import { useState, useMemo } from "react";
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
-  ResponsiveContainer, ReferenceLine, ReferenceArea,
+  ResponsiveContainer, ReferenceLine, ReferenceArea, ReferenceDot,
 } from "recharts";
 import { Loader2, TrendingUp, ArrowDownToLine, Trash2, RefreshCw, Package, Wallet, Clock } from "lucide-react";
 import { useTranslations, useLocale } from "next-intl";
 import { useProductMovements } from "../hooks/useProductMovements";
 import type { MovementDto } from "../api/movements";
+import { MovementLog } from "./MovementLog";
+import { useProductIncoming } from "../hooks/useProductIncoming";
+import type { IncomingSupplyDto } from "../api/movements";
 import { useProductSalesTrend } from "@/features/analytics/hooks/usePosAnalytics";
 
 // ── Line config ───────────────────────────────────────────────────────────────
@@ -33,6 +36,9 @@ function buildLines(t: SeriesT, opts?: { includeRevenue?: boolean; includeMargin
     { key: "transfer",   label: t("transfer"),   color: "#A78BFA", dash: undefined, width: 1.5, yAxisId: "quantity" },
     { key: "write_off",  label: t("write_off"),  color: "#F87171", dash: undefined, width: 1.5, yAxisId: "quantity" },
     { key: "adjustment", label: t("adjustment"), color: "#4ADE80", dash: undefined, width: 1.5, yAxisId: "quantity" },
+    // Sales are not stock movements (POS sales are not written to stock_movements), so this line is
+    // fed by the POS sales trend and sits on the same quantity axis as the stock balance.
+    { key: "sold",       label: t("sold"),       color: "#FB923C", dash: undefined, width: 2,   yAxisId: "quantity" },
   ];
   if (opts?.includeRevenue) {
     lines.push({ key: "revenue", label: t("revenue"), color: "#FBBF24", dash: undefined, width: 2, yAxisId: "revenue" });
@@ -114,6 +120,8 @@ interface ChartPoint {
    * merged in separately below, never touched by groupByDay itself. */
   revenue?: number;
   quantitySold?: number;
+  /** Units sold that day (POS sales trend) — drawn as the "sold" line on the quantity axis. */
+  sold?: number;
   /** null = a real sale happened that day but margin is unknown (no Item.PricePurchase on file,
    * or the caller can't view margin) — distinct from 0 (a sale day with exactly zero margin) and
    * from "no key at all" (not a showRevenueSeries render). Rendered as a connectNulls gap, not
@@ -143,11 +151,22 @@ function daysOfStockColor(v: number | null | undefined): string {
   return "#4ADE80";
 }
 
-function groupByDay(items: MovementDto[], from: string): ChartPoint[] {
+/**
+ * `baseline` is the balance right before `from` (latest movement older than the window). Without
+ * it a short range (7/14d) that has few or no movements has no stock value for the days before its
+ * first movement, so the line is empty even though the product had stock the whole time.
+ */
+function groupByDay(
+  items: MovementDto[],
+  from: string,
+  baseline: number | null = null,
+  /** Last x-axis day (YYYY-MM-DD). Defaults to today; later when a delivery is expected after it. */
+  until?: string,
+): ChartPoint[] {
   const map = new Map<string, ChartPoint>();
 
   const start = new Date(from);
-  const today = new Date();
+  const today = until ? new Date(until) : new Date();
   for (let d = new Date(start); d <= today; d.setDate(d.getDate() + 1)) {
     const key = d.toISOString().slice(0, 10);
     map.set(key, { date: key, stock: null, receipt: 0, transfer: 0, write_off: 0, adjustment: 0 });
@@ -168,8 +187,8 @@ function groupByDay(items: MovementDto[], from: string): ChartPoint[] {
     if (m.quantityAfter != null) pt.stock = m.quantityAfter;
   }
 
-  // Forward-fill stock for days with no movements
-  let lastStock: number | null = null;
+  // Forward-fill stock for days with no movements, starting from the balance carried into the window
+  let lastStock: number | null = baseline;
   for (const pt of map.values()) {
     if (pt.stock !== null) lastStock = pt.stock;
     else if (lastStock !== null) pt.stock = lastStock;
@@ -222,11 +241,16 @@ function ChartLegend({
   hidden,
   onToggle,
   lines,
+  hovered,
+  onHover,
 }: {
   showBuffers: boolean;
   hidden: Set<string>;
   onToggle: (key: string) => void;
   lines: ReturnType<typeof buildLines>;
+  /** Series currently under the pointer — the chart highlights it and dims the rest. */
+  hovered: string | null;
+  onHover: (key: string | null) => void;
 }) {
   const t = useTranslations("Dashboard.inventory.analytics");
   const tFields = useTranslations("Dashboard.inventory.fields");
@@ -237,15 +261,20 @@ function ChartLegend({
       <div style={{ display: "flex", flexWrap: "wrap", gap: "4px 12px" }}>
         {lines.map(({ key, label, color, dash, width }) => {
           const off = hidden.has(key);
+          const active = hovered === key;
           return (
             <button
               key={key}
               onClick={() => onToggle(key)}
+              onMouseEnter={() => onHover(key)}
+              onMouseLeave={() => onHover(null)}
+              onFocus={() => onHover(key)}
+              onBlur={() => onHover(null)}
               title={off ? t("legend.show", { label }) : t("legend.hide", { label })}
               style={{
                 display: "flex", alignItems: "center", gap: 5,
-                background: off ? "#0A0F1A" : "transparent",
-                border: `1px solid ${off ? "#1F2937" : "transparent"}`,
+                background: off ? "#0A0F1A" : active ? `${color}22` : "transparent",
+                border: `1px solid ${off ? "#1F2937" : active ? color : "transparent"}`,
                 borderRadius: 6, padding: "3px 8px",
                 cursor: "pointer", transition: "all 0.15s",
                 opacity: off ? 0.45 : 1,
@@ -262,7 +291,7 @@ function ChartLegend({
               <span style={{
                 fontSize: 11,
                 fontWeight: key === "stock" ? 600 : 400,
-                color: off ? "#374151" : (key === "stock" ? "#9CA3AF" : "#6B7280"),
+                color: off ? "#374151" : active ? "#E8EDF5" : (key === "stock" ? "#9CA3AF" : "#6B7280"),
                 textDecoration: off ? "line-through" : "none",
               }}>
                 {label}
@@ -320,8 +349,10 @@ function CustomTooltip({ active, payload, label, buffers }: {
   // suffix, unlike the plain quantity movements this generic filter still handles.
   const revenueEntry = payload.find((p) => p.dataKey === "revenue");
   const marginEntry = payload.find((p) => p.dataKey === "margin");
+  const soldEntry = payload.find((p) => p.dataKey === "sold");
   const movements = payload.filter(
-    (p) => p.dataKey !== "stock" && p.dataKey !== "revenue" && p.dataKey !== "margin" && (p.value ?? 0) > 0,
+    (p) => p.dataKey !== "stock" && p.dataKey !== "revenue" && p.dataKey !== "margin" && p.dataKey !== "sold"
+      && (p.value ?? 0) > 0,
   );
 
   // Determine zone
@@ -340,6 +371,15 @@ function CustomTooltip({ active, payload, label, buffers }: {
         <div style={{ display: "flex", justifyContent: "space-between", gap: 16, marginBottom: 6, paddingBottom: 6, borderBottom: "1px solid #1F2937" }}>
           <span style={{ color: "#38BDF8", fontWeight: 600 }}>{t("series.stock")}</span>
           <span style={{ color: "#38BDF8", fontFamily: "monospace", fontWeight: 700 }}>{stock}</span>
+        </div>
+      )}
+
+      {soldEntry && (
+        <div style={{ display: "flex", justifyContent: "space-between", gap: 16, marginBottom: 6, paddingBottom: 6, borderBottom: "1px solid #1F2937" }}>
+          <span style={{ color: "#FB923C", fontWeight: 600 }}>{tSeries("sold")}</span>
+          <span style={{ color: "#FB923C", fontFamily: "monospace", fontWeight: 700 }}>
+            {(soldEntry.value ?? 0).toLocaleString(intlLocale, { maximumFractionDigits: 2 })}
+          </span>
         </div>
       )}
 
@@ -407,8 +447,11 @@ export function ProductAnalyticsTab({
   showRevenueSeries = false,
   canViewMargin,
   daysOfStockRemaining,
+  storeId,
 }: {
   productId: string;
+  /** Restricts movements (chart + event log) to one store. Omitted = every store of the tenant. */
+  storeId?: string;
   chartHeight?: number;
   buffers?: ProductBuffers;
   /** TASK-484 (interactive analytics + margin plan): adds a revenue line (and margin, when
@@ -453,6 +496,12 @@ export function ProductAnalyticsTab({
 
   const [rangeDays, setRangeDays] = useState(30);
   const [hiddenLines, setHiddenLines] = useState<Set<string>>(new Set());
+  // Legend hover: the matching chart line is emphasised, the others are dimmed.
+  const [hoveredLine, setHoveredLine] = useState<string | null>(null);
+  // Event-log hover: the chart marks the date of the movement under the pointer with a dot.
+  const [hoveredMovementId, setHoveredMovementId] = useState<string | null>(null);
+  const lineOpacity = (key: string) => (hoveredLine && hoveredLine !== key ? 0.15 : 1);
+  const lineWidth = (key: string, base: number) => (hoveredLine === key ? base + 2 : base);
 
   function toggleLine(key: string) {
     setHiddenLines((prev) => {
@@ -470,22 +519,79 @@ export function ProductAnalyticsTab({
     from,
     to,
     page_size: 500,
+    store_id: storeId,
   });
 
   const movements = data?.items ?? [];
 
+  // Balance carried into the window: the newest movement strictly before `from` (page_size 1 —
+  // the API returns newest first). Falls back to the first in-window movement's quantityBefore.
+  // Open orders heading to the store (internal orders + marketplace) — drawn as future markers.
+  const { data: incomingData } = useProductIncoming(productId, storeId);
+  const incoming: IncomingSupplyDto[] = incomingData ?? [];
+  const lastExpected = incoming
+    .map((r) => r.expectedAt)
+    .filter((d): d is string => !!d)
+    .sort()
+    .pop();
+  // Extend the axis only as far as the furthest expected delivery (never shrinks below today).
+  const axisEnd = lastExpected && lastExpected > to ? lastExpected : to;
+
+  const dayBeforeFrom = daysAgoStr(rangeDays + 1);
+  const { data: beforeData } = useProductMovements(productId, {
+    to: dayBeforeFrom,
+    page_size: 1,
+    store_id: storeId,
+  });
+  const baselineStock: number | null = useMemo(() => {
+    const prior = beforeData?.items?.[0]?.quantityAfter;
+    if (prior != null) return prior;
+    const firstInWindow = [...movements]
+      .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
+      .find((m) => m.quantityBefore != null);
+    return firstInWindow?.quantityBefore ?? null;
+  }, [beforeData, movements]);
+
   const chartData = useMemo(
-    () => groupByDay(movements, from),
+    () => groupByDay(movements, from, baselineStock, axisEnd),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [movements, from],
+    [movements, from, baselineStock, axisEnd],
   );
+
+  // Expected deliveries grouped by day: one marker per date with the summed quantity + status label.
+  const incomingMarkers = useMemo(() => {
+    const byDate = new Map<string, { date: string; qty: number; rows: IncomingSupplyDto[] }>();
+    for (const r of incoming) {
+      if (!r.expectedAt) continue;
+      const cur = byDate.get(r.expectedAt) ?? { date: r.expectedAt, qty: 0, rows: [] };
+      cur.qty += r.quantity;
+      cur.rows.push(r);
+      byDate.set(r.expectedAt, cur);
+    }
+    return Array.from(byDate.values()).filter((m) => m.date >= from);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [incoming, from]);
+  const incomingTotal = useMemo(
+    () => incoming.reduce((sum, r) => sum + r.quantity, 0),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [incoming],
+  );
+
+  const hoveredMarker = useMemo(() => {
+    if (!hoveredMovementId) return null;
+    const mv = movements.find((x) => x.id === hoveredMovementId);
+    if (!mv) return null;
+    const date = mv.createdAt.slice(0, 10);
+    const point = chartData.find((pt) => pt.date === date);
+    const y = point?.stock ?? mv.quantityAfter ?? 0;
+    return { date, y, color: lines.find((l) => l.key === mv.movementType)?.color ?? "#E8EDF5" };
+  }, [hoveredMovementId, movements, chartData, lines]);
 
   // TASK-484: always group_by "day" regardless of rangeDays — the movement chart's x-axis is
   // always day-level, and the two series must align on the same date keys.
   const { data: trendData } = useProductSalesTrend(
     productId,
-    { from, to, group_by: "day" },
-    showRevenueSeries,
+    { from, to, group_by: "day", store_id: storeId },
   );
   const trendPoints = trendData?.points ?? [];
 
@@ -493,14 +599,16 @@ export function ProductAnalyticsTab({
   // becomes 0 (not a gap, unlike stock's forward-fill), a day with sales but unknown margin
   // stays null (see ChartPoint's margin doc comment above).
   const mergedChartData = useMemo((): ChartPoint[] => {
-    if (!showRevenueSeries) return chartData;
     const byDate = new Map(trendPoints.map((p) => [p.date, p]));
     return chartData.map((pt) => {
       const trend = byDate.get(pt.date);
+      const sold = trend?.quantity ?? 0;
+      if (!showRevenueSeries) return { ...pt, sold, quantitySold: sold };
       return {
         ...pt,
+        sold,
         revenue: trend?.revenue ?? 0,
-        quantitySold: trend?.quantity ?? 0,
+        quantitySold: sold,
         margin: includeMargin ? (trend ? trend.marginAmount : 0) : undefined,
       };
     });
@@ -519,6 +627,12 @@ export function ProductAnalyticsTab({
     write_off:  movements.filter((m) => m.movementType === "write_off").reduce((s, m) => s + Math.abs(m.quantity), 0),
     adjustment: movements.filter((m) => m.movementType === "adjustment").reduce((s, m) => s + Math.abs(m.quantity), 0),
   }), [movements]);
+
+  const soldTotal = useMemo(
+    () => trendPoints.reduce((sum, p) => sum + p.quantity, 0),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [trendPoints],
+  );
 
   // Current stock = last known quantityAfter in the period
   const currentStock = useMemo(() => {
@@ -600,6 +714,20 @@ export function ProductAnalyticsTab({
             color="#FBBF24"
           />
         )}
+        {incoming.length > 0 && (
+          <SummaryCard
+            icon={<ArrowDownToLine size={14} color="#F59E0B" />}
+            label={t("incoming.inTransit")}
+            value={incomingTotal.toLocaleString(intlLocale, { maximumFractionDigits: 2 })}
+            color="#F59E0B"
+          />
+        )}
+        <SummaryCard
+          icon={<TrendingUp size={14} color="#FB923C" />}
+          label={tSeries("sold")}
+          value={soldTotal.toLocaleString(intlLocale, { maximumFractionDigits: 2 })}
+          color="#FB923C"
+        />
         <SummaryCard icon={<ArrowDownToLine size={14} color="#3B82F6" />} label={tSeries("receipt")} value={totals.receipt}    color="#3B82F6" />
         <SummaryCard icon={<TrendingUp      size={14} color="#A78BFA" />} label={tSeries("transfer")} value={totals.transfer}   color="#A78BFA" />
         <SummaryCard icon={<Trash2          size={14} color="#F87171" />} label={tSeries("write_off")} value={totals.write_off}  color="#F87171" />
@@ -616,9 +744,16 @@ export function ProductAnalyticsTab({
           <div style={{ color: "#4B5563", fontSize: 11 }}>{t("eventsSummary", { count: movements.length, days: rangeDays })}</div>
         </div>
 
-        <ChartLegend showBuffers={!!buffers} hidden={hiddenLines} onToggle={toggleLine} lines={lines} />
+        <ChartLegend
+          showBuffers={!!buffers}
+          hidden={hiddenLines}
+          onToggle={toggleLine}
+          lines={lines}
+          hovered={hoveredLine}
+          onHover={setHoveredLine}
+        />
 
-        {movements.length === 0 ? (
+        {movements.length === 0 && baselineStock == null ? (
           <div style={{ textAlign: "center", padding: "32px 0", color: "#374151", fontSize: 13 }}>
             {t("noMovements")}
           </div>
@@ -695,13 +830,57 @@ export function ProductAnalyticsTab({
                 </>
               )}
 
+              {/* Orders on the way: dashed amber guide on the expected delivery date */}
+              {incomingMarkers.map((m) => (
+                <ReferenceLine
+                  key={`incoming-${m.date}`}
+                  yAxisId="quantity"
+                  x={m.date}
+                  stroke="#F59E0B"
+                  strokeWidth={1.5}
+                  strokeDasharray="5 4"
+                  label={{
+                    // Short on purpose: nearby delivery dates would overlap a longer label; the status
+                    // and supplier live in the "Incoming supply" cards right below the chart.
+                    value: `🚚 +${m.qty}`,
+                    position: "insideTopLeft",
+                    fill: "#F59E0B",
+                    fontSize: 10,
+                  }}
+                />
+              ))}
+
+              {/* Event-log hover marker: vertical guide + dot on the stock line at the movement's date */}
+              {hoveredMarker && (
+                <>
+                  <ReferenceLine
+                    yAxisId="quantity"
+                    x={hoveredMarker.date}
+                    stroke={hoveredMarker.color}
+                    strokeDasharray="3 3"
+                    strokeOpacity={0.7}
+                  />
+                  <ReferenceDot
+                    yAxisId="quantity"
+                    x={hoveredMarker.date}
+                    y={hoveredMarker.y}
+                    r={7}
+                    fill={hoveredMarker.color}
+                    stroke="#E8EDF5"
+                    strokeWidth={2}
+                    ifOverflow="extendDomain"
+                  />
+                </>
+              )}
+
               {/* Stock balance line — most prominent */}
               <Line
                 yAxisId="quantity"
                 type="monotone"
                 dataKey="stock"
                 stroke="#38BDF8"
-                strokeWidth={2.5}
+                strokeWidth={lineWidth("stock", 2.5)}
+                strokeOpacity={lineOpacity("stock")}
                 dot={false}
                 activeDot={{ r: 4, fill: "#38BDF8" }}
                 connectNulls
@@ -717,7 +896,8 @@ export function ProductAnalyticsTab({
                   type="monotone"
                   dataKey={key}
                   stroke={color}
-                  strokeWidth={width}
+                  strokeWidth={lineWidth(key, width)}
+                  strokeOpacity={lineOpacity(key)}
                   strokeDasharray={dash}
                   dot={false}
                   activeDot={{ r: 3, fill: color }}
@@ -730,81 +910,73 @@ export function ProductAnalyticsTab({
         )}
       </div>
 
-      {/* Movement log */}
-      {movements.length > 0 && (
+      {/* Orders on the way */}
+      {incoming.length > 0 && (
         <div>
           <div style={{
-            color: "#4B5563", fontSize: 11, fontWeight: 600,
-            textTransform: "uppercase", letterSpacing: "0.05em",
-            marginBottom: 8, paddingBottom: 6, borderBottom: "1px solid #1F2937",
+            color: "#4B5563", fontSize: 11, fontWeight: 600, textTransform: "uppercase",
+            letterSpacing: "0.05em", marginBottom: 8, paddingBottom: 6, borderBottom: "1px solid #1F2937",
           }}>
-            {t("eventLog")}
+            {t("incoming.title")} <span style={{ color: "#374151" }}>· {incoming.length}</span>
           </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 4, maxHeight: 320, overflowY: "auto" }}>
-            {movements.slice(0, 50).map((m) => {
-              const line = lines.find((l) => l.key === m.movementType);
-              const isPlus = m.movementType === "receipt" || m.movementType === "adjustment";
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))", gap: 8 }}>
+            {incoming.map((r) => {
+              const isShipped = r.status === "shipped";
+              const accent = isShipped ? "#34D399" : "#F59E0B";
               return (
-                <div
-                  key={m.id}
-                  style={{
-                    display: "flex", alignItems: "center", gap: 10,
-                    padding: "7px 12px",
-                    background: "#0A0F1A", border: "1px solid #1F2937",
-                    borderRadius: 7,
-                  }}
-                >
-                  <div style={{
-                    width: 8, height: 8, borderRadius: "50%", flexShrink: 0,
-                    background: line?.color ?? "#6B7280",
-                  }} />
-
-                  <span style={{
-                    fontSize: 11, padding: "1px 7px", borderRadius: 4, flexShrink: 0,
-                    background: `${line?.color ?? "#6B7280"}15`,
-                    color: line?.color ?? "#6B7280",
-                    fontWeight: 600,
-                  }}>
-                    {movementLabels[m.movementType] ?? m.movementType}
-                  </span>
-
-                  <span style={{
-                    color: "#9CA3AF", fontSize: 11, flex: 1, minWidth: 0,
-                    overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-                  }}>
-                    {m.fromStoreName && m.toStoreName
-                      ? `${m.fromStoreName} → ${m.toStoreName}`
-                      : m.fromStoreName ?? m.toStoreName ?? "—"}
-                  </span>
-
-                  {/* quantityBefore → quantityAfter */}
-                  {m.quantityBefore != null && m.quantityAfter != null ? (
-                    <span style={{ color: "#4B5563", fontSize: 11, flexShrink: 0, whiteSpace: "nowrap" }}>
-                      <span style={{ fontFamily: "monospace" }}>{m.quantityBefore}</span>
-                      <span style={{ margin: "0 4px" }}>→</span>
-                      <span style={{ fontFamily: "monospace", color: "#38BDF8" }}>{m.quantityAfter}</span>
+                <div key={`${r.source}-${r.id}`} style={{
+                  background: "#0A0F1A", border: "1px solid #1F2937", borderLeft: `3px solid ${accent}`,
+                  borderRadius: 8, padding: "10px 12px", display: "flex", flexDirection: "column", gap: 6,
+                }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
+                    <span style={{
+                      fontSize: 11, fontWeight: 600, padding: "1px 8px", borderRadius: 4,
+                      background: `${accent}22`, color: accent,
+                    }}>
+                      {t(`incoming.status.${r.source}_${r.status}`)}
                     </span>
-                  ) : m.quantityAfter != null ? (
-                    <span style={{ color: "#4B5563", fontSize: 11, flexShrink: 0 }}>
-                      {t("balancePrefix")} <span style={{ fontFamily: "monospace", color: "#38BDF8" }}>{m.quantityAfter}</span>
+                    <span style={{ fontFamily: "monospace", fontSize: 13, color: "#E8EDF5", fontWeight: 700 }}>
+                      +{r.quantity}{r.unit ? ` ${r.unit}` : ""}
                     </span>
-                  ) : null}
-
-                  <span style={{
-                    fontFamily: "monospace", fontSize: 12, flexShrink: 0,
-                    color: isPlus ? "#4ADE80" : "#F87171",
-                  }}>
-                    {isPlus ? `+${m.quantity}` : `−${Math.abs(m.quantity)}`}
-                  </span>
-
-                  <span style={{ color: "#4B5563", fontSize: 10, flexShrink: 0 }}>
-                    {new Date(m.createdAt).toLocaleDateString(intlLocale, { day: "2-digit", month: "2-digit" })}
-                  </span>
+                  </div>
+                  <div style={{ color: "#9CA3AF", fontSize: 12 }}>
+                    {t("incoming.expected")}:{" "}
+                    <span style={{ color: "#E8EDF5" }}>
+                      {r.expectedAt
+                        ? new Date(r.expectedAt).toLocaleDateString(intlLocale, { day: "2-digit", month: "2-digit", year: "numeric" })
+                        : t("incoming.noDate")}
+                    </span>
+                  </div>
+                  <div style={{ color: "#6B7280", fontSize: 11 }}>
+                    {t(`incoming.source.${r.source}`)}
+                    {r.number ? ` · ${r.number}` : ""}
+                    {r.supplierName ? ` · ${r.supplierName}` : ""}
+                  </div>
+                  <div style={{ color: "#4B5563", fontSize: 11 }}>
+                    {t("incoming.ordered")}{" "}
+                    {new Date(r.orderedAt).toLocaleDateString(intlLocale, { day: "2-digit", month: "2-digit" })}
+                    {r.shippedAt && (
+                      <> · {t("incoming.shipped")}{" "}
+                        {new Date(r.shippedAt).toLocaleDateString(intlLocale, { day: "2-digit", month: "2-digit" })}</>
+                    )}
+                    {r.destinationStoreName ? ` · ${r.destinationStoreName}` : ""}
+                  </div>
                 </div>
               );
             })}
           </div>
         </div>
+      )}
+
+      {/* Movement log */}
+      {movements.length > 0 && (
+        <MovementLog
+          movements={movements}
+          lineMeta={Object.fromEntries(lines.map((l) => [l.key, { color: l.color, label: movementLabels[l.key] ?? l.label }]))}
+          intlLocale={intlLocale}
+          hoveredId={hoveredMovementId}
+          onHover={setHoveredMovementId}
+        />
       )}
     </div>
   );

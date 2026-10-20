@@ -10,6 +10,9 @@ public sealed class StockRepository : IStockRepository
 {
     private readonly AppDbContext _db;
 
+    /// <summary>Ukrainian-collation ordering only where the provider supports it (Npgsql).</summary>
+    private bool Uk => _db.Database.IsNpgsql();
+
     public StockRepository(AppDbContext db) => _db = db;
 
     public async Task<List<ProductStock>> GetAllAsync(
@@ -35,7 +38,7 @@ public sealed class StockRepository : IStockRepository
 
         return await query
             .OrderBy(s => s.ExpiryDate)
-            .ThenBy(s => s.Product!.Name)
+            .ThenByUk(s => s.Product!.Name, Uk)
             .ToListAsync(ct);
     }
 
@@ -92,7 +95,7 @@ public sealed class StockRepository : IStockRepository
         return (items, total);
     }
 
-    private static IQueryable<ProductStock> ApplySort(
+    private IQueryable<ProductStock> ApplySort(
         IQueryable<ProductStock> query, string? sortBy, bool? sortDescending)
     {
         var key = StockSortKeys.Normalize(sortBy);
@@ -108,14 +111,14 @@ public sealed class StockRepository : IStockRepository
 
         return (key, descending) switch
         {
-            ("productname", false) => query.OrderBy(s => s.Product != null ? s.Product.Name : null),
-            ("productname", true) => query.OrderByDescending(s => s.Product != null ? s.Product.Name : null),
+            ("productname", false) => query.OrderByUk(s => s.Product != null ? s.Product.Name : null, Uk),
+            ("productname", true) => query.OrderByDescendingUk(s => s.Product != null ? s.Product.Name : null, Uk),
             ("quantity", false) => query.OrderBy(s => s.Quantity),
             ("quantity", true) => query.OrderByDescending(s => s.Quantity),
             ("status", false) => query.OrderBy(s => s.Status),
             ("status", true) => query.OrderByDescending(s => s.Status),
-            (_, false) => query.OrderBy(s => s.ExpiryDate).ThenBy(s => s.Product != null ? s.Product.Name : null),
-            (_, true) => query.OrderByDescending(s => s.ExpiryDate).ThenBy(s => s.Product != null ? s.Product.Name : null),
+            (_, false) => query.OrderBy(s => s.ExpiryDate).ThenByUk(s => s.Product != null ? s.Product.Name : null, Uk),
+            (_, true) => query.OrderByDescending(s => s.ExpiryDate).ThenByUk(s => s.Product != null ? s.Product.Name : null, Uk),
         };
     }
 

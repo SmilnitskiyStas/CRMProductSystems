@@ -1,4 +1,5 @@
 using System.Globalization;
+using ShelfGuard.Application.Common;
 using ShelfGuard.Application.Features.Sales.Dtos;
 using ShelfGuard.Domain.Entities;
 using ShelfGuard.Domain.Interfaces;
@@ -13,12 +14,20 @@ public sealed class DailySalesService : IDailySalesService
 
     public DailySalesService(IDailySalesRepository repo) => _repo = repo;
 
-    public async Task<List<DailySaleDto>> GetAsync(
+    public async Task<PagedResult<DailySaleDto>> GetAsync(
         Guid[]? storeIds, Guid? productId, DateOnly? from, DateOnly? to,
+        int page, int pageSize, string? sortBy = null, bool sortDescending = true,
         CancellationToken ct = default)
     {
-        var sales = await _repo.GetAsync(storeIds, productId, from, to, ct);
-        return sales.Select(ToDto).ToList();
+        var (sales, total) = await _repo.GetPagedAsync(
+            storeIds, productId, from, to, page, pageSize, sortBy, sortDescending, ct);
+        return new PagedResult<DailySaleDto>
+        {
+            Items = sales.Select(ToDto).ToList(),
+            TotalCount = total,
+            Page = page,
+            PageSize = pageSize,
+        };
     }
 
     public async Task<(DailySaleDto? Sale, string? Error)> UpsertAsync(

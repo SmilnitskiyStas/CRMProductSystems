@@ -8,6 +8,9 @@ public sealed class SupplyScheduleRepository : ISupplyScheduleRepository
 {
     private readonly AppDbContext _db;
 
+    /// <summary>Ukrainian-collation ordering only where the provider supports it (Npgsql).</summary>
+    private bool Uk => _db.Database.IsNpgsql();
+
     public SupplyScheduleRepository(AppDbContext db) => _db = db;
 
     public async Task<List<SupplySchedule>> GetAsync(
@@ -22,8 +25,8 @@ public sealed class SupplyScheduleRepository : ISupplyScheduleRepository
         if (supplierId.HasValue) query = query.Where(s => s.SupplierId == supplierId);
 
         return await query
-            .OrderBy(s => s.Store!.Name)
-            .ThenBy(s => s.Supplier!.Name)
+            .OrderByUk(s => s.Store!.Name, Uk)
+            .ThenByUk(s => s.Supplier!.Name, Uk)
             .ToListAsync(ct);
     }
 

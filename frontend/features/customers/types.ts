@@ -80,3 +80,84 @@ export interface UpdateCustomerPayload {
   notes?: string;
   tags?: string[];
 }
+
+// ── Customer profile page: purchase analytics ──────────────────────────────────────────────────
+
+export interface CustomerActivityStats {
+  receiptCount: number;
+  totalSpent: number;
+  averageCheck: number;
+  itemsQuantity: number;
+  firstPurchaseAt: string | null;
+  lastPurchaseAt: string | null;
+  daysSinceLastPurchase: number | null;
+  daysSinceRegistered: number;
+  averageDaysBetweenPurchases: number | null;
+  receipts30d: number;
+  spent30d: number;
+  receipts90d: number;
+  spent90d: number;
+}
+
+export interface CustomerStoreActivity {
+  storeId: string;
+  storeName: string;
+  receipts: number;
+  spent: number;
+  sharePercent: number;
+  firstAt: string;
+  lastAt: string;
+}
+
+export interface CustomerMonthActivity {
+  /** "YYYY-MM" */
+  month: string;
+  receipts: number;
+  spent: number;
+}
+
+export interface CustomerTopProduct {
+  productId: string;
+  name: string;
+  quantity: number;
+  spent: number;
+  receipts: number;
+  lastAt: string;
+}
+
+export interface CustomerActivity {
+  stats: CustomerActivityStats;
+  stores: CustomerStoreActivity[];
+  months: CustomerMonthActivity[];
+  topProducts: CustomerTopProduct[];
+}
+
+export interface CustomerReceiptLine {
+  productId: string;
+  name: string;
+  quantity: number;
+  unitPrice: number;
+  discount: number;
+  total: number;
+}
+
+export interface CustomerReceipt {
+  id: string;
+  receiptNumber: string;
+  fiscalNumber: string | null;
+  createdAt: string;
+  storeId: string;
+  storeName: string;
+  total: number;
+  paymentType: string;
+  status: string;
+  lines: CustomerReceiptLine[];
+}
+
+export interface CustomerReceiptsPage {
+  items: CustomerReceipt[];
+  totalCount: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+}

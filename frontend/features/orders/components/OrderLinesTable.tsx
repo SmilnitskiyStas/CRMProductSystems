@@ -14,14 +14,58 @@ const roundingLabels: Record<OrderLine["rounding"], string> = {
   usq_rounded: "USQ",
 };
 
-export function OrderLinesTable({ lines }: { lines: OrderLine[] }) {
+interface Props {
+  /** The lines of the CURRENT page only (the page slices the full calculation). */
+  lines: OrderLine[];
+  selectedIds: ReadonlySet<string>;
+  onToggle: (productId: string) => void;
+  /** Select / clear every orderable line on the current page. */
+  onTogglePage: (select: boolean) => void;
+  page: number;
+  totalPages: number;
+  totalCount: number;
+  onPageChange: (page: number) => void;
+}
+
+export function OrderLinesTable({
+  lines, selectedIds, onToggle, onTogglePage, page, totalPages, totalCount, onPageChange,
+}: Props) {
   const router = useRouter();
   const t = useTranslations("Dashboard.orders.table");
 
+  const orderable = lines.filter((l) => l.quantityToOrder > 0);
+  const allPageSelected = orderable.length > 0 && orderable.every((l) => selectedIds.has(l.productId));
+
   const columns: TableColumn<OrderLine>[] = [
+    {
+      key: "select",
+      header: (
+        <input
+          type="checkbox"
+          aria-label={t("selectPage")}
+          title={t("selectPage")}
+          checked={allPageSelected}
+          disabled={orderable.length === 0}
+          onChange={(e) => onTogglePage(e.target.checked)}
+          style={{ cursor: orderable.length ? "pointer" : "default", accentColor: "#3B82F6" }}
+        />
+      ),
+      width: 44,
+      render: (l) =>
+        l.quantityToOrder > 0 ? (
+          <input
+            type="checkbox"
+            aria-label={t("selectLine")}
+            checked={selectedIds.has(l.productId)}
+            onChange={() => onToggle(l.productId)}
+            style={{ cursor: "pointer", accentColor: "#3B82F6" }}
+          />
+        ) : null,
+    },
     {
       key: "product",
       header: t("headers.product"),
+      align: "left",
       cellStyle: { color: "#E8EDF5", fontWeight: 500 },
       render: (l) => (
         <div style={{ minWidth: 0 }}>
@@ -52,6 +96,18 @@ export function OrderLinesTable({ lines }: { lines: OrderLine[] }) {
       // tenants not using the marketplace (inTransitFromMarketplace === 0) the cell is unchanged.
       render: (l) => {
         if (l.inTransit <= 0) return "—";
+        // Part of what is on the way is late: say so — the quantity still counts, so it is not re-ordered.
+        if (l.inTransitDelayed > 0) {
+          return (
+            <div title={t("delayedTooltip", { qty: l.inTransitDelayed })}>
+              <div>{l.inTransit}</div>
+              <div style={{ color: "#FBBF24", fontSize: 11, whiteSpace: "nowrap" }}>
+                {l.delayPostponed ? t("postponedUntil") : t("delayedUntil")}
+                {l.delayedUntil ? ` ${new Date(l.delayedUntil).toLocaleDateString()}` : ""}
+              </div>
+            </div>
+          );
+        }
         if (l.inTransitFromMarketplace <= 0) return l.inTransit;
         const title = [
           t("inTransitTooltip.supplierReceipts", {
@@ -128,6 +184,12 @@ export function OrderLinesTable({ lines }: { lines: OrderLine[] }) {
       rows={lines}
       rowKey={(l) => l.productId}
       rowStyle={(l) => (l.quantityToOrder > 0 ? {} : { opacity: 0.45 })}
+      density="compact"
+      minWidth={900}
+      page={page}
+      totalPages={totalPages}
+      totalCount={totalCount}
+      onPageChange={onPageChange}
       emptyMessage={t("empty")}
     />
   );

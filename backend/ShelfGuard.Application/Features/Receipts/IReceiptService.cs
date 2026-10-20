@@ -23,6 +23,13 @@ public interface IReceiptService
     Task<(ReceiptDto? Receipt, string? Error)> ReceiveAsync(
         Guid id, Guid receivedBy, CancellationToken ct = default);
 
+    /// <summary>
+    /// Postpones the expected delivery of a delayed receipt. The receipt stays open, so the order
+    /// engine keeps counting it as in transit (no re-order) — it just knows the delivery is late.
+    /// </summary>
+    Task<(ReceiptDto? Receipt, string? Error)> PostponeAsync(
+        Guid id, Guid userId, PostponeReceiptRequest request, CancellationToken ct = default);
+
     Task<(ReceiptDto? Receipt, string? Error)> CancelAsync(
         Guid id, CancellationToken ct = default);
 }

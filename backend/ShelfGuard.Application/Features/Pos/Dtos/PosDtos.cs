@@ -33,7 +33,30 @@ public sealed record CreateSaleRequest(
     decimal PaymentAmount,
     Guid? CustomerId = null,
     Guid? LoyaltyMembershipId = null,
-    decimal? RedeemAmount = null);
+    decimal? RedeemAmount = null,
+    // Offline-first register apps: client-generated idempotency key. Replaying the same key
+    // returns the already-stored sale instead of creating a duplicate. Required in batch sync.
+    Guid? ClientTransactionId = null,
+    // Offline sync attribution (batch only). CashierId = the operator who actually rang the sale
+    // when a different operator's token flushes the queue; OccurredAt = client UTC time of the sale.
+    // The server only honours a foreign CashierId if that cashier really had a session on this
+    // register at OccurredAt. On POST /sales a CashierId different from the token is a 400 and
+    // OccurredAt is ignored.
+    Guid? CashierId = null,
+    DateTime? OccurredAt = null);
+
+/// <summary>Offline sync: queued sales (max 100) submitted together; each item is idempotent.</summary>
+public sealed record BatchSalesRequest(IReadOnlyList<CreateSaleRequest> Sales);
+
+/// <param name="Status">created | duplicate (already stored, original returned) | failed</param>
+public sealed record BatchSaleItemResultDto(
+    Guid? ClientTransactionId,
+    string Status,
+    SaleDto? Sale,
+    string? Error,
+    int? ErrorStatusCode);
+
+public sealed record BatchSalesResultDto(IReadOnlyList<BatchSaleItemResultDto> Results);
 
 public sealed record SaleItemRequest(
     string Barcode,
@@ -94,7 +117,10 @@ public sealed record SaleItemDto(
     decimal Quantity,
     decimal UnitPrice,
     decimal DiscountAmount,
-    decimal Total);
+    decimal Total,
+    // Promotion rule that priced this (sub-)line, with its receipt label; null otherwise.
+    Guid? PromotionRuleId = null,
+    string? PromotionLabel = null);
 
 public sealed record SalesListDto(
     IReadOnlyList<SaleDto> Items,

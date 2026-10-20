@@ -6,6 +6,8 @@ import type {
   CreateCustomerPayload,
   UpdateCustomerPayload,
   ConsumerProfileChangePage,
+  CustomerActivity,
+  CustomerReceiptsPage,
 } from "../types";
 
 export const customersApi = {
@@ -19,6 +21,17 @@ export const customersApi = {
 
   getById(id: string): Promise<CustomerDetail> {
     return api.get<CustomerDetail>(`/api/customers/${id}`);
+  },
+
+  /** Purchase analytics for the customer page (totals, stores, monthly trend, top products). */
+  getActivity(id: string): Promise<CustomerActivity> {
+    return api.get<CustomerActivity>(`/api/customers/${id}/activity`);
+  },
+
+  /** One page of the customer's receipts (newest first) with their lines. */
+  getReceipts(id: string, page: number, pageSize: number): Promise<CustomerReceiptsPage> {
+    const params = new URLSearchParams({ page: String(page), pageSize: String(pageSize) });
+    return api.get<CustomerReceiptsPage>(`/api/customers/${id}/receipts?${params.toString()}`);
   },
 
   // TASK-621b — lazy-loaded only when the "Історія профілю" tab opens.

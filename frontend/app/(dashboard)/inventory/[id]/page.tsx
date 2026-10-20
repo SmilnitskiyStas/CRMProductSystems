@@ -9,8 +9,11 @@ import {
 } from "lucide-react";
 import { useTranslations, useLocale } from "next-intl";
 import { useProduct, useItemZones } from "@/features/inventory/hooks/useProducts";
+import { useProductBuffer, resolveStockLevels } from "@/features/inventory/hooks/useProductBuffer";
+import { usePrimaryStoreId } from "@/lib/useStoreContext";
 import { ProductAnalyticsTab } from "@/features/inventory/components/ProductAnalyticsTab";
 import { ProductImagesSection } from "@/features/inventory/components/ProductImagesSection";
+import { ItemBatchesSection } from "@/features/shelf/components/ItemBatchesSection";
 import type { Product } from "@/features/inventory/types";
 
 // ── Tab ───────────────────────────────────────────────────────────────────────
@@ -222,6 +225,8 @@ export default function ProductPage() {
   );
 
   const { data: product, isLoading } = useProduct(id);
+  const storeId = usePrimaryStoreId();
+  const { data: buffer } = useProductBuffer(id, storeId);
 
   if (isLoading) {
     return (
@@ -239,6 +244,9 @@ export default function ProductPage() {
       </div>
     );
   }
+
+  // Catalog min/max/safety are user-owned; when unset, show the calculated CDA buffer of the selected store.
+  const levels = resolveStockLevels(product, buffer);
 
   return (
     <div style={{ padding: "24px 32px", display: "flex", flexDirection: "column", gap: 20 }}>
@@ -297,19 +305,19 @@ export default function ProductPage() {
             <StatCard
               icon={<ArrowDownToLine size={16} color="#3B82F6" />}
               label={t("minStock")}
-              value={product.minStock}
+              value={levels.minStock}
               color="#3B82F6"
             />
             <StatCard
               icon={<TrendingUp size={16} color="#A78BFA" />}
               label={t("maxStock")}
-              value={product.maxStock}
+              value={levels.maxStock}
               color="#A78BFA"
             />
             <StatCard
               icon={<RefreshCw size={16} color="#4ADE80" />}
               label={t("safetyBuffer")}
-              value={product.safetyBuffer}
+              value={levels.safetyBuffer}
               color="#4ADE80"
             />
             {product.shelfLifeDays != null && (
@@ -389,13 +397,23 @@ export default function ProductPage() {
 
             {/* Stock */}
             <Section title={t("sectionStock")}>
+              {levels.fromBuffer && (
+                <p style={{ color: "#6B7280", fontSize: 11, margin: "0 0 12px" }}>{t("levelsFromBuffer")}</p>
+              )}
               <Grid>
-                <Field label={t("minStock")} value={<span style={{ fontFamily: "monospace" }}>{product.minStock}</span>} />
-                <Field label={t("maxStock")} value={<span style={{ fontFamily: "monospace" }}>{product.maxStock}</span>} />
-                <Field label={t("safetyBuffer")} value={<span style={{ fontFamily: "monospace" }}>{product.safetyBuffer}</span>} />
+                <Field label={t("minStock")} value={<span style={{ fontFamily: "monospace" }}>{levels.minStock}</span>} />
+                <Field label={t("maxStock")} value={<span style={{ fontFamily: "monospace" }}>{levels.maxStock}</span>} />
+                <Field label={t("safetyBuffer")} value={<span style={{ fontFamily: "monospace" }}>{levels.safetyBuffer}</span>} />
                 <Field label={t("shelfLifeDays")} value={product.shelfLifeDays != null ? `${product.shelfLifeDays} ${t("shelfLifeDaysSuffix")}` : "—"} />
               </Grid>
             </Section>
+
+            {/* Stock by expiry date */}
+            <div style={{ gridColumn: "1 / -1" }}>
+              <Section title={tProductPage("batchesTitle")}>
+                <ItemBatchesSection productId={product.id} productName={product.name} unit={product.unit} />
+              </Section>
+            </div>
 
             {/* Storage conditions */}
             {(product.storageTempMin != null || product.storageTempMax != null) && (
@@ -431,11 +449,12 @@ export default function ProductPage() {
       {tab === "analytics" && (
         <ProductAnalyticsTab
           productId={id}
+          storeId={storeId}
           chartHeight={380}
           buffers={{
-            safetyBuffer: product.safetyBuffer,
-            minStock: product.minStock,
-            maxStock: product.maxStock,
+            safetyBuffer: levels.safetyBuffer,
+            minStock: levels.minStock,
+            maxStock: levels.maxStock,
           }}
         />
       )}

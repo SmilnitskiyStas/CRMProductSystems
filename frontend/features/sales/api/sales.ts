@@ -1,5 +1,5 @@
 import { api } from "@/lib/api";
-import type { CsvImportResult, DailySale, SalesFilters, UpsertDailySalePayload } from "../types";
+import type { CsvImportResult, DailySale, PagedSales, SalesFilters, UpsertDailySalePayload } from "../types";
 
 function query(filters: SalesFilters): string {
   const params = new URLSearchParams();
@@ -9,13 +9,17 @@ function query(filters: SalesFilters): string {
   if (filters.productId) params.set("product_id", filters.productId);
   if (filters.from) params.set("from", filters.from);
   if (filters.to) params.set("to", filters.to);
+  if (filters.page) params.set("page", String(filters.page));
+  if (filters.pageSize) params.set("pageSize", String(filters.pageSize));
+  if (filters.sortBy) params.set("sortBy", filters.sortBy);
+  if (filters.sortDescending != null) params.set("sortDescending", String(filters.sortDescending));
   const q = params.toString();
   return q ? `?${q}` : "";
 }
 
 export const salesApi = {
   getAll: (filters: SalesFilters) =>
-    api.get<DailySale[]>(`/api/daily-sales${query(filters)}`),
+    api.get<PagedSales>(`/api/daily-sales${query(filters)}`),
 
   upsert: (payload: UpsertDailySalePayload) =>
     api.post<DailySale>("/api/daily-sales", payload),

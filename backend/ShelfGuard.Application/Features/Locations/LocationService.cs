@@ -1,4 +1,5 @@
 using ShelfGuard.Application.Features.Locations.Dtos;
+using ShelfGuard.Application.Features.Promotions;
 using ShelfGuard.Domain.Constants;
 using ShelfGuard.Domain.Entities;
 using ShelfGuard.Domain.Interfaces;
@@ -85,9 +86,14 @@ public sealed class LocationService : ILocationService
         if (regionError is not null)
             return (null, regionError);
 
+        var (timeZone, tzError) = NormalizeTimeZone(request.TimeZone);
+        if (tzError is not null)
+            return (null, tzError);
+
         var location = new Location
         {
             TenantId = tenantId,
+            TimeZone = timeZone ?? StoreTimeZones.Default,
             Name = request.Name.Trim(),
             Address = request.Address?.Trim(),
             RegionCode = regionCode,
@@ -119,9 +125,14 @@ public sealed class LocationService : ILocationService
         if (regionError is not null)
             return (null, regionError);
 
+        var (timeZone, tzError) = NormalizeTimeZone(request.TimeZone);
+        if (tzError is not null)
+            return (null, tzError);
+
         location.Name = request.Name.Trim();
         location.Address = request.Address?.Trim();
         location.RegionCode = regionCode;
+        if (timeZone is not null) location.TimeZone = timeZone; // null/blank = keep
         location.Latitude = request.Latitude;
         location.Longitude = request.Longitude;
         location.Type = request.LocationType;
@@ -261,7 +272,8 @@ public sealed class LocationService : ILocationService
         s.IsActive,
         s.CreatedAt,
         s.Zones.Where(z => z.IsActive).Select(ToZoneDto).ToList(),
-        RegionCode: s.RegionCode
+        RegionCode: s.RegionCode,
+        TimeZone: s.TimeZone
     );
 
     /// <summary>
@@ -278,6 +290,14 @@ public sealed class LocationService : ILocationService
         return UkraineRegions.IsValid(code)
             ? (code, null)
             : (null, $"Invalid region code '{code}'.");
+    }
+
+    /// <summary>Blank -> (null, null) (keep / default); unknown IANA id -> error (standard 400).</summary>
+    private static (string? Value, string? Error) NormalizeTimeZone(string? raw)
+    {
+        if (string.IsNullOrWhiteSpace(raw)) return (null, null);
+        var id = raw.Trim();
+        return StoreTimeZones.IsValid(id) ? (id, null) : (null, $"Invalid time zone '{id}'.");
     }
 
     private static LocationZoneDto ToZoneDto(LocationZone z) => new(

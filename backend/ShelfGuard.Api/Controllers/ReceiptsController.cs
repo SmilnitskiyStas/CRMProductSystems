@@ -101,6 +101,25 @@ public sealed class ReceiptsController : ControllerBase
         return Ok(receipt);
     }
 
+    /// <summary>Moves the expected delivery date of a delayed order; the order stays open and "in transit".</summary>
+    [HttpPut("{id:guid}/postpone")]
+    [Authorize(Policy = AppPolicies.AtLeastStoreManager)]
+    [ProducesResponseType(typeof(ReceiptDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> Postpone(Guid id, PostponeReceiptRequest request, CancellationToken ct)
+    {
+        var (_, userId) = GetContext();
+        if (userId is null) return Forbid();
+
+        var (receipt, error) = await _receipts.PostponeAsync(id, userId.Value, request, ct);
+
+        if (error == "Receipt not found.") return NotFound();
+        if (error is not null) return BadRequest(new { error });
+
+        return Ok(receipt);
+    }
+
     [HttpPut("{id:guid}/cancel")]
     [Authorize(Policy = AppPolicies.AtLeastStoreManager)]
     [ProducesResponseType(typeof(ReceiptDto), StatusCodes.Status200OK)]

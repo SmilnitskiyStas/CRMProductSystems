@@ -24,4 +24,8 @@
     <ProjectReference Include="..\ShelfGuard.Domain\ShelfGuard.Domain.csproj" />
     <ProjectReference Include="..\ShelfGuard.Infrastructure\ShelfGuard.Infrastructure.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <!-- Shared with the cashier's TypeScript engine mirror: keep the path stable. -->
+    <None Include="Promotions\golden-vectors.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
 </Project>

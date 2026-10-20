@@ -11,11 +11,14 @@ public sealed class ReceiptService : IReceiptService
 {
     private readonly IReceiptRepository _repo;
     private readonly INotificationRepository _notifications;
+    private readonly IActivityLogRepository _activityLogs;
 
-    public ReceiptService(IReceiptRepository repo, INotificationRepository notifications)
+    public ReceiptService(
+        IReceiptRepository repo, INotificationRepository notifications, IActivityLogRepository activityLogs)
     {
         _repo = repo;
         _notifications = notifications;
+        _activityLogs = activityLogs;
     }
 
     public async Task<List<ReceiptDto>> GetAllAsync(Guid? storeId, string? status, CancellationToken ct = default)
@@ -233,6 +236,56 @@ public sealed class ReceiptService : IReceiptService
         }, ct);
     }
 
+    public async Task<(ReceiptDto? Receipt, string? Error)> PostponeAsync(
+        Guid id, Guid userId, PostponeReceiptRequest request, CancellationToken ct = default)
+    {
+        var receipt = await _repo.GetByIdAsync(id, ct);
+        if (receipt is null)
+            return (null, "Receipt not found.");
+
+        if (receipt.Status is not ("draft" or "ordered" or "in_transit"))
+            return (null, "Only an open order can be postponed.");
+
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        if (request.NewExpectedAt <= today)
+            return (null, "The new delivery date must be in the future.");
+
+        if (request.NewExpectedAt > today.AddDays(365))
+            return (null, "The new delivery date is too far in the future (max 365 days).");
+
+        if (receipt.ExpectedAt is { } current && request.NewExpectedAt <= current && current > today)
+            return (null, "The new date must be later than the current expected date.");
+
+        var reason = string.IsNullOrWhiteSpace(request.Reason) ? null : request.Reason.Trim();
+        if (reason is { Length: > 500 })
+            return (null, "Reason is too long (max 500 characters).");
+
+        var previousExpectedAt = receipt.ExpectedAt;
+        receipt.OriginalExpectedAt ??= receipt.ExpectedAt;
+        receipt.ExpectedAt = request.NewExpectedAt;
+        receipt.PostponeCount += 1;
+        receipt.PostponedAt = DateTime.UtcNow;
+        receipt.PostponedBy = userId;
+        receipt.DelayReason = reason;
+
+        _repo.Update(receipt);
+        await _repo.SaveChangesAsync(ct);
+
+        await _activityLogs.LogAsync(new ActivityLog
+        {
+            TenantId = receipt.TenantId,
+            UserId = userId,
+            Action = "receipt.postponed",
+            EntityType = "stock_receipt",
+            EntityId = receipt.Id,
+            Meta = $"from={previousExpectedAt:yyyy-MM-dd}; to={request.NewExpectedAt:yyyy-MM-dd}; count={receipt.PostponeCount}",
+        }, ct);
+        await _activityLogs.SaveChangesAsync(ct);
+
+        var saved = await _repo.GetByIdAsync(id, ct);
+        return (saved is null ? null : ToDto(saved), null);
+    }
+
     public async Task<(ReceiptDto? Receipt, string? Error)> CancelAsync(
         Guid id, CancellationToken ct = default)
     {
@@ -268,7 +321,11 @@ public sealed class ReceiptService : IReceiptService
         r.ReceivedAt,
         r.Notes,
         r.CreatedAt,
-        r.Items.Select(ToItemDto).ToList()
+        r.Items.Select(ToItemDto).ToList(),
+        r.PostponeCount,
+        r.OriginalExpectedAt,
+        r.PostponedAt,
+        r.DelayReason
     );
 
     private static ReceiptItemDto ToItemDto(StockReceiptItem i) => new(

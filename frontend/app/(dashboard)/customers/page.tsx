@@ -1,12 +1,12 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { Plus } from "lucide-react";
 import { toast } from "sonner";
 import { useTranslations } from "next-intl";
 import { CustomerTable } from "@/features/customers/components/CustomerTable";
 import { CustomerForm } from "@/features/customers/components/CustomerForm";
-import { CustomerDetail } from "@/features/customers/components/CustomerDetail";
 import {
   useCustomers,
   useCreateCustomer,
@@ -20,11 +20,11 @@ const PAGE_SIZE = 50;
 
 export default function CustomersPage() {
   const t = useTranslations("Dashboard.customers.page");
+  const router = useRouter();
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<Customer | null>(null);
-  const [selected, setSelected] = useState<Customer | null>(null);
 
   const { data, isLoading } = useCustomers(page, PAGE_SIZE, search);
 
@@ -56,8 +56,6 @@ export default function CustomersPage() {
         onSuccess: () => {
           toast.success(t("toastUpdated"));
           setEditing(null);
-          // If the drawer was open for this customer, update its ref
-          if (selected?.id === editing.id) setSelected(null);
         },
         onError: (err) => toast.error(err.message),
       },
@@ -69,7 +67,6 @@ export default function CustomersPage() {
     deleteMutation.mutate(customer.id, {
       onSuccess: () => {
         toast.success(t("toastDeleted"));
-        if (selected?.id === customer.id) setSelected(null);
       },
       onError: (err) => toast.error(err.message),
     });
@@ -77,7 +74,6 @@ export default function CustomersPage() {
 
   function openEdit(customer: Customer) {
     setEditing(customer);
-    setSelected(null);
   }
 
   // ── Render ────────────────────────────────────────────────────────────────────
@@ -116,7 +112,7 @@ export default function CustomersPage() {
         isLoading={isLoading}
         onSearchChange={(v) => { setSearch(v); setPage(1); }}
         onPageChange={setPage}
-        onRowClick={(c) => { setSelected(c); setEditing(null); }}
+        onRowClick={(c) => router.push(`/customers/${c.id}`)}
         onEdit={openEdit}
         onDelete={handleDelete}
       />
@@ -139,15 +135,6 @@ export default function CustomersPage() {
           error={updateMutation.error?.message ?? null}
           onClose={() => { setEditing(null); updateMutation.reset(); }}
           onSubmit={handleUpdate}
-        />
-      )}
-
-      {/* Detail drawer */}
-      {selected && (
-        <CustomerDetail
-          customer={selected}
-          onClose={() => setSelected(null)}
-          onEdit={() => openEdit(selected)}
         />
       )}
     </div>

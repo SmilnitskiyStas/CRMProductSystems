@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using ShelfGuard.Application.Features.Pos;
 using ShelfGuard.Application.Features.Pos.Dtos;
+using ShelfGuard.Application.Features.Registers;
 using ShelfGuard.Infrastructure.Authorization;
 using System.Security.Claims;
 
@@ -16,11 +17,20 @@ namespace ShelfGuard.Api.Controllers;
 [ApiController]
 [Route("api/pos")]
 [Authorize(Policy = AppPolicies.CanAccessPos)]
+// NOTE: no class-level [RequireModule("pos")]: the legacy shift/sale endpoints (mobile POS) and the
+// worker fiscalization-retry cron (service account of a tenant that may lack "pos") never had a
+// module gate; only the cashier-app endpoints below are gated.
+[AllowOperatorToken]
 public sealed class PosController : ControllerBase
 {
     private readonly IPosService _pos;
+    private readonly IPosSyncService _sync;
 
-    public PosController(IPosService pos) => _pos = pos;
+    public PosController(IPosService pos, IPosSyncService sync)
+    {
+        _pos = pos;
+        _sync = sync;
+    }
 
     // ── Shifts ─────────────────────────────────────────────────────────────
 
@@ -38,7 +48,14 @@ public sealed class PosController : ControllerBase
         var (tenantId, cashierId) = GetContext();
         if (tenantId is null || cashierId is null) return Forbid();
 
-        var (shift, error, status) = await _pos.OpenShiftAsync(tenantId.Value, cashierId.Value, request, ct);
+        // Register operator token: the shift is bound to the register and its store (claims win
+        // over whatever the client sent).
+        var registerId = GetRegisterId();
+        if (registerId is not null && GetStoreId() is Guid tokenStore)
+            request = request with { StoreId = tokenStore };
+
+        var (shift, error, status) = await _pos.OpenShiftAsync(
+            tenantId.Value, cashierId.Value, request, ct, registerId);
 
         if (error is not null)
             return status == 409 ? Conflict(new { error }) : BadRequest(new { error });
@@ -55,7 +72,7 @@ public sealed class PosController : ControllerBase
         var (tenantId, _) = GetContext();
         if (tenantId is null) return Forbid();
 
-        var shift = await _pos.GetCurrentShiftAsync(tenantId.Value, ct);
+        var shift = await _pos.GetCurrentShiftAsync(tenantId.Value, ct, GetRegisterId());
         return shift is null ? NotFound() : Ok(shift);
     }
 
@@ -80,7 +97,7 @@ public sealed class PosController : ControllerBase
         var (tenantId, _) = GetContext();
         if (tenantId is null) return Forbid();
 
-        var (shift, error, status) = await _pos.CloseShiftAsync(tenantId.Value, request, ct);
+        var (shift, error, status) = await _pos.CloseShiftAsync(tenantId.Value, request, ct, GetRegisterId());
 
         if (error is not null)
             return status == 404 ? NotFound(new { error }) : BadRequest(new { error });
@@ -107,7 +124,8 @@ public sealed class PosController : ControllerBase
         var (tenantId, cashierId) = GetContext();
         if (tenantId is null || cashierId is null) return Forbid();
 
-        var (sale, error, status) = await _pos.CreateSaleAsync(tenantId.Value, cashierId.Value, request, ct);
+        var (sale, error, status) = await _pos.CreateSaleAsync(
+            tenantId.Value, cashierId.Value, request, ct, GetRegisterId());
 
         if (error is not null)
         {
@@ -120,6 +138,65 @@ public sealed class PosController : ControllerBase
         }
 
         return CreatedAtAction(nameof(GetSales), new { shiftId = sale!.ShiftId }, sale);
+    }
+
+    /// <summary>
+    /// Offline sync: submits queued sales (max 100). Every item carries a ClientTransactionId and
+    /// is idempotent; the response has one result per item (created | duplicate | failed) and the
+    /// overall status is 200 even when some items failed.
+    /// </summary>
+    [HttpPost("sales/batch")]
+    [RequireModule("pos")]
+    [ProducesResponseType(typeof(BatchSalesResultDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(object), StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> CreateSalesBatch([FromBody] BatchSalesRequest request, CancellationToken ct)
+    {
+        var (tenantId, cashierId) = GetContext();
+        if (tenantId is null || cashierId is null) return Forbid();
+
+        var (result, error, status) = await _pos.CreateSalesBatchAsync(
+            tenantId.Value, cashierId.Value, request, ct, GetRegisterId());
+
+        return error is null ? Ok(result) : StatusCode(status ?? 400, new { error });
+    }
+
+    /// <summary>
+    /// Delta catalog for register apps: items changed after (since, afterId), ordered by
+    /// (updatedAt, id). Page with nextSince/nextAfterId while hasMore; inactive items are included
+    /// so the till can drop them. Omit since for a full initial download.
+    /// </summary>
+    [HttpGet("sync/catalog")]
+    [RequireModule("pos")]
+    [ProducesResponseType(typeof(SyncCatalogResponse), StatusCodes.Status200OK)]
+    public async Task<IActionResult> SyncCatalog(
+        [FromQuery] DateTime? since, [FromQuery] Guid? afterId, [FromQuery] int? limit, CancellationToken ct)
+    {
+        var (tenantId, _) = GetContext();
+        if (tenantId is null) return Forbid();
+
+        return Ok(await _sync.GetCatalogAsync(since?.ToUniversalTime(), afterId, limit, ct));
+    }
+
+    /// <summary>
+    /// Published promotion rules for the register's store (valid now or later), with an etag.
+    /// Pass the last etag: when nothing changed the response is { etag, notModified: true, rules: [] }.
+    /// Operator tokens always get their register's store; other POS users pass storeId (or their
+    /// token's store_id is used).
+    /// </summary>
+    [HttpGet("sync/promotions")]
+    [RequireModule("pos")]
+    [ProducesResponseType(typeof(SyncPromotionsResponse), StatusCodes.Status200OK)]
+    public async Task<IActionResult> SyncPromotions(
+        [FromQuery] string? etag, [FromQuery] Guid? storeId, CancellationToken ct)
+    {
+        var (tenantId, _) = GetContext();
+        if (tenantId is null) return Forbid();
+
+        var (result, error, status) = await _sync.GetPromotionsAsync(
+            tenantId.Value, GetRegisterId(), storeId ?? GetStoreId(), etag, ct);
+        if (error is not null)
+            return status == 403 ? Forbid() : StatusCode(status ?? 400, new { error });
+        return Ok(result);
     }
 
     /// <summary>Lists all sales for a given shift.</summary>
@@ -172,6 +249,13 @@ public sealed class PosController : ControllerBase
     }
 
     // ── helpers ────────────────────────────────────────────────────────────
+
+    /// <summary>register_id claim of a cashier-app operator token; null for regular user tokens.</summary>
+    private Guid? GetRegisterId() =>
+        Guid.TryParse(User.FindFirst("register_id")?.Value, out var id) && id != Guid.Empty ? id : null;
+
+    private Guid? GetStoreId() =>
+        Guid.TryParse(User.FindFirst("store_id")?.Value, out var id) && id != Guid.Empty ? id : null;
 
     private (Guid? TenantId, Guid? UserId) GetContext()
     {

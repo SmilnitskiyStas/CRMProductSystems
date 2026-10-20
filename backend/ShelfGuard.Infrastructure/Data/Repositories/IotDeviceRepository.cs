@@ -8,6 +8,9 @@ public sealed class IotDeviceRepository : IIotDeviceRepository
 {
     private readonly AppDbContext _db;
 
+    /// <summary>Ukrainian-collation ordering only where the provider supports it (Npgsql).</summary>
+    private bool Uk => _db.Database.IsNpgsql();
+
     public IotDeviceRepository(AppDbContext db) => _db = db;
 
     public async Task<List<IotDevice>> GetAllAsync(Guid? storeId, CancellationToken ct = default) =>
@@ -15,7 +18,7 @@ public sealed class IotDeviceRepository : IIotDeviceRepository
             .Include(d => d.Store)
             .Include(d => d.Zone)
             .Where(d => storeId == null || d.StoreId == storeId)
-            .OrderBy(d => d.DeviceType).ThenBy(d => d.Name)
+            .OrderBy(d => d.DeviceType).ThenByUk(d => d.Name, Uk)
             .ToListAsync(ct);
 
     public async Task<IotDevice?> GetByIdAsync(Guid id, CancellationToken ct = default) =>

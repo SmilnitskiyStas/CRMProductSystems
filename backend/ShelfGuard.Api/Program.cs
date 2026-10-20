@@ -179,6 +179,41 @@ builder.Services.AddRateLimiter(options =>
                 QueueLimit  = 0,
             }));
 
+    // Cashier app: register activation (single-use code) - 10 req/min per client IP.
+    options.AddPolicy("register-activate", httpContext =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            factory: _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 10,
+                Window      = TimeSpan.FromMinutes(1),
+                QueueLimit  = 0,
+            }));
+
+    // Cashier app: PIN sign-in - 20 req/min per client IP (a till shares one IP; per-user and
+    // per-register lockouts in RegisterService are the real brute-force defence).
+    options.AddPolicy("register-session", httpContext =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            factory: _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 20,
+                Window      = TimeSpan.FromMinutes(1),
+                QueueLimit  = 0,
+            }));
+
+    // Cashier app: PIN generate/clear by managers - 10 req/min per acting user.
+    options.AddPolicy("register-pin-manage", httpContext =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: httpContext.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value
+                          ?? httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            factory: _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 10,
+                Window      = TimeSpan.FromMinutes(1),
+                QueueLimit  = 0,
+            }));
+
     // managed-AI Phase 4b: the consumer AI assistant makes a real (paid) model call per
     // request. Partitioned by consumer_account_id (falls back to IP for an odd tokenless
     // hit) — 6 questions / 3 min per consumer keeps a single account from running up the
@@ -229,7 +264,13 @@ builder.Services
             ValidateLifetime         = true,
             ValidateIssuerSigningKey = true,
             ValidIssuer              = builder.Configuration["Jwt:Issuer"],
-            ValidAudience            = builder.Configuration["Jwt:Audience"],
+            // Staff/consumer tokens use the base audience; cashier-app operator tokens a separate one
+            // that OperatorTokenValidation only lets through on [AllowOperatorToken] endpoints.
+            ValidAudiences           = new[]
+            {
+                builder.Configuration["Jwt:Audience"],
+                builder.Configuration["Jwt:Audience"] + ShelfGuard.Application.Services.JwtAudiences.RegisterSuffix,
+            },
             IssuerSigningKey         = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSecret)),
             ClockSkew                = TimeSpan.Zero,
         };
@@ -240,8 +281,10 @@ builder.Services
         // exactly the Hub path — without the PathStartsWithSegments guard this would accept a
         // bearer token via query string on every endpoint in the API, which is a token-leakage
         // risk (query strings land in access logs, proxy logs, and browser history).
+        var registerAudience = builder.Configuration["Jwt:Audience"] + ShelfGuard.Application.Services.JwtAudiences.RegisterSuffix;
         options.Events = new JwtBearerEvents
         {
+            OnTokenValidated = ctx => OperatorTokenValidation.ValidateAsync(ctx, registerAudience),
             OnMessageReceived = context =>
             {
                 var accessToken = context.Request.Query["access_token"];

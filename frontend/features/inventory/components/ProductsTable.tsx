@@ -15,6 +15,7 @@ import {
   DrawerGrid,
 } from "@/components/ui/DetailDrawer";
 import { ProductAnalyticsTab } from "./ProductAnalyticsTab";
+import { usePrimaryStoreId } from "@/lib/useStoreContext";
 
 interface Props {
   products: Product[];
@@ -364,6 +365,8 @@ function ProductDetail({ p }: { p: Product }) {
 
 // ── Table ────────────────────────────────────────────────────────────────────
 export function ProductsTable({ products, onEdit, onDelete, isDeleting, sortBy, sortDescending, onSort }: Props) {
+  // Analytics drawer shows the movements of the store selected in the header only.
+  const storeId = usePrimaryStoreId();
   const router = useRouter();
   const t = useTranslations("Dashboard.inventory.table");
   const tFields = useTranslations("Dashboard.inventory.fields");
@@ -644,6 +647,7 @@ export function ProductsTable({ products, onEdit, onDelete, isDeleting, sortBy, 
             {drawerTab === "analytics" && (
               <ProductAnalyticsTab
                 productId={selected.id}
+                storeId={storeId}
                 buffers={{
                   safetyBuffer: selected.safetyBuffer,
                   minStock: selected.minStock,
