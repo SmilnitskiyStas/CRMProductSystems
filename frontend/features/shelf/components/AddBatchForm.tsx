@@ -21,6 +21,8 @@ interface ProductOption {
 interface Props {
   stores: StoreOption[];
   products: ProductOption[];
+  /** Pre-selects and locks the product (used from the item page). */
+  productId?: string;
   onSuccess: () => void;
   onCancel: () => void;
 }
@@ -44,7 +46,7 @@ const labelStyle: React.CSSProperties = {
   marginBottom: 5,
 };
 
-export function AddBatchForm({ stores, products, onSuccess, onCancel }: Props) {
+export function AddBatchForm({ stores, products, productId, onSuccess, onCancel }: Props) {
   const t = useTranslations("Dashboard.shelf.addBatchForm");
   const tCommon = useTranslations("Common");
   const create = useCreateStock();
@@ -58,7 +60,7 @@ export function AddBatchForm({ stores, products, onSuccess, onCancel }: Props) {
     batchNumber: string;
     shelfNumber: string;
   }>({
-    productId: "",
+    productId: productId ?? "",
     storeId: "",
     zoneId: "",
     quantity: "",
@@ -118,6 +120,7 @@ export function AddBatchForm({ stores, products, onSuccess, onCancel }: Props) {
           onChange={(e) => set("productId", e.target.value)}
           style={inputStyle}
           required
+          disabled={!!productId}
         >
           <option value="">{t("productPlaceholder")}</option>
           {products.map((p) => (
