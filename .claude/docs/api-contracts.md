@@ -2238,3 +2238,24 @@ display, support-ticket creation, and review submission. None of these have a mo
 these endpoints (and the pre-existing `/overview`) can see to the caller's own granted locations,
 which for store-migration can flip a genuinely-migrated customer to "not migrated," not just
 undercount revenue.
+
+## Shelf planogram + AI shelf-photo scan (TASK-726) — web and mobile contract
+
+Auth: standard staff JWT (`Authorization: Bearer`, same as web). Base: `api/locations/{id}/zones/{zoneId}`. Errors: `{ "error": "..." }`.
+
+- `GET /shelves` (CanViewStock) -> `[{ shelfId, label, items: [ShelfItemDto] }]` — zone sections from the plan JSON + planogram items; use to pick/scan a shelf.
+- `GET /shelf-items?shelfId=` (CanViewStock) -> `ShelfItemDto[]` `{ id, shelfId, itemId, itemName, barcode|null, expectedFacings }`.
+- `PUT /shelf-items` (StoreManager+) body `{ shelfId, items: [{ itemId, expectedFacings 1..99 }] }` — replaces that section's list; 400 on invalid input.
+- `POST /scans` (StoreManager+, multipart/form-data): `file` (jpg/jpeg/png/webp, **max 5 MB**) + optional `shelfId` (omit = whole zone). 201 -> `ShelfScanDto`. Codes: 400 bad/oversized file, 404 zone, 422 no planogram items, 429 rate limit (10 / 3 min / user), 502 AI failed, 503 AI slot not configured. Reference photos of catalog items are sent to the AI automatically (max 12).
+- `GET /scans?limit=20` -> `ShelfScanDto[]` (newest first); `GET /scans/{scanId}` -> `ShelfScanDto`.
+- `ShelfScanDto`: `{ id, locationId, zoneId, shelfId|null, imageUrl, status, missingCount, lowCount, alertPending, summary|null, items: [{ itemId, name, status: present|low|missing, estimatedCount, confidence 0..1, note|null }], model, errorMessage, createdBy, createdAt }`. `imageUrl` is a static path (`/uploads/shelf-scans/{tenantId}/{id}.ext`) relative to the API host.
+- Client recommendation: downscale to <= 1600 px longest side, JPEG q~0.8, before upload (keeps under 5 MB, faster AI).
+
+### Item images (TASK-729) — several reference photos per catalog item
+`item_images` table (RLS tenant_isolation/provider_bypass/worker_bypass). Max **8** per item; exactly one primary (unique partial index); `Item.imageUrl` always mirrors the primary URL (null if none). Files: `/uploads/items/{tenantId}/{guid}.ext` (jpg/jpeg/png/webp/gif, max 5 MB, signature checked).
+- `GET /api/items/{id}/images` -> `[{ id, url, label|null, sortOrder, isPrimary, createdAt }]` (primary first, then sortOrder).
+- `POST /api/items/{id}/images` (StoreManager+, multipart: `file` + optional `label` <=50) -> 201 image dto; first image auto-primary; 400 >8 / bad file / label too long.
+- `PATCH /api/items/{id}/images/{imageId}` (StoreManager+) body `{ label?, isPrimary?, sortOrder? }` — `label:""` clears; `isPrimary:true` moves primary (updates `Item.imageUrl`); `isPrimary:false` on the current primary -> 400. -> image dto.
+- `DELETE /api/items/{id}/images/{imageId}` (StoreManager+) -> 204; deletes the file; if primary, next image (by sortOrder) is promoted.
+- Legacy: `POST /api/items/{id}/image` adds a new image that becomes primary -> `{ imageUrl }`; `DELETE /api/items/{id}/image` removes the primary and promotes the next -> 204.
+- 404 for foreign/unknown item or image. Shelf scan sends up to 3 images per item (primary first) to the AI, global cap 12 images / 8 MB, primaries of all items before second/third angles.

@@ -23,7 +23,7 @@ public sealed class ItemsControllerTests
 
     public ItemsControllerTests()
     {
-        _controller = new ItemsController(_catalog)
+        _controller = new ItemsController(_catalog, Substitute.For<IItemImageService>())
         {
             ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext() },
         };

@@ -1561,6 +1561,23 @@ Open-Meteo/Nominatim/Checkbox: retry(GET)/breaker/timeout; AI: breaker per endpo
 ### TASK-725 — Resilience stage 3b (API ролі + gateway) — review
 API_ROLE core/consumer/provider, nginx gateway :5100, SignalR Redis backplane. dotnet test 2491/2491, nginx-маршрути перевірені на dummy-апстрімах; НЕ запускалось end-to-end, НЕ задеплоєно. Перед продом: Maximum Pool Size=30, RAM, staging. Лог: `.claude/logs/tasks/725_*`.
 
+### TASK-726 — Shelf planogram + AI shelf-photo scan (backend) — review
+`shelf_items`/`shelf_scans` (+RLS, store_scope, data-migration з Position JSON), `GET/PUT …/zones/{zoneId}/shelf-items`, `POST/GET …/zones/{zoneId}/scans[/{id}]`, Vision у `AiChatRequest`+Anthropic/OpenAI, `ShelfPhotoAdvisor` (Analyst), `shelf.empty` event key, `ShelfScan.AlertPending` для worker. dotnet test 2514/2514; міграцію НЕ застосовано, не закомічено. Лог: `.claude/logs/tasks/726_*`.
+
+### TASK-728 — Worker shelf.empty alerts — review
+`shelf-alert.job.ts` (cron 1 хв: claim `shelf_scans.AlertPending` через UPDATE…RETURNING SKIP LOCKED у транзакції → черга `notifications` `shelf_empty`) + handler у `notification.job.ts` (telegram/email, налаштування `shelf.empty`). tsc OK; live не перевірено; фронт-лейбл `shelf.empty` не додано. Лог: `.claude/logs/tasks/728_*`.
+
+### TASK-727 — Shelf planogram + AI scan (frontend) — review
+Multi-item sections with facings, "Перевірити полицю" photo scan panel + history, canvas red/amber highlight. tsc/eslint clean; not browser-tested. Log: `.claude/logs/tasks/727_2026-10-19_shelf-planogram-ai-scan-frontend_frontend-developer.md`.
+
+## TASK-730 — Product multi-photo gallery (frontend, done)
+ProductImagesSection (grid, downscale upload, labels, primary, delete, max 8) wired into ProductForm edit mode; contract /api/items/{id}/images. tsc/eslint clean. Log: logs/tasks/730_*.
+
+## TASK-729 — Item multi-image (backend, done)
+`item_images` + `/api/items/{id}/images` CRUD, legacy image endpoints kept, shelf scan uses up to 3 refs/item. Migration AddItemImages not applied anywhere yet. Log: logs/tasks/729_*.
+
+## TASK-731 — Mobile shelf check (done)
+Shelf-check flow in mobile (location > zone > shelf > photo > AI result + history), More menu entry, new deps expo-image-picker/manipulator (new APK needed). tsc/eslint clean; not device-tested. Log: logs/tasks/731_*.
 ### TASK-726 - Cashier app backend Phase 1 (registers, PIN sessions, idempotent sales, delta catalog) - review
 `cash_registers`/`register_sessions` + RLS, device-token activation, PIN operator JWT, `ClientTransactionId` idempotency, `POST /pos/sales/batch`, `GET /pos/sync/catalog`, `items.UpdatedAt` trigger. Migration AddCashRegisters applied to dev; dotnet test 2527/2527; not committed. Лог: `.claude/logs/tasks/726_*`.
 

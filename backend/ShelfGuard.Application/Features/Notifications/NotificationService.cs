@@ -367,6 +367,8 @@ public sealed class NotificationService : INotificationService
         "access.temporary_expiring_soon",
         "access.temporary_expired",
         "auth.password_reset_requested",
+        // AI shelf-photo check found missing/low items (worker sends the alert from shelf_scans.AlertPending).
+        "shelf.empty",
     ];
 
     private static readonly HashSet<string> ValidChannels =

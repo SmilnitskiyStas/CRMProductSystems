@@ -50,7 +50,7 @@
       [
         "expo-camera",
         {
-          "cameraPermission": "ShelfGuard потребує доступ до камери для сканування штрихкодів.",
+          "cameraPermission": "ShelfGuard потребує доступ до камери для сканування штрихкодів і фото полиць.",
           "microphonePermission": false,
           "recordAudioAndroid": false
         }
@@ -59,6 +59,14 @@
         "expo-location",
         {
           "locationWhenInUsePermission": "ShelfGuard використовує геолокацію, щоб знайти найближчий магазин."
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "ShelfGuard потребує доступ до фото, щоб додати знімок полиці.",
+          "cameraPermission": false,
+          "microphonePermission": false
         }
       ],
       "expo-notifications",

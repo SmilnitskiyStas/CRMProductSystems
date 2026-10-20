@@ -1802,6 +1802,52 @@ namespace ShelfGuard.Infrastructure.Migrations
                     b.ToTable("items", (string)null);
                 });
 
+            modelBuilder.Entity("ShelfGuard.Domain.Entities.ItemImage", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasDefaultValueSql("gen_random_uuid()");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("NOW()");
+
+                    b.Property<string>("ImageUrl")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<bool>("IsPrimary")
+                        .HasColumnType("boolean");
+
+                    b.Property<Guid>("ItemId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Label")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ItemId")
+                        .IsUnique()
+                        .HasDatabaseName("ux_item_images_one_primary")
+                        .HasFilter("\"IsPrimary\" = true");
+
+                    b.HasIndex("TenantId", "ItemId")
+                        .HasDatabaseName("idx_item_images_tenant_item");
+
+                    b.ToTable("item_images", (string)null);
+                });
+
             modelBuilder.Entity("ShelfGuard.Domain.Entities.ItemZoneAssignment", b =>
                 {
                     b.Property<Guid>("Id")
@@ -5100,6 +5146,127 @@ namespace ShelfGuard.Infrastructure.Migrations
                     b.ToTable("schedule_shifts", (string)null);
                 });
 
+            modelBuilder.Entity("ShelfGuard.Domain.Entities.ShelfItem", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasDefaultValueSql("gen_random_uuid()");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("NOW()");
+
+                    b.Property<int>("ExpectedFacings")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(1);
+
+                    b.Property<Guid>("ItemId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("LocationId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("ShelfId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("ZoneId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ItemId");
+
+                    b.HasIndex("TenantId", "ZoneId")
+                        .HasDatabaseName("idx_shelf_items_tenant_zone");
+
+                    b.HasIndex("ZoneId", "ShelfId", "ItemId")
+                        .IsUnique();
+
+                    b.ToTable("shelf_items", (string)null);
+                });
+
+            modelBuilder.Entity("ShelfGuard.Domain.Entities.ShelfScan", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasDefaultValueSql("gen_random_uuid()");
+
+                    b.Property<bool>("AlertPending")
+                        .HasColumnType("boolean");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("NOW()");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ErrorMessage")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<string>("ImagePath")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<Guid>("LocationId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("LowCount")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("MissingCount")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Model")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("ResultJson")
+                        .HasColumnType("jsonb");
+
+                    b.Property<Guid?>("ShelfId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasDefaultValue("completed");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("TokensUsed")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("ZoneId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AlertPending")
+                        .HasDatabaseName("idx_shelf_scans_alert_pending")
+                        .HasFilter("\"AlertPending\" = true");
+
+                    b.HasIndex("ZoneId");
+
+                    b.HasIndex("TenantId", "ZoneId", "CreatedAt")
+                        .HasDatabaseName("idx_shelf_scans_tenant_zone_created");
+
+                    b.ToTable("shelf_scans", (string)null);
+                });
+
             modelBuilder.Entity("ShelfGuard.Domain.Entities.StockEvent", b =>
                 {
                     b.Property<Guid>("Id")
@@ -8192,6 +8359,17 @@ namespace ShelfGuard.Infrastructure.Migrations
                     b.Navigation("Tenant");
                 });
 
+            modelBuilder.Entity("ShelfGuard.Domain.Entities.ItemImage", b =>
+                {
+                    b.HasOne("ShelfGuard.Domain.Entities.Item", "Item")
+                        .WithMany()
+                        .HasForeignKey("ItemId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Item");
+                });
+
             modelBuilder.Entity("ShelfGuard.Domain.Entities.ItemZoneAssignment", b =>
                 {
                     b.HasOne("ShelfGuard.Domain.Entities.Item", "Item")
@@ -9244,6 +9422,34 @@ namespace ShelfGuard.Infrastructure.Migrations
                     b.Navigation("Schedule");
 
                     b.Navigation("User");
+                });
+
+            modelBuilder.Entity("ShelfGuard.Domain.Entities.ShelfItem", b =>
+                {
+                    b.HasOne("ShelfGuard.Domain.Entities.Item", "Item")
+                        .WithMany()
+                        .HasForeignKey("ItemId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("ShelfGuard.Domain.Entities.LocationZone", "Zone")
+                        .WithMany()
+                        .HasForeignKey("ZoneId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Item");
+
+                    b.Navigation("Zone");
+                });
+
+            modelBuilder.Entity("ShelfGuard.Domain.Entities.ShelfScan", b =>
+                {
+                    b.HasOne("ShelfGuard.Domain.Entities.LocationZone", null)
+                        .WithMany()
+                        .HasForeignKey("ZoneId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("ShelfGuard.Domain.Entities.StockReceipt", b =>

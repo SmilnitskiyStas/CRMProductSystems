@@ -14,7 +14,13 @@ public sealed class ItemsController : ControllerBase
 {
     private readonly IItemService _catalog;
 
-    public ItemsController(IItemService catalog) => _catalog = catalog;
+    private readonly IItemImageService _images;
+
+    public ItemsController(IItemService catalog, IItemImageService images)
+    {
+        _catalog = catalog;
+        _images = images;
+    }
 
     [HttpGet]
     [ProducesResponseType(typeof(PagedResult<ItemDto>), StatusCodes.Status200OK)]
@@ -130,6 +136,7 @@ public sealed class ItemsController : ControllerBase
         return result is null ? NotFound() : Ok(result);
     }
 
+    // Legacy single-image endpoints: POST adds a new image that becomes primary; DELETE removes the primary.
     [HttpPost("{id:guid}/image")]
     [Authorize(Policy = AppPolicies.AtLeastStoreManager)]
     [ProducesResponseType(typeof(object), StatusCodes.Status200OK)]
@@ -137,19 +144,87 @@ public sealed class ItemsController : ControllerBase
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> UploadImage(Guid id, IFormFile file, CancellationToken ct)
     {
+        var tenantId = GetTenantId();
+        if (tenantId is null) return Forbid();
         if (file is null || file.Length == 0)
             return BadRequest(new { error = "No file uploaded." });
 
-        if (file.Length > 5 * 1024 * 1024)
-            return BadRequest(new { error = "File too large. Max 5 MB." });
-
         using var stream = file.OpenReadStream();
-        var (url, error) = await _catalog.UploadImageAsync(id, stream, file.FileName, ct);
-
-        if (error == "Product not found.") return NotFound(new { error });
+        var (image, error, status) = await _images.AddAsync(tenantId.Value, id, stream, file.Length, file.FileName, null, makePrimary: true, ct);
+        if (status == 404) return NotFound(new { error });
         if (error is not null) return BadRequest(new { error });
 
-        return Ok(new { imageUrl = url });
+        return Ok(new { imageUrl = image!.Url });
+    }
+
+    [HttpDelete("{id:guid}/image")]
+    [Authorize(Policy = AppPolicies.AtLeastStoreManager)]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> DeleteImage(Guid id, CancellationToken ct)
+    {
+        var tenantId = GetTenantId();
+        if (tenantId is null) return Forbid();
+        var (ok, error) = await _images.DeletePrimaryAsync(tenantId.Value, id, ct);
+        return ok ? NoContent() : NotFound(new { error });
+    }
+
+    [HttpGet("{id:guid}/images")]
+    [ProducesResponseType(typeof(List<ItemImageDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetImages(Guid id, CancellationToken ct)
+    {
+        var tenantId = GetTenantId();
+        if (tenantId is null) return Forbid();
+        var (images, error) = await _images.ListAsync(tenantId.Value, id, ct);
+        return images is null ? NotFound(new { error }) : Ok(images);
+    }
+
+    [HttpPost("{id:guid}/images")]
+    [Authorize(Policy = AppPolicies.AtLeastStoreManager)]
+    [ProducesResponseType(typeof(ItemImageDto), StatusCodes.Status201Created)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> AddImage(Guid id, IFormFile file, [FromForm] string? label, CancellationToken ct)
+    {
+        var tenantId = GetTenantId();
+        if (tenantId is null) return Forbid();
+        if (file is null || file.Length == 0)
+            return BadRequest(new { error = "No file uploaded." });
+
+        using var stream = file.OpenReadStream();
+        var (image, error, status) = await _images.AddAsync(tenantId.Value, id, stream, file.Length, file.FileName, label, makePrimary: false, ct);
+        if (status == 404) return NotFound(new { error });
+        if (error is not null) return BadRequest(new { error });
+
+        return StatusCode(StatusCodes.Status201Created, image);
+    }
+
+    [HttpPatch("{id:guid}/images/{imageId:guid}")]
+    [Authorize(Policy = AppPolicies.AtLeastStoreManager)]
+    [ProducesResponseType(typeof(ItemImageDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> UpdateImage(Guid id, Guid imageId, UpdateItemImageRequest request, CancellationToken ct)
+    {
+        var tenantId = GetTenantId();
+        if (tenantId is null) return Forbid();
+        var (image, error, status) = await _images.UpdateAsync(tenantId.Value, id, imageId, request, ct);
+        if (status == 404) return NotFound(new { error });
+        if (error is not null) return BadRequest(new { error });
+        return Ok(image);
+    }
+
+    [HttpDelete("{id:guid}/images/{imageId:guid}")]
+    [Authorize(Policy = AppPolicies.AtLeastStoreManager)]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> DeleteImageById(Guid id, Guid imageId, CancellationToken ct)
+    {
+        var tenantId = GetTenantId();
+        if (tenantId is null) return Forbid();
+        var (ok, error) = await _images.DeleteAsync(tenantId.Value, id, imageId, ct);
+        return ok ? NoContent() : NotFound(new { error });
     }
 
     [HttpGet("{id:guid}/suppliers")]

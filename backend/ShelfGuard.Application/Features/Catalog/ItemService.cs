@@ -432,32 +432,6 @@ public sealed class ItemService : IItemService
         );
     }
 
-    public async Task<(string? Url, string? Error)> UploadImageAsync(Guid itemId, Stream imageStream, string fileName, CancellationToken ct)
-    {
-        var item = await _repo.GetByIdAsync(itemId, ct);
-        if (item is null) return (null, "Product not found.");
-
-        var ext = Path.GetExtension(fileName).ToLowerInvariant();
-        var allowed = new[] { ".jpg", ".jpeg", ".png", ".webp", ".gif" };
-        if (!allowed.Contains(ext)) return (null, "Unsupported image format.");
-
-        var uploadDir = Path.Combine("wwwroot", "uploads", "items");
-        Directory.CreateDirectory(uploadDir);
-
-        var fileNameOnDisk = $"{itemId}{ext}";
-        var filePath = Path.Combine(uploadDir, fileNameOnDisk);
-
-        using var fs = new FileStream(filePath, FileMode.Create);
-        await imageStream.CopyToAsync(fs, ct);
-
-        var url = $"/uploads/items/{fileNameOnDisk}";
-        item.ImageUrl = url;
-        _repo.Update(item);
-        await _repo.SaveChangesAsync(ct);
-
-        return (url, null);
-    }
-
     /// <summary>
     /// Trims, drops blanks and de-duplicates barcodes while preserving order. The first
     /// surviving entry is the primary/active barcode — POS, receipts and analytics all read

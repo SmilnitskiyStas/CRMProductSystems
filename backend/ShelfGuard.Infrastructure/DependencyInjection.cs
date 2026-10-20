@@ -50,6 +50,7 @@ public static class DependencyInjection
 
         // Catalog (v1 tenant-aware)
         services.AddScoped<IItemRepository, ItemRepository>();
+        services.AddScoped<IItemImageRepository, ItemImageRepository>();
         services.AddScoped<ICategoryRepository, CategoryRepository>();
 
         // Stock
@@ -73,6 +74,7 @@ public static class DependencyInjection
 
         // Locations
         services.AddScoped<ILocationRepository, LocationRepository>();
+        services.AddScoped<IShelfRepository, ShelfRepository>();
 
         // Legal Entities
         services.AddScoped<ILegalEntityRepository, LegalEntityRepository>();
@@ -336,6 +338,7 @@ public static class DependencyInjection
         // TASK-420 - Marketing analytics Фаза 2 (price segments + frequency/reactivation)
         services.AddScoped<Application.Features.MarketingAnalytics.PriceSegments.IPriceSegmentsRepository,
             Data.Repositories.PriceSegmentsRepository>();
+        services.AddScoped<Domain.Interfaces.IShelfPhotoAdvisor, AI.ShelfPhotoAdvisor.ShelfPhotoAdvisor>();
         services.AddScoped<Domain.Interfaces.IPriceSegmentAdvisor,
             AI.PriceSegmentAdvisor.PriceSegmentAdvisor>();
 

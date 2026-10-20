@@ -35,10 +35,12 @@ public static class DependencyInjection
     {
 services.AddScoped<IAuthService, AuthService>();
         services.AddScoped<IItemService, ItemService>();
+        services.AddScoped<IItemImageService, ItemImageService>();
         services.AddScoped<ICategoryService, CategoryService>();
         services.AddScoped<IProviderCategoryService, ProviderCategoryService>();
         services.AddScoped<IStockService, StockService>();
         services.AddScoped<ILocationService, LocationService>();
+        services.AddScoped<IShelfService, ShelfService>();
         services.AddScoped<ISupplierService, SupplierService>();
         services.AddScoped<IReceiptService, ReceiptService>();
         services.AddScoped<ITransferService, TransferService>();

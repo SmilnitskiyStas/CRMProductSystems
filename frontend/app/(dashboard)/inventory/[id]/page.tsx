@@ -12,6 +12,7 @@ import { useProduct, useItemZones } from "@/features/inventory/hooks/useProducts
 import { useProductBuffer, resolveStockLevels } from "@/features/inventory/hooks/useProductBuffer";
 import { usePrimaryStoreId } from "@/lib/useStoreContext";
 import { ProductAnalyticsTab } from "@/features/inventory/components/ProductAnalyticsTab";
+import { ProductImagesSection } from "@/features/inventory/components/ProductImagesSection";
 import { ItemBatchesSection } from "@/features/shelf/components/ItemBatchesSection";
 import type { Product } from "@/features/inventory/types";
 
@@ -213,6 +214,7 @@ export default function ProductPage() {
   const tProductPage = useTranslations("Dashboard.inventory.productPage");
   const tItemTypes = useTranslations("Dashboard.inventory.itemTypes");
   const tCommon = useTranslations("Common");
+  const tImages = useTranslations("Dashboard.inventory.itemImages");
   const locale = useLocale();
   const intlLocale = locale === "en" ? "en-US" : "uk-UA";
   const { id } = useParams<{ id: string }>();
@@ -330,6 +332,13 @@ export default function ProductPage() {
 
           {/* Sections grid */}
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+
+            {/* Photos — read-only gallery, editing happens on the edit page */}
+            <div style={{ gridColumn: "1 / -1" }}>
+              <Section title={tImages("viewTitle")}>
+                <ProductImagesSection productId={product.id} canEdit={false} />
+              </Section>
+            </div>
 
             {/* Main info */}
             <Section title={t("sectionMain")}>

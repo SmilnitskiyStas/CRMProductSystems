@@ -60,7 +60,6 @@ public interface IItemService
 
     Task<BarcodeProductLookupDto?> LookupByBarcodeExternalAsync(string barcode, CancellationToken ct);
 
-    Task<(string? Url, string? Error)> UploadImageAsync(Guid itemId, Stream imageStream, string fileName, CancellationToken ct);
 
     // TASK-714: product ↔ store-zone tags (floor-plan canvas groundwork, TASK-715/716).
     Task<List<ItemZoneDto>> GetZonesAsync(Guid itemId, CancellationToken ct = default);

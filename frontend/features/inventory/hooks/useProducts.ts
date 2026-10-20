@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { productsApi } from "../api/products";
-import type { CreateProductPayload, ProductSortBy, UpdateProductPayload } from "../types";
+import type { CreateProductPayload, ProductSortBy, UpdateItemImagePayload, UpdateProductPayload } from "../types";
 
 const PRODUCTS_KEY = ["products"] as const;
 
@@ -140,5 +140,46 @@ export function useUnassignItemZone(productId: string) {
   return useMutation({
     mutationFn: (zoneId: string) => productsApi.unassignZone(productId, zoneId),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: itemZonesKey(productId) }),
+  });
+}
+
+// Multi-photo gallery. Primary photo mirrors into item.imageUrl, so every change also
+// invalidates the product queries (lists/thumbnails). The images key sits under PRODUCTS_KEY,
+// so that single invalidation covers both.
+function itemImagesKey(productId: string) {
+  return [...PRODUCTS_KEY, productId, "images"] as const;
+}
+
+export function useItemImages(productId: string) {
+  return useQuery({
+    queryKey: itemImagesKey(productId),
+    queryFn: () => productsApi.getImages(productId),
+    enabled: Boolean(productId),
+  });
+}
+
+export function useAddItemImage(productId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ file, label }: { file: File; label?: string }) =>
+      productsApi.addImage(productId, file, label),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: PRODUCTS_KEY }),
+  });
+}
+
+export function useUpdateItemImage(productId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ imageId, payload }: { imageId: string; payload: UpdateItemImagePayload }) =>
+      productsApi.updateImage(productId, imageId, payload),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: PRODUCTS_KEY }),
+  });
+}
+
+export function useDeleteItemImage(productId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (imageId: string) => productsApi.deleteImage(productId, imageId),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: PRODUCTS_KEY }),
   });
 }

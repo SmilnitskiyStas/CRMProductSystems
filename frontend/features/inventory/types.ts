@@ -134,3 +134,19 @@ export type ProductSortBy =
   | "retailprice"
   | "minstock"
   | "maxstock";
+
+/** One photo of a product (different sides). `isPrimary` one is mirrored into item.imageUrl. */
+export interface ItemImage {
+  id: string;
+  url: string;
+  label: string | null;
+  sortOrder: number;
+  isPrimary: boolean;
+  createdAt: string;
+}
+
+export interface UpdateItemImagePayload {
+  label?: string;
+  isPrimary?: boolean;
+  sortOrder?: number;
+}
