@@ -12,6 +12,7 @@ import { useProduct, useItemZones } from "@/features/inventory/hooks/useProducts
 import { useProductBuffer, resolveStockLevels } from "@/features/inventory/hooks/useProductBuffer";
 import { usePrimaryStoreId } from "@/lib/useStoreContext";
 import { ProductAnalyticsTab } from "@/features/inventory/components/ProductAnalyticsTab";
+import { ItemBatchesSection } from "@/features/shelf/components/ItemBatchesSection";
 import type { Product } from "@/features/inventory/types";
 
 // ── Tab ───────────────────────────────────────────────────────────────────────
@@ -397,6 +398,13 @@ export default function ProductPage() {
                 <Field label={t("shelfLifeDays")} value={product.shelfLifeDays != null ? `${product.shelfLifeDays} ${t("shelfLifeDaysSuffix")}` : "—"} />
               </Grid>
             </Section>
+
+            {/* Stock by expiry date */}
+            <div style={{ gridColumn: "1 / -1" }}>
+              <Section title={tProductPage("batchesTitle")}>
+                <ItemBatchesSection productId={product.id} productName={product.name} unit={product.unit} />
+              </Section>
+            </div>
 
             {/* Storage conditions */}
             {(product.storageTempMin != null || product.storageTempMax != null) && (
