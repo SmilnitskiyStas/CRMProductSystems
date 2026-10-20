@@ -45,6 +45,13 @@ public interface IAiOrderService
 
 public sealed class AiOrderService : IAiOrderService
 {
+    /// <summary>
+    /// Hard cap on how many positions one AI order may contain. The AI agent is deliberately limited
+    /// to a short, reviewable order (the most urgent positions) instead of every orderable line of
+    /// the store — the rest stays available through the regular order calculation.
+    /// </summary>
+    public const int MaxPositions = 10;
+
     private readonly IAiOrderRepository _repo;
     private readonly IAiOrderAdvisor _advisor;
     private readonly IOrderCalcService _orderCalc;
@@ -106,7 +113,15 @@ public sealed class AiOrderService : IAiOrderService
         var (calc, calcError) = await _orderCalc.CalculateAsync(storeId, ct);
         if (calcError is not null) return (null, calcError);
 
-        var orderableLines = calc!.Lines.Where(l => l.QuantityToOrder > 0).ToList();
+        // Most urgent first: lowest coverage of the buffer by (on hand + in transit), ties broken by
+        // the larger quantity to order. Only the first MaxPositions are sent to the AI and saved.
+        var orderableLines = calc!.Lines
+            .Where(l => l.QuantityToOrder > 0)
+            .OrderBy(l => l.BufferTotal > 0 ? (l.StockOnHand + l.InTransit) / l.BufferTotal : 0m)
+            .ThenByDescending(l => l.QuantityToOrder)
+            .ThenBy(l => l.ProductName)
+            .Take(MaxPositions)
+            .ToList();
         if (orderableLines.Count == 0)
             return (null, "Nothing to order — all demand is covered.");
 

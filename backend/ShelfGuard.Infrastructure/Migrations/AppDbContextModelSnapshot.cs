@@ -5240,6 +5240,10 @@ namespace ShelfGuard.Infrastructure.Migrations
                     b.Property<Guid?>("CreatedBy")
                         .HasColumnType("uuid");
 
+                    b.Property<string>("DelayReason")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
                     b.Property<Guid>("DestinationStoreId")
                         .HasColumnType("uuid")
                         .HasColumnName("DestinationLocationId");
@@ -5249,6 +5253,20 @@ namespace ShelfGuard.Infrastructure.Migrations
 
                     b.Property<string>("Notes")
                         .HasColumnType("text");
+
+                    b.Property<DateOnly?>("OriginalExpectedAt")
+                        .HasColumnType("date");
+
+                    b.Property<int>("PostponeCount")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0);
+
+                    b.Property<DateTime?>("PostponedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("PostponedBy")
+                        .HasColumnType("uuid");
 
                     b.Property<DateTime?>("ReceivedAt")
                         .HasColumnType("timestamp with time zone");

@@ -170,6 +170,10 @@ public sealed record StoreNetFlowDto(Guid StoreId, string StoreName, int Gained,
 /// <summary>One migrated customer's drill-down row — same shape serves both the on-screen table
 /// (PII always masked, small <c>limit</c>) and the Excel export (PII masked unless
 /// <c>UnmaskPii</c>+capability, larger <c>limit</c>).</summary>
+/// <summary>One registered customer with no purchase yet — PII is always masked on screen.</summary>
+public sealed record NoPurchaseCustomerRowDto(
+    Guid CustomerId, string Name, string? Phone, string? Email, DateTime RegisteredAt);
+
 public sealed record StoreMigrationCustomerRowDto(
     Guid CustomerId,
     string Name,

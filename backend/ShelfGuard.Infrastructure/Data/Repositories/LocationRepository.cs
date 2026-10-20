@@ -8,12 +8,15 @@ public sealed class LocationRepository : ILocationRepository
 {
     private readonly AppDbContext _db;
 
+    /// <summary>Ukrainian-collation ordering only where the provider supports it (Npgsql).</summary>
+    private bool Uk => _db.Database.IsNpgsql();
+
     public LocationRepository(AppDbContext db) => _db = db;
 
     public Task<List<Location>> GetAllAsync(CancellationToken ct = default) =>
         _db.Locations
             .Include(s => s.Zones.Where(z => z.IsActive))
-            .OrderBy(s => s.Name)
+            .OrderByUk(s => s.Name, Uk)
             .ToListAsync(ct);
 
     public Task<Location?> GetByIdAsync(Guid id, CancellationToken ct = default) =>
@@ -24,7 +27,7 @@ public sealed class LocationRepository : ILocationRepository
     public Task<List<LocationZone>> GetZonesAsync(Guid locationId, CancellationToken ct = default) =>
         _db.LocationZones
             .Where(z => z.LocationId == locationId)
-            .OrderBy(z => z.Name)
+            .OrderByUk(z => z.Name, Uk)
             .ToListAsync(ct);
 
     public Task<LocationZone?> GetZoneByIdAsync(Guid zoneId, CancellationToken ct = default) =>

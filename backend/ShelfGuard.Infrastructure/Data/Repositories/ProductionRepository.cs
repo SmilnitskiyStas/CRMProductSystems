@@ -12,6 +12,9 @@ public sealed class ProductionRepository : IProductionRepository
 {
     private readonly AppDbContext _db;
 
+    /// <summary>Ukrainian-collation ordering only where the provider supports it (Npgsql).</summary>
+    private bool Uk => _db.Database.IsNpgsql();
+
     public ProductionRepository(AppDbContext db) => _db = db;
 
     // ── Recipes ───────────────────────────────────────────────────────────────
@@ -26,7 +29,7 @@ public sealed class ProductionRepository : IProductionRepository
         if (!includeInactive)
             query = query.Where(r => r.IsActive);
 
-        return await query.OrderBy(r => r.Name).ToListAsync(ct);
+        return await query.OrderByUk(r => r.Name, Uk).ToListAsync(ct);
     }
 
     public Task<Recipe?> GetRecipeByIdAsync(Guid id, CancellationToken ct = default) =>

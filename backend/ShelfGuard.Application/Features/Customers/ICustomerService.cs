@@ -11,6 +11,13 @@ public interface ICustomerService
     Task<(CustomerDto? Customer, string? Error)> UpdateAsync(Guid id, Guid tenantId, UpdateCustomerDto dto, CancellationToken ct = default);
     Task<bool> DeleteAsync(Guid id, Guid tenantId, CancellationToken ct = default);
 
+    /// <summary>Purchase analytics for one customer; null when the customer does not exist.</summary>
+    Task<CustomerActivityDto?> GetActivityAsync(Guid id, Guid tenantId, CancellationToken ct = default);
+
+    /// <summary>One page of the customer's receipts (newest first) with their lines.</summary>
+    Task<PagedResult<CustomerReceiptDto>?> GetReceiptsAsync(
+        Guid id, Guid tenantId, int page, int pageSize, CancellationToken ct = default);
+
     /// <summary>
     /// TASK-621b. Staff-facing view of a <see cref="Customer"/>'s linked
     /// <see cref="ShelfGuard.Domain.Entities.ConsumerAccountProfileChange"/> history — delegates to

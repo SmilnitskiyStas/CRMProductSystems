@@ -131,6 +131,69 @@ public sealed partial class CustomerService : ICustomerService
         return history ?? empty;
     }
 
+    public async Task<CustomerActivityDto?> GetActivityAsync(Guid id, Guid tenantId, CancellationToken ct = default)
+    {
+        var customer = await _repo.GetByIdAsync(id, tenantId, ct);
+        if (customer is null) return null;
+
+        var now = DateTime.UtcNow;
+        var monthsFrom = new DateTime(now.Year, now.Month, 1, 0, 0, 0, DateTimeKind.Utc).AddMonths(-11);
+
+        // Same DbContext for every repository call in this request: run sequentially.
+        var s = await _repo.GetActivityStatsAsync(id, tenantId, now, ct);
+        var stores = await _repo.GetStoreActivityAsync(id, tenantId, ct);
+        var months = await _repo.GetMonthlyActivityAsync(id, tenantId, monthsFrom, ct);
+        var top = await _repo.GetTopProductsAsync(id, tenantId, 10, ct);
+
+        decimal? avgGap = null;
+        if (s.ReceiptCount >= 2 && s.FirstPurchaseAt is { } first && s.LastPurchaseAt is { } last)
+            avgGap = Math.Round((decimal)(last - first).TotalDays / (s.ReceiptCount - 1), 1);
+
+        var stats = new CustomerActivityStatsDto(
+            s.ReceiptCount,
+            s.TotalSpent,
+            s.ReceiptCount > 0 ? Math.Round(s.TotalSpent / s.ReceiptCount, 2) : 0m,
+            s.ItemsQuantity,
+            s.FirstPurchaseAt,
+            s.LastPurchaseAt,
+            s.LastPurchaseAt is { } l ? (int)(now.Date - l.Date).TotalDays : null,
+            (int)(now.Date - customer.CreatedAt.Date).TotalDays,
+            avgGap,
+            s.Receipts30d, s.Spent30d, s.Receipts90d, s.Spent90d);
+
+        var totalSpent = stores.Sum(x => x.Spent);
+        return new CustomerActivityDto(
+            stats,
+            stores.Select(x => new CustomerStoreActivityDto(
+                x.StoreId, x.StoreName, x.Receipts, x.Spent,
+                totalSpent > 0 ? Math.Round(x.Spent / totalSpent * 100m, 1) : 0m, x.FirstAt, x.LastAt)).ToList(),
+            months.Select(m => new CustomerMonthActivityDto($"{m.Year:D4}-{m.Month:D2}", m.Receipts, m.Spent)).ToList(),
+            top.Select(p => new CustomerTopProductDto(p.ProductId, p.Name, p.Quantity, p.Spent, p.Receipts, p.LastAt)).ToList());
+    }
+
+    public async Task<PagedResult<CustomerReceiptDto>?> GetReceiptsAsync(
+        Guid id, Guid tenantId, int page, int pageSize, CancellationToken ct = default)
+    {
+        var customer = await _repo.GetByIdAsync(id, tenantId, ct);
+        if (customer is null) return null;
+
+        var p = Math.Max(1, page);
+        var size = Math.Clamp(pageSize, 1, 100);
+        var (rows, total) = await _repo.GetReceiptsPagedAsync(id, tenantId, p, size, ct);
+
+        return new PagedResult<CustomerReceiptDto>
+        {
+            Items = rows.Select(r => new CustomerReceiptDto(
+                r.Id, r.ReceiptNumber, r.FiscalNumber, r.CreatedAt, r.StoreId, r.StoreName, r.Total,
+                r.PaymentType, r.Status,
+                r.Lines.Select(l => new CustomerReceiptLineDto(
+                    l.ProductId, l.Name, l.Quantity, l.UnitPrice, l.Discount, l.Total)).ToList())).ToList(),
+            TotalCount = total,
+            Page = p,
+            PageSize = size,
+        };
+    }
+
     public async Task<(CustomerDto? Customer, string? Error)> CreateAsync(
         Guid tenantId, CreateCustomerDto dto, CancellationToken ct = default)
     {

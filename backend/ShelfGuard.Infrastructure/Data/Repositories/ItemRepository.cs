@@ -10,6 +10,9 @@ public sealed class ItemRepository : IItemRepository
 {
     private readonly AppDbContext _db;
 
+    /// <summary>Ukrainian-collation ordering only where the provider supports it (Npgsql).</summary>
+    private bool Uk => _db.Database.IsNpgsql();
+
     public ItemRepository(AppDbContext db) => _db = db;
 
     public async Task<List<Item>> GetAllAsync(
@@ -34,7 +37,7 @@ public sealed class ItemRepository : IItemRepository
             query = query.Where(p => p.ManagementType == managementType.ToUpperInvariant());
 
         return await query
-            .OrderBy(p => p.Name)
+            .OrderByUk(p => p.Name, Uk)
             .ToListAsync(ct);
     }
 
@@ -121,7 +124,7 @@ public sealed class ItemRepository : IItemRepository
         return query.Where(p => p.CategoryId != null && wanted.Contains(p.CategoryId.Value));
     }
 
-    private static IQueryable<Item> ApplySort(IQueryable<Item> query, string? sortBy, bool? sortDescending)
+    private IQueryable<Item> ApplySort(IQueryable<Item> query, string? sortBy, bool? sortDescending)
     {
         var key = ItemSortKeys.Normalize(sortBy);
 
@@ -142,16 +145,16 @@ public sealed class ItemRepository : IItemRepository
             // Postgres-specific SQL fragment is possible but not worth the complexity for a
             // "sort by barcode" nicety, so this key falls back to the same order as "name"
             // (documented judgment call, TASK-632) rather than risk a repeat of that failure mode.
-            ("barcode", false) => query.OrderBy(p => p.Name),
-            ("barcode", true) => query.OrderByDescending(p => p.Name),
+            ("barcode", false) => query.OrderByUk(p => p.Name, Uk),
+            ("barcode", true) => query.OrderByDescendingUk(p => p.Name, Uk),
             // Null category sorts last regardless of direction (typical UI expectation for an
             // "uncategorized" bucket) — achieved via a primary always-ascending "is null" key
             // (0 = has category, 1 = uncategorized) so only the secondary Name comparison flips
             // with the requested direction.
             ("category", false) => query.OrderBy(p => p.Category == null ? 1 : 0)
-                .ThenBy(p => p.Category != null ? p.Category.Name : null),
+                .ThenByUk(p => p.Category != null ? p.Category.Name : null, Uk),
             ("category", true) => query.OrderBy(p => p.Category == null ? 1 : 0)
-                .ThenByDescending(p => p.Category != null ? p.Category.Name : null),
+                .ThenByDescendingUk(p => p.Category != null ? p.Category.Name : null, Uk),
             ("purchaseprice", false) => query.OrderBy(p => p.PricePurchase),
             ("purchaseprice", true) => query.OrderByDescending(p => p.PricePurchase),
             ("retailprice", false) => query.OrderBy(p => p.PriceRetail),
@@ -160,8 +163,8 @@ public sealed class ItemRepository : IItemRepository
             ("minstock", true) => query.OrderByDescending(p => p.MinStock),
             ("maxstock", false) => query.OrderBy(p => p.MaxStock),
             ("maxstock", true) => query.OrderByDescending(p => p.MaxStock),
-            (_, false) => query.OrderBy(p => p.Name),
-            (_, true) => query.OrderByDescending(p => p.Name),
+            (_, false) => query.OrderByUk(p => p.Name, Uk),
+            (_, true) => query.OrderByDescendingUk(p => p.Name, Uk),
         };
     }
 
@@ -365,7 +368,7 @@ public sealed class ItemRepository : IItemRepository
             .Include(s => s.Supplier)
             .Where(s => s.ProductId == productId)
             .OrderByDescending(s => s.IsPrimary)
-            .ThenBy(s => s.Supplier!.Name)
+            .ThenByUk(s => s.Supplier!.Name, Uk)
             .ToListAsync(ct);
 
     public Task<bool> SupplierSettingExistsAsync(Guid productId, Guid supplierId, CancellationToken ct = default) =>

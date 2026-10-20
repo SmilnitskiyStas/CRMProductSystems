@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { LayoutDashboard, Bell, Link as LinkIcon, Blocks, Store } from "lucide-react";
 import { OverviewTab } from "@/features/settings/components/OverviewTab";
@@ -10,14 +10,21 @@ import { IntegrationsTab } from "@/features/settings/components/IntegrationsTab"
 import { ModulesTab } from "@/features/settings/components/ModulesTab";
 import { MarketplaceProfileTab } from "@/features/settings/components/MarketplaceProfileTab";
 import { useMe } from "@/features/auth/hooks/useAuth";
-import { hasRole, canViewIntegrations, PROVIDER_TEAM, SUPPLIER_ONLY } from "@/lib/roles";
+import { hasRole, canViewIntegrations, canAccessTenantSettings, PROVIDER_TEAM, SUPPLIER_ONLY } from "@/lib/roles";
 
 type Tab = "overview" | "notifications" | "integrations" | "modules" | "marketplace-profile";
 
 export default function SettingsPage() {
   const t = useTranslations("Dashboard.settings.page");
   const searchParams = useSearchParams();
+  const router = useRouter();
   const { data: me } = useMe();
+
+  // Business tenants do not have a Settings page (the platform team configures it for them).
+  const allowed = canAccessTenantSettings(me?.role);
+  useEffect(() => {
+    if (me && !allowed) router.replace("/dashboard");
+  }, [me, allowed, router]);
 
   // Tab-level role gating — mirrors the backend authorization for each tab's endpoints:
   //  · integrations → AppPolicies.IntegrationsViewOrCapability (store_manager+ OR capability)
@@ -54,6 +61,8 @@ export default function SettingsPage() {
     const tabParam = searchParams.get("tab") as Tab | null;
     if (tabParam && TABS.some((tb) => tb.id === tabParam)) setActiveTab(tabParam);
   }, [searchParams]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  if (!me || !allowed) return null;
 
   return (
     <div style={{ padding: "28px 32px", maxWidth: 900 }}>

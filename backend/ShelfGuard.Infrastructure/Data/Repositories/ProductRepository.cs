@@ -1,4 +1,4 @@
-﻿using ShelfGuard.Domain.Entities;
+using ShelfGuard.Domain.Entities;
 using ShelfGuard.Domain.Interfaces;
 using Microsoft.EntityFrameworkCore;
 
@@ -8,10 +8,13 @@ public sealed class ProductRepository : IProductRepository
 {
     private readonly AppDbContext _db;
 
+    /// <summary>Ukrainian-collation ordering only where the provider supports it (Npgsql).</summary>
+    private bool Uk => _db.Database.IsNpgsql();
+
     public ProductRepository(AppDbContext db) => _db = db;
 
     public async Task<IEnumerable<Product>> GetAllAsync(CancellationToken ct = default) =>
-        await _db.Products.OrderBy(p => p.Name).ToListAsync(ct);
+        await _db.Products.OrderByUk(p => p.Name, Uk).ToListAsync(ct);
 
     public Task<Product?> GetByIdAsync(Guid id, CancellationToken ct = default) =>
         _db.Products.FirstOrDefaultAsync(p => p.Id == id, ct);

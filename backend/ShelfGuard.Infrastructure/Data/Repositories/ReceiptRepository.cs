@@ -9,6 +9,9 @@ public sealed class ReceiptRepository : IReceiptRepository
 {
     private readonly AppDbContext _db;
 
+    /// <summary>Ukrainian-collation ordering only where the provider supports it (Npgsql).</summary>
+    private bool Uk => _db.Database.IsNpgsql();
+
     public ReceiptRepository(AppDbContext db) => _db = db;
 
     public async Task<List<StockReceipt>> GetAllAsync(Guid? storeId, string? status, CancellationToken ct = default)
@@ -72,7 +75,7 @@ public sealed class ReceiptRepository : IReceiptRepository
         return (items, total);
     }
 
-    private static IQueryable<StockReceipt> ApplySort(
+    private IQueryable<StockReceipt> ApplySort(
         IQueryable<StockReceipt> query, string? sortBy, bool? sortDescending)
     {
         var key = ReceiptSortKeys.Normalize(sortBy);
@@ -82,10 +85,10 @@ public sealed class ReceiptRepository : IReceiptRepository
         {
             ("status", false) => query.OrderBy(r => r.Status),
             ("status", true) => query.OrderByDescending(r => r.Status),
-            ("supplier", false) => query.OrderBy(r => r.Supplier != null ? r.Supplier.Name : null),
-            ("supplier", true) => query.OrderByDescending(r => r.Supplier != null ? r.Supplier.Name : null),
-            ("destination", false) => query.OrderBy(r => r.DestinationStore != null ? r.DestinationStore.Name : null),
-            ("destination", true) => query.OrderByDescending(r => r.DestinationStore != null ? r.DestinationStore.Name : null),
+            ("supplier", false) => query.OrderByUk(r => r.Supplier != null ? r.Supplier.Name : null, Uk),
+            ("supplier", true) => query.OrderByDescendingUk(r => r.Supplier != null ? r.Supplier.Name : null, Uk),
+            ("destination", false) => query.OrderByUk(r => r.DestinationStore != null ? r.DestinationStore.Name : null, Uk),
+            ("destination", true) => query.OrderByDescendingUk(r => r.DestinationStore != null ? r.DestinationStore.Name : null, Uk),
             ("expectedat", false) => query.OrderBy(r => r.ExpectedAt),
             ("expectedat", true) => query.OrderByDescending(r => r.ExpectedAt),
             (_, false) => query.OrderBy(r => r.CreatedAt),

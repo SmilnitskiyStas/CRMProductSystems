@@ -9,6 +9,17 @@ interface Props {
   overview: RfmOverviewDto;
   selectedKey: RfmSegmentKey | null;
   onSelect: (key: RfmSegmentKey) => void;
+  /**
+   * Store-migration summary (customers whose first and last purchase were in different stores).
+   * Pass it only when there is something to show — the card is not rendered otherwise. Clicking it
+   * opens the migration section below the grid instead of that section being always on.
+   */
+  migration?: { migratedCount: number; sharePercent: number; revenue: number; revenueSharePercent: number } | null;
+  migrationSelected?: boolean;
+  onSelectMigration?: () => void;
+  /** "Без покупок" card: pass a handler to make it clickable (opens its customer list below). */
+  noPurchaseSelected?: boolean;
+  onSelectNoPurchase?: () => void;
 }
 
 function colorFor(key: RfmSegmentKey): RfmColorTokens {
@@ -25,7 +36,10 @@ function colorFor(key: RfmSegmentKey): RfmColorTokens {
  * means). The "no purchase" card has no click handler at all: there's no segment-detail
  * endpoint for it (it isn't one of the 11 RFM segments).
  */
-export function SegmentGrid({ overview, selectedKey, onSelect }: Props) {
+export function SegmentGrid({
+  overview, selectedKey, onSelect, migration, migrationSelected = false, onSelectMigration,
+  noPurchaseSelected = false, onSelectNoPurchase,
+}: Props) {
   const t = useTranslations("Dashboard.marketingAnalytics.segmentGrid");
   const locale = useLocale();
   const intlLocale = locale === "en" ? "en-US" : "uk-UA";
@@ -95,16 +109,30 @@ export function SegmentGrid({ overview, selectedKey, onSelect }: Props) {
           );
         })}
 
-        {/* "Без покупок" — separate, non-clickable (RFM_ANALYSIS.md §5: not one of the 11 transactional segments). */}
+        {/* "Без покупок" — not one of the 11 RFM segments (RFM_ANALYSIS.md §5), so it has no segment detail;
+            when a handler is passed it opens its own customer list instead. */}
         <div
+          role={onSelectNoPurchase ? "button" : undefined}
+          tabIndex={onSelectNoPurchase ? 0 : undefined}
+          onClick={onSelectNoPurchase}
+          onKeyDown={(e) => {
+            if (onSelectNoPurchase && (e.key === "Enter" || e.key === " ")) {
+              e.preventDefault();
+              onSelectNoPurchase();
+            }
+          }}
+          onMouseEnter={() => setHoveredKey("__nopurchase")}
+          onMouseLeave={() => setHoveredKey(null)}
           style={{
-            background: "#0D1117",
-            border: "1px dashed #374151",
+            background: noPurchaseSelected ? "#161B26" : onSelectNoPurchase && hoveredKey === "__nopurchase" ? "#111827" : "#0D1117",
+            border: `1px ${noPurchaseSelected ? "solid" : "dashed"} ${noPurchaseSelected ? "#9CA3AF" : "#374151"}`,
             borderRadius: 10,
             padding: "14px 16px",
             display: "flex",
             flexDirection: "column",
             gap: 8,
+            cursor: onSelectNoPurchase ? "pointer" : "default",
+            transition: "border-color 0.1s, background 0.1s",
           }}
         >
           <span style={{ color: "#9CA3AF", fontSize: 13, fontWeight: 700 }}>{t("noPurchaseTitle")}</span>
@@ -119,6 +147,55 @@ export function SegmentGrid({ overview, selectedKey, onSelect }: Props) {
           </div>
           <span style={{ color: "#4B5563", fontSize: 10 }}>{t("noPurchaseHint")}</span>
         </div>
+
+        {/* "Міграція" — only when customers actually moved between stores; click toggles the section below. */}
+        {migration && onSelectMigration && (
+          <button
+            onClick={onSelectMigration}
+            onMouseEnter={() => setHoveredKey("__migration")}
+            onMouseLeave={() => setHoveredKey(null)}
+            title={t("migrationHint")}
+            style={{
+              textAlign: "left",
+              cursor: "pointer",
+              background: migrationSelected ? "#0B2A2A" : hoveredKey === "__migration" ? "#111827" : "#0D1117",
+              border: `1px solid ${migrationSelected ? "#2DD4BF" : "#1F2937"}`,
+              borderRadius: 10,
+              padding: "14px 16px",
+              display: "flex",
+              flexDirection: "column",
+              gap: 8,
+              transition: "border-color 0.1s, background 0.1s",
+            }}
+          >
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
+              <span style={{ color: "#E8EDF5", fontSize: 13, fontWeight: 700, lineHeight: 1.3 }}>{t("migrationTitle")}</span>
+              <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#2DD4BF", flexShrink: 0, marginTop: 4 }} />
+            </div>
+            <span style={{ color: "#6B7280", fontSize: 11, lineHeight: 1.4, minHeight: 30 }}>{t("migrationDescription")}</span>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginTop: 2 }}>
+              <span style={{ color: "#E8EDF5", fontSize: 19, fontWeight: 700, fontFamily: "monospace" }}>
+                {migration.migratedCount.toLocaleString(intlLocale)}
+              </span>
+              <span style={{ color: "#2DD4BF", fontSize: 12, fontWeight: 600 }}>
+                {migration.sharePercent.toLocaleString(intlLocale, { maximumFractionDigits: 1 })}%
+              </span>
+            </div>
+            <div style={{ height: 4, borderRadius: 2, background: "#161B26", overflow: "hidden" }}>
+              <div style={{ height: "100%", width: `${Math.min(100, migration.sharePercent)}%`, background: "#2DD4BF" }} />
+            </div>
+            {/* Same "Оборот" row as the segment cards so all cards share one structure and height. */}
+            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, marginTop: 2 }}>
+              <span style={{ color: "#4B5563" }}>{t("revenueLabel")}</span>
+              <span style={{ color: "#9CA3AF", fontFamily: "monospace" }}>
+                {migration.revenue.toLocaleString(intlLocale, { maximumFractionDigits: 0 })} ₴{" "}
+                <span style={{ color: "#4B5563" }}>
+                  ({migration.revenueSharePercent.toLocaleString(intlLocale, { maximumFractionDigits: 1 })}%)
+                </span>
+              </span>
+            </div>
+          </button>
+        )}
       </div>
 
       {!selectedKey && <p style={{ color: "#4B5563", fontSize: 12, marginTop: 14, marginBottom: 0 }}>{t("hint")}</p>}

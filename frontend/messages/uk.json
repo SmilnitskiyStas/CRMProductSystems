@@ -1262,7 +1262,8 @@
         "procurement": {
           "label": "Постачання",
           "orders": "Замовлення постачання",
-          "aiOrders": "AI Постачання"
+          "aiOrders": "AI Постачання",
+          "tracking": "Відстеження замовлень"
         },
         "marketplace": {
           "label": "Маркетплейс",
@@ -1630,6 +1631,7 @@
         "minStock": "Мін. залишок",
         "maxStock": "Макс. залишок",
         "safetyBuffer": "Буфер безпеки",
+        "levelsFromBuffer": "Розраховано за буфером (CDA) для обраного магазину: безпека = червона зона, мін. = червона + жовта, макс. = вся зона",
         "shelfLifeDays": "Термін зберігання",
         "shelfLifeDaysSuffix": "дн.",
         "storageTempMin": "Темп. мін.",
@@ -1755,6 +1757,7 @@
           "transfer": "Передачі",
           "write_off": "Списання",
           "adjustment": "Коригування",
+          "sold": "Продано",
           "revenue": "Виручка",
           "margin": "Маржа (оцінна)"
         },
@@ -1795,7 +1798,40 @@
         "eventsSummary": "{count} подій за {days} дн.",
         "noMovements": "Немає рухів за вибраний період",
         "eventLog": "Журнал подій",
-        "balancePrefix": "залишок:"
+        "balancePrefix": "залишок:",
+        "incoming": {
+          "title": "Очікувані поставки",
+          "inTransit": "В дорозі",
+          "expected": "Очікується",
+          "noDate": "дата не вказана",
+          "ordered": "Замовлено",
+          "shipped": "відправлено",
+          "source": {
+            "receipt": "Внутрішнє замовлення",
+            "marketplace": "Маркетплейс"
+          },
+          "status": {
+            "receipt_draft": "Замовлено",
+            "marketplace_new": "Нове замовлення",
+            "marketplace_confirmed": "Підтверджено",
+            "marketplace_shipped": "У дорозі"
+          }
+        },
+        "log": {
+          "all": "Усі",
+          "when": "Дата й час",
+          "performedBy": "Підтвердив",
+          "store": "Склад / магазин",
+          "quantity": "Кількість",
+          "balance": "Залишок (до → після)",
+          "batch": "Партія",
+          "expires": "придатна до",
+          "unitPrice": "Ціна за одиницю",
+          "totalAmount": "Сума",
+          "document": "Документ",
+          "notes": "Примітка",
+          "showMore": "Показати ще {count}"
+        }
       },
       "itemZones": {
         "loading": "Завантаження зон…",
@@ -2506,7 +2542,25 @@
         "statPositionsToOrder": "Позицій до замовлення",
         "selectStoreHint": "Оберіть конкретний магазин угорі сторінки, щоб сформувати замовлення",
         "emptyTitle": "Оберіть магазин і натисніть «Сформувати замовлення» —",
-        "emptySubtitle": "система оновить ADU, перебудує CDA-буфери та порахує кількості до замовлення."
+        "emptySubtitle": "система оновить ADU, перебудує CDA-буфери та порахує кількості до замовлення.",
+        "onlyToOrder": "Лише позиції до замовлення",
+        "selectAll": "Вибрати всі до замовлення ({count})",
+        "clearSelection": "Зняти вибір",
+        "selectedCount": "Вибрано: {count}",
+        "confirmOrder": "Підтвердити замовлення ({count})",
+        "toastConfirmed": "Замовлення підтверджено: {positions} позицій, документів: {receipts}",
+        "toastConfirmFailed": "Не вдалося підтвердити замовлення: {message}",
+        "confirmDialog": {
+          "title": "Підтвердити замовлення?",
+          "body": "Буде створено замовлення постачальникам: {positions} позицій, постачальників: {suppliers}. Незабрані позиції не замовляються.",
+          "groupLine": "{positions} поз. · {qty} од.",
+          "total": "Разом",
+          "cancel": "Скасувати",
+          "confirm": "Підтвердити",
+          "confirming": "Створення…",
+          "noSupplier": "Без постачальника",
+          "unknownSupplier": "Постачальник"
+        }
       },
       "bufferFunnel": {
         "tooltip": "Позиція {position} із {total} (🔴 {red} · 🟡 {yellow} · 🟢 {green})"
@@ -2530,7 +2584,12 @@
         },
         "actionMenu": {
           "productAnalytics": "Аналітика товару"
-        }
+        },
+        "selectPage": "Вибрати всі на сторінці",
+        "selectLine": "Вибрати позицію",
+        "delayedTooltip": "Затримується: {qty} од. Кількість усе одно враховується як «в дорозі» — повторно не замовляється.",
+        "delayedUntil": "затримується до",
+        "postponedUntil": "відтерміновано до"
       }
     },
     "pos": {
@@ -2919,7 +2978,22 @@
         "doneButton": "Готово",
         "refreshButton": "Оновити"
       },
+      "noPurchase": {
+        "title": "Без покупок",
+        "description": "Зареєстровані клієнти, які жодного разу не купували в обраних закладах. Контакти приховані.",
+        "headerName": "Ім'я",
+        "headerPhone": "Телефон",
+        "headerEmail": "Email",
+        "headerRegistered": "Зареєстровано",
+        "loading": "Завантаження…",
+        "empty": "Немає таких клієнтів",
+        "close": "Закрити",
+        "limitNote": "Показано перші {shown} з {total}."
+      },
       "segmentGrid": {
+        "migrationTitle": "Міграція",
+        "migrationDescription": "Покупці, які змінили заклад між першою та останньою покупкою за період.",
+        "migrationHint": "Натисніть, щоб побачити потоки між закладами",
         "revenueLabel": "Оборот",
         "noPurchaseTitle": "Без покупок",
         "noPurchaseDescription": "Зареєстровані, але жодного разу не конвертовані в продаж — поза 11 RFM-сегментами.",
@@ -3672,6 +3746,18 @@
           "createWriteOff": "Створити списання",
           "viewAllStock": "Переглянути всі залишки"
         }
+      },
+      "orders": {
+        "title": "Замовлення постачальникам",
+        "viewAll": "Усі замовлення",
+        "ordered": "Замовлено",
+        "inTransit": "В дорозі",
+        "delayed": "Затримуються",
+        "units": "од.",
+        "delayedList": "Затримуються найбільше",
+        "noSupplier": "Без постачальника",
+        "overdueDays": "+{days} дн.",
+        "none": "Активних замовлень немає"
       }
     },
     "autoService": {
@@ -4074,6 +4160,71 @@
           "fullName": "Ім'я",
           "email": "Email",
           "phone": "Телефон"
+        }
+      },
+      "profile": {
+        "back": "Клієнти",
+        "toList": "До списку",
+        "notFound": "Клієнта не знайдено",
+        "rank": "Ранг",
+        "phone": "Телефон",
+        "email": "Email",
+        "customerSince": "З нами з",
+        "daysAgo": "{days} дн. тому",
+        "everyDays": "раз на {days} дн.",
+        "receiptsCount": "{count} чеків",
+        "kpi": {
+          "receipts": "Чеків",
+          "totalSpent": "Витрачено",
+          "averageCheck": "Середній чек",
+          "lastPurchase": "Остання покупка",
+          "firstPurchase": "Перша покупка",
+          "frequency": "Частота покупок",
+          "last30": "За 30 днів",
+          "last90": "За 90 днів",
+          "items": "Куплено одиниць"
+        },
+        "trend": {
+          "title": "Витрати по місяцях (12 міс.)",
+          "empty": "Немає покупок за останні 12 місяців",
+          "spent": "Витрачено",
+          "receipts": "Чеків"
+        },
+        "stores": {
+          "title": "Де купує",
+          "store": "Магазин",
+          "receipts": "Чеків",
+          "spent": "Сума",
+          "share": "Частка",
+          "first": "Перша",
+          "last": "Остання",
+          "empty": "Покупок немає"
+        },
+        "products": {
+          "title": "Найчастіші товари (за сумою)",
+          "name": "Товар",
+          "quantity": "К-сть",
+          "spent": "Сума",
+          "receipts": "Чеків",
+          "last": "Остання",
+          "empty": "Покупок немає"
+        },
+        "receipts": {
+          "title": "Чеки",
+          "date": "Дата й час",
+          "store": "Магазин",
+          "number": "Номер",
+          "items": "Позицій",
+          "payment": "Оплата",
+          "total": "Сума",
+          "empty": "Чеків немає",
+          "line": {
+            "name": "Товар",
+            "quantity": "К-сть",
+            "price": "Ціна",
+            "discount": "Знижка",
+            "total": "Сума"
+          }
         }
       },
       "paymentType": {
@@ -7072,7 +7223,8 @@
         "subtitlePrefix": "Історія надісланих сповіщень. Налаштування каналів —",
         "settingsLinkText": "на сторінці Налаштування",
         "filtersButton": "Фільтри",
-        "recentActivityLabel": "Остання активність"
+        "recentActivityLabel": "Остання активність",
+        "subtitleNoSettings": "Історія надісланих сповіщень."
       },
       "history": {
         "loading": "Завантаження…",
@@ -7640,6 +7792,72 @@
       "fieldCreated": "Отримано",
       "fieldProcessed": "Оброблено",
       "noMessage": "Повідомлення не залишено."
+    },
+    "orderTracking": {
+      "title": "Відстеження замовлень",
+      "subtitle": "Де зараз ваші замовлення постачальникам: створено, підтверджено, відправлено, доставлено",
+      "kpi": {
+        "open": "Відкриті",
+        "overdue": "Прострочені"
+      },
+      "status": {
+        "new": "Нові",
+        "confirmed": "Підтверджені",
+        "in_transit": "В дорозі",
+        "delivered": "Доставлені",
+        "cancelled": "Скасовані"
+      },
+      "source": {
+        "all": "Усі джерела",
+        "receipt": "Внутрішнє замовлення",
+        "marketplace": "Маркетплейс"
+      },
+      "columns": {
+        "created": "Створено",
+        "source": "Тип / номер",
+        "supplier": "Постачальник",
+        "store": "Магазин",
+        "status": "Статус",
+        "expected": "Очікується",
+        "quantity": "К-сть",
+        "amount": "Сума",
+        "delay": "Затримка"
+      },
+      "timeline": {
+        "created": "Створено",
+        "confirmed": "Підтверджено",
+        "shipped": "Відправлено",
+        "delivered": "Отримано",
+        "cancelled": "Скасовано",
+        "pending": "ще не відбулось"
+      },
+      "lines": {
+        "name": "Товар",
+        "quantity": "Замовлено",
+        "received": "Отримано",
+        "amount": "Сума"
+      },
+      "overdueDays": "прострочено на {days} дн.",
+      "note": "Примітка",
+      "searchPlaceholder": "Пошук за постачальником, магазином, номером…",
+      "resetStatuses": "Скинути статуси",
+      "loading": "Завантаження…",
+      "empty": "Замовлень не знайдено",
+      "postponedBadge": "Відтерміновано ×{count}",
+      "postponeAction": "Відтермінувати доставку",
+      "postponedInfo": "Відтерміновано {count} раз(и): було {from} → тепер {to}",
+      "supplierDateHint": "Дату доставки за цим замовленням встановлює постачальник.",
+      "postpone": {
+        "title": "Відтермінувати доставку",
+        "body": "Замовлення лишається відкритим і рахується як «в дорозі», тому програма не пропонуватиме замовити ці товари ще раз. Вона лише знатиме, що доставка затримується.",
+        "newDate": "Нова очікувана дата",
+        "reason": "Причина (необов'язково)",
+        "reasonPlaceholder": "Наприклад: постачальник повідомив про затримку",
+        "cancel": "Скасувати",
+        "confirm": "Відтермінувати",
+        "saving": "Збереження…",
+        "toastDone": "Доставку відтерміновано до {date}"
+      }
     }
   }
 }

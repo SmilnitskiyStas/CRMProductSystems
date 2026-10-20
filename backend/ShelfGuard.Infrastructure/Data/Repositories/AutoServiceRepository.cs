@@ -12,6 +12,9 @@ public sealed class AutoServiceRepository : IAutoServiceRepository
 {
     private readonly AppDbContext _db;
 
+    /// <summary>Ukrainian-collation ordering only where the provider supports it (Npgsql).</summary>
+    private bool Uk => _db.Database.IsNpgsql();
+
     public AutoServiceRepository(AppDbContext db) => _db = db;
 
     // ── Customers ────────────────────────────────────────────────────────────
@@ -28,7 +31,7 @@ public sealed class AutoServiceRepository : IAutoServiceRepository
                 (c.Phone != null && c.Phone.Contains(search)));
         }
 
-        return await query.OrderBy(c => c.Name).ToListAsync(ct);
+        return await query.OrderByUk(c => c.Name, Uk).ToListAsync(ct);
     }
 
     public Task<AsCustomer?> GetCustomerByIdAsync(Guid id, CancellationToken ct = default) =>
@@ -59,7 +62,7 @@ public sealed class AutoServiceRepository : IAutoServiceRepository
         if (customerId.HasValue)
             query = query.Where(v => v.CustomerId == customerId.Value);
 
-        return await query.OrderBy(v => v.Brand).ThenBy(v => v.Model).ToListAsync(ct);
+        return await query.OrderByUk(v => v.Brand, Uk).ThenByUk(v => v.Model, Uk).ToListAsync(ct);
     }
 
     public Task<AsVehicle?> GetVehicleByIdAsync(Guid id, CancellationToken ct = default) =>
@@ -91,7 +94,7 @@ public sealed class AutoServiceRepository : IAutoServiceRepository
         var query = _db.AsServiceCatalogs.AsQueryable();
         if (!includeInactive)
             query = query.Where(s => s.IsActive);
-        return await query.OrderBy(s => s.Name).ToListAsync(ct);
+        return await query.OrderByUk(s => s.Name, Uk).ToListAsync(ct);
     }
 
     public Task<AsServiceCatalog?> GetServiceCatalogItemByIdAsync(Guid id, CancellationToken ct = default) =>

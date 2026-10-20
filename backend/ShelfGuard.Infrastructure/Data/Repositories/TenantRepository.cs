@@ -12,6 +12,9 @@ public sealed class TenantRepository : ITenantRepository
 {
     private readonly AppDbContext _db;
 
+    /// <summary>Ukrainian-collation ordering only where the provider supports it (Npgsql).</summary>
+    private bool Uk => _db.Database.IsNpgsql();
+
     public TenantRepository(AppDbContext db) => _db = db;
 
     // BUG-014: the internal system tenant used as a home for provider-created
@@ -21,7 +24,7 @@ public sealed class TenantRepository : ITenantRepository
         await _db.Tenants
             .AsNoTracking()
             .Where(t => t.Slug != MarketplaceRepository.PlatformTenantSlug)
-            .OrderBy(t => t.Name)
+            .OrderByUk(t => t.Name, Uk)
             .ToListAsync(ct);
 
     public async Task<Tenant?> GetByIdAsync(Guid id, CancellationToken ct) =>

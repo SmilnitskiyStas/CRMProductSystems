@@ -252,6 +252,18 @@ public sealed class MarketingAnalyticsService : IMarketingAnalyticsService
             .ToList();
     }
 
+    public async Task<IReadOnlyList<NoPurchaseCustomerRowDto>> GetNoPurchaseCustomersAsync(
+        Guid tenantId, IReadOnlyList<Guid>? storeIds, int limit, CancellationToken ct = default)
+    {
+        var rows = await _repo.GetNoPurchaseCustomersAsync(tenantId, storeIds, limit, ct);
+
+        // On-screen list is always masked, same as the store-migration table.
+        return rows
+            .Select(r => new NoPurchaseCustomerRowDto(
+                r.CustomerId, r.Name, PiiMasking.MaskPhone(r.Phone), PiiMasking.MaskEmail(r.Email), r.RegisteredAt))
+            .ToList();
+    }
+
     public async Task<RfmExportResult> ExportStoreMigrationAsync(
         Guid tenantId, Guid userId, ExportStoreMigrationRequest request, CancellationToken ct = default)
     {

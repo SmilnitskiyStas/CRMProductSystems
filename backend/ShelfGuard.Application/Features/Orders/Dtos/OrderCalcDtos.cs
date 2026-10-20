@@ -29,7 +29,17 @@ public sealed record OrderLineDto(
     /// order-review UI can show the source of the "in transit" number in a tooltip. Always ≤
     /// <see cref="InTransit"/>. Unit-mismatched marketplace lines are excluded (see the repo).
     /// </summary>
-    decimal InTransitFromMarketplace = 0m
+    decimal InTransitFromMarketplace = 0m,
+    /// <summary>The product's default supplier — used to split a confirmed order into one receipt per supplier.</summary>
+    Guid? SupplierId = null,
+    /// <summary>Catalog purchase price (per unit) — prefill for the confirmed order lines; may be null.</summary>
+    decimal? PricePurchase = null,
+    /// <summary>Part of <see cref="InTransit"/> whose delivery is late (past its date or postponed). Still counted as in transit.</summary>
+    decimal InTransitDelayed = 0m,
+    /// <summary>Latest expected delivery date among the delayed in-transit orders.</summary>
+    DateOnly? DelayedUntil = null,
+    /// <summary>True when at least one of those orders was postponed on purpose.</summary>
+    bool DelayPostponed = false
 );
 
 public sealed record OrderCalcResult(

@@ -15,13 +15,16 @@ public sealed class SupplierRolesRepository : ISupplierRolesRepository
 {
     private readonly AppDbContext _db;
 
+    /// <summary>Ukrainian-collation ordering only where the provider supports it (Npgsql).</summary>
+    private bool Uk => _db.Database.IsNpgsql();
+
     public SupplierRolesRepository(AppDbContext db) => _db = db;
 
     public async Task<IReadOnlyList<SupplierRole>> GetAllAsync(Guid tenantId, CancellationToken ct = default) =>
         await _db.SupplierRoles
             .AsNoTracking()
             .Where(r => r.TenantId == tenantId)
-            .OrderBy(r => r.IsSystem ? 0 : 1).ThenBy(r => r.DisplayName)
+            .OrderBy(r => r.IsSystem ? 0 : 1).ThenByUk(r => r.DisplayName, Uk)
             .ToListAsync(ct);
 
     public Task<SupplierRole?> GetByIdAsync(Guid tenantId, Guid roleId, CancellationToken ct = default) =>

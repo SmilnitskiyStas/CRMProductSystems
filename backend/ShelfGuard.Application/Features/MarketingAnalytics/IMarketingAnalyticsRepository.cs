@@ -70,6 +70,9 @@ public sealed record StoreMigrationCustomerRow(
     Guid ToStoreId, string ToStoreName, DateOnly ToDate,
     int TransactionCountInPeriod, decimal RevenueInPeriod);
 
+public sealed record NoPurchaseCustomerRow(
+    Guid CustomerId, string Name, string? Phone, string? Email, DateTime RegisteredAt);
+
 /// <summary>
 /// Raw-SQL data access for RFM scoring and its derived views (TASK-406, plan §"R/F/M-скоринг").
 /// First use of <c>Database.SqlQueryRaw&lt;T&gt;</c> in this codebase — <c>NTILE(5)</c> has no
@@ -150,4 +153,13 @@ public interface IMarketingAnalyticsRepository
     /// a large one (export row cap) for the Excel export.</summary>
     Task<IReadOnlyList<StoreMigrationCustomerRow>> GetStoreMigrationCustomersAsync(
         Guid tenantId, IReadOnlyList<Guid>? storeIds, DateOnly from, DateOnly to, int limit, CancellationToken ct = default);
+
+    /// <summary>
+    /// Registered customers with no non-failed purchase in the selected stores (all stores when
+    /// <paramref name="storeIds"/> is empty) — the same "never purchased" definition
+    /// <see cref="GetCustomerBaseCountsAsync"/> uses for the "Без покупок" card count. Newest
+    /// registrations first; <paramref name="limit"/> is caller-clamped.
+    /// </summary>
+    Task<IReadOnlyList<NoPurchaseCustomerRow>> GetNoPurchaseCustomersAsync(
+        Guid tenantId, IReadOnlyList<Guid>? storeIds, int limit, CancellationToken ct = default);
 }

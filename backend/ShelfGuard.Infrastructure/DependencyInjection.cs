@@ -137,6 +137,7 @@ public static class DependencyInjection
         services.AddScoped<ISupplyScheduleRepository, SupplyScheduleRepository>();
         services.AddScoped<IBufferRepository, BufferRepository>();
         services.AddScoped<IOrderCalcRepository, OrderCalcRepository>();
+        services.AddScoped<IOrderTrackingRepository, OrderTrackingRepository>();
         services.AddScoped<IEventRepository, EventRepository>();
         services.AddScoped<IWeatherRepository, WeatherRepository>();
         services.AddScoped<ICannibalizationRepository, CannibalizationRepository>();

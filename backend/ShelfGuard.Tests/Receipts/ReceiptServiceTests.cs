@@ -11,13 +11,14 @@ public sealed class ReceiptServiceTests
 {
     private readonly IReceiptRepository _repo = Substitute.For<IReceiptRepository>();
     private readonly INotificationRepository _notifications = Substitute.For<INotificationRepository>();
+    private readonly IActivityLogRepository _activityLogs = Substitute.For<IActivityLogRepository>();
     private readonly ReceiptService _sut;
     private readonly Guid _tenantId = Guid.NewGuid();
     private readonly Guid _userId = Guid.NewGuid();
     private readonly Guid _storeId = Guid.NewGuid();
     private readonly Guid _productId = Guid.NewGuid();
 
-    public ReceiptServiceTests() => _sut = new ReceiptService(_repo, _notifications);
+    public ReceiptServiceTests() => _sut = new ReceiptService(_repo, _notifications, _activityLogs);
 
     // ── Create ─────────────────────────────────────────────────────────────
 
@@ -227,6 +228,85 @@ public sealed class ReceiptServiceTests
     }
 
     // ── helpers ────────────────────────────────────────────────────────────
+
+    // ── Postpone ───────────────────────────────────────────────────────────
+
+    private static DateOnly Today => DateOnly.FromDateTime(DateTime.UtcNow);
+
+    private StockReceipt OpenReceipt(string status = "ordered")
+    {
+        var r = BuildReceipt(1);
+        r.Status = status;
+        r.ExpectedAt = Today.AddDays(3);
+        _repo.GetByIdAsync(r.Id, Arg.Any<CancellationToken>()).Returns(r);
+        return r;
+    }
+
+    [Fact]
+    public async Task PostponeAsync_PastDate_ReturnsError()
+    {
+        var r = OpenReceipt();
+        var (dto, error) = await _sut.PostponeAsync(r.Id, _userId, new PostponeReceiptRequest(Today.AddDays(-1), null));
+        Assert.Null(dto);
+        Assert.NotNull(error);
+        Assert.Equal(0, r.PostponeCount);
+    }
+
+    [Fact]
+    public async Task PostponeAsync_MoreThan365Days_ReturnsError()
+    {
+        var r = OpenReceipt();
+        var (dto, error) = await _sut.PostponeAsync(r.Id, _userId, new PostponeReceiptRequest(Today.AddDays(366), null));
+        Assert.Null(dto);
+        Assert.Contains("too far", error);
+        Assert.Equal(0, r.PostponeCount);
+    }
+
+    [Theory]
+    [InlineData("received")]
+    [InlineData("cancelled")]
+    public async Task PostponeAsync_NonOpenStatus_ReturnsError(string status)
+    {
+        var r = OpenReceipt(status);
+        var (dto, error) = await _sut.PostponeAsync(r.Id, _userId, new PostponeReceiptRequest(Today.AddDays(10), null));
+        Assert.Null(dto);
+        Assert.Contains("open order", error);
+    }
+
+    [Fact]
+    public async Task PostponeAsync_ReasonTooLong_ReturnsError()
+    {
+        var r = OpenReceipt();
+        var (dto, error) = await _sut.PostponeAsync(r.Id, _userId,
+            new PostponeReceiptRequest(Today.AddDays(10), new string('x', 501)));
+        Assert.Null(dto);
+        Assert.Contains("too long", error);
+    }
+
+    [Fact]
+    public async Task PostponeAsync_Valid_SetsFieldsAndDto()
+    {
+        var r = OpenReceipt();
+        var original = r.ExpectedAt;
+        var newDate = Today.AddDays(10);
+
+        var (dto, error) = await _sut.PostponeAsync(r.Id, _userId, new PostponeReceiptRequest(newDate, "  late  "));
+
+        Assert.Null(error);
+        Assert.NotNull(dto);
+        Assert.Equal(1, r.PostponeCount);
+        Assert.Equal(original, r.OriginalExpectedAt);
+        Assert.Equal(newDate, r.ExpectedAt);
+        Assert.Equal("late", r.DelayReason);
+        Assert.Equal(1, dto!.PostponeCount);
+        Assert.Equal(original, dto.OriginalExpectedAt);
+        Assert.Equal(newDate, dto.ExpectedAt);
+        Assert.Equal("late", dto.DelayReason);
+        Assert.NotNull(dto.PostponedAt);
+        await _activityLogs.Received(1).LogAsync(
+            Arg.Is<ActivityLog>(a => a.TenantId == _tenantId && a.Action == "receipt.postponed"),
+            Arg.Any<CancellationToken>());
+    }
 
     private StockReceipt BuildReceipt(int itemCount, DateOnly? expiryDate = null)
     {

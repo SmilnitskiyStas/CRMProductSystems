@@ -147,6 +147,7 @@ export function ProductTrendPanel({ productId, productName, storeId, onClose }: 
 
       <ProductAnalyticsTab
         productId={productId}
+        storeId={storeId}
         showRevenueSeries
         canViewMargin={canViewMargin}
         daysOfStockRemaining={daysOfStockRemaining}
