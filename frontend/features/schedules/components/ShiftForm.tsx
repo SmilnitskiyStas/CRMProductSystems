@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useTranslations } from "next-intl";
 import type { ScheduleShiftDto, AddShiftPayload, UpdateShiftPayload, ShiftStatus } from "../types";
 import { Btn } from "@/components/ui/Btn";
+import { LocationsMultiSelectDropdown } from "@/features/users/components/LocationsMultiSelectDropdown";
 
 const inputStyle: React.CSSProperties = {
   width: "100%",
@@ -213,26 +214,18 @@ export function ShiftForm(props: Props) {
             <>
               <div>
                 <label style={labelStyle}>{t("workersLabel")}</label>
-                <div
-                  style={{
-                    ...inputStyle, maxHeight: 150, overflowY: "auto", padding: 6,
-                    borderColor: errors.userId ? "#EF4444" : "#374151",
-                  }}
-                >
-                  {(props as CreateProps).users.length === 0 && (
-                    <div style={{ color: "#6B7280", fontSize: 12, padding: 6 }}>{t("noWorkers")}</div>
-                  )}
-                  {(props as CreateProps).users.map((u) => (
-                    <label key={u.id} style={{ display: "flex", gap: 8, alignItems: "center", padding: "4px 6px", cursor: "pointer", fontSize: 13 }}>
-                      <input
-                        type="checkbox"
-                        checked={userIds.includes(u.id)}
-                        onChange={() => setUserIds((p) => (p.includes(u.id) ? p.filter((x) => x !== u.id) : [...p, u.id]))}
-                      />
-                      {u.name}
-                    </label>
-                  ))}
-                </div>
+                {(props as CreateProps).users.length === 0 ? (
+                  <div style={{ color: "#6B7280", fontSize: 12 }}>{t("noWorkers")}</div>
+                ) : (
+                  <LocationsMultiSelectDropdown
+                    locations={(props as CreateProps).users}
+                    selectedIds={userIds}
+                    onToggle={(id) => setUserIds((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]))}
+                    summaryLabel={t("workersSelected", { count: userIds.length })}
+                    placeholderLabel={t("workersPlaceholder")}
+                    doneLabel={t("workersDone")}
+                  />
+                )}
                 {errors.userId && <p style={{ color: "#EF4444", fontSize: 11, marginTop: 4 }}>{errors.userId}</p>}
               </div>
 
