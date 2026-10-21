@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
-import { getTranslations, setRequestLocale } from "next-intl/server";
+import { setRequestLocale } from "next-intl/server";
 import "@/features/landing/landing.css";
 import { routing } from "@/i18n/routing";
+import { buildPageMetadata } from "@/features/landing/page-meta";
 import { LandingHeader } from "@/features/landing/components/LandingHeader";
 import { RetailHeroSection } from "@/features/landing/components/RetailHeroSection";
 import { RetailFeaturesSection } from "@/features/landing/components/RetailFeaturesSection";
@@ -20,30 +21,7 @@ export async function generateMetadata({
   params: Promise<{ locale: string }>;
 }): Promise<Metadata> {
   const { locale } = await params;
-  const t = await getTranslations({ locale, namespace: "Landing.verticals.retail.meta" });
-  const tSite = await getTranslations({ locale, namespace: "Landing.meta" });
-
-  return {
-    metadataBase: new URL("https://agrusystems.pp.ua"),
-    title: t("title"),
-    description: t("description"),
-    openGraph: {
-      title: t("title"),
-      description: t("description"),
-      url: locale === "en" ? "/en/retail" : "/retail",
-      siteName: tSite("ogSiteName"),
-      locale: locale === "en" ? "en_US" : "uk_UA",
-      type: "website",
-      images: [
-        {
-          url: "/landing/dashboard-1.jpg",
-          width: 1280,
-          height: 574,
-          alt: tSite("ogImageAlt"),
-        },
-      ],
-    },
-  };
+  return buildPageMetadata(locale, "Landing.verticals.retail.meta", "/retail");
 }
 
 // Vertical marketing page for retail chains (TASK-713) — same SSG pattern
