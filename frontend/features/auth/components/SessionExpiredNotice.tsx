@@ -4,13 +4,15 @@ import { useSearchParams } from "next/navigation";
 import { useTranslations } from "next-intl";
 
 // Shown on /login when the API client redirects after a failed token refresh
-// (lib/api.ts → /login?reason=session_expired). Amber warning tone — this is
-// an expected event, not an error.
+// (lib/api.ts → /login?reason=session_expired) or after the idle-timeout logout
+// (useIdleLogout → /login?reason=idle_timeout). Amber warning tone — both are
+// expected events, not errors.
 export function SessionExpiredNotice() {
   const t = useTranslations("Dashboard.auth");
   const searchParams = useSearchParams();
+  const reason = searchParams.get("reason");
 
-  if (searchParams.get("reason") !== "session_expired") return null;
+  if (reason !== "session_expired" && reason !== "idle_timeout") return null;
 
   return (
     <div
@@ -26,7 +28,7 @@ export function SessionExpiredNotice() {
         fontFamily: '"Inter", sans-serif',
       }}
     >
-      {t("sessionExpired")}
+      {t(reason === "idle_timeout" ? "idleTimeout" : "sessionExpired")}
     </div>
   );
 }

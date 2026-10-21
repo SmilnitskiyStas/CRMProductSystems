@@ -1613,3 +1613,6 @@ F4 "Клієнт" panel (wedge/camera/manual by phone|card|account), QR decoding
 
 ## TASK-738 — SEO-основа публічного сайту (2026-10-20)
 `/uk`→308, canonical/hreflang/og:url, sitemap.ts, robots.ts, noindex поза публічними сторінками, JSON-LD на головній. Лог: logs/tasks/738_2026-10-20_seo-foundation_frontend.md. Не закомічено.
+
+### TASK-745 — Sliding session: refresh-race fix + idle logout 5 хв — review
+single-flight refresh + cross-tab lock (`lib/api.ts`), 10 с grace у `AuthService.RefreshAsync`, idle hook з TASK-712. Лог: `.claude/logs/tasks/745_*`. Не змерджено.

@@ -157,10 +157,38 @@ describe("lib/api", () => {
       setToken("stale-token");
       fetchMock
         .mockResolvedValueOnce(jsonResponse({ error: "unauthorized" }, 401))
-        .mockResolvedValueOnce(jsonResponse({ error: "no refresh cookie" }, 401));
+        .mockResolvedValueOnce(jsonResponse({ error: "no refresh cookie" }, 401))
+        .mockResolvedValueOnce(jsonResponse({ error: "no refresh cookie" }, 401)); // retry also denied
 
       await expect(api.get("/api/items/1")).rejects.toMatchObject({ status: 401 });
       expect(getToken()).toBeNull();
+    });
+
+    it("parallel 401s share ONE refresh call (rotation would otherwise kill the session)", async () => {
+      setToken("stale-token");
+      let refreshCalls = 0;
+      fetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
+        if (url.includes("/api/auth/refresh")) {
+          refreshCalls++;
+          return jsonResponse({ accessToken: "fresh-token" });
+        }
+        const auth = (init?.headers as Record<string, string>)?.Authorization;
+        return auth === "Bearer fresh-token" ? jsonResponse({ ok: true }) : jsonResponse({}, 401);
+      });
+
+      await Promise.all([api.get("/api/a"), api.get("/api/b"), api.get("/api/c")]);
+
+      expect(refreshCalls).toBe(1);
+    });
+
+    it("keeps the session when refresh fails transiently (5xx)", async () => {
+      setToken("stale-token");
+      fetchMock
+        .mockResolvedValueOnce(jsonResponse({}, 401))
+        .mockResolvedValueOnce(jsonResponse({}, 503));
+
+      await expect(api.get("/api/items/1")).rejects.toMatchObject({ status: 401 });
+      expect(getToken()).toBe("stale-token");
     });
 
     it("does not attempt refresh for the anonymous /api/auth/login endpoint", async () => {
