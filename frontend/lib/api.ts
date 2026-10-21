@@ -103,8 +103,10 @@ async function apiFetch<T>(
     // attempt refresh or redirect — useLogout handles the clean navigation.
     if (_loggedOut) throw new ApiError(401, "Logged out.");
     const refreshed = await tryRefresh();
-    if (refreshed) return apiFetch<T>(path, options, true);
+    if (refreshed === "ok") return apiFetch<T>(path, options, true);
     if (_loggedOut) throw new ApiError(401, "Logged out.");
+    // Transient refresh failure (network/5xx): keep the session, surface the error.
+    if (refreshed === "error") throw new ApiError(401, "Session refresh failed, try again.");
     clearToken();
     if (typeof window !== "undefined") {
       // Hard navigation on purpose — resets all in-memory state (React Query cache, Zustand).
@@ -124,18 +126,61 @@ async function apiFetch<T>(
   return res.json() as Promise<T>;
 }
 
-async function tryRefresh(): Promise<boolean> {
+type RefreshResult = "ok" | "denied" | "error";
+
+// Single-flight: the refresh token ROTATES and a replayed (already-revoked) token makes the
+// backend revoke the whole session family. When an access token expires, many parallel requests
+// 401 at once — each firing its own /refresh with the same cookie would log the user out.
+let _refreshInFlight: Promise<RefreshResult> | null = null;
+
+function tryRefresh(): Promise<RefreshResult> {
+  if (!_refreshInFlight) {
+    _refreshInFlight = withCrossTabLock(() => doRefresh()).finally(() => {
+      _refreshInFlight = null;
+    });
+  }
+  return _refreshInFlight;
+}
+
+// Serialises refreshes across tabs (they share one refresh cookie). A tab that waited on the
+// lock re-uses the token another tab already refreshed instead of rotating again.
+async function withCrossTabLock(fn: () => Promise<RefreshResult>): Promise<RefreshResult> {
+  const before = _token;
+  const run = () => {
+    const stored = typeof window !== "undefined" ? localStorage.getItem(TOKEN_KEY) : null;
+    if (stored && stored !== before) {
+      _token = stored; // another tab refreshed while we waited
+      return Promise.resolve<RefreshResult>("ok");
+    }
+    return fn();
+  };
+  if (typeof navigator !== "undefined" && navigator.locks) {
+    return await navigator.locks.request("sg_refresh", run);
+  }
+  return run();
+}
+
+async function doRefresh(isRetry = false): Promise<RefreshResult> {
   try {
     const res = await fetch(`${API_BASE}/api/auth/refresh`, {
       method: "POST",
       credentials: "include",
     });
-    if (!res.ok) return false;
+    if (res.status === 401 || res.status === 403) {
+      // A concurrent refresh (other tab/device race) may have just rotated the cookie —
+      // retry once with the fresh cookie before concluding the session is really gone.
+      if (!isRetry) {
+        await new Promise((r) => setTimeout(r, 400));
+        return doRefresh(true);
+      }
+      return "denied";
+    }
+    if (!res.ok) return "error"; // 5xx / 429 — transient, do not drop the session
     const data = (await res.json()) as { accessToken: string };
     setToken(data.accessToken);
-    return true;
+    return "ok";
   } catch {
-    return false;
+    return "error"; // network blip
   }
 }
 

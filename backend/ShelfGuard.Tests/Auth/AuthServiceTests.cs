@@ -225,6 +225,7 @@ public sealed class AuthServiceTests
         var user = MakeUser();
         var stolen = RefreshToken.Create(user.Id, "hashed_token", DateTime.UtcNow.AddDays(7));
         stolen.Revoke("rotated_to_hash"); // already rotated — presenting it again = theft
+        BackdateRevocation(stolen, TimeSpan.FromMinutes(5)); // well outside the rotation grace window
         _tokens.GetByHashAsync("hashed_token", default).Returns(stolen);
         _users.GetByIdAsync(user.Id, default).Returns(user);
 
@@ -239,6 +240,26 @@ public sealed class AuthServiceTests
         // No new token minted for the attacker
         await _tokens.DidNotReceive().AddAsync(Arg.Any<RefreshToken>(), default);
     }
+
+    [Fact]
+    public async Task RefreshAsync_replay_within_rotation_grace_does_not_revoke_family()
+    {
+        var user = MakeUser();
+        var rotated = RefreshToken.Create(user.Id, "hashed_token", DateTime.UtcNow.AddDays(7));
+        rotated.Revoke("rotated_to_hash"); // just rotated — parallel refresh race
+        _tokens.GetByHashAsync("hashed_token", default).Returns(rotated);
+
+        var (response, error) = await _sut.RefreshAsync("raw_token");
+
+        Assert.Null(response);
+        Assert.NotNull(error);
+        await _tokens.DidNotReceive().RevokeAllForUserAsync(Arg.Any<Guid>(), default);
+        await _tokens.DidNotReceive().AddAsync(Arg.Any<RefreshToken>(), default);
+    }
+
+    private static void BackdateRevocation(RefreshToken token, TimeSpan age) =>
+        typeof(RefreshToken).GetProperty(nameof(RefreshToken.RevokedAt))!
+            .SetValue(token, DateTime.UtcNow - age);
 
     // ── Revoke ─────────────────────────────────────────────────────────────
 

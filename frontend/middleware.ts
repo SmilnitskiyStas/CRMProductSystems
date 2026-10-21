@@ -38,12 +38,30 @@ const INTL_PATH_PREFIXES = [
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
+  // SEO-01: `/uk/...` duplicates the unprefixed default-locale URL. Redirect before
+  // intl rewriting; nextUrl.clone() keeps the query string.
+  if (pathname === "/uk" || pathname.startsWith("/uk/")) {
+    const url = request.nextUrl.clone();
+    url.pathname = pathname.slice(3) || "/";
+    return NextResponse.redirect(url, 308);
+  }
+
   const isIntlPath =
     pathname === "/" || INTL_PATH_PREFIXES.some((prefix) => pathname.startsWith(prefix));
   if (isIntlPath) {
     return intlMiddleware(request);
   }
 
+  // SEO-04: everything outside the public marketing pages (login, dashboard, ...)
+  // is not for search engines. Header form works for the client-rendered layouts.
+  const res = routeApp(request, pathname);
+  if (pathname !== "/robots.txt" && pathname !== "/sitemap.xml") {
+    res.headers.set("X-Robots-Tag", "noindex");
+  }
+  return res;
+}
+
+function routeApp(request: NextRequest, pathname: string): NextResponse {
   const isProtected = PROTECTED.some((p) => pathname.startsWith(p));
   const isAuth = AUTH_ROUTES.some((p) => pathname.startsWith(p));
   const hasSession =

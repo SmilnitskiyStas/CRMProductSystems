@@ -22,6 +22,7 @@ public sealed class AuthService : IAuthService
     // product brief.
     private const int TempPasswordValidHours = 3;
     private const int TempPasswordLength = 14;
+    private static readonly TimeSpan RefreshRotationGrace = TimeSpan.FromSeconds(10);
     private const string TempPasswordExpiredError = "Temporary password has expired. Please request a new one.";
 
     // TASK-469 (security review TASK-467, MEDIUM #1): per-user forgot-password cooldown.
@@ -133,6 +134,14 @@ public sealed class AuthService : IAuthService
 
         // TASK-329: a known-but-revoked token presented again = the cookie was
         // stolen and replayed after rotation. Kill the whole token family.
+        // Grace window: a token rotated moments ago and presented again is almost always a benign
+        // race (two tabs / parallel requests refreshing at once), not theft. Reject this call but
+        // keep the family alive; the client retries with the already-rotated cookie.
+        if (existing.RevokedAt is not null
+            && existing.ReplacedByTokenHash is not null
+            && DateTime.UtcNow - existing.RevokedAt.Value < RefreshRotationGrace)
+            return (null, genericError);
+
         if (existing.RevokedAt is not null)
         {
             await _refreshTokens.RevokeAllForUserAsync(existing.UserId, ct);

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { useMe } from "@/features/auth/hooks/useAuth";
+import { useIdleLogout } from "@/features/auth/hooks/useIdleLogout";
 import { getToken } from "@/lib/api";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { TopBar } from "@/components/layout/TopBar";
@@ -49,6 +50,7 @@ function Loading() {
 function DashboardChrome({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   usePageTitle();
+  useIdleLogout();
   const { error, isLoading } = useMe();
   const [mounted, setMounted] = useState(false);
   const [collapsed, setCollapsed] = useState(false);

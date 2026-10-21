@@ -8,4 +8,7 @@ export const routing = defineRouting({
   locales: ["uk", "en"],
   defaultLocale: "uk",
   localePrefix: "as-needed",
+  // hreflang is emitted in HTML <head> (page-meta.ts); the middleware Link header
+  // would add a second, possibly conflicting set (SEO-02).
+  alternateLinks: false,
 });

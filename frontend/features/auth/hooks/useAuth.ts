@@ -87,20 +87,26 @@ export function useLogout() {
   const queryClient = useQueryClient();
   const router = useRouter();
 
-  return useMutation({
-    mutationFn: () => {
+  // Explicit `string | void` (not `string | undefined`) is what lets TanStack
+  // Query's inferred `mutate()` type keep the argument optional — call sites can
+  // still do `logout.mutate()` with no argument at all, not just `mutate(undefined)`.
+  return useMutation<void, unknown, string | void>({
+    // Optional `reason` (e.g. "idle_timeout") is threaded through to the /login
+    // redirect below so the login page can show a distinct notice. Existing
+    // manual-logout call sites keep calling `.mutate()` with no argument.
+    mutationFn: (reason) => {
       // Flag BEFORE the logout call: in-flight polling requests (chat widget,
       // notifications) will 401 once the refresh cookie is revoked — the flag
       // keeps them from hijacking the redirect with ?reason=session_expired (BUG-011).
       markLoggedOut();
       return authApi.logout();
     },
-    onSettled: () => {
+    onSettled: (_data, _error, reason) => {
       clearToken();
       clearStoredUser();
       queryClient.clear();
       useStoreContext.setState({ selectedStoreIds: [], initialized: false });
-      router.push("/login");
+      router.push(reason ? `/login?reason=${reason}` : "/login");
     },
   });
 }
