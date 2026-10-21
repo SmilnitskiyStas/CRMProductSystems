@@ -1622,3 +1622,6 @@ F4 "Клієнт" panel (wedge/camera/manual by phone|card|account), QR decoding
 
 ### TASK-745 — Sliding session: refresh-race fix + idle logout 5 хв — review
 single-flight refresh + cross-tab lock (`lib/api.ts`), 10 с grace у `AuthService.RefreshAsync`, idle hook з TASK-712. Лог: `.claude/logs/tasks/745_*`. Не змерджено.
+
+### TASK-746 — capability `consumer_app.manage` (розділ «Застосунок» через TenantRole) — review
+Нова capability + політика `ConsumerAppManageOrCapability` на 12 контролерах consumer-app, tab-ключі `consumer_app` + `/consumer-app/*`, Sidebar role OR capability. Лог: `.claude/logs/tasks/746_*`. Гілка feat/consumer-app-role-capability, не змерджено.

@@ -38,6 +38,7 @@ namespace ShelfGuard.Infrastructure.Authorization;
 /// AiOrdersManageOrCapability       | AtLeastStoreManagerRoles   | ai_orders.manage
 /// StoreManagerOrUsersManage        | AtLeastStoreManagerRoles   | users.manage
 /// MarketingAnalyticsViewOrCapability | CanViewAnalyticsRoles    | marketing_analytics.view
+/// ConsumerAppManageOrCapability    | AtLeastEnterpriseAdminRoles| consumer_app.manage
 ///
 /// TASK-352 (Block 1 audit, user decision): Invite/Update/Deactivate on UsersController were
 /// split across two floors (Invite/Deactivate = AtLeastEnterpriseAdmin, Update =
@@ -86,6 +87,7 @@ public static class AppPolicies
     public const string AiOrdersViewOrCapability        = "AiOrdersViewOrCapability";
     public const string AiOrdersManageOrCapability      = "AiOrdersManageOrCapability";
     public const string MarketingAnalyticsViewOrCapability = "MarketingAnalyticsViewOrCapability";
+    public const string ConsumerAppManageOrCapability = "ConsumerAppManageOrCapability";
 
     /// <summary>
     /// UsersController's "users.manage" capability unlocks Invite/Update/Deactivate. All three
@@ -188,5 +190,7 @@ public static class AppPolicies
             new RoleOrCapabilityRequirement(AtLeastStoreManagerRoles, TenantRoleCapabilities.UsersManage)));
         options.AddPolicy(MarketingAnalyticsViewOrCapability, p => p.AddRequirements(
             new RoleOrCapabilityRequirement(CanViewAnalyticsRoles, TenantRoleCapabilities.MarketingAnalyticsView)));
+        options.AddPolicy(ConsumerAppManageOrCapability, p => p.AddRequirements(
+            new RoleOrCapabilityRequirement(AtLeastEnterpriseAdminRoles, TenantRoleCapabilities.ConsumerAppManage)));
     }
 }

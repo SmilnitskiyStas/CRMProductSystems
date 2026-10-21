@@ -93,6 +93,8 @@ interface NavItem {
   /** Optional second-level heading inside a navigation group. */
   section?: NavSection;
   roles?: Set<AppRole>;
+  /** TenantRole capability that grants the item in addition to `roles` (role OR capability, ADR-020). */
+  capability?: string;
   /** Permission key(s) required for PROVIDER_TEAM users — user needs at least one (OR logic) */
   permission?: string | string[];
   exact?: boolean;
@@ -269,16 +271,16 @@ export function buildNavGroups(t: SidebarGroupsT): NavGroup[] {
     icon: <Smartphone size={18} />,
     moduleKey: "mobile_app",
     items: [
-      { href: "/consumer-app/messages", label: t("consumerApp.customerMessages"), icon: <Megaphone size={16} />, roles: AT_LEAST_ENTERPRISE_ADMIN, section: consumerAppSections.content },
-      { href: "/consumer-app/banners", label: t("consumerApp.banners"), icon: <Megaphone size={16} />, roles: AT_LEAST_ENTERPRISE_ADMIN, section: consumerAppSections.content },
-      { href: "/consumer-app/promotions", label: t("consumerApp.promotions"), icon: <TrendingUp size={16} />, roles: AT_LEAST_ENTERPRISE_ADMIN, section: consumerAppSections.content },
-      { href: "/consumer-app/catalog", label: t("consumerApp.catalog"), icon: <Package size={16} />, roles: AT_LEAST_ENTERPRISE_ADMIN, section: consumerAppSections.content },
-      { href: "/consumer-app/design", label: t("consumerApp.design"), icon: <Palette size={16} />, roles: AT_LEAST_ENTERPRISE_ADMIN, section: consumerAppSections.configuration },
-      { href: "/consumer-app/pages", label: t("consumerApp.pages"), icon: <LayoutTemplate size={16} />, roles: AT_LEAST_ENTERPRISE_ADMIN, section: consumerAppSections.configuration },
-      { href: "/consumer-app/navigation", label: t("consumerApp.navigation"), icon: <Compass size={16} />, roles: AT_LEAST_ENTERPRISE_ADMIN, section: consumerAppSections.configuration },
-      { href: "/consumer-app/features", label: t("consumerApp.features"), icon: <ToggleLeft size={16} />, roles: AT_LEAST_ENTERPRISE_ADMIN, section: consumerAppSections.configuration },
-      { href: "/consumer-app/versions", label: t("consumerApp.versions"), icon: <History size={16} />, roles: AT_LEAST_ENTERPRISE_ADMIN, section: consumerAppSections.configuration },
-      { href: "/consumer-app", label: t("consumerApp.bonusProgram"), icon: <Smartphone size={16} />, roles: AT_LEAST_ENTERPRISE_ADMIN, exact: true, section: consumerAppSections.loyalty },
+      { href: "/consumer-app/messages", label: t("consumerApp.customerMessages"), icon: <Megaphone size={16} />, roles: AT_LEAST_ENTERPRISE_ADMIN, capability: "consumer_app.manage", section: consumerAppSections.content },
+      { href: "/consumer-app/banners", label: t("consumerApp.banners"), icon: <Megaphone size={16} />, roles: AT_LEAST_ENTERPRISE_ADMIN, capability: "consumer_app.manage", section: consumerAppSections.content },
+      { href: "/consumer-app/promotions", label: t("consumerApp.promotions"), icon: <TrendingUp size={16} />, roles: AT_LEAST_ENTERPRISE_ADMIN, capability: "consumer_app.manage", section: consumerAppSections.content },
+      { href: "/consumer-app/catalog", label: t("consumerApp.catalog"), icon: <Package size={16} />, roles: AT_LEAST_ENTERPRISE_ADMIN, capability: "consumer_app.manage", section: consumerAppSections.content },
+      { href: "/consumer-app/design", label: t("consumerApp.design"), icon: <Palette size={16} />, roles: AT_LEAST_ENTERPRISE_ADMIN, capability: "consumer_app.manage", section: consumerAppSections.configuration },
+      { href: "/consumer-app/pages", label: t("consumerApp.pages"), icon: <LayoutTemplate size={16} />, roles: AT_LEAST_ENTERPRISE_ADMIN, capability: "consumer_app.manage", section: consumerAppSections.configuration },
+      { href: "/consumer-app/navigation", label: t("consumerApp.navigation"), icon: <Compass size={16} />, roles: AT_LEAST_ENTERPRISE_ADMIN, capability: "consumer_app.manage", section: consumerAppSections.configuration },
+      { href: "/consumer-app/features", label: t("consumerApp.features"), icon: <ToggleLeft size={16} />, roles: AT_LEAST_ENTERPRISE_ADMIN, capability: "consumer_app.manage", section: consumerAppSections.configuration },
+      { href: "/consumer-app/versions", label: t("consumerApp.versions"), icon: <History size={16} />, roles: AT_LEAST_ENTERPRISE_ADMIN, capability: "consumer_app.manage", section: consumerAppSections.configuration },
+      { href: "/consumer-app", label: t("consumerApp.bonusProgram"), icon: <Smartphone size={16} />, roles: AT_LEAST_ENTERPRISE_ADMIN, capability: "consumer_app.manage", exact: true, section: consumerAppSections.loyalty },
       { href: "/consumer-app/analytics", label: t("analytics.consumerAppAnalytics"), icon: <Activity size={16} />, roles: CAN_VIEW_ANALYTICS, permission: "analytics", section: consumerAppSections.analytics },
     ],
   },
@@ -1060,7 +1062,13 @@ export function Sidebar({ collapsed, onToggle }: Props) {
         // unchanged by this task.
         if (tabsSet) return tabsSet.has(item.href) || tabsSet.has(group.key);
         // Role check (existing logic)
-        if (item.roles && !item.roles.has(userRole)) return false;
+        if (
+          item.roles &&
+          !item.roles.has(userRole) &&
+          !(item.capability && me?.capabilities?.includes(item.capability))
+        ) {
+          return false;
+        }
         // Item-level module gate (supplier-portal expansion): retail NavItems carry no
         // item-level moduleKey (their groups do), so this is a no-op for them; supplier
         // cabinet items use it because they all live in one non-module-gated group.

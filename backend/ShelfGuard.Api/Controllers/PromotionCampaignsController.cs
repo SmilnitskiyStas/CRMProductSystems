@@ -14,7 +14,7 @@ using System.Text.Json;
 namespace ShelfGuard.Api.Controllers;
 
 [ApiController]
-[Authorize(Policy = AppPolicies.AtLeastEnterpriseAdmin)]
+[Authorize(Policy = AppPolicies.ConsumerAppManageOrCapability)]
 [Route("api/promotion-campaigns")]
 [RequireModule("mobile_app")] // TASK-674: "Застосунок" admin section
 public sealed class PromotionCampaignsController : ControllerBase

@@ -108,6 +108,8 @@ public static class TenantRoleTabs
     public const string Analytics = "analytics";
     public const string Workforce = "workforce";
     public const string Support = "support";
+    // "Застосунок" (consumer-app builder) group — gated by module "mobile_app".
+    public const string ConsumerApp = "consumer_app";
 
     /// <summary>Every group-level key — one per real <c>NavGroup</c> in Sidebar.tsx (all the
     /// pre-TASK-398 ones plus "calendar", added when the events calendar became its own group).
@@ -117,7 +119,7 @@ public static class TenantRoleTabs
     public static readonly HashSet<string> GroupKeys =
     [
         Operations, Sales, Calendar, Procurement, Marketplace,
-        AutoService, Production, Analytics, Workforce, Support,
+        AutoService, Production, Analytics, ConsumerApp, Workforce, Support,
     ];
 
     // ── Item-level keys (TASK-398) — one per Sidebar.tsx NavItem href, fine-grained grants.
@@ -163,6 +165,19 @@ public static class TenantRoleTabs
     public const string ItemAnalytics = "/analytics";
     public const string ItemAnalyticsPos = "/analytics/pos";
 
+    // Consumer app (moduleKey "mobile_app"). "/consumer-app/analytics" is intentionally omitted:
+    // it stays under the analytics permission, not the consumer_app.manage capability.
+    public const string ItemConsumerAppMessages = "/consumer-app/messages";
+    public const string ItemConsumerAppBanners = "/consumer-app/banners";
+    public const string ItemConsumerAppPromotions = "/consumer-app/promotions";
+    public const string ItemConsumerAppCatalog = "/consumer-app/catalog";
+    public const string ItemConsumerAppDesign = "/consumer-app/design";
+    public const string ItemConsumerAppPages = "/consumer-app/pages";
+    public const string ItemConsumerAppNavigation = "/consumer-app/navigation";
+    public const string ItemConsumerAppFeatures = "/consumer-app/features";
+    public const string ItemConsumerAppVersions = "/consumer-app/versions";
+    public const string ItemConsumerAppBonusProgram = "/consumer-app";
+
     // Workforce (no moduleKey)
     public const string ItemUsers = "/users";
     public const string ItemSchedules = "/schedules";
@@ -191,6 +206,9 @@ public static class TenantRoleTabs
         ItemAutoServiceWorkOrders, ItemAutoServiceCustomers, ItemAutoServiceCatalog,
         ItemProductionRecipes, ItemProductionOrders,
         ItemAnalytics, ItemAnalyticsPos,
+        ItemConsumerAppMessages, ItemConsumerAppBanners, ItemConsumerAppPromotions, ItemConsumerAppCatalog,
+        ItemConsumerAppDesign, ItemConsumerAppPages, ItemConsumerAppNavigation, ItemConsumerAppFeatures,
+        ItemConsumerAppVersions, ItemConsumerAppBonusProgram,
         ItemUsers, ItemSchedules, ItemProviderTeam, ItemLegalEntities,
         ItemServiceDesk,
     ];
@@ -262,6 +280,19 @@ public static class TenantRoleTabs
         [
             new(ItemAnalytics, "Аналітика"),
             new(ItemAnalyticsPos, "POS Аналітика"),
+        ]),
+        new(ConsumerApp, "Застосунок",
+        [
+            new(ItemConsumerAppMessages, "Повідомлення клієнтам"),
+            new(ItemConsumerAppBanners, "Банери"),
+            new(ItemConsumerAppPromotions, "Акції"),
+            new(ItemConsumerAppCatalog, "Каталог"),
+            new(ItemConsumerAppDesign, "Дизайн"),
+            new(ItemConsumerAppPages, "Сторінки"),
+            new(ItemConsumerAppNavigation, "Навігація"),
+            new(ItemConsumerAppFeatures, "Функції"),
+            new(ItemConsumerAppVersions, "Версії"),
+            new(ItemConsumerAppBonusProgram, "Бонусна програма"),
         ]),
         new(Workforce, "Персонал",
         [

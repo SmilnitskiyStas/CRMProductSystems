@@ -16,7 +16,7 @@ namespace ShelfGuard.Api.Controllers;
 /// </summary>
 [ApiController]
 [Route("api/settings/loyalty/tiers")]
-[Authorize(Policy = AppPolicies.AtLeastEnterpriseAdmin)]
+[Authorize(Policy = AppPolicies.ConsumerAppManageOrCapability)]
 [RequireModule("mobile_app")] // TASK-674: "Застосунок" admin section
 public sealed class LoyaltyTierSettingsController : ControllerBase
 {
