@@ -1612,4 +1612,4 @@ TS engine mirror passing all 37 shared golden vectors (+ drift test, `sync-vecto
 F4 "Клієнт" panel (wedge/camera/manual by phone|card|account), QR decoding only in customer mode, member chip in the cart, member+tier priced through the promotion engine, membership/customer ids in the sale/outbox payload, bonus lines on screen/print receipts, offline promise text. 156 vitest, build+dist OK, mock-API smoke OK; not run against the real backend; not committed. Лог: `.claude/logs/tasks/736_*`.
 
 ### TASK-739 - Staff dialog on /locations - review
-Кнопка «Персонал» у списку локацій: перелік прив'язаних працівників, додати/відкріпити (enterprise_admin+). Backend без змін; tsc+lint чисті. Лог: `.claude/logs/tasks/739_*`.
+Сторінка `/locations/{id}/staff` (посилання «Персонал» у списку): таблиця працівників локації, пошук, фільтр ролі, масове додавання/відкріплення (enterprise_admin+). Backend без змін; tsc+lint чисті. Лог: `.claude/logs/tasks/739_*`.

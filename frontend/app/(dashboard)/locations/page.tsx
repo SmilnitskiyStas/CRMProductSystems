@@ -17,7 +17,6 @@ import type { LocationDto, LocationType, LocationSortKey } from "@/features/loca
 import { useMe } from "@/features/auth/hooks/useAuth";
 import { useStoreContext, useStoreScopeReady } from "@/lib/useStoreContext";
 import { hasRole, AT_LEAST_ENTERPRISE_ADMIN, AT_LEAST_STORE_MANAGER } from "@/lib/roles";
-import { LocationStaffDialog } from "@/features/locations/components/LocationStaffDialog";
 import { Table, type TableColumn } from "@/components/ui/Table";
 
 // ── Page ───────────────────────────────────────────────────────────────────────
@@ -82,7 +81,6 @@ export default function LocationsPage() {
   // Staff-of-location view: GET /api/users is AtLeastStoreManager; editing assignments is
   // enterprise_admin+ only (PUT /api/users/:id/locations).
   const canViewStaff = hasRole(me?.role, AT_LEAST_STORE_MANAGER);
-  const [staffFor, setStaffFor] = useState<LocationDto | null>(null);
 
   const create = useCreateLocation();
   const updateId = dialog && dialog !== "create" ? dialog.id : "";
@@ -217,9 +215,12 @@ export default function LocationsPage() {
             {t("planLink")}
           </Link>
           {canViewStaff && (
-            <Btn variant="ghost" size="sm" onClick={() => setStaffFor(loc)}>
+            <Link
+              href={`/locations/${loc.id}/staff`}
+              style={{ color: "#9CA3AF", fontSize: 12, textDecoration: "none", padding: "5px 10px", fontWeight: 500 }}
+            >
               {t("staffButton")}
-            </Btn>
+            </Link>
           )}
           {canManageLocations && (
             <Btn variant="ghost" size="sm" onClick={() => setDialog(loc)}>
@@ -279,14 +280,6 @@ export default function LocationsPage() {
         isLoading={showLoading}
         emptyMessage={showLoading ? tCommon("loading") : t("empty")}
       />
-
-      {staffFor && (
-        <LocationStaffDialog
-          location={staffFor}
-          canEdit={canManageLocations}
-          onClose={() => setStaffFor(null)}
-        />
-      )}
 
       {/* Dialog */}
       {dialog !== null && (
