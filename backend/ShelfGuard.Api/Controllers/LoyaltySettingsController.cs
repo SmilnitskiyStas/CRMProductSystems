@@ -15,7 +15,7 @@ namespace ShelfGuard.Api.Controllers;
 /// </summary>
 [ApiController]
 [Route("api/settings/loyalty")]
-[Authorize(Policy = AppPolicies.AtLeastEnterpriseAdmin)]
+[Authorize(Policy = AppPolicies.ConsumerAppManageOrCapability)]
 // TASK-674: the whole "Застосунок" admin section is gated by the "mobile_app" module.
 // "loyalty" stays scoped to the POS QR accrual API (LoyaltyController) only.
 [RequireModule("mobile_app")]

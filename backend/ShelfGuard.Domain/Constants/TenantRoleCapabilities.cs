@@ -130,6 +130,18 @@ public static class TenantRoleCapabilities
     /// </summary>
     public const string MarketingAnalyticsExportPii = "marketing_analytics.export_pii";
 
+    // ── Застосунок (consumer-app section) ────────────────────────────────
+
+    /// <summary>
+    /// Whole "Застосунок" (consumer-app) section: banners, promotions, loyalty settings/tiers,
+    /// catalog/design/pages/navigation/features/versions (App Builder) and customer messages.
+    /// Default floor is enterprise_admin+ (<c>AtLeastEnterpriseAdminRoles</c>); this capability
+    /// only adds an alternate path in for a lower tenant role. Checked via the
+    /// <c>ConsumerAppManageOrCapability</c> policy. The "mobile_app" module gate
+    /// ([RequireModule]) is independent and unchanged.
+    /// </summary>
+    public const string ConsumerAppManage = "consumer_app.manage";
+
     /// <summary>
     /// Every assignable capability key, including the reused
     /// <see cref="TenantUserPermissions.LegalEntitiesManage"/> — the single validation source
@@ -144,6 +156,7 @@ public static class TenantRoleCapabilities
         OrdersManage, SuppliersView, SuppliersManage, ReceiptsView,
         AiOrdersView, AiOrdersManage,
         MarketingAnalyticsView, MarketingAnalyticsExportPii,
+        ConsumerAppManage,
     ];
 
     /// <summary>
@@ -179,6 +192,10 @@ public static class TenantRoleCapabilities
         [
             new(MarketingAnalyticsView, "Перегляд маркетингової аналітики (RFM-дашборд, сегменти, експорти)"),
             new(MarketingAnalyticsExportPii, "Вивантаження повних контактів (телефон, email) в експортах маркетингової аналітики"),
+        ]),
+        new("Застосунок",
+        [
+            new(ConsumerAppManage, "Керування розділом «Застосунок» (банери, акції, лояльність, конструктор, повідомлення клієнтам)"),
         ]),
     ];
 }

@@ -267,6 +267,23 @@ public sealed class TenantRoleServiceTests
     }
 
     [Fact]
+    public async Task CreateAsync_ConsumerAppCapabilityAndTabs_AreAccepted()
+    {
+        _repo.GetByNameAsync(_tenantId, "App Manager", Arg.Any<CancellationToken>()).Returns((TenantRole?)null);
+
+        var request = new CreateTenantRoleRequest(
+            "App Manager",
+            [TenantRoleCapabilities.ConsumerAppManage],
+            [TenantRoleTabs.ConsumerApp, TenantRoleTabs.ItemConsumerAppBanners]);
+
+        var (role, error) = await _sut.CreateAsync(_tenantId, null, request);
+
+        Assert.Null(error);
+        Assert.Contains(TenantRoleCapabilities.ConsumerAppManage, role!.Capabilities);
+        Assert.Contains(TenantRoleTabs.ConsumerApp, role.AllowedTabs);
+    }
+
+    [Fact]
     public async Task CreateAsync_ItemLevelTabKey_IsAccepted()
     {
         _repo.GetByNameAsync(_tenantId, "Приймальник", Arg.Any<CancellationToken>()).Returns((TenantRole?)null);

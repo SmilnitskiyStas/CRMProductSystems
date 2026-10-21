@@ -219,6 +219,7 @@ public sealed class AppPoliciesTests
     [InlineData(AppPolicies.AiOrdersManageOrCapability, TenantRoleCapabilities.AiOrdersManage)]
     [InlineData(AppPolicies.StoreManagerOrUsersManage, TenantRoleCapabilities.UsersManage)]
     [InlineData(AppPolicies.MarketingAnalyticsViewOrCapability, TenantRoleCapabilities.MarketingAnalyticsView)]
+    [InlineData(AppPolicies.ConsumerAppManageOrCapability, TenantRoleCapabilities.ConsumerAppManage)]
     public void RoleOrCapabilityPolicy_carries_expected_capability(string policyName, string expectedCapability)
         => Assert.Equal(expectedCapability, RequirementFor(policyName).Capability);
 
@@ -293,6 +294,18 @@ public sealed class AppPoliciesTests
     // marketing_analytics.view capability as the OR — see the next test for the actual bug
     // this fixes: a sub-store_manager role becomes able to pass this policy at all.
     [Fact]
+    public void ConsumerAppManageOrCapability_base_roles_match_AtLeastEnterpriseAdmin()
+        => AssertSameRoles(AppPolicies.AtLeastEnterpriseAdminRoles, AppPolicies.ConsumerAppManageOrCapability);
+
+    [Fact]
+    public void ConsumerAppManageOrCapability_base_roles_exclude_supplier_and_lower_tenant_roles()
+    {
+        var roles = RequirementFor(AppPolicies.ConsumerAppManageOrCapability).AllowedRoles;
+        Assert.DoesNotContain(AppRoles.SupplierAdmin, roles);
+        Assert.DoesNotContain(AppRoles.StoreManager, roles);
+    }
+
+    [Fact]
     public void MarketingAnalyticsViewOrCapability_base_roles_match_CanViewAnalytics()
         => AssertSameRoles(AppPolicies.CanViewAnalyticsRoles, AppPolicies.MarketingAnalyticsViewOrCapability);
 
@@ -323,6 +336,7 @@ public sealed class AppPoliciesTests
     [InlineData(AppPolicies.AiOrdersManageOrCapability)]
     [InlineData(AppPolicies.StoreManagerOrUsersManage)]
     [InlineData(AppPolicies.MarketingAnalyticsViewOrCapability)]
+    [InlineData(AppPolicies.ConsumerAppManageOrCapability)]
     public void RoleOrCapabilityPolicy_is_registered(string policyName)
         => Assert.NotNull(_options.GetPolicy(policyName));
 

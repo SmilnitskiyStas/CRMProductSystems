@@ -10,7 +10,7 @@ using ShelfGuard.Infrastructure.Data;
 namespace ShelfGuard.Api.Controllers;
 
 [ApiController]
-[Authorize(Policy = AppPolicies.AtLeastEnterpriseAdmin)]
+[Authorize(Policy = AppPolicies.ConsumerAppManageOrCapability)]
 [Route("api/mobile-catalog-settings")]
 [RequireModule("mobile_app")] // TASK-674: "Застосунок" admin section
 public sealed class MobileCatalogSettingsController : ControllerBase

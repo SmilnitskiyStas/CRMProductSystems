@@ -157,7 +157,7 @@ public sealed class NotificationsController : ControllerBase
     // The rest of this controller (notification settings/history/read state) is core and ungated.
     /// <summary>Creates a customer communication draft. Delivery starts after provider integration.</summary>
     [HttpGet("customer-messages")]
-    [Authorize(Policy = AppPolicies.AtLeastEnterpriseAdmin)]
+    [Authorize(Policy = AppPolicies.ConsumerAppManageOrCapability)]
     [RequireModule("mobile_app")]
     [ProducesResponseType(typeof(PagedResult<CustomerMessageCampaignDto>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetCustomerMessages([FromQuery] PagedQuery query, CancellationToken ct)
@@ -168,7 +168,7 @@ public sealed class NotificationsController : ControllerBase
     }
 
     [HttpGet("customer-messages/{id:guid}")]
-    [Authorize(Policy = AppPolicies.AtLeastEnterpriseAdmin)]
+    [Authorize(Policy = AppPolicies.ConsumerAppManageOrCapability)]
     [RequireModule("mobile_app")]
     [ProducesResponseType(typeof(CustomerMessageCampaignDetailDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -182,7 +182,7 @@ public sealed class NotificationsController : ControllerBase
 
     /// <summary>Creates a customer communication draft. Delivery starts after provider integration.</summary>
     [HttpPost("customer-messages")]
-    [Authorize(Policy = AppPolicies.AtLeastEnterpriseAdmin)]
+    [Authorize(Policy = AppPolicies.ConsumerAppManageOrCapability)]
     [RequireModule("mobile_app")]
     [ProducesResponseType(typeof(CreateCustomerMessageResult), StatusCodes.Status201Created)]
     [ProducesResponseType(typeof(object), StatusCodes.Status400BadRequest)]
@@ -206,7 +206,7 @@ public sealed class NotificationsController : ControllerBase
 
     /// <summary>Submits an existing draft for immediate or scheduled delivery.</summary>
     [HttpPost("customer-messages/{id:guid}/submit")]
-    [Authorize(Policy = AppPolicies.AtLeastEnterpriseAdmin)]
+    [Authorize(Policy = AppPolicies.ConsumerAppManageOrCapability)]
     [RequireModule("mobile_app")]
     [ProducesResponseType(typeof(CustomerMessageCampaignDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]

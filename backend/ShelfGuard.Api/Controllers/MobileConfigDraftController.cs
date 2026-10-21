@@ -26,7 +26,7 @@ namespace ShelfGuard.Api.Controllers;
 /// </summary>
 [ApiController]
 [Route("api/v1/mobile/config/draft")]
-[Authorize(Policy = AppPolicies.AtLeastEnterpriseAdmin)]
+[Authorize(Policy = AppPolicies.ConsumerAppManageOrCapability)]
 [RequireModule("mobile_app")] // TASK-674: App Builder is part of the "Застосунок" section
 public sealed class MobileConfigDraftController : ControllerBase
 {
