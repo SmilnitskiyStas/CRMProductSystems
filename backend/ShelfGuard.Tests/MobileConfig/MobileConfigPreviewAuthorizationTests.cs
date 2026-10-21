@@ -24,7 +24,7 @@ namespace ShelfGuard.Tests.MobileConfig;
 ///
 /// Two things must both hold for the endpoint to actually be safe, so both are asserted:
 /// (1) <see cref="MobileConfigPreviewController"/> is decorated with
-/// <c>[Authorize(Policy = AppPolicies.AtLeastEnterpriseAdmin)]</c> and carries no
+/// <c>[Authorize(Policy = AppPolicies.ConsumerAppManageOrCapability)]</c> and carries no
 /// <c>[AllowAnonymous]</c> anywhere in its metadata (the exact trap
 /// <see cref="MobileConfigController"/>'s controller-level <c>[AllowAnonymous]</c> would set for
 /// an action added there instead — see that controller's remarks); (2) that named policy itself,
@@ -51,7 +51,7 @@ public sealed class MobileConfigPreviewAuthorizationTests
             .Cast<AuthorizeAttribute>()
             .SingleOrDefault();
         Assert.NotNull(authorize);
-        Assert.Equal(AppPolicies.AtLeastEnterpriseAdmin, authorize!.Policy);
+        Assert.Equal(AppPolicies.ConsumerAppManageOrCapability, authorize!.Policy);
 
         // Not on the controller...
         Assert.Empty(controllerType.GetCustomAttributes(typeof(AllowAnonymousAttribute), inherit: true));
