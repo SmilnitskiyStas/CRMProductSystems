@@ -52,6 +52,15 @@ export function usePosCashiers(params: PosDateRangeParams, enabled = true) {
   });
 }
 
+// Lazy: callers pass enabled=false until the user opens "Детальніше по магазину і касирах".
+export function usePosStoreDetail(params: PosDateRangeParams, enabled = false) {
+  return useQuery({
+    queryKey: ["pos-analytics-store-detail", params],
+    queryFn: () => posAnalyticsApi.getStoreDetail(params),
+    enabled: enabled && !!params.store_id,
+  });
+}
+
 // TASK-484: row-click drill-down from top-products, consumed by the extended
 // ProductAnalyticsTab. Full filter object (productId + params) in the query key, same
 // discipline as every hook above — no keepPreviousData.

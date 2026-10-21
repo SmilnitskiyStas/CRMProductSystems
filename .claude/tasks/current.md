@@ -1625,3 +1625,6 @@ single-flight refresh + cross-tab lock (`lib/api.ts`), 10 с grace у `AuthServi
 
 ### TASK-746 — capability `consumer_app.manage` (розділ «Застосунок» через TenantRole) — review
 Нова capability + політика `ConsumerAppManageOrCapability` на 12 контролерах consumer-app, tab-ключі `consumer_app` + `/consumer-app/*`, Sidebar role OR capability. Лог: `.claude/logs/tasks/746_*`. Гілка feat/consumer-app-role-capability, не змерджено.
+
+### TASK-747 — POS analytics: lazy «Детальніше по магазину і касирах» — review
+`GET /api/analytics/pos/store-detail?from&to&store_id` (store_id обов'язковий; виручка/чеки/сер.чек/зміни/години з `pos_shifts`/прибуток). Прибуток лише при `CanViewMargin` (інакше null). 4 згруповані запити, без N+1. Фронт: `PosStoreDetailPanel` — запит `enabled` лише після кліку. Лог: `.claude/logs/tasks/747_*`. Не закомічено.

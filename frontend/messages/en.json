@@ -2891,6 +2891,32 @@
             "shifts": "Shifts"
           }
         },
+        "storeDetail": {
+          "show": "Store and cashier details",
+          "hide": "Hide details",
+          "hint": "Loaded only on your request.",
+          "selectStore": "Pick a store in the header to see cashier details.",
+          "error": "Failed to load details",
+          "empty": "No sales in the selected period",
+          "title": "Store: {store}",
+          "totalRevenue": "Revenue",
+          "totalProfit": "Profit",
+          "hoursWorked": "Hours worked",
+          "hoursUnit": "{value} h",
+          "coverage": "Cost coverage: {value}% of revenue",
+          "noCostNote": "Profit is not available for your role — revenue only.",
+          "profitEstimate": "Profit is an estimate: the item's current purchase price applied to all sales. Items without a purchase price are excluded.",
+          "headers": {
+            "cashier": "Employee",
+            "revenue": "Revenue",
+            "receipts": "Receipts",
+            "averageTicket": "Average ticket",
+            "shifts": "Shifts",
+            "hours": "Hours",
+            "perHour": "Revenue/h",
+            "profit": "Profit"
+          }
+        },
         "revenueTrend": {
           "title": "Revenue trend",
           "empty": "No data for the selected period",
