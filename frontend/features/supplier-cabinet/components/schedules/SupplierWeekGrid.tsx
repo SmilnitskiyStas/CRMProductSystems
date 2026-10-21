@@ -3,6 +3,8 @@
 import { useState } from "react";
 import { useTranslations } from "next-intl";
 import { toast } from "sonner";
+import { useBulkAddShifts } from "@/features/schedules/hooks/useBulkAddShifts";
+import { BulkResultNotice } from "@/features/schedules/components/BulkResultNotice";
 import { Plus } from "lucide-react";
 import type {
   WorkScheduleDetailDto,
@@ -82,14 +84,15 @@ export function SupplierWeekGrid({ schedule, canManage }: Props) {
   const grid      = buildGrid(schedule.shifts);
   const workers   = uniqueWorkers(schedule.shifts);
 
-  function handleAdd(data: AddShiftPayload) {
-    addShiftMutation.mutate(
-      { ...data, locationId: schedule.locationId },
-      {
-        onSuccess: () => { toast.success(t("addShiftToast")); setAddShiftCell(null); },
-        onError:   (err) => toast.error(err.message),
-      },
-    );
+  const bulk = useBulkAddShifts(addShiftMutation.mutateAsync, schedule.locationId);
+
+  async function handleAdd(items: AddShiftPayload[]) {
+    const res = await bulk.run(items);
+    if (res.ok.length > 0) toast.success(t("addShiftsToast", { count: res.ok.length }));
+    // Close the form and report per-worker/day outcome in the notice above the grid; a fully
+    // successful add needs only the toast.
+    setAddShiftCell(null);
+    if (res.failed.length === 0) bulk.clear();
   }
 
   function handleUpdate(data: UpdateShiftPayload) {
@@ -116,6 +119,13 @@ export function SupplierWeekGrid({ schedule, canManage }: Props) {
 
   return (
     <div style={{ overflowX: "auto" }}>
+      {bulk.result && bulk.result.failed.length > 0 && (
+        <BulkResultNotice
+          result={bulk.result}
+          userNames={new Map(users.map((u) => [u.id, u.name]))}
+          onClose={bulk.clear}
+        />
+      )}
       <table style={{ borderCollapse: "collapse", width: "100%", minWidth: 700 }}>
         <thead>
           <tr>
@@ -280,10 +290,12 @@ export function SupplierWeekGrid({ schedule, canManage }: Props) {
           mode="create"
           scheduleId={schedule.id}
           users={users}
-          defaultDate={addShiftCell.date}
-          isPending={addShiftMutation.isPending}
-          error={addShiftMutation.error?.message ?? null}
-          onClose={() => { setAddShiftCell(null); addShiftMutation.reset(); }}
+          weekDates={weekDates}
+          defaultUserId={addShiftCell.userId}
+          defaultDate={addShiftCell.userId ? addShiftCell.date : undefined}
+          isPending={bulk.pending}
+          error={null}
+          onClose={() => setAddShiftCell(null)}
           onSubmit={handleAdd}
         />
       )}

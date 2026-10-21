@@ -1611,6 +1611,12 @@ TS engine mirror passing all 37 shared golden vectors (+ drift test, `sync-vecto
 ### TASK-736 - Cashier phase 4: loyalty member at the till - review
 F4 "Клієнт" panel (wedge/camera/manual by phone|card|account), QR decoding only in customer mode, member chip in the cart, member+tier priced through the promotion engine, membership/customer ids in the sale/outbox payload, bonus lines on screen/print receipts, offline promise text. 156 vitest, build+dist OK, mock-API smoke OK; not run against the real backend; not committed. Лог: `.claude/logs/tasks/736_*`.
 
+### TASK-739 - Staff dialog on /locations - review
+Сторінка `/locations/{id}/staff` (посилання «Персонал» у списку): таблиця працівників локації, пошук, фільтр ролі, масове додавання/відкріплення (enterprise_admin+). Backend без змін; tsc+lint чисті. Лог: `.claude/logs/tasks/739_*`.
+
+### TASK-740 - Schedules: publish button + bulk shifts - review
+Кнопка «Опублікувати» над сіткою; у формі зміни мультивибір працівників і днів (працівник×день). Frontend-only (+SupplierWeekGrid). my-shifts не фільтрує за статусом графіка. Лог: `.claude/logs/tasks/740_*`.
+
 ## TASK-738 — SEO-основа публічного сайту (2026-10-20)
 `/uk`→308, canonical/hreflang/og:url, sitemap.ts, robots.ts, noindex поза публічними сторінками, JSON-LD на головній. Лог: logs/tasks/738_2026-10-20_seo-foundation_frontend.md. Не закомічено.
 

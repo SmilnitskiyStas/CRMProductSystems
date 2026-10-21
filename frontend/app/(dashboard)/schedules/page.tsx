@@ -6,10 +6,12 @@ import { Calendar } from "lucide-react";
 import { ScheduleList } from "@/features/schedules/components/ScheduleList";
 import { WeekGrid } from "@/features/schedules/components/WeekGrid";
 import { MyShifts } from "@/features/schedules/components/MyShifts";
-import { useSchedule } from "@/features/schedules/hooks/useSchedules";
+import { useSchedule, useUpdateSchedule } from "@/features/schedules/hooks/useSchedules";
+import { Btn } from "@/components/ui/Btn";
+import { toast } from "sonner";
 import { useMe } from "@/features/auth/hooks/useAuth";
 import { AT_LEAST_STORE_MANAGER, PROVIDER_TEAM } from "@/lib/roles";
-import type { WorkScheduleDto } from "@/features/schedules/types";
+import type { WorkScheduleDto, ScheduleStatus } from "@/features/schedules/types";
 import type { AppRole } from "@/lib/roles";
 import { ScheduleTab } from "@/features/provider/components/ScheduleTab";
 import { useRequireTab } from "@/lib/useRequireTab";
@@ -24,7 +26,23 @@ function WeekGridPanel({
   canManage: boolean;
 }) {
   const t = useTranslations("Dashboard.schedules.page");
+  const tList = useTranslations("Dashboard.schedules.list");
   const { data: detail, isLoading } = useSchedule(schedule.id);
+  const update = useUpdateSchedule();
+
+  // The list snapshot passed from the page goes stale after a status change — the detail
+  // query is invalidated by the mutation, so it is the source of truth for the status.
+  const status = detail?.status ?? schedule.status;
+
+  function setStatus(next: ScheduleStatus) {
+    update.mutate(
+      { id: schedule.id, data: { name: detail?.name ?? schedule.name, status: next } },
+      {
+        onSuccess: () => toast.success(t(next === "published" ? "publishedToast" : "unpublishedToast")),
+        onError: (err) => toast.error(t("publishError", { message: err.message })),
+      },
+    );
+  }
 
   if (isLoading) {
     return (
@@ -34,7 +52,36 @@ function WeekGridPanel({
 
   if (!detail) return null;
 
-  return <WeekGrid schedule={detail} canManage={canManage} />;
+  return (
+    <>
+      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14, flexWrap: "wrap" }}>
+        <span
+          style={{
+            padding: "2px 10px", borderRadius: 999, fontSize: 11, fontWeight: 600,
+            background: status === "published" ? "#052e16" : "#111827",
+            color: status === "published" ? "#4ADE80" : "#9CA3AF",
+            border: `1px solid ${status === "published" ? "#16A34A" : "#374151"}`,
+          }}
+        >
+          {tList(status === "published" ? "statusPublished" : status === "archived" ? "statusArchived" : "statusDraft")}
+        </span>
+        {canManage && status !== "published" && (
+          <Btn size="sm" disabled={update.isPending} onClick={() => setStatus("published")}>
+            {t("publishButton")}
+          </Btn>
+        )}
+        {canManage && status === "published" && (
+          <Btn size="sm" variant="ghost" disabled={update.isPending} onClick={() => setStatus("draft")}>
+            {t("unpublishButton")}
+          </Btn>
+        )}
+        {status === "draft" && (
+          <span style={{ color: "#6B7280", fontSize: 12 }}>{t("draftHint")}</span>
+        )}
+      </div>
+      <WeekGrid schedule={detail} canManage={canManage} />
+    </>
+  );
 }
 
 export default function SchedulesPage() {
