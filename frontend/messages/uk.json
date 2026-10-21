@@ -7209,7 +7209,13 @@
         "subtitle": "Управління робочими графіками та змінами персоналу",
         "schedulesTab": "Графіки",
         "myShiftsTab": "Мій розклад",
-        "chooseScheduleHint": "Оберіть графік зі списку"
+        "chooseScheduleHint": "Оберіть графік зі списку",
+        "publishButton": "Опублікувати",
+        "unpublishButton": "Повернути в чернетку",
+        "publishedToast": "Графік опубліковано",
+        "unpublishedToast": "Графік повернено в чернетку",
+        "draftHint": "Графік у чернетці — натисніть «Опублікувати», коли він готовий.",
+        "publishError": "Не вдалося опублікувати: {message}"
       },
       "form": {
         "editTitle": "Редагувати графік",
@@ -7271,6 +7277,13 @@
         "breakNegativeError": "Перерва не може бути від'ємною",
         "roleOverrideLabel": "Посада (замінити)",
         "roleOverridePlaceholder": "Необов'язково",
+        "workersLabel": "Працівники *",
+        "noWorkers": "Немає доступних працівників",
+        "daysLabel": "Дні тижня *",
+        "presetWeekdays": "Пн–Пт",
+        "presetAllWeek": "Весь тиждень",
+        "presetClear": "Очистити",
+        "willCreate": "{count, plural, one {Буде створено # зміну} few {Буде створено # зміни} many {Буде створено # змін} other {Буде створено # змін}}",
         "statusLabel": "Статус",
         "notesLabel": "Нотатки",
         "notesPlaceholder": "Довільні нотатки…",
@@ -7288,6 +7301,8 @@
       "weekGrid": {
         "workerColumnHeader": "Працівник",
         "addShiftToast": "Зміну додано",
+        "addShiftsToast": "{count, plural, one {Додано # зміну} few {Додано # зміни} many {Додано # змін} other {Додано # змін}}",
+        "addShiftsPartialError": "Не вдалося додати {failed}. {details}",
         "updateShiftToast": "Зміну оновлено",
         "deleteShiftConfirm": "Видалити зміну {name} {date}?",
         "deleteShiftToast": "Зміну видалено",

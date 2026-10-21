@@ -60,9 +60,11 @@ export function WeekGrid({ schedule, canManage }: Props) {
   const t = useTranslations("Dashboard.schedules.weekGrid");
   const [addShiftCell, setAddShiftCell] = useState<{ userId?: string; date: string } | null>(null);
   const [editingShift, setEditingShift] = useState<ScheduleShiftDto | null>(null);
+  const [bulkPending, setBulkPending]   = useState(false);
+  const [bulkError, setBulkError]       = useState<string | null>(null);
 
   const { data: usersData } = useUsers();
-  const users = (usersData ?? []).map((u) => ({ id: u.id, name: u.fullName }));
+  const users = (usersData ?? []).filter((u) => u.isActive).map((u) => ({ id: u.id, name: u.fullName }));
 
   const addShiftMutation    = useAddShift(schedule.id);
   const updateShiftMutation = useUpdateShift(schedule.id);
@@ -72,14 +74,29 @@ export function WeekGrid({ schedule, canManage }: Props) {
   const grid      = buildGrid(schedule.shifts);
   const workers   = uniqueWorkers(schedule.shifts);
 
-  function handleAdd(data: AddShiftPayload) {
-    addShiftMutation.mutate(
-      { ...data, locationId: schedule.locationId },
-      {
-        onSuccess: () => { toast.success(t("addShiftToast")); setAddShiftCell(null); },
-        onError:   (err) => toast.error(err.message),
-      },
-    );
+  // One request per (worker x day) via the existing validated endpoint; failures (e.g. an
+  // overlapping shift) are collected and reported without dropping the ones that succeeded.
+  async function handleAdd(items: AddShiftPayload[]) {
+    setBulkError(null);
+    setBulkPending(true);
+    const failures: string[] = [];
+    let ok = 0;
+    for (const item of items) {
+      try {
+        await addShiftMutation.mutateAsync({ ...item, locationId: schedule.locationId });
+        ok++;
+      } catch (err) {
+        failures.push(`${item.shiftDate}: ${(err as Error).message}`);
+      }
+    }
+    setBulkPending(false);
+    if (failures.length === 0) {
+      toast.success(t("addShiftsToast", { count: ok }));
+      setAddShiftCell(null);
+    } else {
+      if (ok > 0) toast.success(t("addShiftsToast", { count: ok }));
+      setBulkError(t("addShiftsPartialError", { failed: failures.length, details: failures.slice(0, 3).join("; ") }));
+    }
   }
 
   function handleUpdate(data: UpdateShiftPayload) {
@@ -275,10 +292,12 @@ export function WeekGrid({ schedule, canManage }: Props) {
           mode="create"
           scheduleId={schedule.id}
           users={users}
-          defaultDate={addShiftCell.date}
-          isPending={addShiftMutation.isPending}
-          error={addShiftMutation.error?.message ?? null}
-          onClose={() => { setAddShiftCell(null); addShiftMutation.reset(); }}
+          weekDates={weekDates}
+          defaultUserId={addShiftCell.userId}
+          defaultDate={addShiftCell.userId ? addShiftCell.date : undefined}
+          isPending={bulkPending}
+          error={bulkError}
+          onClose={() => { setAddShiftCell(null); setBulkError(null); }}
           onSubmit={handleAdd}
         />
       )}

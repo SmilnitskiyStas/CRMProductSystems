@@ -1613,3 +1613,6 @@ F4 "Клієнт" panel (wedge/camera/manual by phone|card|account), QR decoding
 
 ### TASK-739 - Staff dialog on /locations - review
 Сторінка `/locations/{id}/staff` (посилання «Персонал» у списку): таблиця працівників локації, пошук, фільтр ролі, масове додавання/відкріплення (enterprise_admin+). Backend без змін; tsc+lint чисті. Лог: `.claude/logs/tasks/739_*`.
+
+### TASK-740 - Schedules: publish button + bulk shifts - review
+Кнопка «Опублікувати» над сіткою; у формі зміни мультивибір працівників і днів (працівник×день). Frontend-only (+SupplierWeekGrid). my-shifts не фільтрує за статусом графіка. Лог: `.claude/logs/tasks/740_*`.

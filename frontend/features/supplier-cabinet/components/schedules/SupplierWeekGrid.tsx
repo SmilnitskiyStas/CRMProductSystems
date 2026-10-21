@@ -70,6 +70,8 @@ export function SupplierWeekGrid({ schedule, canManage }: Props) {
   const t = useTranslations("Dashboard.schedules.weekGrid");
   const [addShiftCell, setAddShiftCell] = useState<{ userId?: string; date: string } | null>(null);
   const [editingShift, setEditingShift] = useState<ScheduleShiftDto | null>(null);
+  const [bulkPending, setBulkPending]   = useState(false);
+  const [bulkError, setBulkError]       = useState<string | null>(null);
 
   const { data: staffData } = useSupplierScheduleStaff();
   const users = (staffData ?? []).map((u) => ({ id: u.id, name: u.fullName }));
@@ -82,14 +84,28 @@ export function SupplierWeekGrid({ schedule, canManage }: Props) {
   const grid      = buildGrid(schedule.shifts);
   const workers   = uniqueWorkers(schedule.shifts);
 
-  function handleAdd(data: AddShiftPayload) {
-    addShiftMutation.mutate(
-      { ...data, locationId: schedule.locationId },
-      {
-        onSuccess: () => { toast.success(t("addShiftToast")); setAddShiftCell(null); },
-        onError:   (err) => toast.error(err.message),
-      },
-    );
+  // One request per (worker x day); failures are collected without dropping the successes.
+  async function handleAdd(items: AddShiftPayload[]) {
+    setBulkError(null);
+    setBulkPending(true);
+    const failures: string[] = [];
+    let ok = 0;
+    for (const item of items) {
+      try {
+        await addShiftMutation.mutateAsync({ ...item, locationId: schedule.locationId });
+        ok++;
+      } catch (err) {
+        failures.push(`${item.shiftDate}: ${(err as Error).message}`);
+      }
+    }
+    setBulkPending(false);
+    if (failures.length === 0) {
+      toast.success(t("addShiftsToast", { count: ok }));
+      setAddShiftCell(null);
+    } else {
+      if (ok > 0) toast.success(t("addShiftsToast", { count: ok }));
+      setBulkError(t("addShiftsPartialError", { failed: failures.length, details: failures.slice(0, 3).join("; ") }));
+    }
   }
 
   function handleUpdate(data: UpdateShiftPayload) {
@@ -280,10 +296,12 @@ export function SupplierWeekGrid({ schedule, canManage }: Props) {
           mode="create"
           scheduleId={schedule.id}
           users={users}
-          defaultDate={addShiftCell.date}
-          isPending={addShiftMutation.isPending}
-          error={addShiftMutation.error?.message ?? null}
-          onClose={() => { setAddShiftCell(null); addShiftMutation.reset(); }}
+          weekDates={weekDates}
+          defaultUserId={addShiftCell.userId}
+          defaultDate={addShiftCell.userId ? addShiftCell.date : undefined}
+          isPending={bulkPending}
+          error={bulkError}
+          onClose={() => { setAddShiftCell(null); setBulkError(null); }}
           onSubmit={handleAdd}
         />
       )}

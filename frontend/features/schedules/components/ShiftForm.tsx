@@ -25,6 +25,8 @@ const labelStyle: React.CSSProperties = {
   marginBottom: 6,
 };
 
+const DAY_KEYS = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"] as const;
+
 const SHIFT_STATUSES: ShiftStatus[] = ["scheduled", "confirmed", "completed", "cancelled"];
 
 interface UserOption {
@@ -36,11 +38,15 @@ interface CreateProps {
   mode: "create";
   scheduleId: string;
   users: UserOption[];
+  /** The 7 dates (YYYY-MM-DD, Mon..Sun) of the schedule's week — day chips are built from these. */
+  weekDates: string[];
+  defaultUserId?: string;
   defaultDate?: string;
   isPending: boolean;
   error?: string | null;
   onClose: () => void;
-  onSubmit: (data: AddShiftPayload) => void;
+  /** One payload per (worker x day) pair — the parent creates them all. */
+  onSubmit: (data: AddShiftPayload[]) => void;
 }
 
 interface EditProps {
@@ -57,16 +63,18 @@ type Props = CreateProps | EditProps;
 function validate(
   t: (key: string) => string,
   fields: {
-    userId?: string;
-    shiftDate: string;
+    userIds?: string[];
+    shiftDates?: string[];
+    shiftDate?: string;
     startTime: string;
     endTime: string;
     breakMinutes: number;
   },
 ): Record<string, string> {
   const errors: Record<string, string> = {};
-  if ("userId" in fields && !fields.userId) errors.userId = t("workerRequiredError");
-  if (!fields.shiftDate) errors.shiftDate = t("dateRequiredError");
+  if (fields.userIds && fields.userIds.length === 0) errors.userId = t("workerRequiredError");
+  if (fields.shiftDates && fields.shiftDates.length === 0) errors.shiftDate = t("dateRequiredError");
+  if (fields.shiftDate !== undefined && !fields.shiftDate) errors.shiftDate = t("dateRequiredError");
   if (!fields.startTime) errors.startTime = t("startRequiredError");
   if (!fields.endTime) errors.endTime = t("endRequiredError");
   if (fields.startTime && fields.endTime && fields.startTime >= fields.endTime) {
@@ -79,11 +87,13 @@ function validate(
 export function ShiftForm(props: Props) {
   const t = useTranslations("Dashboard.schedules.shiftForm");
   const tShiftStatus = useTranslations("Dashboard.schedules.shiftStatus");
+  const tDay = useTranslations("Dashboard.schedules.weekGrid.dayShort");
   const isEdit = props.mode === "edit";
   const shift = isEdit ? props.shift : null;
 
-  const [userId, setUserId]           = useState(shift?.userId ?? "");
-  const [shiftDate, setShiftDate]     = useState(shift?.shiftDate ?? (props.mode === "create" ? (props.defaultDate ?? "") : ""));
+  const [userIds, setUserIds]         = useState<string[]>(props.mode === "create" && props.defaultUserId ? [props.defaultUserId] : []);
+  const [shiftDates, setShiftDates]   = useState<string[]>(props.mode === "create" && props.defaultDate ? [props.defaultDate] : []);
+  const [shiftDate, setShiftDate]     = useState(shift?.shiftDate ?? "");
   const [startTime, setStartTime]     = useState(shift ? shift.startTime.slice(0, 5) : "09:00");
   const [endTime, setEndTime]         = useState(shift ? shift.endTime.slice(0, 5) : "18:00");
   const [breakMinutes, setBreak]      = useState(shift?.breakMinutes ?? 60);
@@ -94,7 +104,12 @@ export function ShiftForm(props: Props) {
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    const errs = validate(t, { userId: isEdit ? undefined : userId, shiftDate, startTime, endTime, breakMinutes });
+    const errs = validate(
+      t,
+      isEdit
+        ? { shiftDate, startTime, endTime, breakMinutes }
+        : { userIds, shiftDates, startTime, endTime, breakMinutes },
+    );
     setErrors(errs);
     if (Object.keys(errs).length > 0) return;
 
@@ -108,16 +123,21 @@ export function ShiftForm(props: Props) {
         status,
       });
     } else {
-      (props as CreateProps).onSubmit({
-        userId,
-        locationId: "", // filled by parent from selected schedule locationId
-        shiftDate,
-        startTime,
-        endTime,
-        breakMinutes,
-        roleOverride: roleOverride.trim() || undefined,
-        notes: notes.trim() || undefined,
-      });
+      const dates = [...shiftDates].sort();
+      (props as CreateProps).onSubmit(
+        userIds.flatMap((userId) =>
+          dates.map((date) => ({
+            userId,
+            locationId: "", // filled by parent from selected schedule locationId
+            shiftDate: date,
+            startTime,
+            endTime,
+            breakMinutes,
+            roleOverride: roleOverride.trim() || undefined,
+            notes: notes.trim() || undefined,
+          })),
+        ),
+      );
     }
   }
 
@@ -188,35 +208,90 @@ export function ShiftForm(props: Props) {
           onSubmit={handleSubmit}
           style={{ padding: 22, overflowY: "auto", display: "flex", flexDirection: "column", gap: 14 }}
         >
-          {/* Worker select — create mode only */}
+          {/* Workers + days — create mode: multi-select, one shift per (worker x day) */}
           {!isEdit && (
-            <div>
-              <label style={labelStyle}>{t("workerLabel")}</label>
-              <select
-                value={userId}
-                onChange={(e) => setUserId(e.target.value)}
-                style={{ ...inputStyle, borderColor: errors.userId ? "#EF4444" : "#374151" }}
-              >
-                <option value="">{t("workerPlaceholder")}</option>
-                {(props as CreateProps).users.map((u) => (
-                  <option key={u.id} value={u.id}>{u.name}</option>
-                ))}
-              </select>
-              {errors.userId && <p style={{ color: "#EF4444", fontSize: 11, marginTop: 4 }}>{errors.userId}</p>}
-            </div>
+            <>
+              <div>
+                <label style={labelStyle}>{t("workersLabel")}</label>
+                <div
+                  style={{
+                    ...inputStyle, maxHeight: 150, overflowY: "auto", padding: 6,
+                    borderColor: errors.userId ? "#EF4444" : "#374151",
+                  }}
+                >
+                  {(props as CreateProps).users.length === 0 && (
+                    <div style={{ color: "#6B7280", fontSize: 12, padding: 6 }}>{t("noWorkers")}</div>
+                  )}
+                  {(props as CreateProps).users.map((u) => (
+                    <label key={u.id} style={{ display: "flex", gap: 8, alignItems: "center", padding: "4px 6px", cursor: "pointer", fontSize: 13 }}>
+                      <input
+                        type="checkbox"
+                        checked={userIds.includes(u.id)}
+                        onChange={() => setUserIds((p) => (p.includes(u.id) ? p.filter((x) => x !== u.id) : [...p, u.id]))}
+                      />
+                      {u.name}
+                    </label>
+                  ))}
+                </div>
+                {errors.userId && <p style={{ color: "#EF4444", fontSize: 11, marginTop: 4 }}>{errors.userId}</p>}
+              </div>
+
+              <div>
+                <label style={labelStyle}>{t("daysLabel")}</label>
+                <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 8 }}>
+                  {(props as CreateProps).weekDates.map((d, i) => {
+                    const on = shiftDates.includes(d);
+                    return (
+                      <button
+                        type="button"
+                        key={d}
+                        onClick={() => setShiftDates((p) => (p.includes(d) ? p.filter((x) => x !== d) : [...p, d]))}
+                        style={{
+                          padding: "6px 10px", borderRadius: 8, fontSize: 12, cursor: "pointer",
+                          border: `1px solid ${on ? "#3B82F6" : "#374151"}`,
+                          background: on ? "#1D3461" : "transparent",
+                          color: on ? "#93C5FD" : "#9CA3AF",
+                        }}
+                      >
+                        {tDay(DAY_KEYS[i])} {d.slice(8, 10)}.{d.slice(5, 7)}
+                      </button>
+                    );
+                  })}
+                </div>
+                <div style={{ display: "flex", gap: 8 }}>
+                  <Btn type="button" variant="ghost" size="sm" onClick={() => setShiftDates((props as CreateProps).weekDates.slice(0, 5))}>
+                    {t("presetWeekdays")}
+                  </Btn>
+                  <Btn type="button" variant="ghost" size="sm" onClick={() => setShiftDates((props as CreateProps).weekDates)}>
+                    {t("presetAllWeek")}
+                  </Btn>
+                  <Btn type="button" variant="ghost" size="sm" onClick={() => setShiftDates([])}>
+                    {t("presetClear")}
+                  </Btn>
+                </div>
+                {errors.shiftDate && <p style={{ color: "#EF4444", fontSize: 11, marginTop: 4 }}>{errors.shiftDate}</p>}
+                {userIds.length > 0 && shiftDates.length > 0 && (
+                  <p style={{ color: "#6B7280", fontSize: 11, marginTop: 6 }}>
+                    {t("willCreate", { count: userIds.length * shiftDates.length })}
+                  </p>
+                )}
+              </div>
+            </>
           )}
 
-          {/* Date */}
-          <div>
-            <label style={labelStyle}>{t("dateLabel")}</label>
-            <input
-              type="date"
-              value={shiftDate}
-              onChange={(e) => setShiftDate(e.target.value)}
-              style={{ ...inputStyle, borderColor: errors.shiftDate ? "#EF4444" : "#374151" }}
-            />
-            {errors.shiftDate && <p style={{ color: "#EF4444", fontSize: 11, marginTop: 4 }}>{errors.shiftDate}</p>}
-          </div>
+          {/* Date — edit mode only */}
+          {isEdit && (
+            <div>
+              <label style={labelStyle}>{t("dateLabel")}</label>
+              <input
+                type="date"
+                value={shiftDate}
+                onChange={(e) => setShiftDate(e.target.value)}
+                style={{ ...inputStyle, borderColor: errors.shiftDate ? "#EF4444" : "#374151" }}
+              />
+              {errors.shiftDate && <p style={{ color: "#EF4444", fontSize: 11, marginTop: 4 }}>{errors.shiftDate}</p>}
+            </div>
+          )}
 
           {/* Start / End */}
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
