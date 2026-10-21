@@ -2335,9 +2335,25 @@
         "statusActive": "Active",
         "statusInactive": "Inactive",
         "planLink": "Plan",
+        "staffButton": "Staff",
         "edit": "Edit",
         "toastCreated": "Location created",
         "toastUpdated": "Location saved",
+        "toastError": "Error: {message}"
+      },
+      "staff": {
+        "title": "Staff: {name}",
+        "hint": "Location-scoped employees only see data of their own locations. An employee with no location assigned sees everything (until an assignment is set).",
+        "loading": "Loading…",
+        "empty": "Nobody is assigned to this location yet.",
+        "remove": "Unassign",
+        "pickPlaceholder": "Select an employee…",
+        "noCandidates": "No employees available to add",
+        "add": "Add",
+        "openUsers": "Open Users",
+        "close": "Close",
+        "toastAdded": "Employee assigned to the location",
+        "toastRemoved": "Employee unassigned",
         "toastError": "Error: {message}"
       },
       "form": {

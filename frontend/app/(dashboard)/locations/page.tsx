@@ -16,7 +16,8 @@ import { LocationFormDialog } from "@/features/locations/components/LocationForm
 import type { LocationDto, LocationType, LocationSortKey } from "@/features/locations/types";
 import { useMe } from "@/features/auth/hooks/useAuth";
 import { useStoreContext, useStoreScopeReady } from "@/lib/useStoreContext";
-import { hasRole, AT_LEAST_ENTERPRISE_ADMIN } from "@/lib/roles";
+import { hasRole, AT_LEAST_ENTERPRISE_ADMIN, AT_LEAST_STORE_MANAGER } from "@/lib/roles";
+import { LocationStaffDialog } from "@/features/locations/components/LocationStaffDialog";
 import { Table, type TableColumn } from "@/components/ui/Table";
 
 // ── Page ───────────────────────────────────────────────────────────────────────
@@ -78,6 +79,10 @@ export default function LocationsPage() {
   // roles never see a button that would 403. GET stays open to all CanViewStock roles —
   // no whole-page gate, only the two mutating buttons below.
   const canManageLocations = hasRole(me?.role, AT_LEAST_ENTERPRISE_ADMIN);
+  // Staff-of-location view: GET /api/users is AtLeastStoreManager; editing assignments is
+  // enterprise_admin+ only (PUT /api/users/:id/locations).
+  const canViewStaff = hasRole(me?.role, AT_LEAST_STORE_MANAGER);
+  const [staffFor, setStaffFor] = useState<LocationDto | null>(null);
 
   const create = useCreateLocation();
   const updateId = dialog && dialog !== "create" ? dialog.id : "";
@@ -211,6 +216,11 @@ export default function LocationsPage() {
             <Map size={13} />
             {t("planLink")}
           </Link>
+          {canViewStaff && (
+            <Btn variant="ghost" size="sm" onClick={() => setStaffFor(loc)}>
+              {t("staffButton")}
+            </Btn>
+          )}
           {canManageLocations && (
             <Btn variant="ghost" size="sm" onClick={() => setDialog(loc)}>
               {t("edit")}
@@ -269,6 +279,14 @@ export default function LocationsPage() {
         isLoading={showLoading}
         emptyMessage={showLoading ? tCommon("loading") : t("empty")}
       />
+
+      {staffFor && (
+        <LocationStaffDialog
+          location={staffFor}
+          canEdit={canManageLocations}
+          onClose={() => setStaffFor(null)}
+        />
+      )}
 
       {/* Dialog */}
       {dialog !== null && (
