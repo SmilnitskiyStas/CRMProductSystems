@@ -3,6 +3,8 @@
 import { useState } from "react";
 import { useTranslations } from "next-intl";
 import { toast } from "sonner";
+import { useBulkAddShifts } from "@/features/schedules/hooks/useBulkAddShifts";
+import { BulkResultNotice } from "@/features/schedules/components/BulkResultNotice";
 import { Plus } from "lucide-react";
 import type {
   WorkScheduleDetailDto,
@@ -70,8 +72,6 @@ export function SupplierWeekGrid({ schedule, canManage }: Props) {
   const t = useTranslations("Dashboard.schedules.weekGrid");
   const [addShiftCell, setAddShiftCell] = useState<{ userId?: string; date: string } | null>(null);
   const [editingShift, setEditingShift] = useState<ScheduleShiftDto | null>(null);
-  const [bulkPending, setBulkPending]   = useState(false);
-  const [bulkError, setBulkError]       = useState<string | null>(null);
 
   const { data: staffData } = useSupplierScheduleStaff();
   const users = (staffData ?? []).map((u) => ({ id: u.id, name: u.fullName }));
@@ -84,28 +84,15 @@ export function SupplierWeekGrid({ schedule, canManage }: Props) {
   const grid      = buildGrid(schedule.shifts);
   const workers   = uniqueWorkers(schedule.shifts);
 
-  // One request per (worker x day); failures are collected without dropping the successes.
+  const bulk = useBulkAddShifts(addShiftMutation.mutateAsync, schedule.locationId);
+
   async function handleAdd(items: AddShiftPayload[]) {
-    setBulkError(null);
-    setBulkPending(true);
-    const failures: string[] = [];
-    let ok = 0;
-    for (const item of items) {
-      try {
-        await addShiftMutation.mutateAsync({ ...item, locationId: schedule.locationId });
-        ok++;
-      } catch (err) {
-        failures.push(`${item.shiftDate}: ${(err as Error).message}`);
-      }
-    }
-    setBulkPending(false);
-    if (failures.length === 0) {
-      toast.success(t("addShiftsToast", { count: ok }));
-      setAddShiftCell(null);
-    } else {
-      if (ok > 0) toast.success(t("addShiftsToast", { count: ok }));
-      setBulkError(t("addShiftsPartialError", { failed: failures.length, details: failures.slice(0, 3).join("; ") }));
-    }
+    const res = await bulk.run(items);
+    if (res.ok.length > 0) toast.success(t("addShiftsToast", { count: res.ok.length }));
+    // Close the form and report per-worker/day outcome in the notice above the grid; a fully
+    // successful add needs only the toast.
+    setAddShiftCell(null);
+    if (res.failed.length === 0) bulk.clear();
   }
 
   function handleUpdate(data: UpdateShiftPayload) {
@@ -132,6 +119,13 @@ export function SupplierWeekGrid({ schedule, canManage }: Props) {
 
   return (
     <div style={{ overflowX: "auto" }}>
+      {bulk.result && bulk.result.failed.length > 0 && (
+        <BulkResultNotice
+          result={bulk.result}
+          userNames={new Map(users.map((u) => [u.id, u.name]))}
+          onClose={bulk.clear}
+        />
+      )}
       <table style={{ borderCollapse: "collapse", width: "100%", minWidth: 700 }}>
         <thead>
           <tr>
@@ -299,9 +293,9 @@ export function SupplierWeekGrid({ schedule, canManage }: Props) {
           weekDates={weekDates}
           defaultUserId={addShiftCell.userId}
           defaultDate={addShiftCell.userId ? addShiftCell.date : undefined}
-          isPending={bulkPending}
-          error={bulkError}
-          onClose={() => { setAddShiftCell(null); setBulkError(null); }}
+          isPending={bulk.pending}
+          error={null}
+          onClose={() => setAddShiftCell(null)}
           onSubmit={handleAdd}
         />
       )}
