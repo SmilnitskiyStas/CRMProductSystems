@@ -363,3 +363,37 @@ export interface AduDto {
   validDays60d: number | null;
   calculatedAt: string;
 }
+
+// GET /api/analytics/pos/promo-no-sales -- promo items that do not sell although the store holds
+// stock (probably not on the shelf). `reason` drives the localized hint.
+export interface PromoNoSalesItemDto {
+  storeId: string;
+  storeName: string;
+  productId: string;
+  productName: string;
+  barcode: string | null;
+  promoSource: "discount" | "campaign" | "rule";
+  promoSourceId: string;
+  promoName: string;
+  discountPercent: number | null;
+  promoStart: string;
+  promoEnd: string | null;
+  periodFrom: string;
+  periodTo: string;
+  periodDays: number;
+  unitsSold: number;
+  expectedUnits: number | null;
+  storeStock: number;
+  onShelfStock: number;
+  warehouseStock: number;
+  zoneId: string | null;
+  zoneName: string | null;
+  reason: "no_sales" | "low_sales";
+}
+
+export interface PromoNoSalesDto {
+  asOf: string;
+  minPromoDays: number;
+  maxSalesRatio: number;
+  items: PromoNoSalesItemDto[];
+}

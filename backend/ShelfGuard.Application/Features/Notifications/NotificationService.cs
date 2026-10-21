@@ -369,6 +369,8 @@ public sealed class NotificationService : INotificationService
         "auth.password_reset_requested",
         // AI shelf-photo check found missing/low items (worker sends the alert from shelf_scans.AlertPending).
         "shelf.empty",
+        // Promo item is running but does not sell while the store holds stock (worker promo-no-sales job).
+        "promo.no_sales",
     ];
 
     private static readonly HashSet<string> ValidChannels =

@@ -44,6 +44,14 @@ export function useWorstProducts(
   });
 }
 
+export function usePromoNoSales(params: { store_id?: string }, enabled = true) {
+  return useQuery({
+    queryKey: ["pos-analytics-promo-no-sales", params],
+    queryFn: () => posAnalyticsApi.getPromoNoSales(params),
+    enabled,
+  });
+}
+
 export function usePosCashiers(params: PosDateRangeParams, enabled = true) {
   return useQuery({
     queryKey: ["pos-analytics-cashiers", params],

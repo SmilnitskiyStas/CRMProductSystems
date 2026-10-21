@@ -13,11 +13,13 @@ import {
   usePosRevenueTrendCompare,
   usePosTopProducts,
   useWorstProducts,
+  usePromoNoSales,
   usePosCashiers,
 } from "@/features/analytics/hooks/usePosAnalytics";
 import { PosSummaryCards } from "@/features/analytics/components/PosSummaryCards";
 import { PosRevenueTrendChart } from "@/features/analytics/components/PosRevenueTrendChart";
 import { PosTopProductsTable } from "@/features/analytics/components/PosTopProductsTable";
+import { PromoNoSalesBanner } from "@/features/analytics/components/PromoNoSalesBanner";
 import { WorstProductsTable } from "@/features/analytics/components/WorstProductsTable";
 import { PosCashierStatsTable } from "@/features/analytics/components/PosCashierStatsTable";
 import { PosStoreDetailPanel } from "@/features/analytics/components/PosStoreDetailPanel";
@@ -133,6 +135,7 @@ export default function PosAnalyticsPage() {
     { ...params, limit: "10" },
     enabled,
   );
+  const { data: promoNoSales } = usePromoNoSales({ store_id: effectiveStoreId }, enabled);
   const { data: cashiers, isLoading: cashiersLoading } = usePosCashiers(
     { from, to, store_id: effectiveStoreId },
     enabled,
@@ -209,6 +212,9 @@ export default function PosAnalyticsPage() {
       </div>
 
       {/* KPI summary cards */}
+      {/* Promo items in stock that do not sell - probably not on the shelf; renders nothing when empty. */}
+      {promoNoSales && <PromoNoSalesBanner data={promoNoSales} />}
+
       <section>
         <h2 style={sectionTitle}>{t("summarySection")}</h2>
         {effectiveSummaryLoading ? (
