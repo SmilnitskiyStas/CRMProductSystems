@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using ShelfGuard.Application.Features.Analytics;
 using ShelfGuard.Application.Features.Analytics.Dtos;
+using ShelfGuard.Application.Features.Analytics.PromoNoSales;
 using ShelfGuard.Infrastructure.Authorization;
 using System.Security.Claims;
 
@@ -23,8 +24,13 @@ namespace ShelfGuard.Api.Controllers;
 public sealed class AnalyticsController : ControllerBase
 {
     private readonly IAnalyticsService _analytics;
+    private readonly IPromoNoSalesService _promoNoSales;
 
-    public AnalyticsController(IAnalyticsService analytics) => _analytics = analytics;
+    public AnalyticsController(IAnalyticsService analytics, IPromoNoSalesService promoNoSales)
+    {
+        _analytics = analytics;
+        _promoNoSales = promoNoSales;
+    }
 
     // TASK-610: storeIds is a repeated query param (`?storeIds=guid1&storeIds=guid2`) — omitted
     // or empty means "all stores" (same convention as TASK-608's other multi-store endpoints).
@@ -364,6 +370,21 @@ public sealed class AnalyticsController : ControllerBase
         var (resolvedFrom, resolvedTo) = ResolveDateRange(from, to);
         var result = await _analytics.GetWorstProductsAsync(tenantId, store_id, resolvedFrom, resolvedTo, limit, ct);
         return Ok(result);
+    }
+
+    // Promo items that do not sell although the store holds stock - the item is probably not on the
+    // shelf / misplaced and needs a revision. Tenant-scoped (RLS + store-scope apply to every read).
+    [HttpGet("pos/promo-no-sales")]
+    [RequireModule("analytics")]
+    [ProducesResponseType(typeof(PromoNoSalesDto), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetPromoNoSales(
+        [FromQuery] Guid? store_id,
+        CancellationToken ct = default)
+    {
+        var tenantId = ResolveTenantId();
+        if (tenantId is null) return Forbid();
+
+        return Ok(await _promoNoSales.GetAsync(tenantId.Value, store_id, ct));
     }
 
     [HttpGet("pos/cashiers")]

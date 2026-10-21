@@ -49,7 +49,24 @@ export type ShelfEmptyPayload = {
   summary: string | null;
 };
 
-type NotificationPayload = ExpiryAlertPayload | TempAlertPayload | IotOfflinePayload | ShelfEmptyPayload;
+export type PromoNoSalesPayload = {
+  type: "promo_no_sales";
+  tenantId: string;
+  storeId: string;
+  storeName: string;
+  items: {
+    productName: string;
+    promoName: string;
+    storeStock: number;
+    unitsSold: number;
+    expectedUnits: number | null;
+    days: number;
+    reason: "no_sales" | "low_sales";
+  }[];
+};
+
+type NotificationPayload =
+  | ExpiryAlertPayload | TempAlertPayload | IotOfflinePayload | ShelfEmptyPayload | PromoNoSalesPayload;
 
 // ── EventType keys must match backend ValidEventTypes and frontend types.ts ──
 
@@ -414,6 +431,104 @@ async function handleShelfEmpty(p: ShelfEmptyPayload): Promise<void> {
   }
 }
 
+// ── Promo item without sales (promo.no_sales) ──────────────────────────────
+
+const PROMO_NO_SALES_ROLES = ["merchandiser", "store_manager", "network_manager", "enterprise_admin"];
+const PROMO_NO_SALES_DEFAULT_CHANNELS = ["telegram", "email"];
+
+export function formatPromoNoSalesText(p: PromoNoSalesPayload): string {
+  const max = 10;
+  const lines: string[] = [
+    "🏷 <b>ShelfGuard — акційні товари без продажів</b>",
+    "",
+    `<b>Магазин:</b> ${escapeHtml(p.storeName)}`,
+    "Товар в акції, на залишку є, але продажів немає або майже немає. Ймовірно, він не виставлений на полицю або стоїть не на місці — проведіть ревізію.",
+    "",
+  ];
+  for (const i of p.items.slice(0, max)) {
+    const expected = i.expectedUnits !== null ? `, очікувалось ~${i.expectedUnits}` : "";
+    lines.push(
+      `• ${escapeHtml(i.productName)} — «${escapeHtml(i.promoName)}»: продано ${i.unitsSold} за ${i.days} дн.${expected}, залишок ${i.storeStock}`
+    );
+  }
+  if (p.items.length > max) lines.push(`… і ще ${p.items.length - max}`);
+  return lines.join("\n");
+}
+
+async function handlePromoNoSales(p: PromoNoSalesPayload): Promise<void> {
+  const eventType = "promo.no_sales";
+  const client = await db.connect();
+  try {
+    await client.query("SET app.role = 'worker'");
+
+    // enterprise_admin / network_manager see every store; store_manager / merchandiser only the
+    // stores assigned to them (primary store or user_locations).
+    const usersRes = await client.query<{ id: string; email: string; telegram_chat_id: string | null }>(
+      `SELECT u."Id" AS id, u."Email" AS email, u."TelegramChatId" AS telegram_chat_id
+       FROM users u
+       WHERE u."TenantId" = $1
+         AND u."Role" = ANY($2::text[])
+         AND u."IsActive" = true
+         AND (u."TelegramChatId" IS NOT NULL OR u."Email" IS NOT NULL)
+         AND (u."Role" IN ('enterprise_admin', 'network_manager')
+              OR u."StoreId" = $3
+              OR EXISTS (SELECT 1 FROM user_locations ul WHERE ul."UserId" = u."Id" AND ul."LocationId" = $3))`,
+      [p.tenantId, PROMO_NO_SALES_ROLES, p.storeId]
+    );
+    if (usersRes.rows.length === 0) return;
+
+    const settingsRes = await client.query<{ user_id: string; channel: string }>(
+      `SELECT "UserId" AS user_id, "Channel" AS channel
+       FROM notification_settings
+       WHERE "UserId" = ANY($1::uuid[]) AND "EventType" = $2 AND "IsEnabled" = true`,
+      [usersRes.rows.map((u) => u.id), eventType]
+    );
+    const enabledMap = new Map<string, Set<string>>();
+    for (const row of settingsRes.rows) {
+      if (!enabledMap.has(row.user_id)) enabledMap.set(row.user_id, new Set());
+      enabledMap.get(row.user_id)!.add(row.channel);
+    }
+
+    const telegramText = formatPromoNoSalesText(p);
+    const emailContent = {
+      subject: `[ShelfGuard] Акційні товари без продажів: ${p.storeName}`,
+      html: telegramText.split("\n").join("<br>"),
+    };
+
+    for (const user of usersRes.rows) {
+      const userChannels = enabledMap.get(user.id) ?? new Set(PROMO_NO_SALES_DEFAULT_CHANNELS);
+      const activeChannels = Array.from(userChannels).filter((c) => PROMO_NO_SALES_DEFAULT_CHANNELS.includes(c));
+
+      const outcomes: DeliveryOutcome[] = [];
+      for (const channel of activeChannels) {
+        if (channel === "telegram") {
+          outcomes.push(
+            user.telegram_chat_id
+              ? await deliver("telegram", () => sendTelegramMessage(user.telegram_chat_id!, telegramText))
+              : { channel: "telegram", status: "skipped", error: "no telegram_chat_id" }
+          );
+        } else if (channel === "email") {
+          outcomes.push(
+            user.email
+              ? await deliver("email", () => sendEmail({ to: user.email, ...emailContent }))
+              : { channel: "email", status: "skipped", error: "no email" }
+          );
+        }
+      }
+      if (outcomes.length === 0) continue;
+
+      for (const o of outcomes) {
+        if (o.status === "failed") {
+          console.error(`[notifications] ${o.channel} send failed for user ${user.id}: ${o.error}`);
+        }
+      }
+      await logNotifications(client, { tenantId: p.tenantId, userId: user.id, eventType, payload: p, outcomes });
+    }
+  } finally {
+    client.release();
+  }
+}
+
 // ── Worker ─────────────────────────────────────────────────────────────────
 
 export function startNotificationWorker(): Worker {
@@ -430,6 +545,8 @@ export function startNotificationWorker(): Worker {
         await handleIotOffline(job.data);
       } else if (job.data.type === "shelf_empty") {
         await handleShelfEmpty(job.data);
+      } else if (job.data.type === "promo_no_sales") {
+        await handlePromoNoSales(job.data);
       } else {
         console.warn(`[notifications] unknown job type: ${(job.data as any).type}`);
       }

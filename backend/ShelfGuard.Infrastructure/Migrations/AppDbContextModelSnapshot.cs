@@ -4444,6 +4444,52 @@ namespace ShelfGuard.Infrastructure.Migrations
                     b.ToTable("promo_cannibalization", (string)null);
                 });
 
+            modelBuilder.Entity("ShelfGuard.Domain.Entities.PromoNoSalesAlert", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasDefaultValueSql("gen_random_uuid()");
+
+                    b.Property<DateTime>("FirstDetectedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("NOW()");
+
+                    b.Property<DateTime>("LastNotifiedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("NOW()");
+
+                    b.Property<Guid>("LocationId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("NotifyCount")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("ProductId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("PromoKey")
+                        .IsRequired()
+                        .HasMaxLength(80)
+                        .HasColumnType("character varying(80)");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TenantId")
+                        .HasDatabaseName("idx_promo_no_sales_alerts_tenant");
+
+                    b.HasIndex("LocationId", "ProductId", "PromoKey")
+                        .IsUnique()
+                        .HasDatabaseName("ux_promo_no_sales_alerts_key");
+
+                    b.ToTable("promo_no_sales_alerts", (string)null);
+                });
+
             modelBuilder.Entity("ShelfGuard.Domain.Entities.PromotionCampaign", b =>
                 {
                     b.Property<Guid>("Id")

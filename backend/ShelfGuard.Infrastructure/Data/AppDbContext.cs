@@ -35,6 +35,7 @@ public sealed class AppDbContext : DbContext
     // Shelf planogram + AI shelf-photo scans
     public DbSet<ShelfItem> ShelfItems => Set<ShelfItem>();
     public DbSet<ShelfScan> ShelfScans => Set<ShelfScan>();
+    public DbSet<PromoNoSalesAlert> PromoNoSalesAlerts => Set<PromoNoSalesAlert>();
 
     // Stock
     public DbSet<ProductStock> ProductStocks => Set<ProductStock>();
@@ -625,6 +626,20 @@ public sealed class AppDbContext : DbContext
              .HasDatabaseName("idx_shelf_scans_alert_pending");
             e.HasOne<LocationZone>().WithMany()
              .HasForeignKey(a => a.ZoneId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // ── PromoNoSalesAlert (dedup ledger for the worker's promo-without-sales alert) ──
+        builder.Entity<PromoNoSalesAlert>(e =>
+        {
+            e.ToTable("promo_no_sales_alerts");
+            e.HasKey(a => a.Id);
+            e.Property(a => a.Id).HasDefaultValueSql("gen_random_uuid()");
+            e.Property(a => a.PromoKey).HasMaxLength(80).IsRequired();
+            e.Property(a => a.FirstDetectedAt).HasDefaultValueSql("NOW()");
+            e.Property(a => a.LastNotifiedAt).HasDefaultValueSql("NOW()");
+            e.HasIndex(a => new { a.LocationId, a.ProductId, a.PromoKey }).IsUnique()
+             .HasDatabaseName("ux_promo_no_sales_alerts_key");
+            e.HasIndex(a => a.TenantId).HasDatabaseName("idx_promo_no_sales_alerts_tenant");
         });
 
         // ── ProductStock ────────────────────────────────────────────────────

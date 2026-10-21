@@ -1625,3 +1625,6 @@ single-flight refresh + cross-tab lock (`lib/api.ts`), 10 с grace у `AuthServi
 
 ### TASK-746 — capability `consumer_app.manage` (розділ «Застосунок» через TenantRole) — review
 Нова capability + політика `ConsumerAppManageOrCapability` на 12 контролерах consumer-app, tab-ключі `consumer_app` + `/consumer-app/*`, Sidebar role OR capability. Лог: `.claude/logs/tasks/746_*`. Гілка feat/consumer-app-role-capability, не змерджено.
+
+### TASK-749 — Акційні товари без продажів (сповіщення + `/analytics/pos`) — review
+Детектор (3 джерела акцій, пороги в `PromoNoSalesThresholds`), `GET /api/analytics/pos/promo-no-sales`, worker `promo-no-sales` (07:00, дедуп `promo_no_sales_alerts`, міграція `AddPromoNoSalesAlerts`), банер на `/analytics/pos`. Лог: `.claude/logs/tasks/749_*`. Не закомічено.

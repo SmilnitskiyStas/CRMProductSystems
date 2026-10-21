@@ -9,6 +9,7 @@ import type {
   ProductSalesTrendDto,
   ProductSalesTrendCompareDto,
   WorstProductsDto,
+  PromoNoSalesDto,
 } from "../types";
 
 export interface PosDateRangeParams {
@@ -116,6 +117,11 @@ export const posAnalyticsApi = {
   getWorstProducts: (params: PosDateRangeParams & { limit?: string }) =>
     api.get<WorstProductsDto>(
       `/api/analytics/pos/worst-products${buildQs([...rangeEntries(params), ["limit", params.limit]])}`,
+    ),
+
+  getPromoNoSales: (params: { store_id?: string }) =>
+    api.get<PromoNoSalesDto>(
+      `/api/analytics/pos/promo-no-sales${buildQs([["store_id", params.store_id]])}`,
     ),
 
   getCashiers: (params: PosDateRangeParams) =>

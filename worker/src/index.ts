@@ -20,12 +20,18 @@ import { startReplenishmentRecomputeWorker } from "./jobs/replenishment-recomput
 import { startCustomerMessagePushWorker } from "./jobs/customer-message-push.job";
 
 import { startShelfAlertWorker } from "./jobs/shelf-alert.job";
+import { startPromoNoSalesWorker } from "./jobs/promo-no-sales.job";
 
 async function scheduleRecurringJobs(): Promise<void> {
   // TASK-728: every minute — turn shelf_scans.AlertPending rows (AI shelf-photo check found
   // missing/low items) into `shelf_empty` notifications and clear the flag.
   const shelfAlertQueue = new Queue("shelf-alert", { connection: redisConnection });
   await shelfAlertQueue.upsertJobScheduler("shelf-alert-cron", { pattern: "* * * * *" }, { name: "shelf-alert" });
+
+  // Daily 07:00 — promo items that do not sell although the store holds stock (after the 00:20
+  // daily_sales aggregation). Deduplicated through promo_no_sales_alerts.
+  const promoNoSalesQueue = new Queue("promo-no-sales", { connection: redisConnection });
+  await promoNoSalesQueue.upsertJobScheduler("promo-no-sales-cron", { pattern: "0 7 * * *" }, { name: "promo-no-sales" });
 
   const expiryQueue = new Queue("expiry-check", { connection: redisConnection });
   // Drop the legacy scheduler id left in Redis by an older worker version —
@@ -144,6 +150,7 @@ async function main(): Promise<void> {
   startPermissionGrantExpiryWorker();
   startCustomerMessagePushWorker();
   startShelfAlertWorker();
+  startPromoNoSalesWorker();
 
   console.log("[worker] All workers started. Waiting for jobs…");
 }

@@ -46,6 +46,7 @@ services.AddScoped<IAuthService, AuthService>();
         services.AddScoped<ITransferService, TransferService>();
         services.AddScoped<IWriteOffService, WriteOffService>();
         services.AddScoped<IAnalyticsService, AnalyticsService>();
+        services.AddScoped<Features.Analytics.PromoNoSales.IPromoNoSalesService, Features.Analytics.PromoNoSales.PromoNoSalesService>();
         services.AddScoped<INotificationService, NotificationService>();
         services.AddScoped<IIntegrationService, IntegrationService>();
         services.AddScoped<IPrroSettingsService, PrroSettingsService>();
