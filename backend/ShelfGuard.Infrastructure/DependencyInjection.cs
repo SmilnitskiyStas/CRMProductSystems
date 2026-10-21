@@ -339,6 +339,7 @@ public static class DependencyInjection
         services.AddScoped<Application.Features.MarketingAnalytics.PriceSegments.IPriceSegmentsRepository,
             Data.Repositories.PriceSegmentsRepository>();
         services.AddScoped<Domain.Interfaces.IShelfPhotoAdvisor, AI.ShelfPhotoAdvisor.ShelfPhotoAdvisor>();
+        services.AddScoped<Domain.Interfaces.IShelfRestockAdvisor, AI.ShelfRestockAdvisor.ShelfRestockAdvisor>();
         services.AddScoped<Domain.Interfaces.IPriceSegmentAdvisor,
             AI.PriceSegmentAdvisor.PriceSegmentAdvisor>();
 

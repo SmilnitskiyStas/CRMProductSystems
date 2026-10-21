@@ -1,5 +1,5 @@
 import { api } from "@/lib/api";
-import type { PlanogramEntry, ShelfItemDto, ShelfScanDto } from "../types";
+import type { PlanogramEntry, ShelfItemDto, ShelfItemInsightDto, ShelfScanDto } from "../types";
 
 const base = (locationId: string, zoneId: string) =>
   `/api/locations/${locationId}/zones/${zoneId}`;
@@ -17,6 +17,8 @@ export const shelvesApi = {
     if (shelfId) form.append("shelfId", shelfId);
     return api.postForm<ShelfScanDto>(`${base(locationId, zoneId)}/scans`, form);
   },
+  getShelfInsights: (locationId: string, zoneId: string, shelfId: string) =>
+    api.get<ShelfItemInsightDto[]>(`${base(locationId, zoneId)}/shelves/${shelfId}/insights`),
   getScans: (locationId: string, zoneId: string, limit = 20) =>
     api.get<ShelfScanDto[]>(`${base(locationId, zoneId)}/scans?limit=${limit}`),
   getScan: (locationId: string, zoneId: string, scanId: string) =>

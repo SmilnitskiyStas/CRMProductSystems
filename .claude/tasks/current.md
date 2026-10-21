@@ -1625,3 +1625,9 @@ single-flight refresh + cross-tab lock (`lib/api.ts`), 10 с grace у `AuthServi
 
 ### TASK-746 — capability `consumer_app.manage` (розділ «Застосунок» через TenantRole) — review
 Нова capability + політика `ConsumerAppManageOrCapability` на 12 контролерах consumer-app, tab-ключі `consumer_app` + `/consumer-app/*`, Sidebar role OR capability. Лог: `.claude/logs/tasks/746_*`. Гілка feat/consumer-app-role-capability, не змерджено.
+
+### TASK-747 - Планограма backend: підкладка плану, типи зон, інсайти полиці, збагачення AI-скану - review
+Upload фону плану, нові типи зон, `GET .../shelves/{shelfId}/insights`, enrich скану (склад/продажі/рекомендація) + `ShelfRestockAdvisor`. Без міграцій. Лог: `.claude/logs/tasks/747_*`. Не закомічено.
+
+### TASK-748 - Планограма frontend: підкладка плану, типи зон, ShelfInsightPanel, збагачений скан - review
+tsc/lint/next build OK; UI не перевірено у браузері (чекає backend TASK-747). Лог: `.claude/logs/tasks/748_*`. Не закомічено.

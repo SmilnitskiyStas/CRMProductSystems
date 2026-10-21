@@ -1,8 +1,11 @@
 "use client";
 
-import { Plus, Trash2 } from "lucide-react";
+import { useRef } from "react";
+import { ImagePlus, Plus, Trash2 } from "lucide-react";
 import { useTranslations } from "next-intl";
 import type { FloorPlanLayout, LocationZoneDto, ZoneStatusCounts } from "../types";
+import { PLAN_ACCEPT } from "../lib/floorPlanBackground";
+import { ZONE_PALETTE_TYPES, zoneTypeMeta } from "../lib/zoneTypes";
 import { STATUS_CONFIG, ZONE_TYPE_ICONS, worstStatus } from "./FloorPlanCanvas";
 
 interface Props {
@@ -12,7 +15,11 @@ interface Props {
   selectedZoneId: string | null;
   onAdd: (zoneId: string) => void;
   onRemove: (zoneId: string) => void;
-  onCreateZone: () => void;
+  onCreateZone: (type?: string) => void;
+  onUploadBackground: (file: File) => void;
+  onBackgroundOpacity: (opacity: number) => void;
+  onRemoveBackground: () => void;
+  uploadingBackground: boolean;
   onOpenShelves: (zoneId: string) => void;
   onResizeCanvas: (w: number, h: number) => void;
 }
@@ -25,10 +32,17 @@ export function FloorPlanSidePanel({
   onAdd,
   onRemove,
   onCreateZone,
+  onUploadBackground,
+  onBackgroundOpacity,
+  onRemoveBackground,
+  uploadingBackground,
   onOpenShelves,
   onResizeCanvas,
 }: Props) {
   const t = useTranslations("Dashboard.locations.floorPlan");
+  const tTypes = useTranslations("Dashboard.locations.zoneTypes");
+  const fileRef = useRef<HTMLInputElement | null>(null);
+  const bg = layout.background ?? null;
   const tZoneStatus = useTranslations("Dashboard.locations.zoneStatus");
   const placedIds = new Set(layout.zones.map((z) => z.zoneId));
   const unplaced = zones.filter((z) => z.isActive && !placedIds.has(z.id));
@@ -119,11 +133,115 @@ export function FloorPlanSidePanel({
         )}
       </Panel>
 
+      {/* Background plan */}
+      <Panel title={t("backgroundTitle")}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          <input
+            ref={fileRef}
+            type="file"
+            accept={PLAN_ACCEPT}
+            hidden
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              if (f) onUploadBackground(f);
+              e.target.value = "";
+            }}
+          />
+          <button
+            onClick={() => fileRef.current?.click()}
+            disabled={uploadingBackground}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 6,
+              background: "#0d1f3a",
+              border: "1px solid #1D4ED8",
+              color: "#60A5FA",
+              borderRadius: 8,
+              padding: "8px 10px",
+              fontSize: 12,
+              fontWeight: 600,
+              cursor: uploadingBackground ? "default" : "pointer",
+            }}
+          >
+            <ImagePlus size={14} /> {uploadingBackground ? t("backgroundUploading") : t("backgroundUpload")}
+          </button>
+          {bg ? (
+            <>
+              <label style={{ color: "#9CA3AF", fontSize: 12 }}>
+                {t("backgroundOpacity", { value: Math.round(bg.opacity * 100) })}
+                <input
+                  type="range"
+                  min={10}
+                  max={100}
+                  step={5}
+                  value={Math.round(bg.opacity * 100)}
+                  onChange={(e) => onBackgroundOpacity(Number(e.target.value) / 100)}
+                  style={{ width: "100%" }}
+                />
+              </label>
+              <button
+                onClick={onRemoveBackground}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: 6,
+                  background: "#2a0a0a",
+                  border: "1px solid #991b1b",
+                  color: "#ef4444",
+                  borderRadius: 8,
+                  padding: "6px 10px",
+                  fontSize: 12,
+                  cursor: "pointer",
+                }}
+              >
+                <Trash2 size={14} /> {t("backgroundRemove")}
+              </button>
+            </>
+          ) : (
+            <p style={{ color: "#6B7280", fontSize: 12, margin: 0, lineHeight: 1.5 }}>{t("backgroundHint")}</p>
+          )}
+        </div>
+      </Panel>
+
+      {/* Object type palette */}
+      <Panel title={t("paletteTitle")}>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
+          {ZONE_PALETTE_TYPES.map((type) => {
+            const meta = zoneTypeMeta(type);
+            return (
+              <button
+                key={type}
+                onClick={() => onCreateZone(type)}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 6,
+                  background: "#10141d",
+                  border: `1px solid ${meta.color}66`,
+                  color: "#E8EDF5",
+                  borderRadius: 8,
+                  padding: "7px 8px",
+                  fontSize: 11,
+                  cursor: "pointer",
+                  textAlign: "left",
+                }}
+              >
+                <span>{meta.icon}</span>
+                <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{tTypes(type)}</span>
+              </button>
+            );
+          })}
+        </div>
+      </Panel>
+
       {/* Unplaced zones */}
       <Panel title={t("unplacedTitle", { count: unplaced.length })}>
         <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
           <button
-            onClick={onCreateZone}
+            onClick={() => onCreateZone()}
             style={{
               display: "flex",
               alignItems: "center",

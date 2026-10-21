@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { PanelRightClose, PanelRightOpen, Save } from "lucide-react";
+import { Eye, Pencil, PanelRightClose, PanelRightOpen, Save } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { FloorPlanCanvas } from "@/features/locations/components/FloorPlanCanvas";
 import { FloorPlanSidePanel } from "@/features/locations/components/FloorPlanSidePanel";
@@ -12,8 +12,10 @@ import { useLocation, useLocations } from "@/features/locations/hooks/useLocatio
 import {
   parseFloorPlan,
   useUpdateFloorPlan,
+  useUploadFloorPlanBackground,
   useZoneStatusCounts,
 } from "@/features/locations/hooks/useFloorPlan";
+import { PLAN_MAX_BYTES, prepareFloorPlanFile } from "@/features/locations/lib/floorPlanBackground";
 import type { FloorPlanLayout, LocationZoneDto } from "@/features/locations/types";
 
 const DEFAULT_W = 160;
@@ -32,6 +34,10 @@ export default function FloorPlanPage() {
   const { data: location, isLoading } = useLocation(locationId);
   const { data: counts } = useZoneStatusCounts(locationId);
   const updateFloorPlan = useUpdateFloorPlan(locationId);
+  const uploadBackground = useUploadFloorPlanBackground(locationId);
+  const [preparingPlan, setPreparingPlan] = useState(false);
+  const [mode, setMode] = useState<"edit" | "view">("edit");
+  const [zoneDialogType, setZoneDialogType] = useState<string | undefined>(undefined);
 
   const [layout, setLayout] = useState<FloorPlanLayout | null>(null);
   const [selectedZoneId, setSelectedZoneId] = useState<string | null>(null);
@@ -85,6 +91,52 @@ export default function FloorPlanPage() {
 
   function handleResizeCanvas(w: number, h: number) {
     patchLayout((prev) => ({ ...prev, canvasW: w, canvasH: h }));
+  }
+
+  async function handleUploadBackground(file: File) {
+    if (file.size > PLAN_MAX_BYTES * 2) {
+      toast.error(t("backgroundTooBig"));
+      return;
+    }
+    setPreparingPlan(true);
+    try {
+      const prepared = await prepareFloorPlanFile(file);
+      if (prepared.blob.size > PLAN_MAX_BYTES) {
+        toast.error(t("backgroundTooBig"));
+        return;
+      }
+      const { url } = await uploadBackground.mutateAsync({
+        file: prepared.blob,
+        fileName: prepared.fileName,
+      });
+      patchLayout((prev) => {
+        // Adapt canvas height to the image aspect ratio (width kept), snapped to the grid.
+        const h = Math.round((prev.canvasW * prepared.naturalH) / prepared.naturalW / prev.grid) * prev.grid;
+        return {
+          ...prev,
+          canvasH: Math.max(prev.grid * 10, h),
+          background: {
+            url,
+            opacity: prev.background?.opacity ?? 0.6,
+            naturalW: prepared.naturalW,
+            naturalH: prepared.naturalH,
+          },
+        };
+      });
+      toast.success(t("backgroundUploaded"));
+    } catch (e) {
+      toast.error(t("backgroundError", { message: e instanceof Error ? e.message : String(e) }));
+    } finally {
+      setPreparingPlan(false);
+    }
+  }
+
+  function handleBackgroundOpacity(opacity: number) {
+    patchLayout((prev) => (prev.background ? { ...prev, background: { ...prev.background, opacity } } : prev));
+  }
+
+  function handleRemoveBackground() {
+    patchLayout((prev) => ({ ...prev, background: null }));
   }
 
   function handleZoneCreated(zone: LocationZoneDto) {
@@ -182,6 +234,29 @@ export default function FloorPlanPage() {
             {panelCollapsed ? tFloorPlan("showPanel") : tFloorPlan("hidePanel")}
           </button>
           <button
+            onClick={() => {
+              setMode((m) => (m === "edit" ? "view" : "edit"));
+              setSelectedZoneId(null);
+            }}
+            title={mode === "edit" ? t("modeViewHint") : t("modeEditHint")}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              background: mode === "view" ? "#0d1f3a" : "#161B26",
+              border: `1px solid ${mode === "view" ? "#1D4ED8" : "#1F2937"}`,
+              color: mode === "view" ? "#60A5FA" : "#9CA3AF",
+              borderRadius: 8,
+              padding: "9px 16px",
+              fontSize: 13,
+              fontWeight: 600,
+              cursor: "pointer",
+            }}
+          >
+            {mode === "edit" ? <Eye size={15} /> : <Pencil size={15} />}
+            {mode === "edit" ? t("modeView") : t("modeEdit")}
+          </button>
+          <button
             onClick={handleSave}
             disabled={!dirty || updateFloorPlan.isPending}
             style={{
@@ -227,8 +302,10 @@ export default function FloorPlanPage() {
             onSelect={setSelectedZoneId}
             onMove={handleMove}
             onResize={handleResize}
+            mode={mode}
+            onOpen={handleOpenShelves}
           />
-          {!panelCollapsed && (
+          {!panelCollapsed && mode === "edit" && (
             <FloorPlanSidePanel
               zones={zones}
               layout={layout}
@@ -236,7 +313,14 @@ export default function FloorPlanPage() {
               selectedZoneId={selectedZoneId}
               onAdd={handleAdd}
               onRemove={handleRemove}
-              onCreateZone={() => setShowZoneDialog(true)}
+              onCreateZone={(type) => {
+                setZoneDialogType(type);
+                setShowZoneDialog(true);
+              }}
+              onUploadBackground={handleUploadBackground}
+              onBackgroundOpacity={handleBackgroundOpacity}
+              onRemoveBackground={handleRemoveBackground}
+              uploadingBackground={preparingPlan || uploadBackground.isPending}
               onOpenShelves={handleOpenShelves}
               onResizeCanvas={handleResizeCanvas}
             />
@@ -247,6 +331,7 @@ export default function FloorPlanPage() {
       {showZoneDialog && (
         <ZoneDialog
           locationId={locationId}
+          initialType={zoneDialogType}
           onCreated={handleZoneCreated}
           onClose={() => setShowZoneDialog(false)}
         />

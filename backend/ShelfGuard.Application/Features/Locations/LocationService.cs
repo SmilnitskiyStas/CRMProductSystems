@@ -187,7 +187,7 @@ public sealed class LocationService : ILocationService
             return (null, "Zone name is required.");
 
         if (!IsValidZoneType(request.Type))
-            return (null, $"Invalid zone type '{request.Type}'. Valid: shelf, fridge, freezer, display, production, warehouse.");
+            return (null, $"Invalid zone type '{request.Type}'. Valid: shelf, fridge, freezer, display, production, warehouse, checkout, entrance_exit, department, storage, other.");
 
         if (request.ShelvesCount < 1)
             return (null, "ShelvesCount must be at least 1.");
@@ -220,7 +220,7 @@ public sealed class LocationService : ILocationService
             return (null, "Zone name is required.");
 
         if (!IsValidZoneType(request.Type))
-            return (null, $"Invalid zone type '{request.Type}'. Valid: shelf, fridge, freezer, display, production, warehouse.");
+            return (null, $"Invalid zone type '{request.Type}'. Valid: shelf, fridge, freezer, display, production, warehouse, checkout, entrance_exit, department, storage, other.");
 
         if (request.ShelvesCount < 1)
             return (null, "ShelvesCount must be at least 1.");
@@ -318,5 +318,6 @@ public sealed class LocationService : ILocationService
                or "shop" or "central_warehouse" or "distribution";
 
     private static bool IsValidZoneType(string type) =>
-        type is "shelf" or "fridge" or "freezer" or "display" or "production" or "warehouse";
+        type is "shelf" or "fridge" or "freezer" or "display" or "production" or "warehouse"
+               or "checkout" or "entrance_exit" or "department" or "storage" or "other";
 }

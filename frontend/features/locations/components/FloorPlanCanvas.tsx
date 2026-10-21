@@ -19,6 +19,8 @@ import type {
   ZoneStatus,
   ZoneStatusCounts,
 } from "../types";
+import { ZONE_TYPE_META, zoneTypeMeta } from "../lib/zoneTypes";
+import { resolveScanImageUrl } from "./ShelfScanPanel";
 
 const ZOOM_MIN = 0.4;
 const ZOOM_MAX = 2;
@@ -37,18 +39,9 @@ export const STATUS_CONFIG: Record<ZoneStatus | "empty", { color: string; bg: st
   empty:    { color: "#4B5563", bg: "#10141d", border: "#1F2937" },
 };
 
-export const ZONE_TYPE_ICONS: Record<string, string> = {
-  refrigerated: "❄️",
-  fresh: "🌿",
-  dry: "📦",
-  frozen: "🧊",
-  fridge: "❄️",
-  freezer: "🧊",
-  shelf: "📦",
-  display: "🪟",
-  production: "⚙️",
-  warehouse: "🏭",
-};
+export const ZONE_TYPE_ICONS: Record<string, string> = Object.fromEntries(
+  Object.entries(ZONE_TYPE_META).map(([k, v]) => [k, v.icon]),
+);
 
 // Worst status wins: expired > critical > warning > safe; no stock → empty
 export function worstStatus(counts: ZoneStatusCounts | undefined): ZoneStatus | "empty" {
@@ -68,6 +61,9 @@ interface CanvasProps {
   onSelect: (zoneId: string | null) => void;
   onMove: (zoneId: string, x: number, y: number) => void;
   onResize: (zoneId: string, w: number, h: number) => void;
+  /** "view": no drag/resize, click opens the zone's shelves page. */
+  mode?: "edit" | "view";
+  onOpen?: (zoneId: string) => void;
 }
 
 export function FloorPlanCanvas({
@@ -78,6 +74,8 @@ export function FloorPlanCanvas({
   onSelect,
   onMove,
   onResize,
+  mode = "edit",
+  onOpen,
 }: CanvasProps) {
   const t = useTranslations("Dashboard.locations.floorPlan");
   const sensors = useSensors(
@@ -120,6 +118,7 @@ export function FloorPlanCanvas({
     onMove(placement.zoneId, Math.round(x / grid) * grid, Math.round(y / grid) * grid);
   }
 
+  const bg = layout.background ?? null;
   const zoneById = new Map(zones.map((z) => [z.id, z]));
 
   return (
@@ -163,6 +162,25 @@ export function FloorPlanCanvas({
                 backgroundSize: `${grid}px ${grid}px`,
               }}
             >
+              {bg && (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={resolveScanImageUrl(bg.url)}
+                  alt=""
+                  draggable={false}
+                  style={{
+                    position: "absolute",
+                    top: 0,
+                    left: 0,
+                    width: layout.canvasW,
+                    height: layout.canvasH,
+                    objectFit: "fill",
+                    opacity: bg.opacity,
+                    pointerEvents: "none",
+                    userSelect: "none",
+                  }}
+                />
+              )}
               {layout.zones.map((placement) => {
                 const zone = zoneById.get(placement.zoneId);
                 if (!zone) return null;
@@ -177,6 +195,8 @@ export function FloorPlanCanvas({
                     selected={selectedZoneId === placement.zoneId}
                     onSelect={onSelect}
                     onResize={onResize}
+                    mode={mode}
+                    onOpen={onOpen}
                   />
                 );
               })}
@@ -294,18 +314,26 @@ interface ZoneBoxProps {
   selected: boolean;
   onSelect: (zoneId: string) => void;
   onResize: (zoneId: string, w: number, h: number) => void;
+  mode: "edit" | "view";
+  onOpen?: (zoneId: string) => void;
 }
 
-function ZoneBox({ zone, placement, counts, grid, zoom, selected, onSelect, onResize }: ZoneBoxProps) {
+function ZoneBox({ zone, placement, counts, grid, zoom, selected, onSelect, onResize, mode, onOpen }: ZoneBoxProps) {
   const t = useTranslations("Dashboard.locations.zoneStatus");
+  const tTypes = useTranslations("Dashboard.locations.zoneTypes");
+  const viewOnly = mode === "view";
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: placement.zoneId,
+    disabled: viewOnly,
   });
   const [hovered, setHovered] = useState(false);
 
   const status = worstStatus(counts);
   const cfg = STATUS_CONFIG[status];
-  const icon = ZONE_TYPE_ICONS[zone.type] ?? "🗂️";
+  const meta = zoneTypeMeta(zone.type);
+  const icon = meta.icon;
+  const markerOnly = !meta.holdsStock;
+  const accent = markerOnly ? meta.color : cfg.border;
 
   const tooltipAbove = placement.y >= 120;
 
@@ -337,7 +365,8 @@ function ZoneBox({ zone, placement, counts, grid, zoom, selected, onSelect, onRe
       {...attributes}
       onClick={(e) => {
         e.stopPropagation();
-        onSelect(placement.zoneId);
+        if (viewOnly) onOpen?.(placement.zoneId);
+        else onSelect(placement.zoneId);
       }}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
@@ -348,12 +377,12 @@ function ZoneBox({ zone, placement, counts, grid, zoom, selected, onSelect, onRe
         width: placement.w,
         height: placement.h,
         transform: transform ? `translate(${transform.x / zoom}px, ${transform.y / zoom}px)` : undefined,
-        background: cfg.bg,
-        border: `1px solid ${selected ? "#3B82F6" : cfg.border}`,
+        background: markerOnly ? `${meta.color}26` : cfg.bg,
+        border: `1px solid ${selected ? "#3B82F6" : accent}`,
         boxShadow: selected ? "0 0 0 2px #3B82F655" : undefined,
         borderRadius: 8,
         padding: "10px 12px",
-        cursor: isDragging ? "grabbing" : "grab",
+        cursor: viewOnly ? "pointer" : isDragging ? "grabbing" : "grab",
         zIndex: isDragging ? 50 : hovered ? 50 : 1,
         userSelect: "none",
         touchAction: "none",
@@ -376,12 +405,18 @@ function ZoneBox({ zone, placement, counts, grid, zoom, selected, onSelect, onRe
       >
         {zone.name}
       </div>
-      <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-        <span style={{ width: 6, height: 6, borderRadius: "50%", background: cfg.color }} />
-        <span style={{ color: cfg.color, fontSize: 10, fontWeight: 600 }}>{t(status)}</span>
-      </div>
+      {markerOnly ? (
+        <div style={{ color: meta.color, fontSize: 10, fontWeight: 600 }}>
+          {tTypes.has(zone.type) ? tTypes(zone.type) : zone.type}
+        </div>
+      ) : (
+        <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+          <span style={{ width: 6, height: 6, borderRadius: "50%", background: cfg.color }} />
+          <span style={{ color: cfg.color, fontSize: 10, fontWeight: 600 }}>{t(status)}</span>
+        </div>
+      )}
 
-      {hovered && !isDragging && (
+      {hovered && !isDragging && !markerOnly && (
         <div
           style={{
             position: "absolute",
@@ -409,7 +444,7 @@ function ZoneBox({ zone, placement, counts, grid, zoom, selected, onSelect, onRe
       )}
 
       {/* Resize handle */}
-      <div
+      {!viewOnly && <div
         onPointerDown={startResize}
         style={{
           position: "absolute",
@@ -418,11 +453,11 @@ function ZoneBox({ zone, placement, counts, grid, zoom, selected, onSelect, onRe
           width: 14,
           height: 14,
           cursor: "nwse-resize",
-          borderRight: `2px solid ${selected ? "#3B82F6" : cfg.border}`,
-          borderBottom: `2px solid ${selected ? "#3B82F6" : cfg.border}`,
+          borderRight: `2px solid ${selected ? "#3B82F6" : accent}`,
+          borderBottom: `2px solid ${selected ? "#3B82F6" : accent}`,
           borderBottomRightRadius: 6,
         }}
-      />
+      />}
     </div>
   );
 }

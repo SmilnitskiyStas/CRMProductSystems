@@ -8,7 +8,7 @@ import { Modal } from "@/components/ui/Modal";
 import { Btn } from "@/components/ui/Btn";
 import { API_BASE, ApiError } from "@/lib/api";
 import { useCreateShelfScan } from "../hooks/useShelves";
-import type { ShelfScanDto, ShelfScanItemStatus } from "../types";
+import type { ShelfRecommendationDto, ShelfScanDto, ShelfScanItemDto, ShelfScanItemStatus } from "../types";
 
 const MAX_SIDE = 1600;
 const MAX_BYTES = 5 * 1024 * 1024;
@@ -186,6 +186,14 @@ function ScanResult({ scan }: { scan: ShelfScanDto }) {
   const t = useTranslations("Dashboard.locations.shelvesPage");
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 8, background: "#161B26", border: "1px solid #1F2937", borderRadius: 10, padding: 12 }}>
+      {scan.status !== "failed" && scan.summary && (
+        <div style={{ color: "#E8EDF5", fontSize: 13, background: "#0d1f3a", border: "1px solid #1D4ED8", borderRadius: 8, padding: "8px 10px" }}>
+          <div style={{ color: "#60A5FA", fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 2 }}>
+            {t("scanSummaryTitle")}
+          </div>
+          {scan.summary}
+        </div>
+      )}
       <div style={{ display: "flex", gap: 12 }}>
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
@@ -206,23 +214,21 @@ function ScanResult({ scan }: { scan: ShelfScanDto }) {
               <p style={{ color: "#9CA3AF", fontSize: 12, margin: "4px 0 0" }}>
                 {t("scanCounts", { missing: scan.missingCount, low: scan.lowCount })}
               </p>
-              {scan.summary && (
-                <p style={{ color: "#E8EDF5", fontSize: 12, margin: "6px 0 0" }}>{scan.summary}</p>
-              )}
             </>
           )}
           <p style={{ color: "#FCD34D", fontSize: 11, margin: "6px 0 0" }}>{t("scanIndicative")}</p>
         </div>
       </div>
       {scan.items.length > 0 && (
-        <div style={{ display: "flex", flexDirection: "column", gap: 4, maxHeight: 220, overflowY: "auto" }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 4, maxHeight: 360, overflowY: "auto" }}>
           {scan.items.map((it) => {
             const c = SCAN_STATUS_COLOR[it.status];
             return (
               <div
                 key={it.itemId}
-                style={{ display: "flex", alignItems: "center", gap: 8, padding: "5px 8px", background: "#0B0E14", border: "1px solid #1F2937", borderRadius: 6, fontSize: 12 }}
+                style={{ padding: "5px 8px", background: "#0B0E14", border: "1px solid #1F2937", borderRadius: 6, fontSize: 12 }}
               >
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                 <span
                   style={{ background: c.bg, border: `1px solid ${c.border}`, color: c.fg, borderRadius: 20, padding: "1px 8px", fontSize: 10, fontWeight: 700, whiteSpace: "nowrap" }}
                 >
@@ -239,8 +245,50 @@ function ScanResult({ scan }: { scan: ShelfScanDto }) {
                   {Math.round(it.confidence * 100)}%
                 </span>
               </div>
+                {it.status !== "present" && <ScanItemDetails it={it} />}
+              </div>
             );
           })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+const PRIORITY_COLOR: Record<ShelfRecommendationDto["priority"], string> = {
+  high: "#F87171",
+  medium: "#FCD34D",
+  low: "#9CA3AF",
+};
+
+function qty(v: number | null | undefined): string {
+  return v === null || v === undefined ? "—" : String(Math.round(v * 10) / 10);
+}
+
+function ScanItemDetails({ it }: { it: ShelfScanItemDto }) {
+  const t = useTranslations("Dashboard.locations.shelvesPage");
+  const hasData = [it.onShelfQty, it.storeQty, it.warehouseQty, it.sold7d, it.sold30d, it.daysOfCover].some(
+    (v) => v !== null && v !== undefined,
+  );
+  const rec = it.recommendation;
+  if (!hasData && (!rec || rec.action === "none")) return null;
+  const inStockElsewhere = (it.warehouseQty ?? 0) > 0 && (it.onShelfQty ?? 0) <= 0;
+  return (
+    <div style={{ marginTop: 4, paddingTop: 4, borderTop: "1px dashed #1F2937", display: "flex", flexDirection: "column", gap: 3 }}>
+      {hasData && (
+        <div style={{ display: "flex", flexWrap: "wrap", gap: "2px 12px", color: "#9CA3AF", fontSize: 11 }}>
+          <span>{t("scanOnShelf")}: <b style={{ color: "#E8EDF5" }}>{qty(it.onShelfQty)}</b></span>
+          <span>{t("scanInStore")}: <b style={{ color: "#E8EDF5" }}>{qty(it.storeQty)}</b></span>
+          <span>
+            {t("scanInWarehouse")}: <b style={{ color: inStockElsewhere ? "#FCD34D" : "#E8EDF5" }}>{qty(it.warehouseQty)}</b>
+          </span>
+          <span>{t("scanSold")}: <b style={{ color: "#E8EDF5" }}>{qty(it.sold7d)} / {qty(it.sold30d)}</b></span>
+          <span>{t("scanDaysOfCover")}: <b style={{ color: "#E8EDF5" }}>{qty(it.daysOfCover)}</b></span>
+        </div>
+      )}
+      {rec && rec.action !== "none" && (
+        <div style={{ fontSize: 11, color: PRIORITY_COLOR[rec.priority], fontWeight: 600 }}>
+          {t(`scanRec_${rec.action}`, { qty: rec.suggestedQty })} · {t(`scanPriority_${rec.priority}`)}
         </div>
       )}
     </div>

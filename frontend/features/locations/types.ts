@@ -44,8 +44,18 @@ export interface FloorPlanZonePlacement {
   h: number;
 }
 
+/** Uploaded floor-plan image drawn under the zones (PDF is rasterised client-side first). */
+export interface FloorPlanBackground {
+  url: string;
+  /** 0..1 */
+  opacity: number;
+  naturalW: number;
+  naturalH: number;
+}
+
 export interface FloorPlanLayout {
   version: 1;
+  background?: FloorPlanBackground | null;
   grid: number;
   canvasW: number;
   canvasH: number;
@@ -138,6 +148,18 @@ export interface PlanogramEntry {
 
 export type ShelfScanItemStatus = "present" | "low" | "missing";
 
+export type ShelfRecommendationAction =
+  | "none"
+  | "restock_from_warehouse"
+  | "order_from_supplier"
+  | "check_manually";
+
+export interface ShelfRecommendationDto {
+  action: ShelfRecommendationAction;
+  suggestedQty: number;
+  priority: "low" | "medium" | "high";
+}
+
 export interface ShelfScanItemDto {
   itemId: string;
   name: string;
@@ -146,6 +168,32 @@ export interface ShelfScanItemDto {
   /** 0..1 — indicative AI confidence, needs human verification. */
   confidence: number;
   note: string | null;
+  // Enrichment from stock/sales (nullable: absent on scans made before it existed).
+  onShelfQty?: number | null;
+  storeQty?: number | null;
+  warehouseQty?: number | null;
+  sold7d?: number | null;
+  sold30d?: number | null;
+  daysOfCover?: number | null;
+  recommendation?: ShelfRecommendationDto | null;
+}
+
+/** Per-product insight for one shelf section (GET .../shelves/{shelfId}/insights). */
+export interface ShelfItemInsightDto {
+  itemId: string;
+  name: string;
+  barcode?: string | null;
+  imageUrl?: string | null;
+  expectedFacings: number;
+  onShelfQty: number;
+  storeQty: number;
+  warehouseQty: number;
+  nearestExpiry: string | null;
+  sold7d: number;
+  sold30d: number;
+  adu: number;
+  daysOfCover: number | null;
+  trendPct: number | null;
 }
 
 export interface ShelfScanDto {

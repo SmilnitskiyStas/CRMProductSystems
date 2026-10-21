@@ -37,6 +37,7 @@ import type {
 import { productsApi } from "@/features/inventory/api/products";
 import { useProductsByIds } from "@/features/inventory/hooks/useProducts";
 import { ShelfProductModal } from "@/features/locations/components/ShelfProductModal";
+import { ShelfInsightPanel } from "@/features/locations/components/ShelfInsightPanel";
 import { ShelfScanPanel, SCAN_STATUS_COLOR } from "@/features/locations/components/ShelfScanPanel";
 
 const DEFAULT_SECTION_W = 200;
@@ -116,6 +117,7 @@ export default function ShelvesPage() {
   const serverPlanogramRef = useRef<Record<string, PlanogramEntry[]>>({});
   const deletedShelfIdsRef = useRef<Set<string>>(new Set());
   const planogramInitForRef = useRef<string | null>(null);
+  const [insightShelfId, setInsightShelfId] = useState<string | null>(null);
   const [scanOpen, setScanOpen] = useState(false);
   const [activeScanId, setActiveScanId] = useState<string | null>(null);
 
@@ -342,6 +344,7 @@ export default function ShelvesPage() {
   };
 
   const modalItem = modalShelfId ? plan.items.find((i) => i.shelfId === modalShelfId) ?? null : null;
+  const insightSection = insightShelfId ? plan.items.find((i) => i.shelfId === insightShelfId) ?? null : null;
 
   return (
     <div style={{ padding: "28px 32px", display: "flex", flexDirection: "column", gap: 20 }}>
@@ -431,7 +434,10 @@ export default function ShelvesPage() {
           itemStatusCounts={itemStatusCounts}
           planogram={planogram}
           scanStatusByShelf={scanStatusByShelf}
-          onRequestLink={(shelfId) => setModalShelfId(shelfId)}
+          onRequestLink={(shelfId) =>
+            // Sections with products open the insight panel; empty ones go straight to the picker.
+            (planogram[shelfId]?.length ?? 0) > 0 ? setInsightShelfId(shelfId) : setModalShelfId(shelfId)
+          }
         />
 
         {/* Side panel */}
@@ -597,6 +603,21 @@ export default function ShelvesPage() {
           sectionLabel={sectionLabelOf(modalItem)}
           entries={planogram[modalItem.shelfId] ?? []}
           onChange={(entries) => handlePlanogramChange(modalItem.shelfId, entries)}
+        />
+      )}
+
+      {insightSection && (
+        <ShelfInsightPanel
+          key={insightSection.shelfId}
+          onClose={() => setInsightShelfId(null)}
+          onEditProducts={() => {
+            setInsightShelfId(null);
+            setModalShelfId(insightSection.shelfId);
+          }}
+          locationId={locationId}
+          zoneId={zoneId}
+          shelfId={insightSection.shelfId}
+          sectionLabel={sectionLabelOf(insightSection)}
         />
       )}
 

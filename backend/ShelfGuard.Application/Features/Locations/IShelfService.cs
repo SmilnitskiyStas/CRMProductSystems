@@ -23,6 +23,13 @@ public interface IShelfService
         Guid tenantId, Guid? userId, Guid locationId, Guid zoneId, Guid? shelfId,
         Stream image, long length, string fileName, CancellationToken ct = default);
 
+    /// <summary>
+    /// Validates (type, size, magic bytes) and stores a floor-plan background image under a
+    /// server-generated name; returns its public url. Does not touch <c>Location.FloorPlan</c>.
+    /// </summary>
+    Task<(string? Url, string? Error, int? StatusCode)> SaveFloorPlanBackgroundAsync(
+        Guid tenantId, Guid locationId, Stream image, long length, string fileName, CancellationToken ct = default);
+
     Task<(List<ShelfScanDto>? Scans, string? Error)> GetScansAsync(
         Guid tenantId, Guid locationId, Guid zoneId, int limit, CancellationToken ct = default);
 

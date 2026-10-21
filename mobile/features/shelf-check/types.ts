@@ -35,6 +35,25 @@ export interface ShelfScanItem {
   estimatedCount: number;
   confidence: number;
   note: string | null;
+  onShelfQty?: number | null;
+  storeQty?: number | null;
+  warehouseQty?: number | null;
+  sold7d?: number | null;
+  sold30d?: number | null;
+  daysOfCover?: number | null;
+  recommendation?: ShelfScanRecommendation | null;
+}
+
+export type RecommendationAction =
+  | 'none'
+  | 'restock_from_warehouse'
+  | 'order_from_supplier'
+  | 'check_manually';
+
+export interface ShelfScanRecommendation {
+  action: RecommendationAction;
+  suggestedQty: number;
+  priority: 'low' | 'medium' | 'high';
 }
 
 export interface ShelfScan {

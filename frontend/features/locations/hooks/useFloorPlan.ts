@@ -21,6 +21,7 @@ export function parseFloorPlan(raw: string | null): FloorPlanLayout {
       canvasW: parsed.canvasW ?? 1400,
       canvasH: parsed.canvasH ?? 900,
       zones: parsed.zones,
+      background: parsed.background ?? null,
     };
   } catch {
     return empty;
@@ -51,6 +52,13 @@ export function useUpdateFloorPlan(locationId: string) {
     mutationFn: (layout: FloorPlanLayout) =>
       locationsApi.updateFloorPlan(locationId, JSON.stringify(layout)),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["locations"] }),
+  });
+}
+
+export function useUploadFloorPlanBackground(locationId: string) {
+  return useMutation({
+    mutationFn: ({ file, fileName }: { file: Blob; fileName?: string }) =>
+      locationsApi.uploadFloorPlanBackground(locationId, file, fileName),
   });
 }
 

@@ -37,3 +37,12 @@ export function invalidateShelfItems(
     queryKey: ["locations", locationId, "zones", zoneId, "shelf-items"],
   });
 }
+
+export function useShelfInsights(locationId: string, zoneId: string, shelfId: string | null) {
+  return useQuery({
+    queryKey: ["locations", locationId, "zones", zoneId, "shelf-insights", shelfId],
+    queryFn: () => shelvesApi.getShelfInsights(locationId, zoneId, shelfId!),
+    enabled: !!locationId && !!zoneId && !!shelfId,
+    staleTime: 30_000,
+  });
+}
