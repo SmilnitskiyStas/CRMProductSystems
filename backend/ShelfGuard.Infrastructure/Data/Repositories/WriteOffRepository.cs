@@ -41,7 +41,8 @@ public sealed class WriteOffRepository : IWriteOffRepository
             .Include(w => w.Items).ThenInclude(i => i.Product)
             .Include(w => w.Items).ThenInclude(i => i.ProductStock)
             .Include(w => w.Store)
-            .AsQueryable();
+            .AsNoTracking()
+            .AsSplitQuery();
 
         if (storeId.HasValue)
             query = query.Where(w => w.StoreId == storeId);
