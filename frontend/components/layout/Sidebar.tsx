@@ -531,7 +531,8 @@ interface CollapsibleNavSectionProps {
 /** A second-level menu group, used by the mobile-app navigation. */
 function CollapsibleNavSection({ section, group, pathname }: CollapsibleNavSectionProps) {
   const hasActive = section.items.some((item) => isActive(pathname, item.href, item.exact));
-  const [expanded, setExpanded] = useState(hasActive);
+  // Open by default so every section's pages are visible without an extra click.
+  const [expanded, setExpanded] = useState(true);
 
   // An active page must never be hidden after a route change.
   useEffect(() => {
