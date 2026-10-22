@@ -239,6 +239,7 @@ export function buildNavGroups(t: SidebarGroupsT): NavGroup[] {
       { href: "/production/orders",    label: t("production.orders"),    icon: <ListOrdered size={16} />, roles: AT_LEAST_STORE_MANAGER },
       { href: "/production/shipments", label: t("production.shipments"), icon: <Truck size={16} />, roles: AT_LEAST_STORE_MANAGER },
       { href: "/production/warehouse", label: t("production.warehouse"), icon: <Warehouse size={16} />, roles: AT_LEAST_STORE_MANAGER },
+      { href: "/production/analytics", label: t("production.analytics"), icon: <BarChart3 size={16} />, roles: AT_LEAST_STORE_MANAGER },
       { href: "/production/recipes",   label: t("production.recipes"),   icon: <FlaskConical size={16} />, roles: AT_LEAST_STORE_MANAGER },
     ],
   },

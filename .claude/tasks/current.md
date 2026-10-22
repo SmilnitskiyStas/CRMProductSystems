@@ -1678,3 +1678,7 @@ Overview/plan/shipments/stock GETs under api/production + TenantRoleTabs keys; t
 - TASK-766 (frontend-developer): production Overview pipeline (4 windows + period + stats) on GET /api/production/pipeline; tsc+eslint clean; verify against TASK-765. Log: logs/tasks/766_*.md
 
 - TASK-765 (backend-developer, done): GET /api/production/pipeline — 4-stage pipeline read model (new/inWork/ready current; shipped + stats per period in location tz). See logs/tasks/765_*.md.
+
+- TASK-768 (frontend-developer): production Overview compact cards + detail modal, shipped-today window; new /production/analytics page (KPIs, chart, tables, CSV) + sidebar item; tsc+eslint clean; verify vs TASK-767. Log: logs/tasks/768_*.md
+
+- TASK-767 (backend-developer): GET /api/production/analytics + TenantRoleTabs `/production/analytics`; 9 tests, build OK. Log: logs/tasks/767_*.md

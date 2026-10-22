@@ -94,3 +94,24 @@ public record ProductionPipelineDto(
     DateOnly From, DateOnly To,
     PipelineNewDto NewRequests, PipelineInWorkDto InWork, PipelineInWorkByStageDto InWorkByStage,
     PipelineReadyDto Ready, PipelineShippedDto Shipped, PipelineStatsDto Stats);
+
+// ── Analytics (TASK-767) ────────────────────────────────────────────────────
+public record AnalyticsTotalsDto(
+    int Received, int Accepted, int Rejected, int Shipped,
+    decimal RequestedQty, decimal AcceptedQty, decimal ShippedQty,
+    decimal? FillRate, double? AvgReviewHours, double? AvgLeadHours);
+public record AnalyticsOrdersDoneDto(int Count, decimal Qty, double? AvgHours);
+public record AnalyticsItemDto(
+    Guid ItemId, string ItemName, string Unit, decimal RequestedQty, decimal AcceptedQty, decimal ShippedQty, decimal? FillRate);
+public record AnalyticsStoreDto(
+    Guid StoreLocationId, string StoreName, int Requests, decimal RequestedQty, decimal ShippedQty, int Rejected,
+    double? AvgLeadHours);
+public record AnalyticsDayDto(
+    DateOnly Date, int Received, int Accepted, int Rejected, int Shipped, decimal ShippedQty, decimal ProducedQty);
+public record AnalyticsReasonDto(string Reason, int Count);
+public record AnalyticsPreviousDto(
+    DateOnly From, DateOnly To, int Received, int Accepted, int Rejected, int Shipped, decimal ShippedQty);
+public record ProductionAnalyticsDto(
+    DateOnly From, DateOnly To, AnalyticsTotalsDto Totals, AnalyticsOrdersDoneDto OrdersDone,
+    List<AnalyticsItemDto> ByItem, List<AnalyticsStoreDto> ByStore, List<AnalyticsDayDto> PerDay,
+    List<AnalyticsReasonDto> RejectionReasons, AnalyticsPreviousDto Previous);

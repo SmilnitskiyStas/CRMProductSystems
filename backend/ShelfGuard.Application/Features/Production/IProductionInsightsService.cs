@@ -21,5 +21,9 @@ public interface IProductionInsightsService
     Task<ProductionPipelineDto> GetPipelineAsync(
         DateOnly? from, DateOnly? to, Guid? locationId, CancellationToken ct = default);
 
+    /// <summary>TASK-767: period analytics (default last 30 days). Throws ArgumentException on bad range.</summary>
+    Task<ProductionAnalyticsDto> GetAnalyticsAsync(
+        DateOnly? from, DateOnly? to, Guid? locationId, CancellationToken ct = default);
+
     Task<List<ProductionStockItemDto>> GetStockAsync(Guid? locationId, string? kind, CancellationToken ct = default);
 }

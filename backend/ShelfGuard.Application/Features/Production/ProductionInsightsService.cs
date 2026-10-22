@@ -356,14 +356,7 @@ public sealed class ProductionInsightsService : IProductionInsightsService
         var locations = await _repo.GetProductionLocationsAsync(locationId, ct);
         var tz = ResolveZone(locations);
         var todayLocal = DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(_clock.GetUtcNow(), tz).DateTime);
-        var start = from ?? to ?? todayLocal;
-        var end = to ?? from ?? todayLocal;
-        if (from.HasValue && !to.HasValue) end = from.Value;
-        if (!from.HasValue && to.HasValue) start = to.Value;
-        if (!from.HasValue && !to.HasValue) { start = todayLocal; end = todayLocal; }
-        if (end < start) throw new ArgumentException("'from' must be on or before 'to'.");
-        if (end.DayNumber - start.DayNumber + 1 > MaxPipelineDays)
-            throw new ArgumentException($"Period must not exceed {MaxPipelineDays} days.");
+        var (start, end) = ResolvePeriod(from, to, todayLocal, defaultDays: 1);
 
         var days = Enumerable.Range(0, end.DayNumber - start.DayNumber + 1).Select(i => start.AddDays(i)).ToList();
         var fromUtc = LocalMidnightUtc(start, tz);
@@ -458,6 +451,28 @@ public sealed class ProductionInsightsService : IProductionInsightsService
             new PipelineInWorkDto(inWork.Count, inWork), byStage, ready, shipped, stats);
     }
 
+    /// <summary>
+    /// Shared period resolution (pipeline + analytics): both given => as is; only one given => that single day;
+    /// none => the last <paramref name="defaultDays"/> days ending today (local). Throws ArgumentException on from &gt; to
+    /// or a span over <see cref="MaxPipelineDays"/>.
+    /// </summary>
+    private static (DateOnly Start, DateOnly End) ResolvePeriod(
+        DateOnly? from, DateOnly? to, DateOnly todayLocal, int defaultDays)
+    {
+        DateOnly start, end;
+        if (from.HasValue && to.HasValue) { start = from.Value; end = to.Value; }
+        else if (from.HasValue) { start = end = from.Value; }
+        else if (to.HasValue) { start = end = to.Value; }
+        else { end = todayLocal; start = todayLocal.AddDays(-(defaultDays - 1)); }
+        if (end < start) throw new ArgumentException("'from' must be on or before 'to'.");
+        if (end.DayNumber - start.DayNumber + 1 > MaxPipelineDays)
+            throw new ArgumentException($"Period must not exceed {MaxPipelineDays} days.");
+        return (start, end);
+    }
+
+    private static DateOnly LocalDate(DateTime utc, TimeZoneInfo tz) =>
+        DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeFromUtc(AsUtc(utc), tz));
+
     private static DateTime AsUtc(DateTime t) => DateTime.SpecifyKind(t, DateTimeKind.Utc);
 
     private static List<PipelineLineDto> PipeLines(ProductionRequest r) =>
@@ -499,6 +514,158 @@ public sealed class ProductionInsightsService : IProductionInsightsService
         var local = date.ToDateTime(TimeOnly.MinValue, DateTimeKind.Unspecified);
         if (tz.IsInvalidTime(local)) local = local.AddHours(1);
         return TimeZoneInfo.ConvertTimeToUtc(local, tz);
+    }
+
+    // ── Analytics (TASK-767) ─────────────────────────────────────────────────
+
+    private const int DefaultAnalyticsDays = 30;
+    private const int TopReasons = 10;
+
+    private static bool IsAcceptedStatus(string s) =>
+        s is ProductionRequestStatus.Accepted or ProductionRequestStatus.Partial or ProductionRequestStatus.Fulfilled;
+
+    private static double? Hours(IEnumerable<double> values)
+    {
+        var list = values.ToList();
+        return list.Count == 0 ? null : Math.Round(list.Average(), 2);
+    }
+
+    /// <summary>
+    /// Read-only analytics for the inclusive local period [from, to] (zone as in the pipeline; default last 30 days).
+    /// received = SubmittedAt in period; reviewed = ReviewedAt in period (accepted = status accepted/partial/fulfilled,
+    /// rejected = status rejected); shipped = Fulfilled with ShippedAt in period.
+    /// totals.requestedQty = Σ RequestedQty of received requests; acceptedQty = Σ AcceptedQty of accepted-reviewed requests;
+    /// shippedQty = Σ AcceptedQty of shipped requests. fillRate = acceptedQty / Σ RequestedQty of ALL reviewed requests
+    /// (rejected ones count as unfilled), null when nothing was reviewed. avgReviewHours = mean(ReviewedAt − SubmittedAt)
+    /// over reviewed requests; avgLeadHours = mean(ShippedAt − SubmittedAt) over shipped requests.
+    /// byItem uses the same definitions per item; previous = the immediately preceding window of equal length.
+    /// </summary>
+    public async Task<ProductionAnalyticsDto> GetAnalyticsAsync(
+        DateOnly? from, DateOnly? to, Guid? locationId, CancellationToken ct = default)
+    {
+        var locations = await _repo.GetProductionLocationsAsync(locationId, ct);
+        var tz = ResolveZone(locations);
+        var todayLocal = DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(_clock.GetUtcNow(), tz).DateTime);
+        var (start, end) = ResolvePeriod(from, to, todayLocal, DefaultAnalyticsDays);
+
+        var length = end.DayNumber - start.DayNumber + 1;
+        var prevEnd = start.AddDays(-1);
+        var prevStart = start.AddDays(-length);
+        var days = Enumerable.Range(0, length).Select(i => start.AddDays(i)).ToList();
+        var fromUtc = LocalMidnightUtc(start, tz);
+        var toUtcExclusive = LocalMidnightUtc(end.AddDays(1), tz);
+        var prevFromUtc = LocalMidnightUtc(prevStart, tz);
+
+        var requests = new List<ProductionRequest>();
+        var orders = new List<ProductionOrder>();
+        if (locations.Count > 0)
+        {
+            var scope = locations.Select(l => l.Id).ToList();
+            requests = await _repo.GetAnalyticsRequestsAsync(scope, prevFromUtc, toUtcExclusive, ct);
+            orders = await _repo.GetCompletedOrdersAsync(scope, fromUtc, toUtcExclusive, ct);
+        }
+
+        bool In(DateTime? t, DateTime a, DateTime b) => t.HasValue && t.Value >= a && t.Value < b;
+        bool InCur(DateTime? t) => In(t, fromUtc, toUtcExclusive);
+
+        var received = requests.Where(r => InCur(r.SubmittedAt)).ToList();
+        var reviewed = requests.Where(r => InCur(r.ReviewedAt)).ToList();
+        var acceptedReqs = reviewed.Where(r => IsAcceptedStatus(r.Status)).ToList();
+        var rejectedReqs = reviewed.Where(r => r.Status == ProductionRequestStatus.Rejected).ToList();
+        var shippedReqs = requests.Where(r => r.Status == ProductionRequestStatus.Fulfilled && InCur(r.ShippedAt)).ToList();
+
+        static decimal Req(ProductionRequest r) => r.Lines.Sum(l => l.RequestedQty);
+        var reviewedRequested = reviewed.Sum(Req);
+        var acceptedQty = acceptedReqs.Sum(AcceptedTotal);
+
+        var totals = new AnalyticsTotalsDto(
+            received.Count, acceptedReqs.Count, rejectedReqs.Count, shippedReqs.Count,
+            received.Sum(Req), acceptedQty, shippedReqs.Sum(AcceptedTotal),
+            reviewedRequested > 0 ? Math.Round(acceptedQty / reviewedRequested, 4) : null,
+            Hours(reviewed.Where(r => r.SubmittedAt.HasValue)
+                .Select(r => (r.ReviewedAt!.Value - r.SubmittedAt!.Value).TotalHours)),
+            Hours(shippedReqs.Where(r => r.SubmittedAt.HasValue)
+                .Select(r => (r.ShippedAt!.Value - r.SubmittedAt!.Value).TotalHours)));
+
+        var ordersDone = new AnalyticsOrdersDoneDto(
+            orders.Count, orders.Sum(o => o.PlannedQty),
+            Hours(orders.Where(o => o.StartedAt.HasValue)
+                .Select(o => (o.CompletedAt!.Value - o.StartedAt!.Value).TotalHours)));
+
+        // byItem
+        var itemAgg = new Dictionary<Guid, (string Name, string Unit, decimal Req, decimal Acc, decimal Ship, decimal RevReq)>();
+        void Bump(ProductionRequestLine l, decimal req, decimal acc, decimal ship, decimal revReq)
+        {
+            var cur = itemAgg.TryGetValue(l.ItemId, out var v) ? v : (l.Item?.Name ?? "—", l.Item?.Unit ?? "", 0m, 0m, 0m, 0m);
+            itemAgg[l.ItemId] = (cur.Item1, cur.Item2, cur.Item3 + req, cur.Item4 + acc, cur.Item5 + ship, cur.Item6 + revReq);
+        }
+        foreach (var l in received.SelectMany(r => r.Lines)) Bump(l, l.RequestedQty, 0, 0, 0);
+        foreach (var l in reviewed.SelectMany(r => r.Lines)) Bump(l, 0, 0, 0, l.RequestedQty);
+        foreach (var l in acceptedReqs.SelectMany(r => r.Lines)) Bump(l, 0, l.AcceptedQty ?? 0m, 0, 0);
+        foreach (var l in shippedReqs.SelectMany(r => r.Lines)) Bump(l, 0, 0, l.AcceptedQty ?? 0m, 0);
+        var byItem = itemAgg
+            .Select(kv => new AnalyticsItemDto(kv.Key, kv.Value.Name, kv.Value.Unit, kv.Value.Req, kv.Value.Acc, kv.Value.Ship,
+                kv.Value.RevReq > 0 ? Math.Round(kv.Value.Acc / kv.Value.RevReq, 4) : null))
+            .OrderByDescending(i => i.ShippedQty).ThenByDescending(i => i.RequestedQty)
+            .ThenBy(i => i.ItemName, StringComparer.CurrentCultureIgnoreCase).ToList();
+
+        // byStore
+        var storeIds = received.Concat(shippedReqs).Concat(rejectedReqs).Select(r => r.StoreLocationId).Distinct().ToList();
+        var byStore = storeIds.Select(id =>
+        {
+            var rec = received.Where(r => r.StoreLocationId == id).ToList();
+            var shp = shippedReqs.Where(r => r.StoreLocationId == id).ToList();
+            var name = requests.Where(r => r.StoreLocationId == id).Select(r => r.StoreLocation?.Name)
+                .FirstOrDefault(n => n != null) ?? "—";
+            return new AnalyticsStoreDto(id, name, rec.Count, rec.Sum(Req), shp.Sum(AcceptedTotal),
+                rejectedReqs.Count(r => r.StoreLocationId == id),
+                Hours(shp.Where(r => r.SubmittedAt.HasValue)
+                    .Select(r => (r.ShippedAt!.Value - r.SubmittedAt!.Value).TotalHours)));
+        })
+        .OrderByDescending(s => s.ShippedQty).ThenByDescending(s => s.Requests)
+        .ThenBy(s => s.StoreName, StringComparer.CurrentCultureIgnoreCase).ToList();
+
+        // perDay
+        var dayIdx = days.Select((d, i) => (d, i)).ToDictionary(x => x.d, x => x.i);
+        var recC = new int[length]; var accC = new int[length]; var rejC = new int[length];
+        var shipC = new int[length]; var shipQ = new decimal[length]; var prod = new decimal[length];
+        void Inc(DateTime? t, Action<int> act)
+        {
+            if (t.HasValue && dayIdx.TryGetValue(LocalDate(t.Value, tz), out var i)) act(i);
+        }
+        foreach (var r in received) Inc(r.SubmittedAt, i => recC[i]++);
+        foreach (var r in acceptedReqs) Inc(r.ReviewedAt, i => accC[i]++);
+        foreach (var r in rejectedReqs) Inc(r.ReviewedAt, i => rejC[i]++);
+        foreach (var r in shippedReqs) Inc(r.ShippedAt, i => { shipC[i]++; shipQ[i] += AcceptedTotal(r); });
+        foreach (var o in orders)
+            if (o.CompletedAt.HasValue && dayIdx.TryGetValue(LocalDate(o.CompletedAt.Value.UtcDateTime, tz), out var i))
+                prod[i] += o.PlannedQty;
+        var perDay = days.Select((d, i) => new AnalyticsDayDto(d, recC[i], accC[i], rejC[i], shipC[i], shipQ[i], prod[i])).ToList();
+
+        // rejection reasons
+        var reasons = new List<string>();
+        foreach (var r in rejectedReqs)
+            if (!string.IsNullOrWhiteSpace(r.ReviewNote)) reasons.Add(r.ReviewNote.Trim());
+        foreach (var l in reviewed.SelectMany(r => r.Lines))
+            if ((l.AcceptedQty ?? 0m) < l.RequestedQty && !string.IsNullOrWhiteSpace(l.Reason)) reasons.Add(l.Reason.Trim());
+        var rejectionReasons = reasons
+            .GroupBy(x => x, StringComparer.OrdinalIgnoreCase)
+            .Select(g => new AnalyticsReasonDto(g.First(), g.Count()))
+            .OrderByDescending(x => x.Count).ThenBy(x => x.Reason, StringComparer.CurrentCultureIgnoreCase)
+            .Take(TopReasons).ToList();
+
+        // previous window
+        bool InPrev(DateTime? t) => In(t, prevFromUtc, fromUtc);
+        var prevShipped = requests.Where(r => r.Status == ProductionRequestStatus.Fulfilled && InPrev(r.ShippedAt)).ToList();
+        var previous = new AnalyticsPreviousDto(
+            prevStart, prevEnd,
+            requests.Count(r => InPrev(r.SubmittedAt)),
+            requests.Count(r => InPrev(r.ReviewedAt) && IsAcceptedStatus(r.Status)),
+            requests.Count(r => InPrev(r.ReviewedAt) && r.Status == ProductionRequestStatus.Rejected),
+            prevShipped.Count, prevShipped.Sum(AcceptedTotal));
+
+        return new ProductionAnalyticsDto(
+            start, end, totals, ordersDone, byItem, byStore, perDay, rejectionReasons, previous);
     }
 
     // ── Warehouse ────────────────────────────────────────────────────────────

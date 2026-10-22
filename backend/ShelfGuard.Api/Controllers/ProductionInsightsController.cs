@@ -59,6 +59,17 @@ public sealed class ProductionInsightsController : ControllerBase
         catch (ArgumentException e) { return BadRequest(new { error = e.Message }); }
     }
 
+    /// <summary>Period analytics (TASK-767). from/to inclusive local dates, default last 30 days.</summary>
+    [HttpGet("analytics")]
+    [ProducesResponseType(typeof(ProductionAnalyticsDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> Analytics(
+        [FromQuery] DateOnly? from, [FromQuery] DateOnly? to, [FromQuery] Guid? locationId, CancellationToken ct)
+    {
+        try { return Ok(await _svc.GetAnalyticsAsync(from, to, locationId, ct)); }
+        catch (ArgumentException e) { return BadRequest(new { error = e.Message }); }
+    }
+
     /// <param name="kind">all (default) | raw | finished.</param>
     [HttpGet("stock")]
     [ProducesResponseType(typeof(List<ProductionStockItemDto>), StatusCodes.Status200OK)]

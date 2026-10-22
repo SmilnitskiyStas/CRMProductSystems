@@ -28,6 +28,13 @@ import {
   reqErrorStyle,
 } from "./ProductionRequestStatusBadge";
 
+function fmtDateTime(v: string, intl: string): string {
+  const dt = new Date(v);
+  return isNaN(dt.getTime())
+    ? "—"
+    : dt.toLocaleString(intl, { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
+}
+
 interface Props {
   id: string;
   /** "store": requesting side (edit/submit/cancel). "production": inbox side (review/reject/sync orders). */
@@ -152,6 +159,14 @@ export function ProductionRequestDetail({ id, mode, canProduce, onClose }: Props
             </span>
           </div>
 
+          {(req.submittedAt || req.reviewedAt || req.shippedAt) && (
+            <div style={{ display: "flex", gap: 16, flexWrap: "wrap", color: "#6B7280", fontSize: 12 }}>
+              {req.submittedAt && <span>{t("submittedAt")}: {fmtDateTime(req.submittedAt, intlLocale)}</span>}
+              {req.reviewedAt && <span>{t("reviewedAt")}: {fmtDateTime(req.reviewedAt, intlLocale)}</span>}
+              {req.shippedAt && <span>{t("shippedAt")}: {fmtDateTime(req.shippedAt, intlLocale)}</span>}
+            </div>
+          )}
+
           {storeSide && isAuto && req.status === "draft" && (
             <div style={{ color: "#C4B5FD", fontSize: 12 }}>{t("autoDraftHint")}</div>
           )}
@@ -216,6 +231,11 @@ export function ProductionRequestDetail({ id, mode, canProduce, onClose }: Props
                   {t("review")}
                 </Btn>
               </>
+            )}
+            {prodSide && req.productionStage === "ready" && !req.shippedAt && (
+              <Link href="/production/shipments" style={{ color: "#60A5FA", fontSize: 13, alignSelf: "center" }}>
+                {t("toShipments")} →
+              </Link>
             )}
             {needsSync && (
               <Btn

@@ -187,3 +187,60 @@ export interface ProductionStockItemDto {
   locationName?: string | null;
   batches?: ProductionStockBatchDto[];
 }
+
+// TASK-768: GET /api/production/analytics (TASK-767). All fields tolerant/optional.
+export interface ProductionAnalyticsDto {
+  from?: string;
+  to?: string;
+  totals?: {
+    received?: number;
+    accepted?: number;
+    rejected?: number;
+    shipped?: number;
+    requestedQty?: number;
+    acceptedQty?: number;
+    shippedQty?: number;
+    /** 0..1 */
+    fillRate?: number | null;
+    avgReviewHours?: number | null;
+    avgLeadHours?: number | null;
+  };
+  ordersDone?: { count?: number; qty?: number; avgHours?: number | null };
+  byItem?: {
+    itemId?: string;
+    itemName?: string | null;
+    unit?: string | null;
+    requestedQty?: number;
+    acceptedQty?: number;
+    shippedQty?: number;
+    fillRate?: number | null;
+  }[];
+  byStore?: {
+    storeLocationId?: string;
+    storeName?: string | null;
+    requests?: number;
+    requestedQty?: number;
+    shippedQty?: number;
+    rejected?: number;
+    avgLeadHours?: number | null;
+  }[];
+  perDay?: {
+    date: string;
+    received?: number;
+    accepted?: number;
+    rejected?: number;
+    shipped?: number;
+    shippedQty?: number;
+    producedQty?: number;
+  }[];
+  rejectionReasons?: { reason?: string | null; count?: number }[];
+  previous?: {
+    from?: string;
+    to?: string;
+    received?: number;
+    accepted?: number;
+    rejected?: number;
+    shipped?: number;
+    shippedQty?: number;
+  };
+}

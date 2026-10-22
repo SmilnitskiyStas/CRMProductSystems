@@ -25,6 +25,19 @@ public interface IProductionInsightsRepository
         IReadOnlyCollection<Guid> productionLocationIds, DateTime fromUtc, DateTime toUtcExclusive,
         CancellationToken ct = default);
 
+    /// <summary>
+    /// TASK-767 analytics: requests whose SubmittedAt / ReviewedAt / ShippedAt falls in [fromUtc, toUtcExclusive)
+    /// (covers the current + previous window). Lines+items and store loaded; no transfer.
+    /// </summary>
+    Task<List<ProductionRequest>> GetAnalyticsRequestsAsync(
+        IReadOnlyCollection<Guid> productionLocationIds, DateTime fromUtc, DateTime toUtcExclusive,
+        CancellationToken ct = default);
+
+    /// <summary>Orders at the given locations with CompletedAt in [fromUtc, toUtcExclusive) (no navigations).</summary>
+    Task<List<ProductionOrder>> GetCompletedOrdersAsync(
+        IReadOnlyCollection<Guid> locationIds, DateTime fromUtc, DateTime toUtcExclusive,
+        CancellationToken ct = default);
+
     /// <summary>Order links of every line of the given requests, with ProductionOrder loaded.</summary>
     Task<List<ProductionOrderRequestLine>> GetLinksForRequestsAsync(
         IReadOnlyCollection<Guid> requestIds, CancellationToken ct = default);

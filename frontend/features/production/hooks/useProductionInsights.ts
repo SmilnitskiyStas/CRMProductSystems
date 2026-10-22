@@ -33,6 +33,15 @@ export function useProductionPipeline(p: { from: string; to: string; locationId?
   });
 }
 
+export function useProductionAnalytics(p: { from: string; to: string; locationId?: string }) {
+  return useQuery({
+    queryKey: ["production", "insights", "analytics", p.from, p.to, p.locationId ?? ""],
+    queryFn: () => productionInsightsApi.getAnalytics(p),
+    enabled: !!p.from && !!p.to,
+    staleTime: 30_000,
+  });
+}
+
 export function useProductionPlan(p: { from: string; to: string; granularity: PlanGranularity; locationId?: string }) {
   return useQuery({
     queryKey: ["production", "insights", "plan", p.from, p.to, p.granularity, p.locationId ?? ""],

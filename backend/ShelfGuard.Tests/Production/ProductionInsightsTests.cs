@@ -35,6 +35,19 @@ internal sealed class FakeInsightsRepo : IProductionInsightsRepository
                 || In(r.SubmittedAt) || In(r.ReviewedAt) || In(r.ShippedAt))).ToList());
     }
 
+    public Task<List<ProductionRequest>> GetAnalyticsRequestsAsync(
+        IReadOnlyCollection<Guid> ids, DateTime fromUtc, DateTime toUtcExclusive, CancellationToken ct = default)
+    {
+        bool In(DateTime? t) => t >= fromUtc && t < toUtcExclusive;
+        return Task.FromResult(Requests.Where(r => ids.Contains(r.ProductionLocationId)
+            && (In(r.SubmittedAt) || In(r.ReviewedAt) || In(r.ShippedAt))).ToList());
+    }
+
+    public Task<List<ProductionOrder>> GetCompletedOrdersAsync(
+        IReadOnlyCollection<Guid> ids, DateTime fromUtc, DateTime toUtcExclusive, CancellationToken ct = default) =>
+        Task.FromResult(Orders.Where(o => ids.Contains(o.LocationId) && o.CompletedAt.HasValue
+            && o.CompletedAt.Value.UtcDateTime >= fromUtc && o.CompletedAt.Value.UtcDateTime < toUtcExclusive).ToList());
+
     public Task<List<ProductionOrderRequestLine>> GetLinksForRequestsAsync(
         IReadOnlyCollection<Guid> requestIds, CancellationToken ct = default) =>
         Task.FromResult(Links.Where(l => Requests.Any(r => requestIds.Contains(r.Id) && r.Lines.Any(x => x.Id == l.RequestLineId))).ToList());

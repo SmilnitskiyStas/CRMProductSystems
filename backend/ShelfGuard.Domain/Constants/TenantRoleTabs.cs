@@ -166,6 +166,7 @@ public static class TenantRoleTabs
     public const string ItemProductionPlan = "/production/plan";
     public const string ItemProductionShipments = "/production/shipments";
     public const string ItemProductionWarehouse = "/production/warehouse";
+    public const string ItemProductionAnalytics = "/production/analytics";
 
     // Analytics (no moduleKey — always visible per role/permission)
     public const string ItemAnalytics = "/analytics";
@@ -211,7 +212,7 @@ public static class TenantRoleTabs
         ItemMarketplaceSuppliers, ItemMarketplaceOrders,
         ItemAutoServiceWorkOrders, ItemAutoServiceCustomers, ItemAutoServiceCatalog,
         ItemProductionRecipes, ItemProductionOrders, ItemProductionRequests,
-        ItemProductionOverview, ItemProductionPlan, ItemProductionShipments, ItemProductionWarehouse,
+        ItemProductionOverview, ItemProductionPlan, ItemProductionShipments, ItemProductionWarehouse, ItemProductionAnalytics,
         ItemAnalytics, ItemAnalyticsPos,
         ItemConsumerAppMessages, ItemConsumerAppBanners, ItemConsumerAppPromotions, ItemConsumerAppCatalog,
         ItemConsumerAppDesign, ItemConsumerAppPages, ItemConsumerAppNavigation, ItemConsumerAppFeatures,
@@ -287,6 +288,7 @@ public static class TenantRoleTabs
             new(ItemProductionOrders, "Виробничі замовлення"),
             new(ItemProductionShipments, "Відвантаження"),
             new(ItemProductionWarehouse, "Склад виробництва"),
+            new(ItemProductionAnalytics, "Аналітика"),
             new(ItemProductionRecipes, "Рецепти"),
         ]),
         new(Analytics, "Аналітика",

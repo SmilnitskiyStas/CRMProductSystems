@@ -49,6 +49,30 @@ public sealed class ProductionInsightsRepository : IProductionInsightsRepository
             .AsSplitQuery()
             .ToListAsync(ct);
 
+    public Task<List<ProductionRequest>> GetAnalyticsRequestsAsync(
+        IReadOnlyCollection<Guid> productionLocationIds, DateTime fromUtc, DateTime toUtcExclusive,
+        CancellationToken ct = default) =>
+        _db.ProductionRequests.AsNoTracking()
+            .Include(r => r.StoreLocation)
+            .Include(r => r.Lines).ThenInclude(l => l.Item)
+            .Where(r => productionLocationIds.Contains(r.ProductionLocationId)
+                && ((r.SubmittedAt >= fromUtc && r.SubmittedAt < toUtcExclusive)
+                    || (r.ReviewedAt >= fromUtc && r.ReviewedAt < toUtcExclusive)
+                    || (r.ShippedAt >= fromUtc && r.ShippedAt < toUtcExclusive)))
+            .AsSplitQuery()
+            .ToListAsync(ct);
+
+    public Task<List<ProductionOrder>> GetCompletedOrdersAsync(
+        IReadOnlyCollection<Guid> locationIds, DateTime fromUtc, DateTime toUtcExclusive,
+        CancellationToken ct = default)
+    {
+        var a = new DateTimeOffset(DateTime.SpecifyKind(fromUtc, DateTimeKind.Utc));
+        var b = new DateTimeOffset(DateTime.SpecifyKind(toUtcExclusive, DateTimeKind.Utc));
+        return _db.ProductionOrders.AsNoTracking()
+            .Where(o => locationIds.Contains(o.LocationId) && o.CompletedAt >= a && o.CompletedAt < b)
+            .ToListAsync(ct);
+    }
+
     public Task<List<ProductionOrderRequestLine>> GetLinksForRequestsAsync(
         IReadOnlyCollection<Guid> requestIds, CancellationToken ct = default) =>
         _db.ProductionOrderRequestLines.AsNoTracking()
