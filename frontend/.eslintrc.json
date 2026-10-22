@@ -8,7 +8,16 @@
         "features/production/**/*.{ts,tsx}",
         "app/(dashboard)/orders/**/*.{ts,tsx}",
         "features/orders/**/*.{ts,tsx}",
-        "features/order-tracking/**/*.{ts,tsx}"
+        "features/order-tracking/**/*.{ts,tsx}",
+        "features/supplier-cabinet/**/*.{ts,tsx}",
+        "app/(dashboard)/supplier/**/*.{ts,tsx}",
+        "features/provider/**/*.{ts,tsx}",
+        "app/(dashboard)/provider/**/*.{ts,tsx}",
+        "features/admin/**/*.{ts,tsx}",
+        "app/(dashboard)/admin/**/*.{ts,tsx}",
+        "features/tenant-roles/**/*.{ts,tsx}",
+        "features/consumer-app/**/*.{ts,tsx}",
+        "app/(dashboard)/consumer-app/**/*.{ts,tsx}"
       ],
       "rules": {
         "no-restricted-syntax": [

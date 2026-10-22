@@ -7,6 +7,8 @@
 
 import { useMemo, useState } from "react";
 import { useTranslations, useLocale } from "next-intl";
+import { filterInputStyle, labelStyle } from "@/components/ui/fieldStyles";
+import { Btn } from "@/components/ui/Btn";
 import { Table, type TableColumn } from "@/components/ui/Table";
 import { TrendIndicator } from "@/components/ui/TrendIndicator";
 import { useSupplierAnalytics } from "../hooks/useSupplierAnalytics";
@@ -16,24 +18,6 @@ import type {
   SupplierAnalyticsItem,
   SupplierPeriodMetric,
 } from "../types";
-
-const dateInputStyle: React.CSSProperties = {
-  background: "#0D1117",
-  border: "1px solid #374151",
-  borderRadius: 8,
-  color: "#E8EDF5",
-  fontSize: 13,
-  padding: "8px 10px",
-  outline: "none",
-};
-
-const labelStyle: React.CSSProperties = {
-  color: "#9CA3AF",
-  fontSize: 12,
-  fontWeight: 500,
-  marginBottom: 6,
-  display: "block",
-};
 
 function isoDaysAgo(days: number): string {
   const d = new Date();
@@ -135,7 +119,7 @@ export function SupplierAnalyticsDashboard() {
             value={from}
             max={to}
             onChange={(e) => e.target.value && setFrom(e.target.value)}
-            style={dateInputStyle}
+            style={filterInputStyle}
           />
         </div>
         <div>
@@ -146,31 +130,22 @@ export function SupplierAnalyticsDashboard() {
             min={from}
             max={todayIso()}
             onChange={(e) => e.target.value && setTo(e.target.value)}
-            style={dateInputStyle}
+            style={filterInputStyle}
           />
         </div>
         <div style={{ display: "flex", gap: 8 }}>
           {[30, 90, 365].map((d) => (
-            <button
+            <Btn
               key={d}
-              type="button"
+              variant="ghost"
+              size="sm"
               onClick={() => {
                 setFrom(isoDaysAgo(d - 1));
                 setTo(todayIso());
               }}
-              style={{
-                background: "transparent",
-                border: "1px solid #374151",
-                borderRadius: 8,
-                color: "#9CA3AF",
-                fontSize: 12,
-                fontWeight: 600,
-                padding: "8px 12px",
-                cursor: "pointer",
-              }}
             >
               {t("presetDays", { n: d })}
-            </button>
+            </Btn>
           ))}
         </div>
       </div>

@@ -6,6 +6,10 @@ import { useTranslations } from "next-intl";
 import { Shield, Building2, AlertTriangle, Activity, RefreshCw, Users, Plus, Truck } from "lucide-react";
 import { useMe } from "@/features/auth/hooks/useAuth";
 import { Btn } from "@/components/ui/Btn";
+import { PageContainer } from "@/components/ui/PageContainer";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { Tabs } from "@/components/ui/Tabs";
+import { inputStyle } from "@/components/ui/fieldStyles";
 import { useTenants, useProviderHealth } from "@/features/provider/hooks/useProvider";
 import { TenantCard } from "@/features/provider/components/TenantCard";
 import { TenantDetailPanel } from "@/features/provider/components/TenantDetailPanel";
@@ -101,49 +105,42 @@ export default function ProviderPage() {
       {/* Flex row: main content + inline detail panel */}
       <div style={{ display: "flex", alignItems: "flex-start", minHeight: "100vh" }}>
 
-      <div
-        style={{
-          flex: 1,
-          minWidth: 0,
-          padding: "28px 32px",
-        }}
-      >
-        {/* Header */}
-        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 28 }}>
-          <div>
-            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4 }}>
-              <div
+      <PageContainer style={{ flex: 1, minWidth: 0 }}>
+        <PageHeader
+          title={
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 10 }}>
+              <span
                 style={{
-                  width: 34, height: 34,
+                  width: 34,
+                  height: 34,
                   borderRadius: 9,
                   background: "linear-gradient(135deg, #7C3AED, #3B82F6)",
-                  display: "flex", alignItems: "center", justifyContent: "center",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
                   flexShrink: 0,
                 }}
               >
                 <Shield size={17} color="#fff" />
-              </div>
-              <h1 style={{ color: "#E8EDF5", fontSize: 22, fontWeight: 700, margin: 0 }}>
-                {t("title")}
-              </h1>
-            </div>
-            <p style={{ color: "#4B5563", fontSize: 14, margin: 0 }}>
-              {t("subtitle")}
-            </p>
-          </div>
-
-          <div style={{ display: "flex", gap: 8 }}>
-            <Btn icon={<Plus size={15} />} onClick={() => setShowWizard(true)}>
-              {t("newClientButton")}
-            </Btn>
-            <Btn variant="ghost" icon={<RefreshCw size={14} />} onClick={() => refetchTenants()}>
-              {t("refreshButton")}
-            </Btn>
-          </div>
-        </div>
+              </span>
+              {t("title")}
+            </span>
+          }
+          subtitle={t("subtitle")}
+          actions={
+            <>
+              <Btn icon={<Plus size={15} />} onClick={() => setShowWizard(true)}>
+                {t("newClientButton")}
+              </Btn>
+              <Btn variant="ghost" icon={<RefreshCw size={14} />} onClick={() => refetchTenants()}>
+                {t("refreshButton")}
+              </Btn>
+            </>
+          }
+        />
 
         {/* Stats row */}
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12, marginBottom: 28 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12 }}>
           {stats.map((stat) => (
             <div
               key={stat.label}
@@ -168,36 +165,15 @@ export default function ProviderPage() {
           ))}
         </div>
 
-        {/* Tabs */}
-        <div style={{ display: "flex", gap: 4, marginBottom: 20, flexWrap: "wrap" }}>
-          {(
-            [
-              { key: "clients",   label: t("tabClients", { count: clientTenants.length }),     icon: <Building2 size={14} /> },
-              { key: "suppliers", label: t("tabSuppliers", { count: supplierTenants.length }), icon: <Truck size={14} /> },
-              { key: "logs",      label: t("tabLogs"),                                  icon: <Activity size={14} /> },
-            ] as const
-          ).map(({ key, label, icon }) => (
-            <button
-              key={key}
-              onClick={() => setActiveTab(key)}
-              style={{
-                padding: "8px 16px",
-                borderRadius: 8,
-                fontSize: 13,
-                fontWeight: activeTab === key ? 600 : 400,
-                cursor: "pointer",
-                background: activeTab === key ? "#1D3461" : "transparent",
-                border: `1px solid ${activeTab === key ? "#3B82F6" : "transparent"}`,
-                color: activeTab === key ? "#93C5FD" : "#6B7280",
-              }}
-            >
-              <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                {icon}
-                {label}
-              </span>
-            </button>
-          ))}
-        </div>
+        <Tabs
+          items={[
+            { key: "clients", label: <><Building2 size={14} /> {t("tabClients", { count: clientTenants.length })}</> },
+            { key: "suppliers", label: <><Truck size={14} /> {t("tabSuppliers", { count: supplierTenants.length })}</> },
+            { key: "logs", label: <><Activity size={14} /> {t("tabLogs")}</> },
+          ]}
+          value={activeTab}
+          onChange={setActiveTab}
+        />
 
         {/* Clients / Suppliers tabs (share the same tenant grid) */}
         {(activeTab === "clients" || activeTab === "suppliers") && (
@@ -208,18 +184,7 @@ export default function ProviderPage() {
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder={t("searchPlaceholder")}
-                style={{
-                  width: "100%",
-                  maxWidth: 380,
-                  background: "#0D1117",
-                  border: "1px solid #1F2937",
-                  borderRadius: 8,
-                  padding: "9px 14px",
-                  color: "#E8EDF5",
-                  fontSize: 13,
-                  outline: "none",
-                  boxSizing: "border-box",
-                }}
+                style={{ ...inputStyle, maxWidth: 380 }}
               />
             </div>
 
@@ -268,7 +233,7 @@ export default function ProviderPage() {
           </div>
         )}
 
-      </div>{/* end main content */}
+      </PageContainer>{/* end main content */}
 
       {/* Inline detail panel — takes its own column in the flex row */}
       {selectedId && (

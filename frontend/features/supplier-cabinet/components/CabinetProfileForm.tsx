@@ -4,6 +4,8 @@ import { useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
 import { Eye, EyeOff } from "lucide-react";
 import { Btn } from "@/components/ui/Btn";
+import { StatusPill } from "@/components/ui/StatusPill";
+import { inputStyle, labelStyle } from "@/components/ui/fieldStyles";
 import { CollapsibleSection } from "@/components/ui/CollapsibleSection";
 import { PlanBadge } from "@/features/marketplace/components/PlanBadge";
 import { RegionSelect } from "@/features/geo/components/RegionSelect";
@@ -16,26 +18,6 @@ import {
 } from "../hooks/useSupplierCabinet";
 import { useItemCategories } from "@/features/marketplace/hooks/useMarketplace";
 
-const INPUT_STYLE: React.CSSProperties = {
-  width: "100%",
-  padding: "9px 12px",
-  background: "#0D1117",
-  border: "1px solid #1F2937",
-  borderRadius: 8,
-  color: "#E8EDF5",
-  fontSize: 13,
-  outline: "none",
-  boxSizing: "border-box",
-};
-
-const LABEL_STYLE: React.CSSProperties = {
-  display: "block",
-  color: "#9CA3AF",
-  fontSize: 12,
-  fontWeight: 500,
-  marginBottom: 6,
-};
-
 function Field({
   label,
   hint,
@@ -47,7 +29,7 @@ function Field({
 }) {
   return (
     <div>
-      <label style={LABEL_STYLE}>{label}</label>
+      <label style={labelStyle}>{label}</label>
       {hint && (
         <p style={{ color: "#6B7280", fontSize: 11, margin: "-2px 0 6px" }}>{hint}</p>
       )}
@@ -164,18 +146,9 @@ export function CabinetProfileForm() {
             {profile.supplierName}
           </h2>
           <PlanBadge plan={profile.plan} />
-          <span
-            style={{
-              padding: "2px 10px",
-              borderRadius: 6,
-              fontSize: 11,
-              fontWeight: 600,
-              background: profile.isPublic ? "#052e16" : "#1c1917",
-              color: profile.isPublic ? "#4ADE80" : "#6B7280",
-            }}
-          >
+          <StatusPill bg={profile.isPublic ? "#052e16" : "#1c1917"} text={profile.isPublic ? "#4ADE80" : "#6B7280"}>
             {profile.isPublic ? t("publishedBadge") : t("hiddenBadge")}
-          </span>
+          </StatusPill>
         </div>
         <Btn
           variant={profile.isPublic ? "ghost" : "success"}
@@ -204,7 +177,7 @@ export function CabinetProfileForm() {
             </Field>
             <Field label={t("websiteLabel")}>
               <input
-                style={INPUT_STYLE}
+                style={inputStyle}
                 value={website}
                 onChange={(e) => setWebsite(e.target.value)}
                 placeholder="https://example.com"
@@ -235,7 +208,7 @@ export function CabinetProfileForm() {
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
             <Field label={t("workingHoursLabel")}>
               <input
-                style={INPUT_STYLE}
+                style={inputStyle}
                 value={workingHours}
                 onChange={(e) => setWorkingHours(e.target.value)}
                 placeholder={t("workingHoursPlaceholder")}
@@ -243,7 +216,7 @@ export function CabinetProfileForm() {
             </Field>
             <Field label={t("paymentTermsLabel")}>
               <input
-                style={INPUT_STYLE}
+                style={inputStyle}
                 value={paymentTerms}
                 onChange={(e) => setPaymentTerms(e.target.value)}
                 placeholder={t("paymentTermsPlaceholder")}

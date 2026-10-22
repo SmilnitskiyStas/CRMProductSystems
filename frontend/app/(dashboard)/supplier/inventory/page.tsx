@@ -2,6 +2,9 @@
 
 import { useState } from "react";
 import { useTranslations } from "next-intl";
+import { PageContainer } from "@/components/ui/PageContainer";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { Tabs } from "@/components/ui/Tabs";
 import { WarehouseStockTable } from "@/features/supplier-cabinet/components/WarehouseStockTable";
 import { SupplierReceiptsList } from "@/features/supplier-cabinet/components/SupplierReceiptsList";
 import { useMe } from "@/features/auth/hooks/useAuth";
@@ -16,9 +19,9 @@ export default function SupplierInventoryPage() {
 
   if (me && !hasRole(me.role, SUPPLIER_ONLY)) {
     return (
-      <div style={{ padding: "28px 32px", color: "#F87171", fontSize: 14 }}>
-        {t("supplierOnlyAccess")}
-      </div>
+      <PageContainer>
+        <div style={{ color: "#F87171", fontSize: 14 }}>{t("supplierOnlyAccess")}</div>
+      </PageContainer>
     );
   }
 
@@ -26,47 +29,26 @@ export default function SupplierInventoryPage() {
   // warehouse_management should not reach this page directly by URL either.
   if (me?.permissions && !me.permissions.warehouse_management) {
     return (
-      <div style={{ padding: "28px 32px", color: "#F87171", fontSize: 14 }}>
-        {t("inventory.noAccess")}
-      </div>
+      <PageContainer>
+        <div style={{ color: "#F87171", fontSize: 14 }}>{t("inventory.noAccess")}</div>
+      </PageContainer>
     );
   }
 
-  const tabStyle = (tab: ActiveTab): React.CSSProperties => ({
-    padding: "10px 20px",
-    background: "transparent",
-    border: "none",
-    borderBottom: activeTab === tab ? "2px solid #3B82F6" : "2px solid transparent",
-    color: activeTab === tab ? "#3B82F6" : "#6B7280",
-    fontSize: 13,
-    fontWeight: activeTab === tab ? 600 : 400,
-    cursor: "pointer",
-    marginBottom: -1,
-    transition: "color 0.15s",
-  });
-
   return (
-    <div style={{ padding: "28px 32px" }}>
-      <div style={{ marginBottom: 24 }}>
-        <h1 style={{ color: "#E8EDF5", fontSize: 22, fontWeight: 700, margin: 0 }}>
-          {t("inventory.title")}
-        </h1>
-        <p style={{ color: "#4B5563", fontSize: 14, marginTop: 6 }}>
-          {t("inventory.subtitle")}
-        </p>
-      </div>
-
-      <div style={{ borderBottom: "1px solid #1F2937", marginBottom: 24, display: "flex" }}>
-        <button style={tabStyle("stock")} onClick={() => setActiveTab("stock")}>
-          {t("inventory.tabStock")}
-        </button>
-        <button style={tabStyle("receipts")} onClick={() => setActiveTab("receipts")}>
-          {t("inventory.tabReceipts")}
-        </button>
-      </div>
+    <PageContainer>
+      <PageHeader title={t("inventory.title")} subtitle={t("inventory.subtitle")} />
+      <Tabs
+        items={[
+          { key: "stock", label: t("inventory.tabStock") },
+          { key: "receipts", label: t("inventory.tabReceipts") },
+        ]}
+        value={activeTab}
+        onChange={setActiveTab}
+      />
 
       {activeTab === "stock" && <WarehouseStockTable />}
       {activeTab === "receipts" && <SupplierReceiptsList />}
-    </div>
+    </PageContainer>
   );
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import { useTranslations } from "next-intl";
+import { StatusPill } from "@/components/ui/StatusPill";
 import { PLAN_COLORS } from "../types";
 import type { TenantSummaryDto } from "../types";
 
@@ -56,20 +57,9 @@ export function TenantCard({ tenant, onClick }: Props) {
 
       {/* Plan badge */}
       <div style={{ marginBottom: 14 }}>
-        <span
-          style={{
-            display: "inline-block",
-            padding: "3px 10px",
-            borderRadius: 6,
-            fontSize: 11,
-            fontWeight: 600,
-            background: plan.bg,
-            border: `1px solid ${plan.border}`,
-            color: plan.text,
-          }}
-        >
+        <StatusPill bg={plan.bg} text={plan.text}>
           {tPlans(tenant.plan)}
-        </span>
+        </StatusPill>
       </div>
 
       {/* Stats row */}
@@ -92,19 +82,9 @@ export function TenantCard({ tenant, onClick }: Props) {
       {tenant.modules.length > 0 && (
         <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
           {tenant.modules.slice(0, 4).map((m) => (
-            <span
-              key={m}
-              style={{
-                padding: "2px 7px",
-                borderRadius: 4,
-                fontSize: 10,
-                background: "#111827",
-                border: "1px solid #1F2937",
-                color: "#6B7280",
-              }}
-            >
+            <StatusPill key={m} bg="#111827" text="#6B7280" style={{ fontSize: 10, padding: "2px 7px", fontWeight: 400 }}>
               {tModules.has(m) ? tModules(m) : m}
-            </span>
+            </StatusPill>
           ))}
           {tenant.modules.length > 4 && (
             <span style={{ fontSize: 10, color: "#4B5563", padding: "2px 4px" }}>

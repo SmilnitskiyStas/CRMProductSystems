@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import type { CSSProperties } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useTranslations, useLocale } from "next-intl";
 import { X, LogIn, Save, ScrollText, PlugZap } from "lucide-react";
@@ -16,6 +15,8 @@ import { AddTenantUserModal } from "./AddTenantUserModal";
 import { setToken, getToken } from "@/lib/api";
 import { ME_KEY } from "@/features/auth/hooks/useAuth";
 import { Btn } from "@/components/ui/Btn";
+import { StatusPill } from "@/components/ui/StatusPill";
+import { inputStyle, textareaStyle } from "@/components/ui/fieldStyles";
 import {
   AI_PROVIDERS,
   DEFAULT_AI_MODELS,
@@ -38,17 +39,6 @@ function formatDate(iso: string | null, locale: string) {
     hour: "2-digit", minute: "2-digit",
   });
 }
-
-const aiInputStyle: CSSProperties = {
-  width: "100%",
-  background: "#0D1117",
-  border: "1px solid #374151",
-  borderRadius: 8,
-  padding: "8px 10px",
-  color: "#E8EDF5",
-  fontSize: 13,
-  outline: "none",
-};
 
 export function TenantDetailPanel({ tenantId, onClose, onImpersonated, onViewLogs }: Props) {
   const t = useTranslations("Dashboard.provider.tenantDetailPanel");
@@ -265,19 +255,9 @@ export function TenantDetailPanel({ tenantId, onClose, onImpersonated, onViewLog
           <div>
             <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4 }}>
               <div style={{ color: "#E8EDF5", fontSize: 18, fontWeight: 700 }}>{tenant.name}</div>
-              <span
-                style={{
-                  padding: "2px 8px",
-                  borderRadius: 5,
-                  fontSize: 11,
-                  fontWeight: 600,
-                  background: tenant.isActive ? "#052e16" : "#1F1211",
-                  border: `1px solid ${tenant.isActive ? "#166534" : "#7F1D1D"}`,
-                  color: tenant.isActive ? "#4ADE80" : "#F87171",
-                }}
-              >
+              <StatusPill bg={tenant.isActive ? "#052e16" : "#1F1211"} text={tenant.isActive ? "#4ADE80" : "#F87171"}>
                 {tenant.isActive ? t("statusActive") : t("statusDeactivated")}
-              </span>
+              </StatusPill>
             </div>
             <div style={{ color: "#4B5563", fontSize: 12 }}>{tenant.slug}</div>
           </div>
@@ -314,12 +294,9 @@ export function TenantDetailPanel({ tenantId, onClose, onImpersonated, onViewLog
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
               <div style={{ color: "#9CA3AF", fontSize: 12, fontWeight: 600 }}>{t("planSectionTitle")}</div>
               {!editingPlan && (
-                <button
-                  onClick={() => startEditPlan(tenant)}
-                  style={{ background: "none", border: "none", color: "#60A5FA", fontSize: 12, cursor: "pointer" }}
-                >
+                <Btn variant="link" size="sm" onClick={() => startEditPlan(tenant)}>
                   {t("changeButton")}
-                </button>
+                </Btn>
               )}
             </div>
 
@@ -360,20 +337,13 @@ export function TenantDetailPanel({ tenantId, onClose, onImpersonated, onViewLog
               </div>
             ) : (
               <div>
-                <span
-                  style={{
-                    display: "inline-block",
-                    padding: "4px 12px",
-                    borderRadius: 7,
-                    fontSize: 13,
-                    fontWeight: 600,
-                    background: PLAN_COLORS[tenant.plan]?.bg,
-                    border: `1px solid ${PLAN_COLORS[tenant.plan]?.border}`,
-                    color: PLAN_COLORS[tenant.plan]?.text,
-                  }}
+                <StatusPill
+                  bg={PLAN_COLORS[tenant.plan]?.bg}
+                  text={PLAN_COLORS[tenant.plan]?.text}
+                  style={{ fontSize: 13, padding: "4px 12px" }}
                 >
                   {tPlans(tenant.plan)}
-                </span>
+                </StatusPill>
               </div>
             )}
           </div>
@@ -383,12 +353,9 @@ export function TenantDetailPanel({ tenantId, onClose, onImpersonated, onViewLog
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
               <div style={{ color: "#9CA3AF", fontSize: 12, fontWeight: 600 }}>{t("modulesSectionTitle")}</div>
               {!editingModules && (
-                <button
-                  onClick={() => startEditModules(tenant)}
-                  style={{ background: "none", border: "none", color: "#60A5FA", fontSize: 12, cursor: "pointer" }}
-                >
+                <Btn variant="link" size="sm" onClick={() => startEditModules(tenant)}>
                   {t("configureButton")}
-                </button>
+                </Btn>
               )}
             </div>
 
@@ -436,19 +403,9 @@ export function TenantDetailPanel({ tenantId, onClose, onImpersonated, onViewLog
                 {tenant.modules.length === 0 ? (
                   <span style={{ color: "#4B5563", fontSize: 13 }}>{t("noModulesConnected")}</span>
                 ) : tenant.modules.map((m) => (
-                  <span
-                    key={m}
-                    style={{
-                      padding: "4px 10px",
-                      borderRadius: 6,
-                      fontSize: 12,
-                      background: "#0F1F3D",
-                      border: "1px solid #1E3A5F",
-                      color: "#93C5FD",
-                    }}
-                  >
+                  <StatusPill key={m} bg="#0F1F3D" text="#93C5FD" style={{ fontWeight: 400, fontSize: 12, padding: "4px 10px" }}>
                     {tModules.has(m) ? tModules(m) : m}
-                  </span>
+                  </StatusPill>
                 ))}
               </div>
             )}
@@ -459,12 +416,9 @@ export function TenantDetailPanel({ tenantId, onClose, onImpersonated, onViewLog
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
               <div style={{ color: "#9CA3AF", fontSize: 12, fontWeight: 600 }}>{t("aiSectionTitle")}</div>
               {!editingAi && (
-                <button
-                  onClick={() => startEditAi(aiAgent)}
-                  style={{ background: "none", border: "none", color: "#60A5FA", fontSize: 12, cursor: "pointer" }}
-                >
+                <Btn variant="link" size="sm" onClick={() => startEditAi(aiAgent)}>
                   {aiAgent?.isConfigured ? t("changeButton") : t("configureButton")}
-                </button>
+                </Btn>
               )}
             </div>
 
@@ -545,7 +499,7 @@ export function TenantDetailPanel({ tenantId, onClose, onImpersonated, onViewLog
                     onChange={(e) => setAiModel(e.target.value)}
                     list={`ai-model-suggestions-${aiProvider}`}
                     placeholder={DEFAULT_AI_MODELS[aiProvider]}
-                    style={aiInputStyle}
+                    style={inputStyle}
                   />
                   <datalist id={`ai-model-suggestions-${aiProvider}`}>
                     {SUGGESTED_AI_MODELS[aiProvider].map((m) => <option key={m.id} value={m.id} />)}
@@ -584,7 +538,7 @@ export function TenantDetailPanel({ tenantId, onClose, onImpersonated, onViewLog
                     value={aiKey}
                     onChange={(e) => setAiKey(e.target.value)}
                     placeholder={aiAgent?.apiKeyLast4 ? `••••${aiAgent.apiKeyLast4} — ${t("aiKeyPlaceholder")}` : "sk-..."}
-                    style={aiInputStyle}
+                    style={inputStyle}
                   />
                 </div>
 
@@ -595,7 +549,7 @@ export function TenantDetailPanel({ tenantId, onClose, onImpersonated, onViewLog
                       value={aiBaseUrl}
                       onChange={(e) => setAiBaseUrl(e.target.value)}
                       placeholder={t("aiBaseUrlPlaceholder")}
-                      style={aiInputStyle}
+                      style={inputStyle}
                     />
                     <div style={{ color: "#4B5563", fontSize: 11, marginTop: 3 }}>{t("aiBaseUrlHint")}</div>
                   </div>
@@ -609,7 +563,7 @@ export function TenantDetailPanel({ tenantId, onClose, onImpersonated, onViewLog
                       const bt = e.target.value as BusinessType;
                       if (bt) applyAiPreset(bt);
                     }}
-                    style={aiInputStyle}
+                    style={inputStyle}
                   >
                     <option value="">{t("aiPresetPlaceholder")}</option>
                     {ALL_BUSINESS_TYPES.map((bt) => (
@@ -628,7 +582,7 @@ export function TenantDetailPanel({ tenantId, onClose, onImpersonated, onViewLog
                     onChange={(e) => setAiExtra(e.target.value)}
                     rows={3}
                     placeholder={t("aiExtraPlaceholder")}
-                    style={{ ...aiInputStyle, resize: "vertical", fontFamily: "inherit" }}
+                    style={textareaStyle}
                   />
                 </div>
 
@@ -652,21 +606,15 @@ export function TenantDetailPanel({ tenantId, onClose, onImpersonated, onViewLog
               </div>
             ) : (
               <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
-                <span
-                  style={{
-                    padding: "3px 10px",
-                    borderRadius: 6,
-                    fontSize: 12,
-                    fontWeight: 600,
-                    background: aiAgent?.isConfigured ? "#052e16" : "#1c1917",
-                    border: `1px solid ${aiAgent?.isConfigured ? "#166534" : "#374151"}`,
-                    color: aiAgent?.isConfigured ? "#4ADE80" : "#6B7280",
-                  }}
+                <StatusPill
+                  bg={aiAgent?.isConfigured ? "#052e16" : "#1c1917"}
+                  text={aiAgent?.isConfigured ? "#4ADE80" : "#6B7280"}
+                  style={{ fontSize: 12 }}
                 >
                   {!aiAgent?.isConfigured
                     ? t("aiStatusNotConnected")
                     : `${aiAgent.provider === "openai" ? "OpenAI" : "Claude"} · ${aiAgent.model || DEFAULT_AI_MODELS[aiAgent.provider === "openai" ? "openai" : "claude"]}`}
-                </span>
+                </StatusPill>
                 {aiAgent?.isConfigured && !aiAgent.isEnabled && (
                   <span style={{ color: "#6B7280", fontSize: 12 }}>{t("aiStatusDisabled")}</span>
                 )}
@@ -681,12 +629,9 @@ export function TenantDetailPanel({ tenantId, onClose, onImpersonated, onViewLog
           <div style={{ background: "#0D1117", border: "1px solid #1F2937", borderRadius: 10, padding: "14px 16px" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
               <div style={{ color: "#9CA3AF", fontSize: 12, fontWeight: 600 }}>{t("adminsSectionTitle")}</div>
-              <button
-                onClick={() => setShowAddUser(true)}
-                style={{ background: "none", border: "none", color: "#60A5FA", fontSize: 12, cursor: "pointer" }}
-              >
+              <Btn variant="link" size="sm" onClick={() => setShowAddUser(true)}>
                 {t("addButton")}
-              </button>
+              </Btn>
             </div>
 
             {usersLoading ? (
@@ -715,21 +660,9 @@ export function TenantDetailPanel({ tenantId, onClose, onImpersonated, onViewLog
                       </div>
                       <div style={{ color: "#6B7280", fontSize: 12 }}>{user.email}</div>
                     </div>
-                    <span
-                      style={{
-                        padding: "2px 8px",
-                        borderRadius: 5,
-                        fontSize: 11,
-                        fontWeight: 600,
-                        background: "#1D3461",
-                        border: "1px solid #3B82F6",
-                        color: "#93C5FD",
-                        whiteSpace: "nowrap",
-                        flexShrink: 0,
-                      }}
-                    >
+                    <StatusPill bg="#1D3461" text="#93C5FD" style={{ flexShrink: 0 }}>
                       Admin
-                    </span>
+                    </StatusPill>
                   </div>
                 ))}
               </div>

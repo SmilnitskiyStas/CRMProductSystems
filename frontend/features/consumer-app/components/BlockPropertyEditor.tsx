@@ -1,4 +1,5 @@
 "use client";
+import { inputStyle, labelStyle } from "@/components/ui/fieldStyles";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useForm, type UseFormRegister, type UseFormSetValue } from "react-hook-form";
@@ -13,26 +14,6 @@ import { ProductPickerField } from "./ProductPickerField";
 
 // ── Style constants (mirrors ThemeEditorSection.tsx / AppBuilderCanvas.tsx conventions — this
 // feature area has no shadcn form primitives of its own) ───────────────────────────────────────
-
-const inputStyle: React.CSSProperties = {
-  width: "100%",
-  background: "#0D1117",
-  border: "1px solid #374151",
-  borderRadius: 8,
-  padding: "9px 12px",
-  color: "#E8EDF5",
-  fontSize: 13,
-  outline: "none",
-  boxSizing: "border-box",
-};
-
-const labelStyle: React.CSSProperties = {
-  display: "block",
-  color: "#9CA3AF",
-  fontSize: 12,
-  fontWeight: 500,
-  marginBottom: 6,
-};
 
 const hintStyle: React.CSSProperties = { color: "#4B5563", fontSize: 11, marginTop: 4 };
 const errorStyle: React.CSSProperties = { ...hintStyle, color: "#EF4444" };

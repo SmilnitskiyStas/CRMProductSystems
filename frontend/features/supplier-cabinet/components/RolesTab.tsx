@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useTranslations } from "next-intl";
-import { Plus, Pencil, Trash2, X, Shield } from "lucide-react";
+import { Plus, Pencil, Trash2, Shield } from "lucide-react";
 import {
   useSupplierRoles,
   useCreateSupplierRole,
@@ -12,6 +12,9 @@ import {
 import { ALL_SUPPLIER_PERMISSIONS } from "@/lib/supplierPermissions";
 import type { SupplierRoleDto } from "../types";
 import { Btn } from "@/components/ui/Btn";
+import { Modal } from "@/components/ui/Modal";
+import { StatusPill } from "@/components/ui/StatusPill";
+import { inputStyle } from "@/components/ui/fieldStyles";
 
 export function RolesTab() {
   const t = useTranslations("Dashboard.supplierCabinet.rolesTab");
@@ -75,34 +78,21 @@ export function RolesTab() {
                     {role.displayName}
                   </span>
                   {role.isSystem && (
-                    <span style={{
-                      fontSize: 10, padding: "2px 7px", borderRadius: 4,
-                      background: "#1F2937", color: "#4B5563", border: "1px solid #374151",
-                    }}>
+                    <StatusPill bg="#1F2937" text="#4B5563">
                       {t("systemBadge")}
-                    </span>
+                    </StatusPill>
                   )}
-                  <span style={{
-                    fontSize: 11, padding: "2px 8px", borderRadius: 4,
-                    background: "#1E3A5F22", color: "#60A5FA", border: "1px solid #1D4ED855",
-                  }}>
+                  <StatusPill bg="#1E3A5F22" text="#60A5FA">
                     {role.baseRole === "supplier_admin" ? t("baseRoleLabels.supplier_admin") : role.baseRole}
-                  </span>
+                  </StatusPill>
                 </div>
                 <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
                   {role.permissions.length === 0 ? (
                     <span style={{ color: "#374151", fontSize: 12 }}>{t("noPermissions")}</span>
                   ) : role.permissions.map((p) => (
-                    <span
-                      key={p}
-                      style={{
-                        fontSize: 11, padding: "3px 8px", borderRadius: 5,
-                        background: "#1E3A5F", color: "#93C5FD",
-                        border: "1px solid #1D4ED8",
-                      }}
-                    >
+                    <StatusPill key={p} bg="#1E3A5F" text="#93C5FD">
                       {t(`permissionLabels.${p}`)}
-                    </span>
+                    </StatusPill>
                   ))}
                 </div>
               </div>
@@ -191,33 +181,7 @@ function RoleFormModal({ role, onClose }: RoleFormModalProps) {
   }
 
   return (
-    <div
-      style={{
-        position: "fixed", inset: 0, zIndex: 999,
-        background: "rgba(0,0,0,0.6)",
-        display: "flex", alignItems: "center", justifyContent: "center",
-        padding: "20px",
-      }}
-      onClick={onClose}
-    >
-      <div
-        style={{
-          background: "#111827", border: "1px solid #1F2937",
-          borderRadius: 14, padding: "28px 32px",
-          width: "100%", maxWidth: 480,
-          maxHeight: "90vh", overflowY: "auto",
-        }}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
-          <h2 style={{ color: "#E8EDF5", fontSize: 16, fontWeight: 700, margin: 0 }}>
-            {isEdit ? t("titleEdit") : t("titleCreate")}
-          </h2>
-          <button onClick={onClose} style={{ background: "none", border: "none", color: "#6B7280", cursor: "pointer" }}>
-            <X size={18} />
-          </button>
-        </div>
-
+    <Modal title={isEdit ? t("titleEdit") : t("titleCreate")} onClose={onClose} width={480}>
         <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 14 }}>
           <input
             required
@@ -262,32 +226,10 @@ function RoleFormModal({ role, onClose }: RoleFormModalProps) {
             </div>
           )}
 
-          <button
-            type="submit"
-            disabled={isPending}
-            style={{
-              padding: "11px 0", borderRadius: 9,
-              background: isPending ? "#1D3461" : "linear-gradient(135deg, #3B82F6, #6366F1)",
-              border: "none", color: "#fff", fontSize: 14, fontWeight: 600,
-              cursor: isPending ? "not-allowed" : "pointer", marginTop: 4,
-            }}
-          >
+          <Btn type="submit" fullWidth disabled={isPending}>
             {isPending ? t("saving") : (isEdit ? t("saveChanges") : t("createRole"))}
-          </button>
+          </Btn>
         </form>
-      </div>
-    </div>
+    </Modal>
   );
 }
-
-const inputStyle: React.CSSProperties = {
-  background: "#0D1117",
-  border: "1px solid #1F2937",
-  borderRadius: 8,
-  padding: "10px 14px",
-  color: "#E8EDF5",
-  fontSize: 13,
-  outline: "none",
-  width: "100%",
-  boxSizing: "border-box",
-};

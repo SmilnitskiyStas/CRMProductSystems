@@ -5,6 +5,8 @@ import { useTranslations } from "next-intl";
 import { toast } from "sonner";
 import { ChevronDown, ChevronRight, Pencil, Plus, Trash2 } from "lucide-react";
 import { Btn } from "@/components/ui/Btn";
+import { Modal } from "@/components/ui/Modal";
+import { StatusPill } from "@/components/ui/StatusPill";
 import type { PlatformCategoryDto } from "../types";
 import { useDeleteCategory } from "../hooks/useProviderCategories";
 import { buildChildrenMap } from "../lib/categoryTree";
@@ -84,36 +86,16 @@ export function CategoryTreeManager({ categories, onEdit, onAddSub }: Props) {
           </span>
 
           {!category.isActive && (
-            <span
-              style={{
-                padding: "1px 7px",
-                borderRadius: 20,
-                background: "#111827",
-                border: "1px solid #374151",
-                color: "#9CA3AF",
-                fontSize: 10,
-                fontWeight: 600,
-              }}
-            >
+            <StatusPill bg="#111827" text="#9CA3AF" style={{ fontSize: 10, padding: "1px 7px" }}>
               {t("inactivePill")}
-            </span>
+            </StatusPill>
           )}
 
           <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
             {category.businessTypes.map((bt) => (
-              <span
-                key={bt}
-                style={{
-                  padding: "1px 7px",
-                  borderRadius: 20,
-                  background: "#0F1F3D",
-                  border: "1px solid #1E3A5F",
-                  color: "#93C5FD",
-                  fontSize: 10,
-                }}
-              >
+              <StatusPill key={bt} bg="#0F1F3D" text="#93C5FD" style={{ fontSize: 10, padding: "1px 7px", fontWeight: 400 }}>
                 {tBusinessTypes.has(bt) ? tBusinessTypes(bt) : bt}
-              </span>
+              </StatusPill>
             ))}
             {category.businessTypes.length === 0 && (
               <span style={{ color: "#4B5563", fontSize: 10 }}>{t("allBusinessTypes")}</span>
@@ -159,27 +141,7 @@ export function CategoryTreeManager({ categories, onEdit, onAddSub }: Props) {
 
       {pendingDelete && (
         <>
-          <div
-            onClick={() => setPendingDelete(null)}
-            style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", zIndex: 1000, backdropFilter: "blur(2px)" }}
-          />
-          <div
-            style={{
-              position: "fixed",
-              top: "50%",
-              left: "50%",
-              transform: "translate(-50%, -50%)",
-              width: "min(420px, 95vw)",
-              background: "#0D1117",
-              border: "1px solid #1F2937",
-              borderRadius: 14,
-              zIndex: 1001,
-              padding: "24px 28px",
-            }}
-          >
-            <h3 style={{ color: "#E8EDF5", fontSize: 15, fontWeight: 700, margin: "0 0 8px" }}>
-              {t("deleteDialog.title")}
-            </h3>
+          <Modal title={t("deleteDialog.title")} onClose={() => setPendingDelete(null)} width={420}>
             <p style={{ color: "#6B7280", fontSize: 13, margin: "0 0 20px" }}>
               {t("deleteDialog.body", { name: pendingDelete.name })}
             </p>
@@ -191,7 +153,7 @@ export function CategoryTreeManager({ categories, onEdit, onAddSub }: Props) {
                 {deleteCategory.isPending ? t("deleteDialog.deleting") : t("deleteDialog.confirm")}
               </Btn>
             </div>
-          </div>
+          </Modal>
         </>
       )}
     </>

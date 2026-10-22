@@ -5,6 +5,7 @@ import type { TenantDto } from "../types";
 import { PLAN_COLORS } from "../types";
 import { useActivateTenant, useDeactivateTenant } from "../hooks/useAdmin";
 import { Btn } from "@/components/ui/Btn";
+import { StatusPill } from "@/components/ui/StatusPill";
 import { Table, type TableColumn } from "@/components/ui/Table";
 
 interface Props {
@@ -23,40 +24,18 @@ function PlanBadge({ plan }: { plan: TenantDto["plan"] }) {
   const tPlans = useTranslations("Dashboard.admin.plans");
   const c = PLAN_COLORS[plan];
   return (
-    <span
-      style={{
-        display: "inline-block",
-        padding: "3px 10px",
-        borderRadius: 6,
-        fontSize: 11,
-        fontWeight: 600,
-        background: c.bg,
-        border: `1px solid ${c.border}`,
-        color: c.text,
-      }}
-    >
+    <StatusPill bg={c.bg} text={c.text}>
       {tPlans(plan)}
-    </span>
+    </StatusPill>
   );
 }
 
 function StatusBadge({ isActive }: { isActive: boolean }) {
   const t = useTranslations("Dashboard.admin.tenantTable");
   return (
-    <span
-      style={{
-        display: "inline-block",
-        padding: "3px 10px",
-        borderRadius: 6,
-        fontSize: 11,
-        fontWeight: 600,
-        background: isActive ? "#052e16" : "#1F1211",
-        border: `1px solid ${isActive ? "#166534" : "#7F1D1D"}`,
-        color: isActive ? "#4ADE80" : "#F87171",
-      }}
-    >
+    <StatusPill bg={isActive ? "#052e16" : "#1F1211"} text={isActive ? "#4ADE80" : "#F87171"}>
       {isActive ? t("statusActive") : t("statusDeactivated")}
-    </span>
+    </StatusPill>
   );
 }
 

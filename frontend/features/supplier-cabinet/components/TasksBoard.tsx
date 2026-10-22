@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useTranslations, useLocale } from "next-intl";
-import { Plus, X, ClipboardList, List, CalendarDays } from "lucide-react";
+import { Plus, ClipboardList, List, CalendarDays } from "lucide-react";
 import {
   useSupplierTasks,
   useCreateSupplierTask,
@@ -12,6 +12,9 @@ import {
 } from "../hooks/useSupplierCabinet";
 import type { SupplierTaskDto, SupplierTaskStatus } from "../types";
 import { Btn } from "@/components/ui/Btn";
+import { Modal } from "@/components/ui/Modal";
+import { StatusPill } from "@/components/ui/StatusPill";
+import { inputStyle, filterInputStyle } from "@/components/ui/fieldStyles";
 import { TasksCalendar } from "./TasksCalendar";
 
 const STATUS_COLORS: Record<SupplierTaskStatus, { bg: string; color: string; border: string }> = {
@@ -27,15 +30,9 @@ function StatusBadge({ status }: { status: SupplierTaskStatus }) {
   const t = useTranslations("Dashboard.supplierCabinet.taskStatus");
   const c = STATUS_COLORS[status];
   return (
-    <span
-      style={{
-        fontSize: 11, padding: "3px 9px", borderRadius: 5,
-        background: c.bg, color: c.color, border: `1px solid ${c.border}`,
-        whiteSpace: "nowrap",
-      }}
-    >
+    <StatusPill bg={c.bg} text={c.color}>
       {t(status)}
-    </span>
+    </StatusPill>
   );
 }
 
@@ -94,29 +91,13 @@ export function TasksBoard() {
           )}
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <div style={{ display: "flex", background: "#0D1117", border: "1px solid #1F2937", borderRadius: 8, padding: 3 }}>
-            <button
-              onClick={() => setView("list")}
-              style={{
-                display: "flex", alignItems: "center", gap: 6,
-                padding: "6px 14px", borderRadius: 6, border: "none", fontSize: 12, fontWeight: 600, cursor: "pointer",
-                background: view === "list" ? "#1D3461" : "transparent",
-                color: view === "list" ? "#93C5FD" : "#6B7280",
-              }}
-            >
-              <List size={13} /> {t("listViewButton")}
-            </button>
-            <button
-              onClick={() => setView("calendar")}
-              style={{
-                display: "flex", alignItems: "center", gap: 6,
-                padding: "6px 14px", borderRadius: 6, border: "none", fontSize: 12, fontWeight: 600, cursor: "pointer",
-                background: view === "calendar" ? "#1D3461" : "transparent",
-                color: view === "calendar" ? "#93C5FD" : "#6B7280",
-              }}
-            >
-              <CalendarDays size={13} /> {t("calendarViewButton")}
-            </button>
+          <div style={{ display: "flex", background: "#0D1117", border: "1px solid #1F2937", borderRadius: 8, padding: 3, gap: 4 }}>
+            <Btn variant={view === "list" ? "primary" : "ghost"} size="sm" icon={<List size={13} />} onClick={() => setView("list")}>
+              {t("listViewButton")}
+            </Btn>
+            <Btn variant={view === "calendar" ? "primary" : "ghost"} size="sm" icon={<CalendarDays size={13} />} onClick={() => setView("calendar")}>
+              {t("calendarViewButton")}
+            </Btn>
           </div>
           <Btn icon={<Plus size={14} />} onClick={() => setCreating(true)}>
             {t("newTaskButton")}
@@ -128,27 +109,13 @@ export function TasksBoard() {
         <>
           {/* Filters */}
           <div style={{ display: "flex", gap: 10, marginBottom: 16, flexWrap: "wrap", alignItems: "center" }}>
-            <div style={{ display: "flex", background: "#0D1117", border: "1px solid #1F2937", borderRadius: 8, padding: 3 }}>
-              <button
-                onClick={() => setScope("mine")}
-                style={{
-                  padding: "6px 14px", borderRadius: 6, border: "none", fontSize: 12, fontWeight: 600, cursor: "pointer",
-                  background: scope === "mine" ? "#1D3461" : "transparent",
-                  color: scope === "mine" ? "#93C5FD" : "#6B7280",
-                }}
-              >
+            <div style={{ display: "flex", background: "#0D1117", border: "1px solid #1F2937", borderRadius: 8, padding: 3, gap: 4 }}>
+              <Btn variant={scope === "mine" ? "primary" : "ghost"} size="sm" onClick={() => setScope("mine")}>
                 {t("scopeMine")}
-              </button>
-              <button
-                onClick={() => setScope("all")}
-                style={{
-                  padding: "6px 14px", borderRadius: 6, border: "none", fontSize: 12, fontWeight: 600, cursor: "pointer",
-                  background: scope === "all" ? "#1D3461" : "transparent",
-                  color: scope === "all" ? "#93C5FD" : "#6B7280",
-                }}
-              >
+              </Btn>
+              <Btn variant={scope === "all" ? "primary" : "ghost"} size="sm" onClick={() => setScope("all")}>
                 {t("scopeAll")}
-              </button>
+              </Btn>
             </div>
 
             <input
@@ -289,33 +256,7 @@ function TaskFormModal({ task, defaultDueDate, onClose }: TaskFormModalProps) {
   }
 
   return (
-    <div
-      style={{
-        position: "fixed", inset: 0, zIndex: 999,
-        background: "rgba(0,0,0,0.6)",
-        display: "flex", alignItems: "center", justifyContent: "center",
-        padding: "20px",
-      }}
-      onClick={onClose}
-    >
-      <div
-        style={{
-          background: "#111827", border: "1px solid #1F2937",
-          borderRadius: 14, padding: "28px 32px",
-          width: "100%", maxWidth: 480,
-          maxHeight: "90vh", overflowY: "auto",
-        }}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
-          <h2 style={{ color: "#E8EDF5", fontSize: 16, fontWeight: 700, margin: 0 }}>
-            {isEdit ? t("titleEdit") : t("titleCreate")}
-          </h2>
-          <button onClick={onClose} style={{ background: "none", border: "none", color: "#6B7280", cursor: "pointer" }}>
-            <X size={18} />
-          </button>
-        </div>
-
+    <Modal title={isEdit ? t("titleEdit") : t("titleCreate")} onClose={onClose} width={480}>
         <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 14 }}>
           <input
             required
@@ -378,44 +319,10 @@ function TaskFormModal({ task, defaultDueDate, onClose }: TaskFormModalProps) {
             </div>
           )}
 
-          <button
-            type="submit"
-            disabled={isPending}
-            style={{
-              padding: "11px 0", borderRadius: 9,
-              background: isPending ? "#1D3461" : "linear-gradient(135deg, #3B82F6, #6366F1)",
-              border: "none", color: "#fff", fontSize: 14, fontWeight: 600,
-              cursor: isPending ? "not-allowed" : "pointer", marginTop: 4,
-            }}
-          >
+          <Btn type="submit" fullWidth disabled={isPending}>
             {isPending ? t("saving") : (isEdit ? t("saveChanges") : t("createTask"))}
-          </button>
+          </Btn>
         </form>
-      </div>
-    </div>
+    </Modal>
   );
 }
-
-const inputStyle: React.CSSProperties = {
-  background: "#0D1117",
-  border: "1px solid #1F2937",
-  borderRadius: 8,
-  padding: "10px 14px",
-  color: "#E8EDF5",
-  fontSize: 13,
-  outline: "none",
-  width: "100%",
-  boxSizing: "border-box",
-  fontFamily: "inherit",
-};
-
-const filterInputStyle: React.CSSProperties = {
-  background: "#0D1117",
-  border: "1px solid #1F2937",
-  borderRadius: 8,
-  padding: "7px 12px",
-  color: "#E8EDF5",
-  fontSize: 12,
-  outline: "none",
-  boxSizing: "border-box",
-};
