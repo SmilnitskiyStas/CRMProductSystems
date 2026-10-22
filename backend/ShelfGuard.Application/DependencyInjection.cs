@@ -140,6 +140,7 @@ services.AddScoped<IAuthService, AuthService>();
         services.AddScoped<IProductionOrderSyncService, ProductionOrderSyncService>();
         services.AddScoped<IProductionRequestService, ProductionRequestService>();
         services.AddScoped<IProductionDemandService, ProductionDemandService>();
+        services.AddScoped<IProductionInsightsService, ProductionInsightsService>();
         // TASK-755: automatic supplier-order drafts (non-own-production items)
         services.AddScoped<IAutoReplenishmentService, AutoReplenishmentService>();
 

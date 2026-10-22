@@ -22,6 +22,16 @@ import type {
   OrderFromRequestResultDto,
   ShipRequestResultDto,
 } from "../types";
+import type {
+  ProductionOverviewDto,
+  ProductionPlanDto,
+  PlanGranularity,
+  ReadyShipmentDto,
+  ShippedShipmentDto,
+  ShipmentsStatus,
+  ProductionStockItemDto,
+  StockKind,
+} from "../insights-types";
 import type { LocationDto } from "@/features/locations/types";
 
 export const productionApi = {
@@ -160,4 +170,23 @@ export const productionApi = {
 
   /** GET /api/locations — for location selector dropdown */
   getLocations: () => api.get<LocationDto[]>("/api/locations"),
+};
+
+// ── TASK-764 insights (read models) ──────────────────────────────────────────
+
+
+function qs(params: Record<string, string | undefined>) {
+  const p = Object.entries(params).filter(([, v]) => v);
+  return p.length ? "?" + p.map(([k, v]) => `${k}=${encodeURIComponent(v as string)}`).join("&") : "";
+}
+
+export const productionInsightsApi = {
+  getOverview: (locationId?: string) =>
+    api.get<ProductionOverviewDto>(`/api/production/overview${qs({ locationId })}`),
+  getPlan: (p: { from: string; to: string; granularity: PlanGranularity; locationId?: string }) =>
+    api.get<ProductionPlanDto>(`/api/production/plan${qs(p)}`),
+  getShipments: <S extends ShipmentsStatus>(p: { status: S; from?: string; to?: string; locationId?: string }) =>
+    api.get<S extends "ready" ? ReadyShipmentDto[] : ShippedShipmentDto[]>(`/api/production/shipments${qs(p)}`),
+  getStock: (p: { kind: StockKind; locationId?: string }) =>
+    api.get<ProductionStockItemDto[]>(`/api/production/stock${qs(p)}`),
 };

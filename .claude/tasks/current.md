@@ -1669,3 +1669,8 @@ Upload фону плану, нові типи зон, `GET .../shelves/{shelfId}
 
 ### TASK-751 — Планограма frontend: підкладка плану, типи зон, ShelfInsightPanel, збагачений скан, компактні зони — review
 tsc/lint/next build OK. Лог: `.claude/logs/tasks/751_*` (раніше TASK-748).
+
+- TASK-764 (frontend-developer): production Overview/Plan/Shipments/Warehouse pages + reordered sidebar; tsc+eslint clean; awaiting TASK-763 contract check. Log: logs/tasks/764_*.md
+
+### TASK-763 production insights read endpoints (backend) - done
+Overview/plan/shipments/stock GETs under api/production + TenantRoleTabs keys; tests green. Log: logs/tasks/763_*.

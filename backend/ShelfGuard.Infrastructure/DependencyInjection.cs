@@ -244,6 +244,8 @@ public static class DependencyInjection
             Data.Repositories.ProductionDemandRepository>();
         services.AddScoped<Domain.Interfaces.IProductionRequestRepository,
             Data.Repositories.ProductionRequestRepository>();
+        services.AddScoped<Domain.Interfaces.IProductionInsightsRepository,
+            Data.Repositories.ProductionInsightsRepository>();
         // TASK-754: per-tenant auto-demand run for the worker-only internal endpoint.
         services.AddScoped<Application.Features.Production.IProductionDemandTenantRunner,
             Services.ProductionDemandTenantRunner>();
