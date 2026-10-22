@@ -1,5 +1,6 @@
 "use client";
 
+import { Btn } from "@/components/ui/Btn";
 import { useState, useRef, useEffect } from "react";
 import { useTranslations } from "next-intl";
 import { isServiceUnavailable } from "@/lib/api";
@@ -184,7 +185,7 @@ export function AiAssistantWidget() {
           style={{
             flex: 1,
             background: "#0D1117",
-            border: "1px solid #374151",
+            border: "1px solid #1F2937",
             borderRadius: 8,
             color: "#E8EDF5",
             fontSize: 13,
@@ -196,24 +197,9 @@ export function AiAssistantWidget() {
           }}
           disabled={isPending}
         />
-        <button
-          onClick={handleSend}
-          disabled={!input.trim() || isPending}
-          style={{
-            background: input.trim() && !isPending ? "#1D4ED8" : "#1F2937",
-            border: "none",
-            borderRadius: 8,
-            color: input.trim() && !isPending ? "#fff" : "#4B5563",
-            fontSize: 13,
-            fontWeight: 600,
-            padding: "9px 16px",
-            cursor: input.trim() && !isPending ? "pointer" : "not-allowed",
-            flexShrink: 0,
-            transition: "background 0.15s",
-          }}
-        >
+        <Btn onClick={handleSend} disabled={!input.trim() || isPending} style={{ flexShrink: 0 }}>
           {t("sendButton")}
-        </button>
+        </Btn>
       </div>
     </div>
   );

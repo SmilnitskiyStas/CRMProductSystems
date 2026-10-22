@@ -1,9 +1,12 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { useTranslations, useLocale } from "next-intl";
 import type { Customer } from "../types";
 import { Table, type TableColumn } from "@/components/ui/Table";
+import { ActionMenu } from "@/components/ui/ActionMenu";
+import { StatusPill } from "@/components/ui/StatusPill";
+import { filterInputStyle } from "@/components/ui/fieldStyles";
 
 function formatDate(iso: string, intlLocale: string) {
   return new Date(iso).toLocaleDateString(intlLocale, {
@@ -17,115 +20,9 @@ function formatDate(iso: string, intlLocale: string) {
 
 function TagBadge({ tag }: { tag: string }) {
   return (
-    <span
-      style={{
-        background: "#0a1628",
-        border: "1px solid #1D4ED8",
-        borderRadius: 20,
-        padding: "2px 8px",
-        color: "#60A5FA",
-        fontSize: 11,
-        fontWeight: 500,
-        whiteSpace: "nowrap",
-      }}
-    >
+    <StatusPill bg="#0a1628" text="#60A5FA" style={{ border: "1px solid #1D4ED8", fontWeight: 500 }}>
       {tag}
-    </span>
-  );
-}
-
-function ActionMenu({
-  onEdit,
-  onDelete,
-}: {
-  onEdit: () => void;
-  onDelete: () => void;
-}) {
-  const t = useTranslations("Dashboard.customers.table");
-  const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!open) return;
-    function handler(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-    }
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, [open]);
-
-  return (
-    <div ref={ref} style={{ position: "relative" }}>
-      <button
-        onClick={(e) => { e.stopPropagation(); setOpen((v) => !v); }}
-        style={{
-          background: "transparent",
-          border: "1px solid #1F2937",
-          borderRadius: 6,
-          padding: "4px 8px",
-          color: "#6B7280",
-          fontSize: 14,
-          cursor: "pointer",
-          lineHeight: 1,
-        }}
-      >
-        ⋯
-      </button>
-      {open && (
-        <div
-          style={{
-            position: "absolute",
-            right: 0,
-            top: "calc(100% + 4px)",
-            background: "#0D1117",
-            border: "1px solid #1F2937",
-            borderRadius: 8,
-            zIndex: 100,
-            minWidth: 140,
-            overflow: "hidden",
-            boxShadow: "0 4px 16px rgba(0,0,0,0.4)",
-          }}
-        >
-          <button
-            onClick={(e) => { e.stopPropagation(); setOpen(false); onEdit(); }}
-            style={{
-              width: "100%",
-              textAlign: "left",
-              background: "transparent",
-              border: "none",
-              padding: "9px 14px",
-              color: "#9CA3AF",
-              fontSize: 13,
-              cursor: "pointer",
-              display: "block",
-            }}
-            onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = "#111827"; }}
-            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = "transparent"; }}
-          >
-            {t("edit")}
-          </button>
-          <button
-            onClick={(e) => { e.stopPropagation(); setOpen(false); onDelete(); }}
-            style={{
-              width: "100%",
-              textAlign: "left",
-              background: "transparent",
-              border: "none",
-              borderTop: "1px solid #1F2937",
-              padding: "9px 14px",
-              color: "#F87171",
-              fontSize: 13,
-              cursor: "pointer",
-              display: "block",
-            }}
-            onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = "#2d0a0a"; }}
-            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = "transparent"; }}
-          >
-            {t("delete")}
-          </button>
-        </div>
-      )}
-    </div>
+    </StatusPill>
   );
 }
 
@@ -231,8 +128,10 @@ export function CustomerTable({
       render: (c) => (
         <div onClick={(e) => e.stopPropagation()}>
           <ActionMenu
-            onEdit={() => onEdit(c)}
-            onDelete={() => onDelete(c)}
+            items={[
+              { label: t("edit"), onClick: () => onEdit(c) },
+              { label: t("delete"), onClick: () => onDelete(c), variant: "danger" },
+            ]}
           />
         </div>
       ),
@@ -260,18 +159,7 @@ export function CustomerTable({
           value={localSearch}
           onChange={(e) => handleSearchInput(e.target.value)}
           placeholder={t("searchPlaceholder")}
-          style={{
-            width: "100%",
-            maxWidth: 400,
-            background: "#0D1117",
-            border: "1px solid #1F2937",
-            borderRadius: 8,
-            padding: "8px 12px",
-            color: "#E8EDF5",
-            fontSize: 13,
-            outline: "none",
-            boxSizing: "border-box",
-          }}
+          style={{ ...filterInputStyle, width: "100%", maxWidth: 400 }}
         />
       </div>
 
@@ -284,64 +172,11 @@ export function CustomerTable({
         isLoading={isLoading}
         minWidth={900}
         emptyMessage={isLoading ? t("loading") : (search ? t("emptySearch") : t("emptyNone"))}
+        page={page}
+        totalPages={totalPages}
+        totalCount={totalCount}
+        onPageChange={onPageChange}
       />
-
-      {/* Pagination */}
-      {totalPages > 1 && (
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            marginTop: 14,
-          }}
-        >
-          <span style={{ color: "#4B5563", fontSize: 12 }}>
-            {t("totalLabel", { count: totalCount })}
-          </span>
-          <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-            <button
-              disabled={page <= 1}
-              onClick={() => onPageChange(page - 1)}
-              style={{
-                background: "transparent",
-                border: "1px solid #1F2937",
-                borderRadius: 6,
-                padding: "5px 12px",
-                color: page <= 1 ? "#374151" : "#9CA3AF",
-                fontSize: 12,
-                cursor: page <= 1 ? "default" : "pointer",
-              }}
-            >
-              {t("prev")}
-            </button>
-            <span style={{ color: "#6B7280", fontSize: 12 }}>
-              {page} / {totalPages}
-            </span>
-            <button
-              disabled={page >= totalPages}
-              onClick={() => onPageChange(page + 1)}
-              style={{
-                background: "transparent",
-                border: "1px solid #1F2937",
-                borderRadius: 6,
-                padding: "5px 12px",
-                color: page >= totalPages ? "#374151" : "#9CA3AF",
-                fontSize: 12,
-                cursor: page >= totalPages ? "default" : "pointer",
-              }}
-            >
-              {t("next")}
-            </button>
-          </div>
-        </div>
-      )}
-
-      {totalPages <= 1 && totalCount > 0 && (
-        <div style={{ color: "#4B5563", fontSize: 12, marginTop: 10, textAlign: "right" }}>
-          {t("totalLabel", { count: totalCount })}
-        </div>
-      )}
     </div>
   );
 }

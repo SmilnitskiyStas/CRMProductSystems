@@ -12,6 +12,7 @@ import { useTierLookup } from "../hooks/usePromotionRules";
 import type { RuleType } from "../types";
 import { isStoreScopedRole, type WizardState } from "../lib/definition";
 import { ItemPicker } from "./ItemPicker";
+import { Btn } from "@/components/ui/Btn";
 import { Chip, ChoiceCard, Field, Note, helpStyle, inputStyle, labelStyle } from "./shared";
 
 export interface StepProps {
@@ -348,13 +349,9 @@ export function StepScope({ state, patch }: StepProps) {
       </div>
       <div style={{ ...helpStyle, marginTop: -8, marginBottom: 16 }}>{t("scope.timeHelp", { zone: zoneText })}</div>
 
-      <button
-        type="button"
-        onClick={() => setAdvanced((a) => !a)}
-        style={{ background: "none", border: "none", color: "#60A5FA", fontSize: 13, cursor: "pointer", padding: 0 }}
-      >
+      <Btn variant="link" onClick={() => setAdvanced((a) => !a)}>
         {advanced ? t("scope.hideAdvanced") : t("scope.showAdvanced")}
-      </button>
+      </Btn>
       {advanced && (
         <div style={{ marginTop: 12 }}>
           <Field label={t("scope.priority")} help={t("scope.priorityHelp")} htmlFor="s-prio">

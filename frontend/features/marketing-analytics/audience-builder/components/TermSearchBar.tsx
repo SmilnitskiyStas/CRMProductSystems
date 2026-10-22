@@ -5,19 +5,10 @@ import { useTranslations } from "next-intl";
 import { Search, Tag as TagIcon } from "lucide-react";
 import { useAudienceBuilderStore } from "../store/useAudienceBuilderStore";
 import { useAudienceCategorySearch } from "../hooks/useAudienceBuilder";
+import { filterInputStyle } from "@/components/ui/fieldStyles";
 
 type SearchMode = "text" | "category";
 
-const inputStyle: React.CSSProperties = {
-  background: "#0D1117",
-  border: "1px solid #1F2937",
-  borderRadius: 6,
-  color: "#E8EDF5",
-  fontSize: 13,
-  padding: "9px 12px",
-  outline: "none",
-  width: "100%",
-};
 
 function modeBtnStyle(active: boolean): React.CSSProperties {
   return {
@@ -119,7 +110,7 @@ export function TermSearchBar() {
               }
             }}
             placeholder={placeholder}
-            style={{ ...inputStyle, paddingLeft: 32 }}
+            style={{ ...filterInputStyle, width: "100%", padding: "9px 12px 9px 32px" }}
           />
         </div>
 

@@ -2,6 +2,7 @@
 
 import { useTranslations } from "next-intl";
 import { useModules } from "@/features/modules/hooks/useModules";
+import { PageContainer } from "@/components/ui/PageContainer";
 import { WorkOrderKanban } from "@/features/auto-service/components/WorkOrderKanban";
 
 export default function AutoServicePage() {
@@ -33,8 +34,8 @@ export default function AutoServicePage() {
   }
 
   return (
-    <div style={{ padding: "28px 32px" }}>
+    <PageContainer>
       <WorkOrderKanban />
-    </div>
+    </PageContainer>
   );
 }

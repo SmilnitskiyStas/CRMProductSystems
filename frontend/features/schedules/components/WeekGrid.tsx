@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { useBulkAddShifts } from "@/features/schedules/hooks/useBulkAddShifts";
 import { BulkResultNotice } from "@/features/schedules/components/BulkResultNotice";
 import { Plus } from "lucide-react";
+import { Btn } from "@/components/ui/Btn";
 import type { WorkScheduleDetailDto, ScheduleShiftDto, AddShiftPayload, UpdateShiftPayload } from "../types";
 import { ShiftCard } from "./ShiftCard";
 import { ShiftForm } from "./ShiftForm";
@@ -240,25 +241,9 @@ export function WeekGrid({ schedule, canManage }: Props) {
                 colSpan={8}
                 style={{ padding: "6px 12px", borderTop: "1px solid #1F2937" }}
               >
-                <button
-                  onClick={() => setAddShiftCell({ date: schedule.weekStart })}
-                  style={{
-                    background: "transparent",
-                    border: "none",
-                    color: "#4B5563",
-                    fontSize: 12,
-                    cursor: "pointer",
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 6,
-                    padding: "4px 0",
-                  }}
-                  onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = "#93C5FD"; }}
-                  onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = "#4B5563"; }}
-                >
-                  <Plus size={14} />
+                <Btn variant="link" size="sm" icon={<Plus size={14} />} onClick={() => setAddShiftCell({ date: schedule.weekStart })}>
                   {t("addShiftButton")}
-                </button>
+                </Btn>
               </td>
             </tr>
           )}

@@ -278,8 +278,8 @@ export function FloorPlanCanvas({
               fontWeight: 600,
               borderRadius: 6,
               cursor: "pointer",
-              background: snap === s ? "#3B82F6" : "#0B0E14",
-              color: snap === s ? "#fff" : "#9CA3AF",
+              background: snap === s ? "#1D3461" : "#0B0E14",
+              color: snap === s ? "#93C5FD" : "#9CA3AF",
               border: "1px solid #1F2937",
             }}
           >

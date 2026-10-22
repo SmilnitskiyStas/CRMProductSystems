@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useTranslations, useLocale } from "next-intl";
+import { Btn } from "@/components/ui/Btn";
 import { useIntegrations } from "@/features/integrations/hooks/useIntegrations";
 import { usePrroSettings } from "@/features/integrations/hooks/usePrroSettings";
 import { IntegrationCard } from "@/features/integrations/components/IntegrationCard";
@@ -234,24 +235,9 @@ function PrroCard({ provider, summary, onConfigure }: PrroCardProps) {
       </div>
 
       {/* Action */}
-      <button
-        onClick={onConfigure}
-        style={{
-          padding: "7px 16px",
-          borderRadius: 8,
-          background: isConfigured ? "transparent" : "#1D3461",
-          border: `1px solid ${isConfigured ? "#374151" : "#3B82F6"}`,
-          color: isConfigured ? "#9CA3AF" : "#93C5FD",
-          fontSize: 13,
-          fontWeight: 500,
-          cursor: "pointer",
-          whiteSpace: "nowrap",
-          flexShrink: 0,
-          transition: "all 0.15s",
-        }}
-      >
+      <Btn variant={isConfigured ? "ghost" : "primary"} onClick={onConfigure} style={{ flexShrink: 0 }}>
         {isConfigured ? t("configureButton") : t("connectButton")}
-      </button>
+      </Btn>
     </div>
   );
 }

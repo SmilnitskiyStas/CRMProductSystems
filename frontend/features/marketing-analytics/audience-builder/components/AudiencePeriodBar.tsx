@@ -1,6 +1,7 @@
 "use client";
 
 import { useTranslations } from "next-intl";
+import { filterInputStyle, labelStyle } from "@/components/ui/fieldStyles";
 
 interface Props {
   from: string;
@@ -8,16 +9,6 @@ interface Props {
   onRangeChange: (from: string, to: string) => void;
 }
 
-const labelStyle: React.CSSProperties = { color: "#4B5563", fontSize: 12, marginBottom: 4, display: "block" };
-const inputStyle: React.CSSProperties = {
-  background: "#0D1117",
-  border: "1px solid #1F2937",
-  borderRadius: 6,
-  color: "#E8EDF5",
-  fontSize: 13,
-  padding: "7px 10px",
-  outline: "none",
-};
 
 /**
  * Purchase-period date range (analysis §5/§6). Unlike Фаза 1/2's 30/60/90 preset buttons,
@@ -51,7 +42,7 @@ export function AudiencePeriodBar({ from, to, onRangeChange }: Props) {
           value={from}
           max={to || undefined}
           onChange={(e) => e.target.value && onRangeChange(e.target.value, to)}
-          style={inputStyle}
+          style={filterInputStyle}
         />
       </div>
       <div>
@@ -61,7 +52,7 @@ export function AudiencePeriodBar({ from, to, onRangeChange }: Props) {
           value={to}
           min={from || undefined}
           onChange={(e) => e.target.value && onRangeChange(from, e.target.value)}
-          style={inputStyle}
+          style={filterInputStyle}
         />
       </div>
     </div>

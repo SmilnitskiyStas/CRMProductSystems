@@ -4,17 +4,8 @@ import { useState } from "react";
 import { useTranslations } from "next-intl";
 import { Search, X } from "lucide-react";
 import { useAudienceBuilderStore } from "../../store/useAudienceBuilderStore";
+import { filterInputStyle, labelStyle } from "@/components/ui/fieldStyles";
 
-const inputStyle: React.CSSProperties = {
-  background: "#0D1117",
-  border: "1px solid #1F2937",
-  borderRadius: 6,
-  color: "#E8EDF5",
-  fontSize: 13,
-  padding: "9px 12px 9px 32px",
-  outline: "none",
-  width: "100%",
-};
 
 /**
  * "Конкурентний бренд / товар" text input + chips (analysis §15.2) — same Enter→chip interaction
@@ -39,7 +30,7 @@ export function CompetitorTermInput() {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
       <div>
-        <label style={{ color: "#4B5563", fontSize: 12, marginBottom: 4, display: "block" }}>{t("label")}</label>
+        <label style={labelStyle}>{t("label")}</label>
         <div style={{ position: "relative", maxWidth: 420 }}>
           <Search size={14} color="#4B5563" style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)" }} />
           <input
@@ -52,7 +43,7 @@ export function CompetitorTermInput() {
               }
             }}
             placeholder={competitorTerms.length === 0 ? t("placeholderFirst") : t("placeholderNext")}
-            style={inputStyle}
+            style={{ ...filterInputStyle, width: "100%", padding: "9px 12px 9px 32px" }}
           />
         </div>
       </div>

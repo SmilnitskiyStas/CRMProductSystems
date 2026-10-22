@@ -5,6 +5,8 @@ import { Plus } from "lucide-react";
 import { toast } from "sonner";
 import { useTranslations } from "next-intl";
 import { Btn } from "@/components/ui/Btn";
+import { PageContainer } from "@/components/ui/PageContainer";
+import { PageHeader } from "@/components/ui/PageHeader";
 import { useMe } from "@/features/auth/hooks/useAuth";
 import { canManageLegalEntities } from "@/lib/roles";
 import {
@@ -85,23 +87,18 @@ export default function LegalEntitiesPage() {
   const isPending = create.isPending || update.isPending;
 
   return (
-    <div style={{ padding: "28px 32px", display: "flex", flexDirection: "column", gap: 20 }}>
-      {/* Header */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16 }}>
-        <div>
-          <h1 style={{ color: "#E8EDF5", fontSize: 22, fontWeight: 700, margin: 0 }}>
-            {t("title")}
-          </h1>
-          <p style={{ color: "#4B5563", fontSize: 13, marginTop: 6, marginBottom: 0 }}>
-            {t("subtitle")}
-          </p>
-        </div>
-        {canManage && (
-          <Btn icon={<Plus size={15} />} onClick={() => setDialog("create")}>
-            {t("newButton")}
-          </Btn>
-        )}
-      </div>
+    <PageContainer>
+      <PageHeader
+        title={t("title")}
+        subtitle={t("subtitle")}
+        actions={
+          canManage ? (
+            <Btn icon={<Plus size={15} />} onClick={() => setDialog("create")}>
+              {t("newButton")}
+            </Btn>
+          ) : undefined
+        }
+      />
 
       {/* List */}
       <LegalEntitiesList
@@ -121,6 +118,6 @@ export default function LegalEntitiesPage() {
           onSubmit={handleSubmit}
         />
       )}
-    </div>
+    </PageContainer>
   );
 }

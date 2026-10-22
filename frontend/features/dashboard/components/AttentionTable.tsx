@@ -6,6 +6,7 @@ import { useTranslations } from "next-intl";
 import { BarChart2 } from "lucide-react";
 import type { AttentionItem, DashboardStats, ItemStatus } from "../types";
 import { ActionMenu } from "@/components/ui/ActionMenu";
+import { Btn } from "@/components/ui/Btn";
 import { Table, type TableColumn } from "@/components/ui/Table";
 
 const STATUS_CONFIG: Record<ItemStatus, { color: string; bg: string }> = {
@@ -232,29 +233,9 @@ export function AttentionTable({ items = [], isLoading, stats }: Props) {
                 justifyContent: "center",
               }}
             >
-              <button
-                onClick={() => router.push(viewAllHref)}
-                style={{
-                  padding: "6px 16px",
-                  borderRadius: 6,
-                  border: "1px solid #1F2937",
-                  background: "transparent",
-                  color: "#93C5FD",
-                  fontSize: 12,
-                  fontWeight: 500,
-                  cursor: "pointer",
-                }}
-                onMouseEnter={(e) => {
-                  (e.currentTarget as HTMLElement).style.background = "#1D3461";
-                  (e.currentTarget as HTMLElement).style.borderColor = "#3B82F6";
-                }}
-                onMouseLeave={(e) => {
-                  (e.currentTarget as HTMLElement).style.background = "transparent";
-                  (e.currentTarget as HTMLElement).style.borderColor = "#1F2937";
-                }}
-              >
+              <Btn variant="ghost" size="sm" onClick={() => router.push(viewAllHref)}>
                 {t("viewAll", { count: filtered.length })}
-              </button>
+              </Btn>
             </div>
           )}
         </div>

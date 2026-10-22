@@ -18,6 +18,8 @@ import {
 } from "@/features/dashboard/hooks/useDashboard";
 import { useMe } from "@/features/auth/hooks/useAuth";
 import { AT_LEAST_STORE_MANAGER, PROVIDER_TEAM, hasRole, type AppRole } from "@/lib/roles";
+import { PageContainer } from "@/components/ui/PageContainer";
+import { PageHeader } from "@/components/ui/PageHeader";
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -34,14 +36,9 @@ export default function DashboardPage() {
   }, [me, router]);
 
   return (
-    <div style={{ padding: "28px 32px", display: "flex", flexDirection: "column", gap: 20 }}>
+    <PageContainer>
       {/* Page title */}
-      <div>
-        <h1 style={{ color: "#E8EDF5", fontSize: 22, fontWeight: 700, margin: 0 }}>{t("title")}</h1>
-        <p style={{ color: "#4B5563", fontSize: 13, marginTop: 6, marginBottom: 0 }}>
-          {t("subtitle")}
-        </p>
-      </div>
+      <PageHeader title={t("title")} subtitle={t("subtitle")} />
 
       {/* Stats cards */}
       <StatsCards stats={stats} isLoading={statsLoading} compare={expiryCompare} />
@@ -66,7 +63,6 @@ export default function DashboardPage() {
 
       {/* Store map */}
       <StoreMap zones={zones} isLoading={zonesLoading} />
-
-    </div>
+    </PageContainer>
   );
 }
