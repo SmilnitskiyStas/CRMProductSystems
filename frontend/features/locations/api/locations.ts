@@ -48,6 +48,11 @@ export const locationsApi = {
     api.post<GeocodeAddressResult>("/api/locations/geocode", { query }),
   updateFloorPlan: (id: string, floorPlan: string) =>
     api.put<LocationDto>(`/api/locations/${id}/floor-plan`, { floorPlan }),
+  uploadFloorPlanBackground: (id: string, file: Blob, fileName = "plan.png") => {
+    const form = new FormData();
+    form.append("file", file, fileName);
+    return api.postForm<{ url: string }>(`/api/locations/${id}/floor-plan/background`, form);
+  },
   createZone: (locationId: string, data: CreateZoneDto) =>
     api.post<LocationZoneDto>(`/api/locations/${locationId}/zones`, data),
   updateZone: (locationId: string, zoneId: string, data: Partial<CreateZoneDto> & { isActive?: boolean; name?: string; position?: string }) =>

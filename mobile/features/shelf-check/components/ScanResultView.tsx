@@ -1,6 +1,6 @@
 import { View, Text, Image } from 'react-native';
 import { resolveApiAssetUrl } from '@/lib/api-client';
-import type { ScanItemStatus, ShelfScan } from '../types';
+import type { ScanItemStatus, ShelfScan, ShelfScanItem } from '../types';
 
 const STATUS_STYLE: Record<ScanItemStatus, { label: string; bg: string; text: string }> = {
   present: { label: 'Є', bg: 'bg-green-100', text: 'text-green-700' },
@@ -14,6 +14,37 @@ export function formatScanDate(iso: string): string {
   return new Date(iso).toLocaleString('uk-UA', {
     day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit',
   });
+}
+
+const PRIORITY_TEXT = { low: 'text-gray-500', medium: 'text-amber-700', high: 'text-red-700' } as const;
+
+function recommendationText(r: NonNullable<ShelfScanItem['recommendation']>): string | null {
+  switch (r.action) {
+    case 'restock_from_warehouse': return `Винести зі складу ≈ ${r.suggestedQty} шт`;
+    case 'order_from_supplier': return `Немає на складі — замовити ≈ ${r.suggestedQty} шт`;
+    case 'check_manually': return 'Розбіжність з обліком — перевірте вручну';
+    default: return null;
+  }
+}
+
+function ItemInsights({ item }: { item: ShelfScanItem }) {
+  if (item.status === 'present') return null;
+  const hasData = item.storeQty != null || item.warehouseQty != null || item.sold7d != null;
+  const rec = item.recommendation ? recommendationText(item.recommendation) : null;
+  if (!hasData && !rec) return null;
+  return (
+    <View className="mt-1.5 bg-gray-50 rounded-lg p-2 gap-0.5">
+      {hasData ? (
+        <Text className="text-xs text-gray-600">
+          Магазин: {item.storeQty ?? 0} · Склад: {item.warehouseQty ?? 0} · Продано 7д/30д: {item.sold7d ?? 0}/{item.sold30d ?? 0}
+          {item.daysOfCover != null ? ` · Запасу на ${Math.round(item.daysOfCover)} дн.` : ''}
+        </Text>
+      ) : null}
+      {rec && item.recommendation ? (
+        <Text className={`text-xs font-semibold ${PRIORITY_TEXT[item.recommendation.priority]}`}>{rec}</Text>
+      ) : null}
+    </View>
+  );
 }
 
 export function ScanResultView({ scan, showImage = true }: { scan: ShelfScan; showImage?: boolean }) {
@@ -56,6 +87,7 @@ export function ScanResultView({ scan, showImage = true }: { scan: ShelfScan; sh
                 ≈ {item.estimatedCount} шт · впевненість {Math.round(item.confidence * 100)}%
               </Text>
               {item.note ? <Text className="text-xs text-gray-500 mt-0.5">{item.note}</Text> : null}
+              <ItemInsights item={item} />
             </View>
           </View>
         );

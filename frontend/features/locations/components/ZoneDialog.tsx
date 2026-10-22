@@ -5,23 +5,26 @@ import { useTranslations } from "next-intl";
 import type { LocationZoneDto } from "../types";
 import { useCreateZone } from "../hooks/useFloorPlan";
 
-const ZONE_TYPE_VALUES = ["shelf", "fridge", "freezer", "display", "production", "warehouse"] as const;
+import { ZONE_PALETTE_TYPES } from "../lib/zoneTypes";
+
+const ZONE_TYPE_VALUES = ZONE_PALETTE_TYPES;
 
 const TEMP_TYPES = new Set(["fridge", "freezer"]);
 
 interface Props {
   locationId: string;
+  initialType?: string;
   onCreated: (zone: LocationZoneDto) => void;
   onClose: () => void;
 }
 
-export function ZoneDialog({ locationId, onCreated, onClose }: Props) {
+export function ZoneDialog({ locationId, initialType, onCreated, onClose }: Props) {
   const t = useTranslations("Dashboard.locations.zoneDialog");
   const tZoneTypes = useTranslations("Dashboard.locations.zoneTypes");
   const tCommon = useTranslations("Common");
   const createZone = useCreateZone(locationId);
   const [name, setName] = useState("");
-  const [type, setType] = useState("shelf");
+  const [type, setType] = useState(initialType ?? "shelf");
   const [shelvesCount, setShelvesCount] = useState(1);
   const [tempMin, setTempMin] = useState<string>("");
   const [tempMax, setTempMax] = useState<string>("");

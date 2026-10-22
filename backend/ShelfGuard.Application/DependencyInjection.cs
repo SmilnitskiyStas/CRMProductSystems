@@ -41,6 +41,7 @@ services.AddScoped<IAuthService, AuthService>();
         services.AddScoped<IStockService, StockService>();
         services.AddScoped<ILocationService, LocationService>();
         services.AddScoped<IShelfService, ShelfService>();
+        services.AddScoped<IShelfInsightService, ShelfInsightService>();
         services.AddScoped<ISupplierService, SupplierService>();
         services.AddScoped<IReceiptService, ReceiptService>();
         services.AddScoped<ITransferService, TransferService>();

@@ -1664,3 +1664,8 @@ Production pages/forms/detail + OrderCard/AutoOrdersSection switched to shared B
 - TASK-762 (frontend, review): production inbox (stage chips, sync-orders retry, no ship/summary) + "Виробничі замовлення" with per-store ship / ship-all. tsc+eslint clean. See logs/tasks/762_*.
 
 - TASK-761 (backend, review): accepted requests auto-plan into Planned production orders (ProductionOrderSyncService, advisory-lock find-or-create), productionStage/hasRecipe/linkedOrders DTOs, sync-orders + ship-requests endpoints, ship guard, `production_request.ready` notification. 2941 tests green. See logs/tasks/761_*.
+### TASK-750 — Планограма backend: підкладка плану, типи зон, інсайти полиці, збагачення AI-скану — review
+Upload фону плану, нові типи зон, `GET .../shelves/{shelfId}/insights`, enrich скану (склад/продажі/рекомендація) + `ShelfRestockAdvisor`. Без міграцій. Лог: `.claude/logs/tasks/750_*` (раніше позначався TASK-747).
+
+### TASK-751 — Планограма frontend: підкладка плану, типи зон, ShelfInsightPanel, збагачений скан, компактні зони — review
+tsc/lint/next build OK. Лог: `.claude/logs/tasks/751_*` (раніше TASK-748).
