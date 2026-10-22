@@ -70,7 +70,7 @@ public sealed class ProductionRepository : IProductionRepository
             .AsQueryable();
 
         if (!string.IsNullOrWhiteSpace(status) &&
-            Enum.TryParse<ProductionOrderStatus>(status, true, out var statusEnum))
+            ProductionOrderStatusExtensions.TryParseApi(status, out var statusEnum))
         {
             query = query.Where(o => o.Status == statusEnum);
         }

@@ -153,7 +153,7 @@ public sealed class ProductionService : IProductionService
             o.Recipe?.Name ?? string.Empty,
             o.Location?.Name ?? string.Empty,
             o.PlannedQty,
-            o.Status.ToString(),
+            o.Status.ToApiString(),
             o.CreatedAt,
             o.CompletedAt,
             o.NeededBy,
@@ -217,7 +217,7 @@ public sealed class ProductionService : IProductionService
         // FEFO write-down); a PUT must never bypass them.
         if (dto.Status is not null)
         {
-            if (!Enum.TryParse<ProductionOrderStatus>(dto.Status, true, out var newStatus))
+            if (!ProductionOrderStatusExtensions.TryParseApi(dto.Status, out var newStatus))
                 return (null, $"Invalid status value '{dto.Status}'.", 400);
             if (newStatus != order.Status)
                 return (null,
@@ -442,7 +442,7 @@ public sealed class ProductionService : IProductionService
             o.Recipe?.Name ?? string.Empty,
             o.Location?.Name ?? string.Empty,
             o.PlannedQty,
-            o.Status.ToString(),
+            o.Status.ToApiString(),
             o.Notes,
             o.CreatedAt,
             o.StartedAt,
