@@ -114,7 +114,7 @@ function OrderBody({ order }: { order: ReceiptDto }) {
     );
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 14, width: "100%" }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: 14, width: "100%", padding: "28px 32px" }}>
       <style>{PRINT_CSS}</style>
 
       <div>
@@ -344,7 +344,7 @@ export function OrderCard({ id }: { id: string }) {
   const t = useTranslations("Dashboard.orders.page.card");
   const { data, isLoading, isError } = useOrderCard(id);
   if (isLoading) return null;
-  if (isError || !data) return <div style={{ color: "#F87171", fontSize: 13 }}>{t("loadFailed")}</div>;
+  if (isError || !data) return <div style={{ color: "#F87171", fontSize: 13, padding: "28px 32px" }}>{t("loadFailed")}</div>;
   // key resets local field state when the server copy changes owner/status.
   return <OrderBody key={`${data.id}-${data.status}-${data.takenByUserId ?? ""}`} order={data} />;
 }
