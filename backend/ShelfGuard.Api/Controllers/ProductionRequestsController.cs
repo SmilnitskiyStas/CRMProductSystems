@@ -146,6 +146,23 @@ public sealed class ProductionRequestsController : ControllerBase
         return error is not null ? StatusCode(code!.Value, new { error }) : Ok(request);
     }
 
+    /// <summary>
+    /// Re-syncs the request's Planned production orders with its accepted quantities (idempotent).
+    /// Re-creates orders for lines left unassigned (e.g. after an order was cancelled).
+    /// </summary>
+    [HttpPost("{id:guid}/sync-orders")]
+    [RequireModule("production")]
+    [Authorize(Policy = AppPolicies.CanReceiveStock)]
+    [ProducesResponseType(typeof(ProductionRequestDetailDto), StatusCodes.Status200OK)]
+    public async Task<IActionResult> SyncOrders(Guid id, CancellationToken ct)
+    {
+        var (_, userId) = GetContext();
+        if (userId is null) return Forbid();
+
+        var (request, error, code) = await _svc.SyncOrdersAsync(id, userId.Value, ct);
+        return error is not null ? StatusCode(code!.Value, new { error }) : Ok(request);
+    }
+
     [HttpPost("{id:guid}/ship")]
     [RequireModule("production")]
     [Authorize(Policy = AppPolicies.CanReceiveStock)]

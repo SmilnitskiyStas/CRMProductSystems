@@ -58,7 +58,9 @@ public record ProductionOrderListItemDto(
     DateTimeOffset CreatedAt,
     DateTimeOffset? CompletedAt,
     DateOnly? NeededBy = null,
-    DateOnly? PlannedDate = null);
+    DateOnly? PlannedDate = null,
+    int RequestCount = 0,
+    int StoreCount = 0);
 
 public record ProductionOrderDetailDto(
     Guid Id,
@@ -81,7 +83,9 @@ public record ProductionOrderRequestRefDto(
     Guid RequestId,
     Guid RequestLineId,
     string StoreLocationName,
-    decimal Qty);
+    decimal Qty,
+    string RequestStatus = "",
+    Guid? ShipmentTransferId = null);
 
 public record ProductionConsumptionDto(
     Guid ItemId,

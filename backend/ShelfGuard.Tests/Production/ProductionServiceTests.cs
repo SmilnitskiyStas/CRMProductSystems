@@ -215,7 +215,8 @@ public sealed class ProductionServiceTests
     private static readonly Guid TenantId = Guid.NewGuid();
     private static readonly Guid UserId   = Guid.NewGuid();
 
-    private static ProductionService BuildSvc(IProductionRepository repo) => new(repo);
+    private static ProductionService BuildSvc(IProductionRepository repo) =>
+        new(repo, NSubstitute.Substitute.For<IProductionOrderSyncService>());
 
     // ── CompleteOrderAsync — wrong status (Done) → 409 ───────────────────────
 

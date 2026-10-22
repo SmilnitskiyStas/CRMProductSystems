@@ -69,6 +69,9 @@ export interface ProductionOrderListItemDto {
   /** "yyyy-MM-dd" — when the output is needed (from store requests). */
   neededBy?: string | null;
   plannedDate?: string | null;
+  /** Store requests feeding this order (TASK-762). */
+  requestCount?: number;
+  storeCount?: number;
 }
 
 export interface ProductionConsumptionDto {
@@ -101,6 +104,16 @@ export interface ProductionOrderRequestRefDto {
   requestLineId: string;
   storeLocationName: string;
   qty: number;
+  requestStatus?: ProductionRequestStatus | null;
+  shipmentTransferId?: string | null;
+}
+
+export interface ShipRequestResultDto {
+  requestId: string;
+  storeLocationName: string;
+  ok: boolean;
+  error?: string | null;
+  transferId?: string | null;
 }
 
 export interface ProductionOrderCreateDto {
@@ -141,6 +154,15 @@ export type ProductionRequestStatus =
   | "fulfilled"
   | "cancelled";
 
+/** Where the request is in the production pipeline (TASK-762). */
+export type ProductionStage =
+  | "awaiting_order"
+  | "planned"
+  | "in_production"
+  | "ready"
+  | "shipped"
+  | "none";
+
 export interface ProductionRequestListItemDto {
   id: string;
   storeLocationId: string;
@@ -156,6 +178,7 @@ export interface ProductionRequestListItemDto {
   totalAcceptedQty: number | null;
   createdAt: string;
   submittedAt: string | null;
+  productionStage?: ProductionStage | null;
 }
 
 export interface ProductionRequestLineDto {
@@ -168,6 +191,15 @@ export interface ProductionRequestLineDto {
   reason: string | null;
   /** Human text for auto-generated draft lines, e.g. "Буфер: на складі 4 кг, потрібно 60". */
   autoReason?: string | null;
+  /** Active recipe exists for the item (production side). */
+  hasRecipe?: boolean;
+  linkedOrders?: LinkedOrderDto[] | null;
+}
+
+export interface LinkedOrderDto {
+  orderId: string;
+  status: ProductionOrderStatus;
+  qty: number;
 }
 
 export interface ProductionRequestDetailDto

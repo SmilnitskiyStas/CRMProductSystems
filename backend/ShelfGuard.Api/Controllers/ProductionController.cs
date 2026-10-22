@@ -196,6 +196,26 @@ public sealed class ProductionController : ControllerBase
         return Ok(result);
     }
 
+    /// <summary>
+    /// For a Done order: ships every linked accepted/partial request whose orders are all Done.
+    /// Per-request results; one failure never aborts the batch.
+    /// </summary>
+    [HttpPost("orders/{id:guid}/ship-requests")]
+    [Authorize(Policy = AppPolicies.CanReceiveStock)]
+    [ProducesResponseType(typeof(List<ProductionShipRequestResultDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(object), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(object), StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> ShipOrderRequests(Guid id, CancellationToken ct)
+    {
+        var tenantId = ResolveTenantId();
+        var userId   = ResolveUserId();
+        if (tenantId is null || userId is null) return Forbid();
+
+        var (results, error, statusCode) = await _requests.ShipOrderRequestsAsync(id, tenantId.Value, userId.Value, ct);
+        if (error is not null) return StatusCode(statusCode!.Value, new { error });
+        return Ok(results);
+    }
+
     [HttpPost("orders/{id:guid}/start")]
     [ProducesResponseType(typeof(ProductionOrderDetailDto), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(object), StatusCodes.Status404NotFound)]

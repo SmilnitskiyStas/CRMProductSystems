@@ -112,10 +112,25 @@ export function useRejectProductionRequest() {
 }
 
 export function useShipProductionRequest() {
-  const invalidate = useInvalidateRequests();
+  const qc = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => productionApi.shipRequest(id),
-    onSuccess: invalidate,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: REQUEST_KEYS.all });
+      qc.invalidateQueries({ queryKey: ["production", "order"] });
+      qc.invalidateQueries({ queryKey: ["production", "orders"] });
+    },
+  });
+}
+
+export function useSyncRequestOrders() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => productionApi.syncRequestOrders(id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: REQUEST_KEYS.all });
+      qc.invalidateQueries({ queryKey: ["production", "orders"] });
+    },
   });
 }
 

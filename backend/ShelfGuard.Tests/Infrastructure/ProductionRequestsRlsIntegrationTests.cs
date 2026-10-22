@@ -127,6 +127,7 @@ public sealed class ProductionRequestsRlsIntegrationTests : IAsyncLifetime
             await db.Database.ExecuteSqlInterpolatedAsync($"DELETE FROM production_order_request_lines WHERE \"TenantId\" = {t}");
             await db.Database.ExecuteSqlInterpolatedAsync($"DELETE FROM production_orders WHERE \"TenantId\" = {t}");
             await db.Database.ExecuteSqlInterpolatedAsync($"DELETE FROM production_requests WHERE \"TenantId\" = {t}");
+            await db.Database.ExecuteSqlInterpolatedAsync($"DELETE FROM recipes WHERE \"TenantId\" = {t}");
             await db.Database.ExecuteSqlInterpolatedAsync($"DELETE FROM stock_transfer_items WHERE \"TransferId\" IN (SELECT \"Id\" FROM stock_transfers WHERE \"TenantId\" = {t})");
             await db.Database.ExecuteSqlInterpolatedAsync($"DELETE FROM stock_transfers WHERE \"TenantId\" = {t}");
             await db.Database.ExecuteSqlInterpolatedAsync($"DELETE FROM stock_movements WHERE \"TenantId\" = {t}");
@@ -221,7 +222,8 @@ public sealed class ProductionRequestsRlsIntegrationTests : IAsyncLifetime
             var requests = new ProductionRequestRepository(db);
             var production = new ProductionRepository(db);
             var transfers = new TransferService(new TransferRepository(db), new UserLocationRepository(db));
-            var svc = new ProductionRequestService(requests, production, new NotificationRepository(db), transfers);
+            var svc = new ProductionRequestService(requests, production, new NotificationRepository(db), transfers,
+                new ProductionOrderSyncService(requests, new NotificationRepository(db)));
 
             var (created, cErr, _) = await svc.CreateAsync(
                 new ProductionRequestCreateDto(s.StoreA, s.ProdA, DateOnly.FromDateTime(DateTime.UtcNow.AddDays(2)),
@@ -253,6 +255,152 @@ public sealed class ProductionRequestsRlsIntegrationTests : IAsyncLifetime
             Assert.Equal(12m, (await verify.ProductStocks.SingleAsync(x => x.Id == stockId)).Quantity);
             Assert.Equal(1, await verify.NotificationQueues.CountAsync(
                 n => n.TenantId == s.TenantA && n.EventType == ProductionRequestService.SubmittedEventType));
+        }
+        finally
+        {
+            await CleanupAsync(s);
+        }
+    }
+
+    private static (ProductionRequestService Requests, ProductionService Production) BuildServices(AppDbContext db)
+    {
+        var requests = new ProductionRequestRepository(db);
+        var production = new ProductionRepository(db);
+        var notifications = new NotificationRepository(db);
+        var transfers = new TransferService(new TransferRepository(db), new UserLocationRepository(db));
+        var sync = new ProductionOrderSyncService(requests, notifications);
+        return (new ProductionRequestService(requests, production, notifications, transfers, sync),
+                new ProductionService(production, sync));
+    }
+
+    private async Task<Guid> SeedRecipeAsync(Seed s)
+    {
+        await using var db = new AppDbContext(_options!);
+        var recipeId = Guid.NewGuid();
+        await db.Database.ExecuteSqlInterpolatedAsync($@"
+            INSERT INTO recipes (""Id"", ""TenantId"", ""Name"", ""OutputItemId"", ""OutputQty"", ""Unit"", ""IsActive"")
+            VALUES ({recipeId}, {s.TenantA}, 'Bread', {s.ItemA}, 1, 'pcs', true)");
+        return recipeId;
+    }
+
+    private async Task<Guid> SubmitAsync(Seed s, Guid storeId, decimal qty, DateOnly neededBy)
+    {
+        await using var db = new AppDbContext(_options!);
+        var (svc, _) = BuildServices(db);
+        var (created, err, _) = await svc.CreateAsync(
+            new ProductionRequestCreateDto(storeId, s.ProdA, neededBy, null, [new(s.ItemA, qty)], true),
+            s.TenantA, s.UserStore);
+        Assert.Null(err);
+        return created!.Id;
+    }
+
+    /// <summary>
+    /// Two concurrent reviews of different requests for the same (production location, item, NeededBy) must
+    /// end with ONE Planned order whose qty is the sum — the advisory lock serialises find-or-create.
+    /// </summary>
+    [Fact]
+    public async Task ConcurrentReviews_SameKey_EndWithOneOrderAndSummedQty()
+    {
+        if (!_available) return;
+        var s = await SeedAsync();
+        try
+        {
+            await SeedRecipeAsync(s);
+            var needed = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(3));
+            var r1 = await SubmitAsync(s, s.StoreA, 10m, needed);
+            var r2 = await SubmitAsync(s, s.OtherStoreA, 7m, needed);
+
+            async Task ReviewAsync(Guid id)
+            {
+                await using var db = new AppDbContext(_options!);
+                var (svc, _) = BuildServices(db);
+                var (_, err, _) = await svc.ReviewAsync(id, new ProductionRequestReviewDto([], null), s.UserProd);
+                Assert.Null(err);
+            }
+
+            await Task.WhenAll(ReviewAsync(r1), ReviewAsync(r2));
+
+            await using var verify = new AppDbContext(_options!);
+            var orders = await verify.ProductionOrders.Where(o => o.TenantId == s.TenantA).ToListAsync();
+            var order = Assert.Single(orders);
+            Assert.Equal(ProductionOrderStatus.Planned, order.Status);
+            Assert.Equal(17m, order.PlannedQty);
+            Assert.Equal(needed, order.NeededBy);
+            var links = await verify.ProductionOrderRequestLines.Where(l => l.TenantId == s.TenantA).ToListAsync();
+            Assert.Equal(2, links.Count);
+            Assert.All(links, l => Assert.Equal(order.Id, l.ProductionOrderId));
+            Assert.Equal(17m, links.Sum(l => l.Qty));
+        }
+        finally
+        {
+            await CleanupAsync(s);
+        }
+    }
+
+    /// <summary>Real EF: review -> order+link INSERTed; re-review down shrinks; cancel unlinks; explicit sync re-creates.</summary>
+    [Fact]
+    public async Task RealFlow_Review_ReReview_CancelOrder_Resync()
+    {
+        if (!_available) return;
+        var s = await SeedAsync();
+        try
+        {
+            await SeedRecipeAsync(s);
+            var needed = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(2));
+            var reqId = await SubmitAsync(s, s.StoreA, 10m, needed);
+
+            Guid lineId;
+            await using (var db = new AppDbContext(_options!))
+            {
+                var (svc, _) = BuildServices(db);
+                var (reviewed, err, _) = await svc.ReviewAsync(reqId, new ProductionRequestReviewDto([], null), s.UserProd);
+                Assert.Null(err);
+                Assert.Equal("planned", reviewed!.ProductionStage);
+                lineId = reviewed.Lines[0].Id;
+                Assert.True(reviewed.Lines[0].HasRecipe);
+            }
+
+            await using (var db = new AppDbContext(_options!))
+            {
+                var (svc, _) = BuildServices(db);
+                var (partial, err, _) = await svc.ReviewAsync(reqId,
+                    new ProductionRequestReviewDto([new(lineId, 6m, "ліміт")], null), s.UserProd);
+                Assert.Null(err);
+                Assert.Equal("partial", partial!.Status);
+                Assert.Equal(6m, partial.Lines[0].LinkedOrders!.Single().Qty);
+            }
+
+            Guid orderId;
+            await using (var verify = new AppDbContext(_options!))
+            {
+                var order = await verify.ProductionOrders.SingleAsync(o => o.TenantId == s.TenantA);
+                orderId = order.Id;
+                Assert.Equal(6m, order.PlannedQty);
+            }
+
+            await using (var db = new AppDbContext(_options!))
+            {
+                var (_, production) = BuildServices(db);
+                var (_, err, _) = await production.CancelOrderAsync(orderId);
+                Assert.Null(err);
+            }
+
+            await using (var db = new AppDbContext(_options!))
+            {
+                var (svc, _) = BuildServices(db);
+                var detail = await svc.GetByIdAsync(reqId);
+                Assert.Equal("awaiting_order", detail!.ProductionStage);
+                Assert.Empty(detail.Lines[0].LinkedOrders!);
+
+                var (re, err, _) = await svc.SyncOrdersAsync(reqId, s.UserProd);
+                Assert.Null(err);
+                Assert.Equal("planned", re!.ProductionStage);
+            }
+
+            await using var final = new AppDbContext(_options!);
+            Assert.Equal(1, await final.ProductionOrders.CountAsync(
+                o => o.TenantId == s.TenantA && o.Status == ProductionOrderStatus.Planned));
+            Assert.Equal(1, await final.ProductionOrderRequestLines.CountAsync(l => l.TenantId == s.TenantA));
         }
         finally
         {

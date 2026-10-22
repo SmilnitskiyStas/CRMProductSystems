@@ -9,12 +9,20 @@ import {
   useStartProductionOrder,
   useCompleteProductionOrder,
   useCancelProductionOrder,
+  useShipOrderRequests,
 } from "../hooks/useProduction";
 import { OrderStatusBadge } from "./ProductionOrderTable";
+import { useShipProductionRequest } from "../hooks/useProductionRequests";
+import { RequestStatusBadge } from "./ProductionRequestStatusBadge";
+import Link from "next/link";
 import { ApiError } from "@/lib/api";
 import { Table, type TableColumn } from "@/components/ui/Table";
 import { Btn } from "@/components/ui/Btn";
-import type { ProductionConsumptionDto, ProductionOrderRequestRefDto } from "../types";
+import type {
+  ProductionConsumptionDto,
+  ProductionOrderRequestRefDto,
+  ShipRequestResultDto,
+} from "../types";
 import { formatDateOnly } from "./ProductionRequestStatusBadge";
 
 interface Props {
@@ -44,11 +52,14 @@ export function ProductionOrderDetail({ id }: Props) {
   const startOrder = useStartProductionOrder(id);
   const completeOrder = useCompleteProductionOrder(id);
   const cancelOrder = useCancelProductionOrder(id);
+  const shipAll = useShipOrderRequests(id);
+  const shipOne = useShipProductionRequest();
 
   const [successInfo, setSuccessInfo] = useState<CompleteSuccess | null>(null);
   const [insufficientStock, setInsufficientStock] =
     useState<InsufficientStockError | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [shipResults, setShipResults] = useState<ShipRequestResultDto[] | null>(null);
 
   if (isLoading) {
     return (
@@ -130,6 +141,27 @@ export function ProductionOrderDetail({ id }: Props) {
 
   const anyPending =
     startOrder.isPending || completeOrder.isPending || cancelOrder.isPending;
+  const shipPending = shipAll.isPending || shipOne.isPending;
+  const isDone = status === "done";
+  const unshipped = (order.requests ?? []).filter((r) => !r.shipmentTransferId);
+
+  function handleShipAll() {
+    if (!confirm(t("shipAllConfirm"))) return;
+    clearFeedback();
+    setShipResults(null);
+    shipAll.mutate(undefined, {
+      onSuccess: (res) => setShipResults(res),
+      onError: (err) => setActionError(err instanceof Error ? err.message : t("shipError")),
+    });
+  }
+
+  function handleShipOne(requestId: string) {
+    clearFeedback();
+    setShipResults(null);
+    shipOne.mutate(requestId, {
+      onError: (err) => setActionError(err instanceof Error ? err.message : t("shipError")),
+    });
+  }
 
   const consumptionColumns: TableColumn<ProductionConsumptionDto>[] = [
     {
@@ -165,6 +197,44 @@ export function ProductionOrderDetail({ id }: Props) {
       render: (r) => r.storeLocationName,
     },
     { key: "qty", header: t("requestsHeaderQty"), render: (r) => r.qty },
+    {
+      key: "reqStatus",
+      header: t("requestsHeaderStatus"),
+      render: (r) => (r.requestStatus ? <RequestStatusBadge status={r.requestStatus} /> : "—"),
+    },
+    {
+      key: "shipment",
+      header: t("requestsHeaderShipment"),
+      render: (r) =>
+        r.shipmentTransferId ? (
+          <Link
+            href="/transfers"
+            onClick={(e) => e.stopPropagation()}
+            style={{ color: "#34D399", fontSize: 12 }}
+          >
+            {t("shipped")}
+          </Link>
+        ) : (
+          <span style={{ color: "#6B7280", fontSize: 12 }}>{t("notShipped")}</span>
+        ),
+    },
+    ...(isDone
+      ? [
+          {
+            key: "shipAction",
+            header: "",
+
+            render: (r: ProductionOrderRequestRefDto) =>
+              r.shipmentTransferId ? null : (
+                <span onClick={(e) => e.stopPropagation()}>
+                  <Btn variant="success" disabled={shipPending} onClick={() => handleShipOne(r.requestId)}>
+                    {t("shipOne")}
+                  </Btn>
+                </span>
+              ),
+          } as TableColumn<ProductionOrderRequestRefDto>,
+        ]
+      : []),
   ];
 
   return (
@@ -360,6 +430,40 @@ export function ProductionOrderDetail({ id }: Props) {
               rowKey={(r) => r.requestLineId}
               onRowClick={() => router.push("/production/requests")}
             />
+            {isDone && (
+              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+                  <h3 style={{ color: "#E8EDF5", fontSize: 13, fontWeight: 600, margin: 0 }}>
+                    {t("shipmentsTitle")}
+                  </h3>
+                  {unshipped.length > 0 ? (
+                    <Btn variant="success" onClick={handleShipAll} disabled={shipPending}>
+                      {shipAll.isPending ? t("shippingAll") : t("shipAll")}
+                    </Btn>
+                  ) : (
+                    <span style={{ color: "#34D399", fontSize: 12 }}>{t("allShipped")}</span>
+                  )}
+                </div>
+                {shipResults && (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                    {shipResults.map((r) => (
+                      <div
+                        key={r.requestId}
+                        style={{
+                          fontSize: 12,
+                          padding: "6px 10px",
+                          borderRadius: 6,
+                          background: r.ok ? "#064E3B" : "#1F1010",
+                          color: r.ok ? "#34D399" : "#F87171",
+                        }}
+                      >
+                        {r.storeLocationName}: {r.ok ? t("shipOk") : r.error || t("shipError")}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         )}
 

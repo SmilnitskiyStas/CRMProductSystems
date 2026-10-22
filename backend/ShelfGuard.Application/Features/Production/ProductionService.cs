@@ -11,8 +11,13 @@ namespace ShelfGuard.Application.Features.Production;
 public sealed class ProductionService : IProductionService
 {
     private readonly IProductionRepository _repo;
+    private readonly IProductionOrderSyncService _sync;
 
-    public ProductionService(IProductionRepository repo) => _repo = repo;
+    public ProductionService(IProductionRepository repo, IProductionOrderSyncService sync)
+    {
+        _repo = repo;
+        _sync = sync;
+    }
 
     // ── Recipes ───────────────────────────────────────────────────────────────
 
@@ -157,7 +162,10 @@ public sealed class ProductionService : IProductionService
             o.CreatedAt,
             o.CompletedAt,
             o.NeededBy,
-            o.PlannedDate)).ToList();
+            o.PlannedDate,
+            o.RequestLines.Select(l => l.RequestLine?.RequestId).Where(x => x.HasValue).Distinct().Count(),
+            o.RequestLines.Select(l => l.RequestLine?.Request?.StoreLocationId).Where(x => x.HasValue).Distinct().Count()))
+            .ToList();
     }
 
     public async Task<ProductionOrderDetailDto?> GetOrderByIdAsync(
@@ -395,6 +403,9 @@ public sealed class ProductionService : IProductionService
 
         await _repo.SaveChangesAsync(ct);
 
+        // Store requests whose every order is now Done become ready to ship -> notify the store (once).
+        await _sync.NotifyOrderCompletedAsync(order.Id, ct);
+
         return (ToOrderDetail(order), null, null, null, outputStock.Id);
     }
 
@@ -413,6 +424,9 @@ public sealed class ProductionService : IProductionService
         order.Status    = ProductionOrderStatus.Cancelled;
         order.UpdatedAt = DateTimeOffset.UtcNow;
         _repo.UpdateOrder(order);
+        // Request lines become unassigned again (stage awaiting_order); production re-plans explicitly
+        // via POST /api/production-requests/{id}/sync-orders. Same DbContext: one SaveChanges.
+        await _sync.UnlinkOrderAsync(order.Id, ct);
         await _repo.SaveChangesAsync(ct);
 
         return (ToOrderDetail(order), null, null);
@@ -459,5 +473,7 @@ public sealed class ProductionService : IProductionService
                 l.RequestLine?.RequestId ?? Guid.Empty,
                 l.RequestLineId,
                 l.RequestLine?.Request?.StoreLocation?.Name ?? string.Empty,
-                l.Qty)).ToList());
+                l.Qty,
+                l.RequestLine?.Request?.Status ?? string.Empty,
+                l.RequestLine?.Request?.ShipmentTransferId)).ToList());
 }

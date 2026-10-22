@@ -136,6 +136,7 @@ services.AddScoped<IAuthService, AuthService>();
 
         // v4 Phase 5 - Production Module (TASK-241)
         services.AddScoped<IProductionService, ProductionService>();
+        services.AddScoped<IProductionOrderSyncService, ProductionOrderSyncService>();
         services.AddScoped<IProductionRequestService, ProductionRequestService>();
         services.AddScoped<IProductionDemandService, ProductionDemandService>();
         // TASK-755: automatic supplier-order drafts (non-own-production items)

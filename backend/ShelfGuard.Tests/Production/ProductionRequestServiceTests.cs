@@ -16,6 +16,8 @@ internal sealed class FakeProductionRequestRepo : IProductionRequestRepository
     public List<Recipe> Recipes { get; } = [];
     public List<Item> Items { get; } = [];
     public List<ProductionOrderRequestLine> Links { get; } = [];
+    public List<ProductionOrder> Orders { get; } = [];
+    public List<(Guid LocationId, Guid ItemId)> LockedKeys { get; } = [];
     public HashSet<Guid> LinesInActiveOrders { get; } = [];
     public int Saves { get; private set; }
 
@@ -57,7 +59,8 @@ internal sealed class FakeProductionRequestRepo : IProductionRequestRepository
         Task.FromResult(Locations.FirstOrDefault(l => l.Id == id));
 
     public Task<Recipe?> GetActiveRecipeForOutputAsync(Guid itemId, CancellationToken ct = default) =>
-        Task.FromResult(Recipes.FirstOrDefault(r => r.IsActive && r.OutputItemId == itemId));
+        Task.FromResult(Recipes.Where(r => r.IsActive && r.OutputItemId == itemId)
+            .OrderByDescending(r => r.CreatedAt).FirstOrDefault());
 
     public Task<HashSet<Guid>> GetItemIdsWithActiveRecipeAsync(IReadOnlyCollection<Guid> itemIds, CancellationToken ct = default) =>
         Task.FromResult(Recipes.Where(r => r.IsActive && itemIds.Contains(r.OutputItemId)).Select(r => r.OutputItemId).ToHashSet());
@@ -76,6 +79,52 @@ internal sealed class FakeProductionRequestRepo : IProductionRequestRepository
         Saves++;
         return Task.CompletedTask;
     }
+
+    public Task<T> ExecuteInTransactionAsync<T>(Func<Task<T>> work, CancellationToken ct = default) => work();
+
+    public Task LockOrderKeysAsync(IEnumerable<(Guid LocationId, Guid ItemId)> keys, CancellationToken ct = default)
+    {
+        LockedKeys.AddRange(keys);
+        return Task.CompletedTask;
+    }
+
+    private IEnumerable<ProductionRequestLine> AllLines => Requests.SelectMany(r => r.Lines);
+
+    private List<ProductionOrderRequestLine> Hydrated(IEnumerable<ProductionOrderRequestLine> links)
+    {
+        var list = links.ToList();
+        foreach (var l in list) l.RequestLine ??= AllLines.FirstOrDefault(x => x.Id == l.RequestLineId);
+        return list;
+    }
+
+    public Task<List<ProductionOrderRequestLine>> GetLinksForLinesAsync(IReadOnlyCollection<Guid> lineIds, CancellationToken ct = default) =>
+        Task.FromResult(Hydrated(Links.Where(l => lineIds.Contains(l.RequestLineId))));
+
+    public Task<List<ProductionOrderRequestLine>> GetLinksForRequestsAsync(IReadOnlyCollection<Guid> requestIds, CancellationToken ct = default)
+    {
+        var lineIds = AllLines.Where(l => requestIds.Contains(l.RequestId)).Select(l => l.Id).ToHashSet();
+        return Task.FromResult(Hydrated(Links.Where(l => lineIds.Contains(l.RequestLineId))));
+    }
+
+    public Task<List<ProductionOrderRequestLine>> GetLinksForOrderAsync(Guid orderId, CancellationToken ct = default) =>
+        Task.FromResult(Hydrated(Links.Where(l => l.ProductionOrderId == orderId)));
+
+    public void RemoveOrderLinks(IEnumerable<ProductionOrderRequestLine> links)
+    {
+        foreach (var l in links.ToList()) Links.Remove(l);
+    }
+
+    public Task AddOrderAsync(ProductionOrder order, CancellationToken ct = default)
+    {
+        Orders.Add(order);
+        return Task.CompletedTask;
+    }
+
+    public Task<ProductionOrder?> FindPlannedOrderAsync(Guid locationId, Guid itemId, DateOnly neededBy, CancellationToken ct = default) =>
+        Task.FromResult(Orders
+            .Where(o => o.Status == ProductionOrderStatus.Planned && o.LocationId == locationId && o.NeededBy == neededBy
+                        && Recipes.Any(r => r.Id == o.RecipeId && r.OutputItemId == itemId))
+            .OrderBy(o => o.CreatedAt).FirstOrDefault());
 
     private ProductionRequest? Hydrate(ProductionRequest? r)
     {
@@ -110,7 +159,8 @@ public sealed class ProductionRequestServiceTests
         _production.GetItemByIdAsync(_bread.Id, Arg.Any<CancellationToken>()).Returns(_bread);
     }
 
-    private ProductionRequestService Svc() => new(_repo, _production, _notifications, _transfers);
+    private ProductionRequestService Svc() => new(_repo, _production, _notifications, _transfers,
+        new ProductionOrderSyncService(_repo, _notifications));
 
     private static DateOnly Tomorrow => DateOnly.FromDateTime(DateTime.UtcNow.AddDays(1));
 

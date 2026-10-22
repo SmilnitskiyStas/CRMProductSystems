@@ -146,6 +146,18 @@ export function useCancelProductionOrder(id: string) {
   });
 }
 
+export function useShipOrderRequests(id: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => productionApi.shipOrderRequests(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: PRODUCTION_KEYS.order(id) });
+      queryClient.invalidateQueries({ queryKey: ["production", "orders"] });
+      queryClient.invalidateQueries({ queryKey: ["production", "requests"] });
+    },
+  });
+}
+
 // ─── Selectors ────────────────────────────────────────────────────────────────
 
 export function useProductionItems() {

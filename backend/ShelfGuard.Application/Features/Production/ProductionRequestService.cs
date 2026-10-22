@@ -24,13 +24,16 @@ public sealed class ProductionRequestService : IProductionRequestService
     private readonly IProductionRepository _production;
     private readonly INotificationRepository _notifications;
     private readonly ITransferService _transfers;
+    private readonly IProductionOrderSyncService _sync;
 
     public ProductionRequestService(
         IProductionRequestRepository repo,
         IProductionRepository production,
         INotificationRepository notifications,
-        ITransferService transfers)
+        ITransferService transfers,
+        IProductionOrderSyncService sync)
     {
+        _sync = sync;
         _repo = repo;
         _production = production;
         _notifications = notifications;
@@ -45,13 +48,14 @@ public sealed class ProductionRequestService : IProductionRequestService
     {
         var statuses = ParseStatuses(status);
         var list = await _repo.ListAsync(storeLocationId, productionLocationId, statuses, neededFrom, neededTo, ct);
-        return list.Select(ToListItem).ToList();
+        var ctx = await LoadContextAsync(list, ct);
+        return list.Select(r => ToListItem(r, ctx)).ToList();
     }
 
     public async Task<ProductionRequestDetailDto?> GetByIdAsync(Guid id, CancellationToken ct = default)
     {
         var r = await _repo.GetByIdAsync(id, ct);
-        return r is null ? null : ToDetail(r);
+        return r is null ? null : await ToDetailAsync(r, ct);
     }
 
     // ── Store side ────────────────────────────────────────────────────────────
@@ -166,7 +170,7 @@ public sealed class ProductionRequestService : IProductionRequestService
 
         await EnqueueSubmittedNotificationAsync(request, ct);
 
-        return (ToDetail(request), null, null);
+        return (await ToDetailAsync(request, ct), null, null);
     }
 
     public async Task<(ProductionRequestDetailDto? Request, string? Error, int? StatusCode)> CancelAsync(
@@ -178,10 +182,15 @@ public sealed class ProductionRequestService : IProductionRequestService
         if (request.Status is not (ProductionRequestStatus.Draft or ProductionRequestStatus.Submitted))
             return (null, "Скасувати можна лише чернетку або надіслану заявку, яку ще не прийнято виробництвом.", 409);
 
-        request.Status = ProductionRequestStatus.Cancelled;
-        request.UpdatedAt = DateTime.UtcNow;
-        await _repo.SaveChangesAsync(ct);
-        return (ToDetail(request), null, null);
+        await _repo.ExecuteInTransactionAsync(async () =>
+        {
+            request.Status = ProductionRequestStatus.Cancelled;
+            request.UpdatedAt = DateTime.UtcNow;
+            await _repo.SaveChangesAsync(ct);
+            await _sync.SyncAsync(request, null, ct); // defensive: drops any lingering demand
+            return 0;
+        }, ct);
+        return (await ToDetailAsync(request, ct), null, null);
     }
 
     // ── Production side ───────────────────────────────────────────────────────
@@ -192,8 +201,11 @@ public sealed class ProductionRequestService : IProductionRequestService
         var request = await _repo.GetByIdAsync(id, ct);
         if (request is null) return (null, "Заявку не знайдено.", 404);
 
-        if (request.Status != ProductionRequestStatus.Submitted)
-            return (null, "Розглянути можна лише надіслану заявку.", 409);
+        // A reviewed (accepted/partial) request can be re-reviewed: production changes quantities while the
+        // linked orders are still Planned. Shipped / rejected / cancelled requests are final.
+        if (request.Status is not (ProductionRequestStatus.Submitted or ProductionRequestStatus.Accepted
+                                   or ProductionRequestStatus.Partial))
+            return (null, "Розглянути можна лише надіслану або вже прийняту (ще не відвантажену) заявку.", 409);
 
         var byId = request.Lines.ToDictionary(l => l.Id);
         var reviews = new Dictionary<Guid, ProductionRequestLineReviewDto>();
@@ -215,20 +227,26 @@ public sealed class ProductionRequestService : IProductionRequestService
                 return (null, $"Вкажіть причину зменшення кількості для «{line.Item?.Name ?? line.ItemId.ToString()}».", 400);
         }
 
-        foreach (var line in request.Lines)
+        // One transaction: status/quantities + the order auto-planning commit (or roll back) together.
+        await _repo.ExecuteInTransactionAsync(async () =>
         {
-            reviews.TryGetValue(line.Id, out var rv);
-            line.AcceptedQty = rv?.AcceptedQty ?? line.RequestedQty;
-            line.Reason = line.AcceptedQty < line.RequestedQty ? rv!.Reason!.Trim() : null;
-        }
+            foreach (var line in request.Lines)
+            {
+                reviews.TryGetValue(line.Id, out var rv);
+                line.AcceptedQty = rv?.AcceptedQty ?? line.RequestedQty;
+                line.Reason = line.AcceptedQty < line.RequestedQty ? rv!.Reason!.Trim() : null;
+            }
 
-        request.Status = ResolveReviewStatus(request.Lines);
-        request.ReviewNote = string.IsNullOrWhiteSpace(dto.Note) ? null : dto.Note.Trim();
-        request.ReviewedBy = userId;
-        request.ReviewedAt = DateTime.UtcNow;
-        request.UpdatedAt = DateTime.UtcNow;
-        await _repo.SaveChangesAsync(ct);
-        return (ToDetail(request), null, null);
+            request.Status = ResolveReviewStatus(request.Lines);
+            request.ReviewNote = string.IsNullOrWhiteSpace(dto.Note) ? null : dto.Note.Trim();
+            request.ReviewedBy = userId;
+            request.ReviewedAt = DateTime.UtcNow;
+            request.UpdatedAt = DateTime.UtcNow;
+            await _repo.SaveChangesAsync(ct);
+            await _sync.SyncAsync(request, userId, ct);
+            return 0;
+        }, ct);
+        return (await ToDetailAsync(request, ct), null, null);
     }
 
     public async Task<(ProductionRequestDetailDto? Request, string? Error, int? StatusCode)> RejectAsync(
@@ -243,19 +261,24 @@ public sealed class ProductionRequestService : IProductionRequestService
         if (request.Status != ProductionRequestStatus.Submitted)
             return (null, "Відхилити можна лише надіслану заявку.", 409);
 
-        foreach (var line in request.Lines)
+        await _repo.ExecuteInTransactionAsync(async () =>
         {
-            line.AcceptedQty = 0;
-            line.Reason = reason.Trim();
-        }
+            foreach (var line in request.Lines)
+            {
+                line.AcceptedQty = 0;
+                line.Reason = reason.Trim();
+            }
 
-        request.Status = ProductionRequestStatus.Rejected;
-        request.ReviewNote = reason.Trim();
-        request.ReviewedBy = userId;
-        request.ReviewedAt = DateTime.UtcNow;
-        request.UpdatedAt = DateTime.UtcNow;
-        await _repo.SaveChangesAsync(ct);
-        return (ToDetail(request), null, null);
+            request.Status = ProductionRequestStatus.Rejected;
+            request.ReviewNote = reason.Trim();
+            request.ReviewedBy = userId;
+            request.ReviewedAt = DateTime.UtcNow;
+            request.UpdatedAt = DateTime.UtcNow;
+            await _repo.SaveChangesAsync(ct);
+            await _sync.SyncAsync(request, userId, ct);
+            return 0;
+        }, ct);
+        return (await ToDetailAsync(request, ct), null, null);
     }
 
     public async Task<List<ProductionRequestSummaryItemDto>> GetSummaryAsync(
@@ -370,6 +393,12 @@ public sealed class ProductionRequestService : IProductionRequestService
         if (request.Status is not (ProductionRequestStatus.Accepted or ProductionRequestStatus.Partial))
             return (null, "Відвантажити можна лише прийняту (повністю чи частково) заявку.", 409);
 
+        // Orders exist for this request -> they must all be finished first. No linked orders at all
+        // (shipping from existing stock) keeps the old behaviour.
+        var links = await _repo.GetLinksForRequestsAsync([request.Id], ct);
+        if (!ProductionRequestStages.AllOrdersDone(links))
+            return (null, "Виробництво ще не завершене.", 409);
+
         var shipLines = request.Lines.Where(l => l.AcceptedQty is > 0).ToList();
         if (shipLines.Count == 0)
             return (null, "У заявці немає прийнятих кількостей для відвантаження.", 409);
@@ -426,13 +455,90 @@ public sealed class ProductionRequestService : IProductionRequestService
         return (await LoadDetailAsync(id, ct), null, null);
     }
 
+    public async Task<(ProductionRequestDetailDto? Request, string? Error, int? StatusCode)> SyncOrdersAsync(
+        Guid id, Guid userId, CancellationToken ct = default)
+    {
+        var request = await _repo.GetByIdAsync(id, ct);
+        if (request is null) return (null, "Заявку не знайдено.", 404);
+
+        if (request.Status is not (ProductionRequestStatus.Accepted or ProductionRequestStatus.Partial
+                                   or ProductionRequestStatus.Rejected or ProductionRequestStatus.Cancelled))
+            return (null, "Синхронізація виробничих замовлень доступна лише для розглянутих заявок.", 409);
+
+        await _sync.SyncAsync(request, userId, ct);
+        return (await ToDetailAsync(request, ct), null, null);
+    }
+
+    public async Task<(List<ProductionShipRequestResultDto>? Results, string? Error, int? StatusCode)> ShipOrderRequestsAsync(
+        Guid orderId, Guid tenantId, Guid userId, CancellationToken ct = default)
+    {
+        var order = await _production.GetOrderByIdAsync(orderId, ct);
+        if (order is null) return (null, "Виробниче замовлення не знайдено.", 404);
+        if (order.Status != ProductionOrderStatus.Done)
+            return (null, "Відвантажувати заявки можна лише із завершеного виробничого замовлення.", 409);
+
+        var orderLinks = await _repo.GetLinksForOrderAsync(orderId, ct);
+        var requestIds = orderLinks.Select(l => l.RequestLine?.RequestId ?? Guid.Empty)
+            .Where(x => x != Guid.Empty).Distinct().ToList();
+
+        var results = new List<ProductionShipRequestResultDto>();
+        foreach (var requestId in requestIds)
+        {
+            var request = await _repo.GetByIdAsync(requestId, ct);
+            if (request is null) continue;
+            // Already shipped / rejected / cancelled requests are not part of this batch.
+            if (request.Status is not (ProductionRequestStatus.Accepted or ProductionRequestStatus.Partial)) continue;
+
+            var storeName = request.StoreLocation?.Name ?? string.Empty;
+            try
+            {
+                var links = await _repo.GetLinksForRequestsAsync([requestId], ct);
+                if (!ProductionRequestStages.AllOrdersDone(links))
+                {
+                    results.Add(new(requestId, storeName, false, "Очікує завершення інших виробничих замовлень.", null));
+                    continue;
+                }
+
+                var (shipped, error, _) = await ShipAsync(requestId, tenantId, userId, ct);
+                results.Add(error is null
+                    ? new(requestId, storeName, true, null, shipped?.ShipmentTransferId)
+                    : new(requestId, storeName, false, error, null));
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                results.Add(new(requestId, storeName, false, ex.Message, null));
+            }
+        }
+
+        return (results, null, null);
+    }
+
     // ── Helpers ───────────────────────────────────────────────────────────────
 
     private async Task<ProductionRequestDetailDto?> LoadDetailAsync(Guid id, CancellationToken ct)
     {
         var r = await _repo.GetByIdAsync(id, ct);
-        return r is null ? null : ToDetail(r);
+        return r is null ? null : await ToDetailAsync(r, ct);
     }
+
+    /// <summary>Order links + recipe availability needed to derive stage / hasRecipe / linkedOrders.</summary>
+    private sealed record StageContext(
+        ILookup<Guid, ProductionOrderRequestLine> LinksByRequest,
+        HashSet<Guid> ItemsWithRecipe);
+
+    private async Task<StageContext> LoadContextAsync(IReadOnlyCollection<ProductionRequest> requests, CancellationToken ct)
+    {
+        if (requests.Count == 0)
+            return new StageContext(Array.Empty<ProductionOrderRequestLine>().ToLookup(l => l.Id), []);
+
+        var links = await _repo.GetLinksForRequestsAsync(requests.Select(r => r.Id).ToList(), ct);
+        var itemIds = requests.SelectMany(r => r.Lines).Select(l => l.ItemId).Distinct().ToList();
+        var withRecipe = await _repo.GetItemIdsWithActiveRecipeAsync(itemIds, ct);
+        return new StageContext(links.ToLookup(l => l.RequestLine!.RequestId), withRecipe);
+    }
+
+    private async Task<ProductionRequestDetailDto> ToDetailAsync(ProductionRequest r, CancellationToken ct) =>
+        ToDetail(r, await LoadContextAsync([r], ct));
 
     private async Task<(string Error, int Code)?> ValidateLinesAsync(
         List<ProductionRequestLineCreateDto>? lines, CancellationToken ct)
@@ -501,7 +607,7 @@ public sealed class ProductionRequestService : IProductionRequestService
         }, ct);
     }
 
-    private static ProductionRequestListItemDto ToListItem(ProductionRequest r) => new(
+    private static ProductionRequestListItemDto ToListItem(ProductionRequest r, StageContext ctx) => new(
         r.Id,
         r.StoreLocationId,
         r.StoreLocation?.Name ?? string.Empty,
@@ -514,26 +620,37 @@ public sealed class ProductionRequestService : IProductionRequestService
         r.Lines.Sum(l => l.RequestedQty),
         r.Lines.Any(l => l.AcceptedQty.HasValue) ? r.Lines.Sum(l => l.AcceptedQty ?? 0) : null,
         r.CreatedAt,
-        r.SubmittedAt);
-
-    private static ProductionRequestDetailDto ToDetail(ProductionRequest r) => new(
-        r.Id,
-        r.StoreLocationId,
-        r.StoreLocation?.Name ?? string.Empty,
-        r.ProductionLocationId,
-        r.ProductionLocation?.Name ?? string.Empty,
-        r.NeededBy,
-        r.Status,
-        r.Source,
-        r.Notes,
-        r.ReviewNote,
-        r.CreatedAt,
         r.SubmittedAt,
-        r.ReviewedAt,
-        r.ShippedAt,
-        r.ShipmentTransferId,
-        r.ShipmentTransfer?.Status,
-        r.Lines.Select(l => new ProductionRequestLineDto(
-            l.Id, l.ItemId, l.Item?.Name ?? string.Empty, l.Item?.Unit ?? string.Empty,
-            l.RequestedQty, l.AcceptedQty, l.Reason, l.AutoReason)).ToList());
+        ProductionRequestStages.Derive(r.Status, r.Lines.ToList(), ctx.LinksByRequest[r.Id].ToList()));
+
+    private static ProductionRequestDetailDto ToDetail(ProductionRequest r, StageContext ctx)
+    {
+        var links = ctx.LinksByRequest[r.Id].ToList();
+        return new ProductionRequestDetailDto(
+            r.Id,
+            r.StoreLocationId,
+            r.StoreLocation?.Name ?? string.Empty,
+            r.ProductionLocationId,
+            r.ProductionLocation?.Name ?? string.Empty,
+            r.NeededBy,
+            r.Status,
+            r.Source,
+            r.Notes,
+            r.ReviewNote,
+            r.CreatedAt,
+            r.SubmittedAt,
+            r.ReviewedAt,
+            r.ShippedAt,
+            r.ShipmentTransferId,
+            r.ShipmentTransfer?.Status,
+            r.Lines.Select(l => new ProductionRequestLineDto(
+                l.Id, l.ItemId, l.Item?.Name ?? string.Empty, l.Item?.Unit ?? string.Empty,
+                l.RequestedQty, l.AcceptedQty, l.Reason, l.AutoReason,
+                ctx.ItemsWithRecipe.Contains(l.ItemId),
+                links.Where(k => k.RequestLineId == l.Id && k.ProductionOrder is { Status: not ProductionOrderStatus.Cancelled })
+                     .Select(k => new ProductionRequestLinkedOrderDto(
+                         k.ProductionOrderId, k.ProductionOrder!.Status.ToApiString(), k.Qty))
+                     .ToList())).ToList(),
+            ProductionRequestStages.Derive(r.Status, r.Lines.ToList(), links));
+    }
 }

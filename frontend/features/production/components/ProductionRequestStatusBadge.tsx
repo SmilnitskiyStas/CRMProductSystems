@@ -2,7 +2,7 @@
 
 import { useTranslations } from "next-intl";
 import type { CSSProperties } from "react";
-import type { ProductionRequestStatus } from "../types";
+import type { ProductionRequestStatus, ProductionStage } from "../types";
 
 const COLORS: Record<ProductionRequestStatus, { bg: string; color: string }> = {
   draft: { bg: "#1F2937", color: "#9CA3AF" },
@@ -53,6 +53,37 @@ export function RequestSourceBadge({ source, showManual = false }: { source: str
       }}
     >
       {auto ? t(source) : t("manual")}
+    </span>
+  );
+}
+
+const STAGE_COLORS: Record<string, { bg: string; color: string }> = {
+  awaiting_order: { bg: "#422006", color: "#FBBF24" },
+  planned: { bg: "#1F2937", color: "#9CA3AF" },
+  in_production: { bg: "#1E3A5F", color: "#60A5FA" },
+  ready: { bg: "#064E3B", color: "#34D399" },
+  shipped: { bg: "#064E3B", color: "#6EE7B7" },
+};
+
+/** Production pipeline stage chip (TASK-762). Renders nothing for "none"/unknown. */
+export function RequestStageBadge({ stage }: { stage?: ProductionStage | null }) {
+  const t = useTranslations("Dashboard.production.requests.stage");
+  if (!stage || !STAGE_COLORS[stage]) return null;
+  const { bg, color } = STAGE_COLORS[stage];
+  return (
+    <span
+      style={{
+        display: "inline-block",
+        padding: "3px 8px",
+        borderRadius: 20,
+        fontSize: 11,
+        fontWeight: 600,
+        background: bg,
+        color,
+        whiteSpace: "nowrap",
+      }}
+    >
+      {t(stage)}
     </span>
   );
 }

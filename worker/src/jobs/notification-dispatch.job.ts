@@ -45,6 +45,12 @@ const DISPATCH_EVENT_ROLES: Record<string, { roles: string[]; channels: string[]
     roles: ["storekeeper", "store_manager", "network_manager", "enterprise_admin"],
     channels: ["telegram", "push"],
   },
+  // TASK-761: every production order of a store request is Done -> ready to ship. StoreId on the outbox
+  // row = the requesting store; its managers collect/accept the goods.
+  "production_request.ready": {
+    roles: ["store_manager", "network_manager", "enterprise_admin"],
+    channels: ["telegram", "push"],
+  },
   // TASK-752: auto DRAFT created by ProductionDemandService. StoreId on the outbox row = the
   // requesting store; the store manager must review and submit the draft (never auto-submitted).
   "production_request.auto_draft": {
@@ -153,6 +159,7 @@ function formatText(row: PendingIntentRow): string {
     "receipt.created": "📦",
     "production_request.submitted": "🏭",
     "production_request.auto_draft": "📝",
+    "production_request.ready": "✅",
     "order.auto_draft": "🛒",
     "supplier.message": "💬",
     "supplier_agreement.signed": "✍️",

@@ -1660,3 +1660,7 @@ Worker більше не логіниться сервісним акаунто�
 Production pages/forms/detail + OrderCard/AutoOrdersSection switched to shared Btn/Table/Modal/ActionMenu, pill badges, 22px headers. tsc + eslint clean. Log: .claude/logs/tasks/759_2026-10-22_production-ui-alignment_frontend-developer.md
 
 - TASK-760: store-side /orders/production + production-only /production/requests via `mode` prop; sidebar item + TenantRoleTabs key. See logs/tasks/760_*.
+
+- TASK-762 (frontend, review): production inbox (stage chips, sync-orders retry, no ship/summary) + "Виробничі замовлення" with per-store ship / ship-all. tsc+eslint clean. See logs/tasks/762_*.
+
+- TASK-761 (backend, review): accepted requests auto-plan into Planned production orders (ProductionOrderSyncService, advisory-lock find-or-create), productionStage/hasRecipe/linkedOrders DTOs, sync-orders + ship-requests endpoints, ship guard, `production_request.ready` notification. 2941 tests green. See logs/tasks/761_*.

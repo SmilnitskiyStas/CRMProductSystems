@@ -67,6 +67,7 @@ public sealed class ProductionRepository : IProductionRepository
         var query = _db.ProductionOrders
             .Include(o => o.Recipe)
             .Include(o => o.Location)
+            .Include(o => o.RequestLines).ThenInclude(l => l.RequestLine!).ThenInclude(rl => rl.Request)
             .AsQueryable();
 
         if (!string.IsNullOrWhiteSpace(status) &&

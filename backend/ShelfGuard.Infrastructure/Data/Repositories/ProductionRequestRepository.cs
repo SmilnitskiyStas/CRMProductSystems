@@ -52,7 +52,8 @@ public sealed class ProductionRequestRepository : IProductionRequestRepository
 
     public Task<Recipe?> GetActiveRecipeForOutputAsync(Guid itemId, CancellationToken ct = default) =>
         _db.Recipes.Where(r => r.IsActive && r.OutputItemId == itemId)
-            .OrderBy(r => r.CreatedAt)
+            .OrderByDescending(r => r.CreatedAt)
+            .ThenBy(r => r.Id)
             .FirstOrDefaultAsync(ct);
 
     public async Task<HashSet<Guid>> GetItemIdsWithActiveRecipeAsync(
@@ -69,6 +70,67 @@ public sealed class ProductionRequestRepository : IProductionRequestRepository
 
     public Task AddOrderLinksAsync(IEnumerable<ProductionOrderRequestLine> links, CancellationToken ct = default) =>
         _db.ProductionOrderRequestLines.AddRangeAsync(links, ct);
+
+    public async Task<T> ExecuteInTransactionAsync<T>(Func<Task<T>> work, CancellationToken ct = default)
+    {
+        // Join an ambient transaction (e.g. a caller that already opened one) instead of nesting.
+        if (_db.Database.CurrentTransaction is not null || !_db.Database.IsRelational())
+            return await work();
+
+        await using var tx = await _db.Database.BeginTransactionAsync(ct);
+        var result = await work();
+        await tx.CommitAsync(ct);
+        return result;
+    }
+
+    public async Task LockOrderKeysAsync(IEnumerable<(Guid LocationId, Guid ItemId)> keys, CancellationToken ct = default)
+    {
+        if (!_db.Database.IsNpgsql()) return;
+        foreach (var (loc, item) in keys.Distinct().OrderBy(k => k.LocationId).ThenBy(k => k.ItemId))
+        {
+            var key = $"prod-order:{loc:N}:{item:N}";
+            // Blocks until the holder commits/rolls back; released automatically at transaction end.
+            await _db.Database.ExecuteSqlInterpolatedAsync(
+                $"SELECT pg_advisory_xact_lock(hashtextextended({key}, 0))", ct);
+        }
+    }
+
+    public Task<List<ProductionOrderRequestLine>> GetLinksForLinesAsync(
+        IReadOnlyCollection<Guid> lineIds, CancellationToken ct = default) =>
+        _db.ProductionOrderRequestLines
+            .Include(l => l.ProductionOrder)
+            .Where(l => lineIds.Contains(l.RequestLineId))
+            .ToListAsync(ct);
+
+    public Task<List<ProductionOrderRequestLine>> GetLinksForRequestsAsync(
+        IReadOnlyCollection<Guid> requestIds, CancellationToken ct = default) =>
+        _db.ProductionOrderRequestLines
+            .Include(l => l.ProductionOrder)
+            .Include(l => l.RequestLine)
+            .Where(l => requestIds.Contains(l.RequestLine!.RequestId))
+            .ToListAsync(ct);
+
+    public Task<List<ProductionOrderRequestLine>> GetLinksForOrderAsync(Guid orderId, CancellationToken ct = default) =>
+        _db.ProductionOrderRequestLines
+            .Include(l => l.RequestLine)
+            .Where(l => l.ProductionOrderId == orderId)
+            .ToListAsync(ct);
+
+    public Task AddOrderAsync(ProductionOrder order, CancellationToken ct = default) =>
+        _db.ProductionOrders.AddAsync(order, ct).AsTask();
+
+    public void RemoveOrderLinks(IEnumerable<ProductionOrderRequestLine> links) =>
+        _db.ProductionOrderRequestLines.RemoveRange(links);
+
+    public Task<ProductionOrder?> FindPlannedOrderAsync(
+        Guid locationId, Guid itemId, DateOnly neededBy, CancellationToken ct = default) =>
+        _db.ProductionOrders
+            .Where(o => o.Status == ProductionOrderStatus.Planned
+                        && o.LocationId == locationId
+                        && o.NeededBy == neededBy
+                        && o.Recipe!.OutputItemId == itemId)
+            .OrderBy(o => o.CreatedAt).ThenBy(o => o.Id)
+            .FirstOrDefaultAsync(ct);
 
     public Task SaveChangesAsync(CancellationToken ct = default) => _db.SaveChangesAsync(ct);
 }

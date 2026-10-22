@@ -20,6 +20,7 @@ import type {
   ProductionRequestSummaryItemDto,
   OrdersFromRequestsDto,
   OrderFromRequestResultDto,
+  ShipRequestResultDto,
 } from "../types";
 import type { LocationDto } from "@/features/locations/types";
 
@@ -89,6 +90,10 @@ export const productionApi = {
       body
     ),
 
+  /** POST /api/production/orders/{id}/ship-requests — ship all requests of a DONE order. */
+  shipOrderRequests: (id: string) =>
+    api.post<ShipRequestResultDto[]>(`/api/production/orders/${id}/ship-requests`),
+
   // ── Store requests ─────────────────────────────────────────────────────────
 
   /** GET /api/production-requests */
@@ -138,6 +143,9 @@ export const productionApi = {
 
   rejectRequest: (id: string, reason: string) =>
     api.post<ProductionRequestDetailDto>(`/api/production-requests/${id}/reject`, { reason }),
+
+  syncRequestOrders: (id: string) =>
+    api.post<ProductionRequestDetailDto>(`/api/production-requests/${id}/sync-orders`),
 
   shipRequest: (id: string) =>
     api.post<ProductionRequestDetailDto>(`/api/production-requests/${id}/ship`),

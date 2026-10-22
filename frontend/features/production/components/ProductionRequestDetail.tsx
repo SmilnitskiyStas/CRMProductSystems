@@ -13,13 +13,15 @@ import {
   useCancelProductionRequest,
   useReviewProductionRequest,
   useRejectProductionRequest,
-  useShipProductionRequest,
+  useSyncRequestOrders,
 } from "../hooks/useProductionRequests";
+import { OrderStatusBadge } from "./ProductionOrderTable";
 import { ProductionRequestForm } from "./ProductionRequestForm";
 import type { ProductionRequestLineDto } from "../types";
 import {
   RequestStatusBadge,
   RequestSourceBadge,
+  RequestStageBadge,
   formatDateOnly,
   errMessage,
   reqInputStyle,
@@ -28,7 +30,7 @@ import {
 
 interface Props {
   id: string;
-  /** "store": requesting side (edit/submit/cancel). "production": inbox side (review/reject/ship). */
+  /** "store": requesting side (edit/submit/cancel). "production": inbox side (review/reject/sync orders). */
   mode: "store" | "production";
   /** Tenant has the production module: review / reject / ship actions are available. */
   canProduce: boolean;
@@ -44,7 +46,7 @@ export function ProductionRequestDetail({ id, mode, canProduce, onClose }: Props
   const cancel = useCancelProductionRequest();
   const review = useReviewProductionRequest();
   const reject = useRejectProductionRequest();
-  const ship = useShipProductionRequest();
+  const sync = useSyncRequestOrders();
 
   const [editing, setEditing] = useState(false);
   const [reviewing, setReviewing] = useState(false);
@@ -66,7 +68,7 @@ export function ProductionRequestDetail({ id, mode, canProduce, onClose }: Props
   }
 
   const pending =
-    submit.isPending || cancel.isPending || review.isPending || reject.isPending || ship.isPending;
+    submit.isPending || cancel.isPending || review.isPending || reject.isPending || sync.isPending;
   const act = { onError: (e: unknown) => setError(errMessage(e, t("actionError"))) };
 
   const storeSide = mode === "store";
@@ -74,6 +76,12 @@ export function ProductionRequestDetail({ id, mode, canProduce, onClose }: Props
   const isAuto = req.source === "auto_buffer" || req.source === "auto_promo";
   const showAutoReason = req.lines.some((l) => !!l.autoReason);
   const showAccepted = req.lines.some((l) => l.acceptedQty !== null);
+  const showOrders = prodSide && (req.status === "accepted" || req.status === "partial" || req.status === "fulfilled");
+  const needsSync =
+    prodSide &&
+    (req.status === "accepted" || req.status === "partial") &&
+    !req.shippedAt &&
+    (req.productionStage === "awaiting_order" || req.lines.some((l) => l.hasRecipe === false));
   const columns: TableColumn<ProductionRequestLineDto>[] = [
     { key: "item", header: t("colItem"), cellStyle: { color: "#E8EDF5" }, render: (l) => l.itemName },
     { key: "req", header: t("colRequested"), render: (l) => `${l.requestedQty} ${l.unit}` },
@@ -103,6 +111,29 @@ export function ProductionRequestDetail({ id, mode, canProduce, onClose }: Props
           },
         ]
       : []),
+    ...(showOrders
+      ? [
+          {
+            key: "orders",
+            header: t("colOrders"),
+            render: (l: ProductionRequestLineDto) => (
+              <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                {l.hasRecipe === false && (
+                  <span style={{ color: "#FBBF24", fontSize: 12 }}>{t("noRecipe")}</span>
+                )}
+                {(l.linkedOrders ?? []).map((o) => (
+                  <span key={o.orderId} style={{ display: "inline-flex", gap: 6, alignItems: "center" }}>
+                    <Link href={`/production/orders/${o.orderId}`} style={{ color: "#60A5FA", fontSize: 12 }}>
+                      {t("openOrder")} · {o.qty}
+                    </Link>
+                    <OrderStatusBadge status={o.status} />
+                  </span>
+                ))}
+              </div>
+            ),
+          },
+        ]
+      : []),
   ];
 
   return (
@@ -112,6 +143,7 @@ export function ProductionRequestDetail({ id, mode, canProduce, onClose }: Props
           <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
             <RequestStatusBadge status={req.status} />
             <RequestSourceBadge source={req.source} />
+            <RequestStageBadge stage={req.productionStage} />
             <span style={{ color: "#9CA3AF", fontSize: 13 }}>
               {req.storeLocationName} → {req.productionLocationName}
             </span>
@@ -185,21 +217,18 @@ export function ProductionRequestDetail({ id, mode, canProduce, onClose }: Props
                 </Btn>
               </>
             )}
-            {prodSide &&
-              (req.status === "accepted" || req.status === "partial") &&
-              !req.shippedAt && (
-                <Btn
-                  variant="success"
-                  disabled={pending}
-                  onClick={() => {
-                    if (!confirm(t("shipConfirm"))) return;
-                    setError(null);
-                    ship.mutate(id, act);
-                  }}
-                >
-                  {ship.isPending ? t("shipping") : t("ship")}
-                </Btn>
-              )}
+            {needsSync && (
+              <Btn
+                variant="ghost"
+                disabled={pending}
+                onClick={() => {
+                  setError(null);
+                  sync.mutate(id, act);
+                }}
+              >
+                {sync.isPending ? t("syncing") : t("syncOrders")}
+              </Btn>
+            )}
           </div>
         </div>
       </Modal>

@@ -47,4 +47,15 @@ public interface IProductionRequestService
     /// </summary>
     Task<(ProductionRequestDetailDto? Request, string? Error, int? StatusCode)> ShipAsync(
         Guid id, Guid tenantId, Guid userId, CancellationToken ct = default);
+
+    /// <summary>Explicit re-sync of the request's production orders with its accepted quantities (idempotent).</summary>
+    Task<(ProductionRequestDetailDto? Request, string? Error, int? StatusCode)> SyncOrdersAsync(
+        Guid id, Guid userId, CancellationToken ct = default);
+
+    /// <summary>
+    /// For a Done order: ships every linked accepted/partial request whose linked orders are all Done.
+    /// One request failing never aborts the batch (per-request result).
+    /// </summary>
+    Task<(List<ProductionShipRequestResultDto>? Results, string? Error, int? StatusCode)> ShipOrderRequestsAsync(
+        Guid orderId, Guid tenantId, Guid userId, CancellationToken ct = default);
 }

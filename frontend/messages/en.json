@@ -1280,7 +1280,7 @@
         "production": {
           "label": "Production",
           "recipes": "Recipes",
-          "orders": "Orders",
+          "orders": "Production orders",
           "requests": "Requests"
         },
         "analytics": {
@@ -4227,7 +4227,7 @@
       },
       "requests": {
         "title": "Incoming store requests",
-        "subtitle": "Store requests to production: review, change quantities or reject, create production orders and ship.",
+        "subtitle": "Incoming store requests: review, change the quantity or reject. Production orders are created automatically once a request is accepted; shipping happens under \"Production orders\".",
         "filterActive": "Active (submitted / accepted / partial)",
         "emptyIncoming": "No incoming requests",
         "colStoreFrom": "Requesting store",
@@ -4240,6 +4240,13 @@
         "calcDone": "Drafts created/updated: {count}",
         "calcNone": "No needs found — no drafts created",
         "calcError": "Failed to calculate needs",
+        "stage": {
+          "awaiting_order": "Awaiting order",
+          "planned": "Planned",
+          "in_production": "In production",
+          "ready": "Ready to ship",
+          "shipped": "Shipped"
+        },
         "source": {
           "manual": "Manual",
           "auto_buffer": "Auto · buffer",
@@ -4322,6 +4329,11 @@
           "ship": "Ship",
           "shipping": "Shipping…",
           "shipConfirm": "Create a transfer of finished goods to the store?",
+          "colOrders": "Production orders",
+          "noRecipe": "No active recipe - order not created",
+          "openOrder": "Order",
+          "syncOrders": "Retry creating orders",
+          "syncing": "Creating...",
           "actionError": "Action failed"
         },
         "review": {
@@ -4347,6 +4359,8 @@
         }
       },
       "orderTable": {
+        "headerStores": "Stores",
+        "storesCell": "{requests, plural, one {# request} other {# requests}} · {stores, plural, one {# store} other {# stores}}",
         "headerNeededBy": "Needed by",
         "headerPlannedDate": "Planned date",
         "statusFilterAll": "All statuses",
@@ -4356,7 +4370,7 @@
         "statusFilterCancelled": "Cancelled",
         "loading": "Loading orders…",
         "loadError": "Failed to load orders.",
-        "title": "Production Orders",
+        "title": "Production orders",
         "addOrder": "Order",
         "empty": "No orders yet. Create your first production order.",
         "headerRecipe": "Recipe",
@@ -4377,12 +4391,24 @@
         "plannedDateLabel": "Planned:",
         "requestsTitle": "Store requests",
         "requestsHeaderStore": "Store",
+        "requestsHeaderStatus": "Request",
+        "requestsHeaderShipment": "Shipment",
+        "shipped": "Shipped",
+        "notShipped": "Not shipped",
+        "shipOne": "Ship",
+        "shipAll": "Ship to all",
+        "shippingAll": "Shipping...",
+        "allShipped": "All shipped",
+        "shipAllConfirm": "Create finished-goods transfers to all stores?",
+        "shipmentsTitle": "Shipments by store",
+        "shipOk": "shipped",
+        "shipError": "Could not ship",
         "requestsHeaderQty": "Quantity",
         "loadError": "Failed to load order.",
         "errorCompleteFallback": "Completion error",
         "cancelConfirm": "Cancel this production order?",
         "errorCancelFallback": "Cancellation error",
-        "backToOrders": "Back to orders",
+        "backToOrders": "Back to production orders",
         "plannedOutputLabel": "Planned output:",
         "startedLabel": "Started:",
         "completedLabel": "Completed:",

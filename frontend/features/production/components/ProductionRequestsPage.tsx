@@ -7,18 +7,14 @@ import { Btn } from "@/components/ui/Btn";
 import { Table, type TableColumn } from "@/components/ui/Table";
 import { useModules } from "@/features/modules/hooks/useModules";
 import { useLocations } from "@/features/locations/hooks/useLocations";
-import {
-  useProductionRequests,
-  useCreateOrdersFromRequests,
-  useAutoGenerateRequests,
-} from "../hooks/useProductionRequests";
+import { useProductionRequests, useAutoGenerateRequests } from "../hooks/useProductionRequests";
 import type { ProductionRequestListItemDto, ProductionRequestStatus } from "../types";
 import { ProductionRequestForm } from "./ProductionRequestForm";
 import { ProductionRequestDetail } from "./ProductionRequestDetail";
-import { ProductionRequestSummary } from "./ProductionRequestSummary";
 import {
   RequestStatusBadge,
   RequestSourceBadge,
+  RequestStageBadge,
   formatDateOnly,
   errMessage,
   reqInputStyle,
@@ -45,9 +41,6 @@ const PRODUCTION_STATUSES: ProductionRequestStatus[] = [
 // Default inbox: what still needs production attention.
 const PRODUCTION_DEFAULT_STATUS = "submitted,accepted,partial";
 
-// Requests that can feed a production order.
-const ORDERABLE = new Set<string>(["accepted", "partial"]);
-
 interface PageProps {
   /** "store": requesting side (create/calc/edit own requests). "production": inbox side. */
   mode: "store" | "production";
@@ -64,13 +57,10 @@ export function ProductionRequestsPage({ mode }: PageProps) {
   // Review / ship / summary / order creation are production-module endpoints (403 otherwise).
   const canProduce = isProd && !!modulesData?.modules.includes("production");
 
-  const [tab, setTab] = useState<"requests" | "summary">("requests");
   const [status, setStatus] = useState(isProd ? PRODUCTION_DEFAULT_STATUS : "");
   const [storeId, setStoreId] = useState("");
   const [formOpen, setFormOpen] = useState(false);
   const [openId, setOpenId] = useState<string | null>(null);
-  const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [plannedDate, setPlannedDate] = useState("");
   const [feedback, setFeedback] = useState<{ ok: boolean; text: string } | null>(null);
 
   const { data: locations = [] } = useLocations();
@@ -79,32 +69,7 @@ export function ProductionRequestsPage({ mode }: PageProps) {
     status: status || (isProd ? PRODUCTION_STATUSES.join(",") : undefined),
     storeLocationId: storeId || undefined,
   });
-  const createOrders = useCreateOrdersFromRequests();
   const autoGen = useAutoGenerateRequests();
-
-  function toggle(id: string) {
-    setSelected((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  }
-
-  function handleCreateOrders() {
-    setFeedback(null);
-    createOrders.mutate(
-      { requestIds: [...selected], plannedDate: plannedDate || undefined },
-      {
-        onSuccess: (res) => {
-          setSelected(new Set());
-          setFeedback({ ok: true, text: t("ordersCreated", { count: res.length }) });
-        },
-        // 422 message lists items without an active recipe.
-        onError: (e) => setFeedback({ ok: false, text: errMessage(e, t("ordersError")) }),
-      }
-    );
-  }
 
   function handleAutoGenerate() {
     setFeedback(null);
@@ -119,25 +84,6 @@ export function ProductionRequestsPage({ mode }: PageProps) {
   }
 
   const columns: TableColumn<ProductionRequestListItemDto>[] = [
-    ...(canProduce
-      ? [
-          {
-            key: "select",
-            header: "",
-            width: 40,
-            render: (r: ProductionRequestListItemDto) =>
-              ORDERABLE.has(r.status) ? (
-                <input
-                  type="checkbox"
-                  checked={selected.has(r.id)}
-                  onChange={() => toggle(r.id)}
-                  onClick={(e) => e.stopPropagation()}
-                  aria-label={t("select")}
-                />
-              ) : null,
-          } as TableColumn<ProductionRequestListItemDto>,
-        ]
-      : []),
     {
       key: "store",
       header: isProd ? t("colStoreFrom") : t("colStore"),
@@ -167,31 +113,11 @@ export function ProductionRequestsPage({ mode }: PageProps) {
         <span style={{ display: "inline-flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
           <RequestStatusBadge status={r.status} />
           <RequestSourceBadge source={r.source} />
+          <RequestStageBadge stage={r.productionStage} />
         </span>
       ),
     },
   ];
-
-  const tabBtn = (key: "requests" | "summary", label: string) => (
-    <button
-      key={key}
-      onClick={() => setTab(key)}
-      style={{
-        padding: "8px 14px",
-        background: "transparent",
-        border: "none",
-        borderBottom: tab === key ? "2px solid #3B82F6" : "2px solid transparent",
-        color: tab === key ? "#60A5FA" : "#6B7280",
-        fontSize: 13,
-        fontWeight: tab === key ? 600 : 400,
-        cursor: "pointer",
-        marginBottom: -1,
-        transition: "color 0.1s",
-      }}
-    >
-      {label}
-    </button>
-  );
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
@@ -226,17 +152,7 @@ export function ProductionRequestsPage({ mode }: PageProps) {
         </div>
       </div>
 
-      {canProduce && (
-        <div style={{ display: "flex", gap: 4, borderBottom: "1px solid #1F2937" }}>
-          {tabBtn("requests", t("tabRequests"))}
-          {tabBtn("summary", t("tabSummary"))}
-        </div>
-      )}
-
-      {tab === "summary" && canProduce ? (
-        <ProductionRequestSummary />
-      ) : (
-        <>
+      <>
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
             <select
               value={status}
@@ -263,21 +179,6 @@ export function ProductionRequestsPage({ mode }: PageProps) {
                   <option key={l.id} value={l.id}>{l.name}</option>
                 ))}
             </select>
-
-            {canProduce && selected.size > 0 && (
-              <>
-                <input
-                  type="date"
-                  value={plannedDate}
-                  onChange={(e) => setPlannedDate(e.target.value)}
-                  title={t("plannedDate")}
-                  style={{ ...reqInputStyle, width: "auto", padding: "7px 12px" }}
-                />
-                <Btn variant="success" onClick={handleCreateOrders} disabled={createOrders.isPending}>
-                  {t("createOrders", { count: selected.size })}
-                </Btn>
-              </>
-            )}
           </div>
 
           {feedback && (
@@ -304,8 +205,7 @@ export function ProductionRequestsPage({ mode }: PageProps) {
               emptyMessage={isLoading ? tCommon("loading") : isProd ? t("emptyIncoming") : t("storeEmpty")}
             />
           )}
-        </>
-      )}
+      </>
 
       {!isProd && formOpen && <ProductionRequestForm onClose={() => setFormOpen(false)} />}
       {openId && (

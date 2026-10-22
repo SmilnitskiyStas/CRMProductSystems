@@ -57,6 +57,15 @@ export function ProductionOrderTable() {
       render: (order) => order.plannedQty,
     },
     {
+      key: "stores",
+      header: t("headerStores"),
+      cellStyle: { color: "#9CA3AF", fontSize: 12 },
+      render: (order) =>
+        order.requestCount
+          ? t("storesCell", { requests: order.requestCount, stores: order.storeCount ?? 0 })
+          : "—",
+    },
+    {
       key: "neededBy",
       header: t("headerNeededBy"),
       cellStyle: { color: "#9CA3AF", fontSize: 12 },
