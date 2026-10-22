@@ -4217,6 +4217,7 @@
         "selectRecipePlaceholder": "— Оберіть рецепт —",
         "locationLabel": "Локація *",
         "selectLocationPlaceholder": "— Оберіть локацію —",
+        "noProductionLocation": "Немає виробничої локації. Створіть її в розділі «Локації» (тип «Виробництво»).",
         "plannedQtyLabel": "Плановий вихід *",
         "notesLabel": "Примітки",
         "notesPlaceholder": "Необов'язково",

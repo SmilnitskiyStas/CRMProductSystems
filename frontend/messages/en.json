@@ -4217,6 +4217,7 @@
         "selectRecipePlaceholder": "— Select recipe —",
         "locationLabel": "Location *",
         "selectLocationPlaceholder": "— Select location —",
+        "noProductionLocation": "No production location yet. Create one under Locations (type \"Production\").",
         "plannedQtyLabel": "Planned output *",
         "notesLabel": "Notes",
         "notesPlaceholder": "Optional",

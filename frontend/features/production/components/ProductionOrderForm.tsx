@@ -18,6 +18,8 @@ export function ProductionOrderForm({ onClose }: Props) {
   const t = useTranslations("Dashboard.production.orderForm");
   const { data: recipes = [] } = useRecipes(false);
   const { data: locations = [] } = useProductionLocations();
+  // Production orders can only be created on a location of type "production" (backend rule).
+  const productionLocations = locations.filter((l) => l.locationType === "production");
   const createOrder = useCreateProductionOrder();
 
   const [recipeId, setRecipeId] = useState("");
@@ -83,12 +85,17 @@ export function ProductionOrderForm({ onClose }: Props) {
           style={inputStyle}
         >
           <option value="">{t("selectLocationPlaceholder")}</option>
-          {locations.map((loc) => (
+          {productionLocations.map((loc) => (
             <option key={loc.id} value={loc.id}>
               {loc.name}
             </option>
           ))}
         </select>
+        {productionLocations.length === 0 && (
+          <div style={{ marginTop: 6, fontSize: 12, color: "#F59E0B" }}>
+            {t("noProductionLocation")}
+          </div>
+        )}
       </div>
 
       <div style={{ marginBottom: 16 }}>
