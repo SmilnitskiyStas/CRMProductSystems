@@ -1,9 +1,11 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { ArrowLeft } from "lucide-react";
 import { toast } from "sonner";
 import { useTranslations } from "next-intl";
+import { PageContainer } from "@/components/ui/PageContainer";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { BackLink } from "@/components/ui/BackLink";
 import { ProductForm } from "@/features/inventory/components/ProductForm";
 import { useCreateProduct } from "@/features/inventory/hooks/useProducts";
 import type { CreateProductPayload } from "@/features/inventory/types";
@@ -29,24 +31,9 @@ export default function NewProductPage() {
   };
 
   return (
-    <div style={{ padding: "24px 32px" }}>
-      {/* Header */}
-      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 20 }}>
-        <button
-          onClick={() => router.push("/inventory")}
-          style={{
-            background: "transparent", border: "none",
-            color: "#6B7280", cursor: "pointer",
-            display: "flex", alignItems: "center", gap: 4,
-            fontSize: 13, padding: 0, flexShrink: 0,
-          }}
-        >
-          <ArrowLeft size={15} /> {tCommon("back")}
-        </button>
-        <h1 style={{ color: "#E8EDF5", fontSize: 20, fontWeight: 700, margin: 0 }}>
-          {t("titleCreate")}
-        </h1>
-      </div>
+    <PageContainer>
+      <BackLink onClick={() => router.push("/inventory")}>{tCommon("back")}</BackLink>
+      <PageHeader title={t("titleCreate")} />
 
       <ProductForm
         product={null}
@@ -56,6 +43,6 @@ export default function NewProductPage() {
         // Create-only page — ProductForm only calls onUpdate when `product` is non-null.
         onUpdate={() => {}}
       />
-    </div>
+    </PageContainer>
   );
 }

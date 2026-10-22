@@ -1,8 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
-import { ChevronLeft, Eye, HeartHandshake, LifeBuoy, MessageCircle } from "lucide-react";
+import { Eye, HeartHandshake, LifeBuoy, MessageCircle } from "lucide-react";
 import { useParams } from "next/navigation";
 import { toast } from "sonner";
 import { useTranslations } from "next-intl";
@@ -29,6 +28,9 @@ import { SupportTicketsPanel } from "@/features/marketplace/components/SupportTi
 import { useMe } from "@/features/auth/hooks/useAuth";
 import { PROVIDER_TEAM, TENANT_ROLES, type AppRole } from "@/lib/roles";
 import { Btn } from "@/components/ui/Btn";
+import { PageContainer } from "@/components/ui/PageContainer";
+import { BackLink } from "@/components/ui/BackLink";
+import { Tabs } from "@/components/ui/Tabs";
 import type { SupplierItemDto } from "@/features/marketplace/types";
 
 type ActiveTab = "catalog" | "reviews";
@@ -95,13 +97,12 @@ export default function SupplierProfilePage() {
 
   if (isLoading) {
     return (
-      <div style={{ padding: "28px 32px" }}>
+      <PageContainer>
         <div
           style={{
             height: 120,
             background: "#111827",
             borderRadius: 12,
-            marginBottom: 20,
           }}
         />
         <div
@@ -118,57 +119,24 @@ export default function SupplierProfilePage() {
             />
           ))}
         </div>
-      </div>
+      </PageContainer>
     );
   }
 
   if (isError || !supplier) {
     return (
-      <div style={{ padding: "28px 32px" }}>
+      <PageContainer>
         <div style={{ color: "#F87171", fontSize: 14 }}>
           {t("errorLoad")}
         </div>
-        <Link
-          href="/marketplace"
-          style={{ color: "#3B82F6", fontSize: 13, display: "inline-flex", alignItems: "center", gap: 4, marginTop: 16 }}
-        >
-          <ChevronLeft size={14} /> {t("backToMarketplace")}
-        </Link>
-      </div>
+        <BackLink href="/marketplace">{t("backToMarketplace")}</BackLink>
+      </PageContainer>
     );
   }
 
-  const tabStyle = (tab: ActiveTab): React.CSSProperties => ({
-    padding: "10px 20px",
-    background: "transparent",
-    border: "none",
-    borderBottom: activeTab === tab ? "2px solid #3B82F6" : "2px solid transparent",
-    color: activeTab === tab ? "#3B82F6" : "#6B7280",
-    fontSize: 13,
-    fontWeight: activeTab === tab ? 600 : 400,
-    cursor: "pointer",
-    marginBottom: -1,
-    transition: "color 0.15s",
-  });
-
   return (
-    <div style={{ padding: "28px 32px" }}>
-      {/* Back link */}
-      <Link
-        href="/marketplace"
-        style={{
-          display: "inline-flex",
-          alignItems: "center",
-          gap: 4,
-          color: "#4B5563",
-          fontSize: 13,
-          textDecoration: "none",
-          marginBottom: 20,
-        }}
-      >
-        <ChevronLeft size={14} />
-        {t("backLink")}
-      </Link>
+    <PageContainer>
+      <BackLink href="/marketplace">{t("backLink")}</BackLink>
 
       {/* Header card */}
       <div
@@ -177,7 +145,6 @@ export default function SupplierProfilePage() {
           border: "1px solid #1F2937",
           borderRadius: 12,
           padding: "24px 28px",
-          marginBottom: 24,
           display: "flex",
           alignItems: "flex-start",
           justifyContent: "space-between",
@@ -187,7 +154,7 @@ export default function SupplierProfilePage() {
       >
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", marginBottom: 8 }}>
-            <h1 style={{ color: "#E8EDF5", fontSize: 20, fontWeight: 700, margin: 0 }}>
+            <h1 style={{ color: "#E8EDF5", fontSize: 22, fontWeight: 700, margin: 0 }}>
               {supplier.supplierName}
             </h1>
             <PlanBadge plan={supplier.plan} />
@@ -355,7 +322,7 @@ export default function SupplierProfilePage() {
       <SupplierCoveragePanel coverage={supplier.deliveryCoverage} />
 
       {/* Metrics */}
-      <div style={{ marginBottom: 28 }}>
+      <div>
         <h2 style={{ color: "#E8EDF5", fontSize: 15, fontWeight: 600, margin: "0 0 14px" }}>
           {t("metricsTitle")}
         </h2>
@@ -363,42 +330,21 @@ export default function SupplierProfilePage() {
       </div>
 
       {/* Tabs */}
-      <div
-        style={{
-          borderBottom: "1px solid #1F2937",
-          marginBottom: 24,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-        }}
-      >
-        <div style={{ display: "flex" }}>
-          <button style={tabStyle("catalog")} onClick={() => setActiveTab("catalog")}>
-            {t("tabCatalog")}
-          </button>
-          <button style={tabStyle("reviews")} onClick={() => setActiveTab("reviews")}>
-            {t("tabReviews")}
-          </button>
-        </div>
-        {isProviderTeam && activeTab === "catalog" && (
-          <button
-            onClick={() => setAddItemModalOpen(true)}
-            style={{
-              padding: "7px 16px",
-              borderRadius: 8,
-              border: "none",
-              background: "#1D4ED8",
-              color: "#E8EDF5",
-              fontSize: 12,
-              fontWeight: 600,
-              cursor: "pointer",
-              marginBottom: 1,
-            }}
-          >
+      <Tabs
+        items={[
+          { key: "catalog", label: t("tabCatalog") },
+          { key: "reviews", label: t("tabReviews") },
+        ]}
+        value={activeTab}
+        onChange={setActiveTab}
+      />
+      {isProviderTeam && activeTab === "catalog" && (
+        <div style={{ display: "flex", justifyContent: "flex-end" }}>
+          <Btn size="sm" onClick={() => setAddItemModalOpen(true)}>
             {t("addItemButton")}
-          </button>
-        )}
-      </div>
+          </Btn>
+        </div>
+      )}
 
       {/* Tab content */}
       {activeTab === "catalog" && (
@@ -462,6 +408,6 @@ export default function SupplierProfilePage() {
           onClose={() => setSupportOpen(false)}
         />
       )}
-    </div>
+    </PageContainer>
   );
 }

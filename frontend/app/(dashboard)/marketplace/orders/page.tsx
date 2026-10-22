@@ -54,27 +54,6 @@ function formatDate(iso: string, locale: string): string {
   });
 }
 
-// Inline styles for the nested item tables rendered inside an expanded order row
-// (these stay plain markup per the migration brief — only the outer order list
-// becomes a shared `Table`).
-const headerCellStyle: React.CSSProperties = {
-  padding: "10px 14px",
-  color: "#4B5563",
-  fontSize: 11,
-  fontWeight: 600,
-  textTransform: "uppercase",
-  letterSpacing: "0.05em",
-  textAlign: "left",
-  borderBottom: "1px solid #1F2937",
-};
-
-const cellStyle: React.CSSProperties = {
-  padding: "12px 14px",
-  color: "#E8EDF5",
-  fontSize: 13,
-  borderBottom: "1px solid #1A2235",
-};
-
 // ─── Orders tab ────────────────────────────────────────────────────────────────
 
 function OrdersTab() {
@@ -238,19 +217,14 @@ function OrderExpandedContent({
           ))}
         </div>
       )}
-      <table style={{ width: "100%", borderCollapse: "collapse" }}>
-        <thead>
-          <tr>
-            <th style={headerCellStyle}>{t("headerProduct")}</th>
-            <th style={{ ...headerCellStyle, textAlign: "right" }}>{t("headerPrice")}</th>
-            <th style={{ ...headerCellStyle, textAlign: "right" }}>{t("headerQty")}</th>
-            <th style={{ ...headerCellStyle, textAlign: "right" }}>{t("headerLineTotal")}</th>
-          </tr>
-        </thead>
-        <tbody>
-          {order.items.map((item) => (
-            <tr key={item.id}>
-              <td style={cellStyle}>
+      <Table<MarketplaceOrderDto["items"][number]>
+        columns={[
+          {
+            key: "product",
+            header: t("headerProduct"),
+            cellStyle: { color: "#E8EDF5" },
+            render: (item) => (
+              <>
                 {item.itemName}
                 {item.unit && (
                   <span style={{ color: "#4B5563", fontSize: 11 }}> · {item.unit}</span>
@@ -266,20 +240,29 @@ function OrderExpandedContent({
                     ))}
                   </div>
                 )}
-              </td>
-              <td style={{ ...cellStyle, textAlign: "right", color: "#9CA3AF", whiteSpace: "nowrap" }}>
-                {money(item.price, intlLocale)}
-              </td>
-              <td style={{ ...cellStyle, textAlign: "right", color: "#9CA3AF" }}>
-                {item.qty}
-              </td>
-              <td style={{ ...cellStyle, textAlign: "right", whiteSpace: "nowrap" }}>
-                {money(item.lineTotal, intlLocale)}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+              </>
+            ),
+          },
+          {
+            key: "price",
+            header: t("headerPrice"),
+            align: "right",
+            cellStyle: { whiteSpace: "nowrap" },
+            render: (item) => money(item.price, intlLocale),
+          },
+          { key: "qty", header: t("headerQty"), align: "right", render: (item) => item.qty },
+          {
+            key: "lineTotal",
+            header: t("headerLineTotal"),
+            align: "right",
+            cellStyle: { color: "#E8EDF5", whiteSpace: "nowrap" },
+            render: (item) => money(item.lineTotal, intlLocale),
+          },
+        ]}
+        rows={order.items}
+        rowKey={(item) => item.id}
+        density="compact"
+      />
     </div>
   );
 }
@@ -414,38 +397,34 @@ function ReceiptItemsTable({
   intlLocale: string;
 }) {
   return (
-    <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: 12 }}>
-      <thead>
-        <tr>
-          <th style={headerCellStyle}>{t("headerProduct")}</th>
-          <th style={{ ...headerCellStyle, textAlign: "right" }}>{t("receiptHeaderOrdered")}</th>
-          <th style={{ ...headerCellStyle, textAlign: "right" }}>{t("receiptHeaderReceived")}</th>
-          <th style={headerCellStyle}>{t("receiptHeaderBatch")}</th>
-          <th style={headerCellStyle}>{t("receiptHeaderExpiry")}</th>
-          <th style={headerCellStyle}>{t("receiptHeaderDiscrepancy")}</th>
-        </tr>
-      </thead>
-      <tbody>
-        {receipt.items.map((item) => (
-          <tr key={item.id}>
-            <td style={cellStyle}>{item.productName ?? item.itemNameSnapshot}</td>
-            <td style={{ ...cellStyle, textAlign: "right", color: "#9CA3AF" }}>
-              {item.quantityOrdered}
-            </td>
-            <td style={{ ...cellStyle, textAlign: "right" }}>
-              {item.quantityReceived ?? "—"}
-            </td>
-            <td style={{ ...cellStyle, color: "#9CA3AF" }}>{item.batchNumber ?? "—"}</td>
-            <td style={{ ...cellStyle, color: "#9CA3AF", whiteSpace: "nowrap" }}>
-              {item.expiryDate ? new Date(item.expiryDate).toLocaleDateString(intlLocale) : "—"}
-            </td>
-            <td style={{ ...cellStyle, color: item.discrepancyNotes ? "#F87171" : "#4B5563" }}>
-              {item.discrepancyNotes ?? "—"}
-            </td>
-          </tr>
-        ))}
-      </tbody>
-    </table>
+    <div style={{ marginBottom: 12 }}>
+      <Table<MarketplaceOrderReceiptDto["items"][number]>
+        columns={[
+          { key: "product", header: t("headerProduct"), cellStyle: { color: "#E8EDF5" }, render: (item) => item.productName ?? item.itemNameSnapshot },
+          { key: "ordered", header: t("receiptHeaderOrdered"), align: "right", render: (item) => item.quantityOrdered },
+          { key: "received", header: t("receiptHeaderReceived"), align: "right", cellStyle: { color: "#E8EDF5" }, render: (item) => item.quantityReceived ?? "—" },
+          { key: "batch", header: t("receiptHeaderBatch"), align: "left", render: (item) => item.batchNumber ?? "—" },
+          {
+            key: "expiry",
+            header: t("receiptHeaderExpiry"),
+            align: "left",
+            cellStyle: { whiteSpace: "nowrap" },
+            render: (item) => (item.expiryDate ? new Date(item.expiryDate).toLocaleDateString(intlLocale) : "—"),
+          },
+          {
+            key: "discrepancy",
+            header: t("receiptHeaderDiscrepancy"),
+            align: "left",
+            render: (item) => (
+              <span style={{ color: item.discrepancyNotes ? "#F87171" : "#4B5563" }}>{item.discrepancyNotes ?? "—"}</span>
+            ),
+          },
+        ]}
+        rows={receipt.items}
+        rowKey={(item) => item.id}
+        density="compact"
+      />
+    </div>
   );
 }
 
