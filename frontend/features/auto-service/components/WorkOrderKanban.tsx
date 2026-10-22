@@ -3,6 +3,8 @@
 import { useState } from "react";
 import { Plus } from "lucide-react";
 import { useTranslations } from "next-intl";
+import { Btn } from "@/components/ui/Btn";
+import { PageHeader } from "@/components/ui/PageHeader";
 import { useWorkOrders, useVehicles } from "../hooks/useAutoService";
 import { WorkOrderCard } from "./WorkOrderCard";
 import { CreateWorkOrderModal } from "./CreateWorkOrderModal";
@@ -62,43 +64,15 @@ export function WorkOrderKanban() {
 
   return (
     <>
-      {/* Toolbar */}
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          marginBottom: 20,
-        }}
-      >
-        <div>
-          <h1 style={{ color: "#E8EDF5", fontSize: 22, fontWeight: 700, margin: 0 }}>
-            {t("pageTitle")}
-          </h1>
-          <p style={{ color: "#4B5563", fontSize: 14, marginTop: 4 }}>
-            {t("pageSubtitle")}
-          </p>
-        </div>
-        <button
-          onClick={() => setShowCreate(true)}
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 8,
-            padding: "9px 16px",
-            borderRadius: 8,
-            border: "none",
-            background: "#1D4ED8",
-            color: "#E8EDF5",
-            fontSize: 13,
-            fontWeight: 600,
-            cursor: "pointer",
-          }}
-        >
-          <Plus size={16} />
-          {t("newWorkOrder")}
-        </button>
-      </div>
+      <PageHeader
+        title={t("pageTitle")}
+        subtitle={t("pageSubtitle")}
+        actions={
+          <Btn onClick={() => setShowCreate(true)} icon={<Plus size={16} />}>
+            {t("newWorkOrder")}
+          </Btn>
+        }
+      />
 
       {/* Kanban board */}
       <div

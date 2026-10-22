@@ -13,6 +13,8 @@ import { useMe } from "@/features/auth/hooks/useAuth";
 import type { ChatSessionDto } from "../types";
 import { RatingModal } from "./RatingModal";
 import { Btn } from "@/components/ui/Btn";
+import { Modal } from "@/components/ui/Modal";
+import { inputStyle, textareaStyle, labelStyle } from "@/components/ui/fieldStyles";
 
 export function ClientChatPanel() {
   const t = useTranslations("Dashboard.chat.clientPanel");
@@ -310,21 +312,14 @@ export function ClientChatPanel() {
               }}>
                 {t("closedFooter")}
                 {selectedSession.rating === null && (
-                  <button
+                  <Btn
+                    size="xs"
+                    variant="ghost"
                     onClick={() => setRatingSession(selectedSession)}
-                    style={{
-                      marginLeft: 12,
-                      background: "none",
-                      border: "1px solid #FBBF24",
-                      borderRadius: 6,
-                      color: "#FBBF24",
-                      fontSize: 12,
-                      padding: "3px 10px",
-                      cursor: "pointer",
-                    }}
+                    style={{ marginLeft: 12 }}
                   >
                     {t("rateButton")}
-                  </button>
+                  </Btn>
                 )}
               </div>
             )}
@@ -334,57 +329,18 @@ export function ClientChatPanel() {
 
       {/* ── New chat dialog ──────────────────────────────────────────── */}
       {showCreate && (
-        <div style={{
-          position: "fixed",
-          inset: 0,
-          background: "rgba(0,0,0,0.6)",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          zIndex: 9998,
-        }}>
-          <div style={{
-            background: "#111827",
-            border: "1px solid #1F2937",
-            borderRadius: 12,
-            padding: "28px 32px",
-            width: 420,
-            maxWidth: "90vw",
-          }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
-              <h2 style={{ color: "#E8EDF5", fontSize: 18, fontWeight: 700, margin: 0 }}>
-                {t("createDialogTitle")}
-              </h2>
-              <button
-                onClick={() => setShowCreate(false)}
-                style={{ background: "none", border: "none", cursor: "pointer", color: "#4B5563" }}
-              >
-                <X size={18} />
-              </button>
-            </div>
-
-            <label style={{ color: "#9CA3AF", fontSize: 12, display: "block", marginBottom: 6 }}>
+        <Modal title={t("createDialogTitle")} onClose={() => setShowCreate(false)} width={420}>
+            <label style={labelStyle}>
               {t("subjectLabel")}
             </label>
             <input
               value={newSubject}
               onChange={(e) => setNewSubject(e.target.value)}
               placeholder={t("subjectPlaceholder")}
-              style={{
-                width: "100%",
-                background: "#1F2937",
-                border: "1px solid #374151",
-                borderRadius: 8,
-                color: "#E8EDF5",
-                fontSize: 13,
-                padding: "9px 12px",
-                outline: "none",
-                boxSizing: "border-box",
-                marginBottom: 14,
-              }}
+              style={{ ...inputStyle, marginBottom: 14 }}
             />
 
-            <label style={{ color: "#9CA3AF", fontSize: 12, display: "block", marginBottom: 6 }}>
+            <label style={labelStyle}>
               {t("firstMessageLabel")}
             </label>
             <textarea
@@ -392,19 +348,7 @@ export function ClientChatPanel() {
               onChange={(e) => setNewFirstMsg(e.target.value)}
               placeholder={t("firstMessagePlaceholder")}
               rows={4}
-              style={{
-                width: "100%",
-                background: "#1F2937",
-                border: "1px solid #374151",
-                borderRadius: 8,
-                color: "#E8EDF5",
-                fontSize: 13,
-                padding: "9px 12px",
-                outline: "none",
-                resize: "vertical",
-                boxSizing: "border-box",
-                marginBottom: 20,
-              }}
+              style={{ ...textareaStyle, marginBottom: 20 }}
             />
 
             <div style={{ display: "flex", gap: 10 }}>
@@ -415,23 +359,11 @@ export function ClientChatPanel() {
               >
                 {createChat.isPending ? t("creatingButton") : t("startButton")}
               </Btn>
-              <button
-                onClick={() => setShowCreate(false)}
-                style={{
-                  background: "transparent",
-                  border: "1px solid #374151",
-                  borderRadius: 8,
-                  color: "#6B7280",
-                  fontSize: 14,
-                  padding: "10px 16px",
-                  cursor: "pointer",
-                }}
-              >
+              <Btn variant="ghost" onClick={() => setShowCreate(false)}>
                 {t("cancelButton")}
-              </button>
+              </Btn>
             </div>
-          </div>
-        </div>
+        </Modal>
       )}
 
       {/* ── Rating modal ─────────────────────────────────────────────── */}

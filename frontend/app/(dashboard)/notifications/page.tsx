@@ -8,6 +8,9 @@ import { canAccessTenantSettings } from "@/lib/roles";
 import { NotificationHistoryList } from "@/features/notifications/components/NotificationHistoryList";
 import { NotificationFilterDrawer } from "@/features/notifications/components/NotificationFilterDrawer";
 import type { NotificationHistoryFilters } from "@/features/notifications/types";
+import { Btn } from "@/components/ui/Btn";
+import { PageContainer } from "@/components/ui/PageContainer";
+import { PageHeader } from "@/components/ui/PageHeader";
 
 const DEFAULT_PAGE_SIZE = 20;
 
@@ -28,55 +31,44 @@ export default function NotificationsPage() {
   const activeCount = countActiveFilters(filters);
 
   return (
-    <div style={{ padding: "28px 32px", maxWidth: 860 }}>
-      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 28, gap: 16 }}>
-        <div>
-          <h1 style={{ color: "#E8EDF5", fontSize: 22, fontWeight: 700, margin: 0 }}>
-            {t("title")}
-          </h1>
-          <p style={{ color: "#4B5563", fontSize: 14, marginTop: 6 }}>
-            {canOpenSettings ? (
-              <>
-                {t("subtitlePrefix")}{" "}
-                <a href="/settings?tab=notifications" style={{ color: "#3B82F6" }}>
-                  {t("settingsLinkText")}
-                </a>
-                .
-              </>
-            ) : (
-              t("subtitleNoSettings")
+    <PageContainer style={{ maxWidth: 860 }}>
+      <PageHeader
+        title={t("title")}
+        subtitle={
+          canOpenSettings ? (
+            <>
+              {t("subtitlePrefix")}{" "}
+              <a href="/settings?tab=notifications" style={{ color: "#3B82F6" }}>
+                {t("settingsLinkText")}
+              </a>
+              .
+            </>
+          ) : (
+            t("subtitleNoSettings")
+          )
+        }
+        actions={
+          <Btn
+            variant={activeCount > 0 ? "primary" : "ghost"}
+            icon={<Filter size={14} />}
+            onClick={() => setFiltersOpen(true)}
+          >
+            {t("filtersButton")}
+            {activeCount > 0 && (
+              <span style={{
+                display: "flex", alignItems: "center", justifyContent: "center",
+                minWidth: 18, height: 18, padding: "0 4px",
+                background: "#3B82F6", color: "#fff",
+                borderRadius: 9, fontSize: 11, fontWeight: 700,
+              }}>
+                {activeCount}
+              </span>
             )}
-          </p>
-        </div>
+          </Btn>
+        }
+      />
 
-        <button
-          onClick={() => setFiltersOpen(true)}
-          style={{
-            position: "relative",
-            display: "flex", alignItems: "center", gap: 6,
-            background: activeCount > 0 ? "#111827" : "transparent",
-            border: `1px solid ${activeCount > 0 ? "#2563EB" : "#1F2937"}`,
-            borderRadius: 8, padding: "8px 14px",
-            color: activeCount > 0 ? "#93C5FD" : "#9CA3AF",
-            fontSize: 13, cursor: "pointer", flexShrink: 0,
-          }}
-        >
-          <Filter size={14} />
-          {t("filtersButton")}
-          {activeCount > 0 && (
-            <span style={{
-              display: "flex", alignItems: "center", justifyContent: "center",
-              minWidth: 18, height: 18, padding: "0 4px",
-              background: "#3B82F6", color: "#fff",
-              borderRadius: 9, fontSize: 11, fontWeight: 700,
-            }}>
-              {activeCount}
-            </span>
-          )}
-        </button>
-      </div>
-
-      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 20 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
         <Clock size={15} style={{ color: "#4B5563" }} />
         <span style={{ color: "#4B5563", fontSize: 13 }}>{t("recentActivityLabel")}</span>
       </div>
@@ -98,6 +90,6 @@ export default function NotificationsPage() {
         filters={filters}
         onChange={setFilters}
       />
-    </div>
+    </PageContainer>
   );
 }

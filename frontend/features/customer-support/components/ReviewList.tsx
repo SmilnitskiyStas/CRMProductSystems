@@ -6,6 +6,9 @@ import { useTranslations, useLocale } from "next-intl";
 import { StarRating } from "@/features/marketplace/components/StarRating";
 import { useCustomerReviews, useReplyToReview } from "../hooks/useCustomerReviews";
 import type { PurchaseReviewDto } from "../types";
+import { Btn } from "@/components/ui/Btn";
+import { Pagination } from "@/components/ui/Pagination";
+import { filterInputStyle, textareaStyle } from "@/components/ui/fieldStyles";
 
 const PAGE_SIZE = 30;
 const RATINGS = [5, 4, 3, 2, 1];
@@ -39,21 +42,9 @@ function ReviewReplyBlock({ review }: { review: PurchaseReviewDto }) {
 
   if (!isReplying) {
     return (
-      <button
-        onClick={() => setIsReplying(true)}
-        style={{
-          alignSelf: "flex-start",
-          padding: "6px 14px",
-          borderRadius: 6,
-          border: "1px solid #1F2937",
-          background: "transparent",
-          color: "#60A5FA",
-          fontSize: 12,
-          cursor: "pointer",
-        }}
-      >
+      <Btn size="sm" variant="ghost" onClick={() => setIsReplying(true)} style={{ alignSelf: "flex-start" }}>
         {t("reply")}
-      </button>
+      </Btn>
     );
   }
 
@@ -64,19 +55,11 @@ function ReviewReplyBlock({ review }: { review: PurchaseReviewDto }) {
         onChange={(e) => setText(e.target.value)}
         placeholder={t("replyPlaceholder")}
         rows={3}
-        style={{
-          background: "#0B111C",
-          border: "1px solid #1F2937",
-          borderRadius: 8,
-          padding: "10px 12px",
-          color: "#E8EDF5",
-          fontSize: 13,
-          resize: "vertical",
-          fontFamily: "inherit",
-        }}
+        style={textareaStyle}
       />
       <div style={{ display: "flex", gap: 8 }}>
-        <button
+        <Btn
+          size="sm"
           disabled={!text.trim() || replyMutation.isPending}
           onClick={() =>
             replyMutation.mutate(
@@ -87,33 +70,12 @@ function ReviewReplyBlock({ review }: { review: PurchaseReviewDto }) {
               },
             )
           }
-          style={{
-            padding: "6px 16px",
-            borderRadius: 6,
-            border: "none",
-            background: !text.trim() ? "#1F2937" : "#1D4ED8",
-            color: "#E8EDF5",
-            fontSize: 12,
-            fontWeight: 600,
-            cursor: !text.trim() || replyMutation.isPending ? "not-allowed" : "pointer",
-          }}
         >
           {replyMutation.isPending ? t("sending") : t("send")}
-        </button>
-        <button
-          onClick={() => { setIsReplying(false); setText(""); }}
-          style={{
-            padding: "6px 16px",
-            borderRadius: 6,
-            border: "1px solid #1F2937",
-            background: "transparent",
-            color: "#6B7280",
-            fontSize: 12,
-            cursor: "pointer",
-          }}
-        >
+        </Btn>
+        <Btn size="sm" variant="ghost" onClick={() => { setIsReplying(false); setText(""); }}>
           {t("cancel")}
-        </button>
+        </Btn>
       </div>
     </div>
   );
@@ -136,17 +98,6 @@ export function ReviewList() {
   const totalPages = data?.totalPages ?? 1;
   const totalCount = data?.totalCount ?? 0;
 
-  const selectStyle = {
-    background: "#111827",
-    border: "1px solid #1F2937",
-    borderRadius: 6,
-    color: "#9CA3AF",
-    fontSize: 13,
-    padding: "7px 10px",
-    cursor: "pointer",
-    outline: "none",
-  };
-
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
       {/* Filter */}
@@ -154,7 +105,7 @@ export function ReviewList() {
         <select
           value={rating}
           onChange={(e) => { setRating(e.target.value ? Number(e.target.value) : ""); setPage(1); }}
-          style={selectStyle}
+          style={filterInputStyle}
         >
           <option value="">{t("allRatingsOption")}</option>
           {RATINGS.map((r) => (
@@ -206,31 +157,7 @@ export function ReviewList() {
       )}
 
       {totalPages > 1 && (
-        <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 12, marginTop: 8 }}>
-          <button
-            disabled={page === 1}
-            onClick={() => setPage((p) => Math.max(1, p - 1))}
-            style={{
-              padding: "8px 18px", borderRadius: 8, border: "1px solid #1F2937",
-              background: "transparent", color: page === 1 ? "#374151" : "#6B7280",
-              fontSize: 13, cursor: page === 1 ? "not-allowed" : "pointer",
-            }}
-          >
-            {t("prevPage")}
-          </button>
-          <span style={{ color: "#4B5563", fontSize: 13 }}>{t("pageOf", { page, total: totalPages })}</span>
-          <button
-            disabled={page >= totalPages}
-            onClick={() => setPage((p) => p + 1)}
-            style={{
-              padding: "8px 18px", borderRadius: 8, border: "1px solid #1F2937",
-              background: "transparent", color: page >= totalPages ? "#374151" : "#6B7280",
-              fontSize: 13, cursor: page >= totalPages ? "not-allowed" : "pointer",
-            }}
-          >
-            {t("nextPage")}
-          </button>
-        </div>
+        <Pagination page={page} totalPages={totalPages} totalCount={totalCount} onPageChange={setPage} />
       )}
     </div>
   );

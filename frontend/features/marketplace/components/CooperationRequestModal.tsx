@@ -3,10 +3,11 @@
 // Modal: client submits a cooperation request to a supplier (TASK-318).
 
 import { useState } from "react";
-import { X } from "lucide-react";
 import { toast } from "sonner";
 import { useTranslations } from "next-intl";
 import { Btn } from "@/components/ui/Btn";
+import { Modal } from "@/components/ui/Modal";
+import { selectStyle, textareaStyle, labelStyle } from "@/components/ui/fieldStyles";
 import { useCreateCooperationRequest } from "../hooks/useCooperation";
 import { useLegalEntities } from "@/features/legal-entities/hooks/useLegalEntities";
 import { CooperationCoveragePanel } from "./CooperationCoveragePanel";
@@ -16,19 +17,6 @@ interface Props {
   supplierName: string;
   onClose: () => void;
 }
-
-const selectStyle: React.CSSProperties = {
-  width: "100%",
-  boxSizing: "border-box",
-  background: "#1F2937",
-  border: "1px solid #374151",
-  borderRadius: 8,
-  color: "#E8EDF5",
-  fontSize: 13,
-  padding: "9px 12px",
-  outline: "none",
-  fontFamily: "inherit",
-};
 
 export function CooperationRequestModal({ supplierId, supplierName, onClose }: Props) {
   const t = useTranslations("Dashboard.marketplace.cooperationRequestModal");
@@ -56,48 +44,7 @@ export function CooperationRequestModal({ supplierId, supplierName, onClose }: P
   }
 
   return (
-    <div
-      style={{
-        position: "fixed",
-        inset: 0,
-        background: "rgba(0,0,0,0.6)",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        zIndex: 999,
-        padding: 20,
-      }}
-      onClick={onClose}
-    >
-      <div
-        style={{
-          background: "#0F1623",
-          border: "1px solid #1F2937",
-          borderRadius: 12,
-          width: "100%",
-          maxWidth: 480,
-          padding: 20,
-        }}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            marginBottom: 6,
-          }}
-        >
-          <h3 style={{ color: "#E8EDF5", fontSize: 15, fontWeight: 700, margin: 0 }}>
-            {t("title")}
-          </h3>
-          <button
-            onClick={onClose}
-            style={{ background: "none", border: "none", cursor: "pointer", color: "#4B5563", padding: 4 }}
-          >
-            <X size={18} />
-          </button>
-        </div>
+    <Modal title={t("title")} onClose={onClose} width={480}>
         <p style={{ color: "#6B7280", fontSize: 13, margin: "0 0 14px" }}>
           {t("supplierLabel")} <span style={{ color: "#9CA3AF" }}>{supplierName}</span>
         </p>
@@ -105,14 +52,7 @@ export function CooperationRequestModal({ supplierId, supplierName, onClose }: P
         {/* Advisory delivery-coverage panel (TASK-657) — never blocks submit. */}
         <CooperationCoveragePanel supplierId={supplierId} />
 
-        <label
-          style={{
-            display: "block",
-            color: "#9CA3AF",
-            fontSize: 12,
-            margin: "14px 0 6px",
-          }}
-        >
+        <label style={{ ...labelStyle, margin: "14px 0 6px" }}>
           {t("messageLabel")}
         </label>
         <textarea
@@ -120,24 +60,12 @@ export function CooperationRequestModal({ supplierId, supplierName, onClose }: P
           onChange={(e) => setMessage(e.target.value)}
           placeholder={t("messagePlaceholder")}
           rows={4}
-          style={{
-            width: "100%",
-            boxSizing: "border-box",
-            background: "#1F2937",
-            border: "1px solid #374151",
-            borderRadius: 8,
-            color: "#E8EDF5",
-            fontSize: 13,
-            padding: "9px 12px",
-            outline: "none",
-            resize: "vertical",
-            fontFamily: "inherit",
-          }}
+          style={textareaStyle}
         />
 
         {activeLegalEntities.length > 0 ? (
           <div style={{ marginTop: 14 }}>
-            <label style={{ display: "block", color: "#9CA3AF", fontSize: 12, marginBottom: 6 }}>
+            <label style={labelStyle}>
               {t("legalEntityLabel")}
             </label>
             <select
@@ -168,7 +96,6 @@ export function CooperationRequestModal({ supplierId, supplierName, onClose }: P
             {createRequest.isPending ? t("submitting") : t("submit")}
           </Btn>
         </div>
-      </div>
-    </div>
+    </Modal>
   );
 }

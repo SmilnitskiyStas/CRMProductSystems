@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import { useTranslations } from "next-intl";
+import { Btn } from "@/components/ui/Btn";
 import type { MovementDto } from "../api/movements";
 
 const PAGE = 25;
@@ -206,15 +207,9 @@ export function MovementLog({ movements, lineMeta, intlLocale, hoveredId, onHove
       </div>
 
       {filtered.length > shown.length && (
-        <button
-          onClick={() => setVisible((v) => v + PAGE)}
-          style={{
-            marginTop: 8, width: "100%", padding: "7px 0", borderRadius: 7, cursor: "pointer",
-            background: "transparent", border: "1px solid #1F2937", color: "#9CA3AF", fontSize: 12,
-          }}
-        >
+        <Btn variant="ghost" size="sm" fullWidth style={{ marginTop: 8 }} onClick={() => setVisible((v) => v + PAGE)}>
           {tl("showMore", { count: Math.min(PAGE, filtered.length - shown.length) })}
-        </button>
+        </Btn>
       )}
     </div>
   );

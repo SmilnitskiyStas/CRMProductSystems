@@ -2,11 +2,14 @@
 
 import { useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
-import { X, Search, RotateCcw } from "lucide-react";
+import { Search, RotateCcw } from "lucide-react";
 import { useUsers } from "@/features/users/hooks/useUsers";
 import { useLocations } from "@/features/locations/hooks/useLocations";
 import type { NotificationHistoryFilters, NotificationEventType } from "../types";
 import { EVENT_TYPE_I18N_KEY, getEventTypeLabel } from "../types";
+import { Btn } from "@/components/ui/Btn";
+import { DetailDrawer } from "@/components/ui/DetailDrawer";
+import { inputStyle, selectStyle, labelStyle } from "@/components/ui/fieldStyles";
 
 interface Props {
   open: boolean;
@@ -17,34 +20,8 @@ interface Props {
 
 const EVENT_TYPES = Object.keys(EVENT_TYPE_I18N_KEY) as NotificationEventType[];
 
-const labelStyle: React.CSSProperties = {
-  color: "#4B5563",
-  fontSize: 12,
-  marginBottom: 6,
-  display: "block",
-};
-
-const fieldStyle: React.CSSProperties = {
-  background: "#0D1117",
-  border: "1px solid #1F2937",
-  borderRadius: 8,
-  color: "#E8EDF5",
-  fontSize: 13,
-  padding: "9px 12px",
-  outline: "none",
-  width: "100%",
-  boxSizing: "border-box",
-};
-
-const selectStyle: React.CSSProperties = {
-  ...fieldStyle,
-  appearance: "none",
-  cursor: "pointer",
-};
-
 /**
- * Hand-rolled overlay filter panel — follows the same fixed-panel + backdrop
- * pattern as NotificationDetailDrawer.tsx (no shadcn Sheet primitive in this repo).
+ * Filter panel rendered in the shared DetailDrawer.
  */
 export function NotificationFilterDrawer({ open, onClose, filters, onChange }: Props) {
   const t = useTranslations("Dashboard.notifications.filterDrawer");
@@ -72,13 +49,6 @@ export function NotificationFilterDrawer({ open, onClose, filters, onChange }: P
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchDraft, open]);
 
-  useEffect(() => {
-    if (!open) return;
-    const handler = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
-    document.addEventListener("keydown", handler);
-    return () => document.removeEventListener("keydown", handler);
-  }, [open, onClose]);
-
   const { data: users } = useUsers();
   const { data: locations } = useLocations();
 
@@ -98,49 +68,8 @@ export function NotificationFilterDrawer({ open, onClose, filters, onChange }: P
   );
 
   return (
-    <>
-      {/* Backdrop */}
-      <div
-        onClick={onClose}
-        style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 40 }}
-      />
-
-      {/* Panel */}
-      <div
-        style={{
-          position: "fixed", top: 0, right: 0, bottom: 0,
-          width: 380, maxWidth: "100vw",
-          background: "#0D1117",
-          borderLeft: "1px solid #1F2937",
-          zIndex: 50,
-          display: "flex", flexDirection: "column",
-          overflowY: "auto",
-        }}
-      >
-        {/* Header */}
-        <div style={{
-          padding: "20px 24px 16px",
-          borderBottom: "1px solid #1F2937",
-          display: "flex", alignItems: "center", justifyContent: "space-between",
-          flexShrink: 0,
-        }}>
-          <div style={{ color: "#E8EDF5", fontSize: 14, fontWeight: 600 }}>
-            {t("title")}
-          </div>
-          <button
-            onClick={onClose}
-            style={{
-              background: "transparent", border: "1px solid #1F2937",
-              borderRadius: 8, padding: "6px 8px", cursor: "pointer", color: "#6B7280",
-              display: "flex", alignItems: "center",
-            }}
-          >
-            <X size={16} />
-          </button>
-        </div>
-
-        {/* Body */}
-        <div style={{ padding: 24, display: "flex", flexDirection: "column", gap: 18, flex: 1 }}>
+    <DetailDrawer isOpen={open} onClose={onClose} title={t("title")} width={380}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
           {/* Search */}
           <div>
             <label style={labelStyle}>{t("searchLabel")}</label>
@@ -151,7 +80,7 @@ export function NotificationFilterDrawer({ open, onClose, filters, onChange }: P
                 value={searchDraft}
                 onChange={(e) => setSearchDraft(e.target.value)}
                 placeholder={t("searchPlaceholder")}
-                style={{ ...fieldStyle, paddingLeft: 34 }}
+                style={{ ...inputStyle, paddingLeft: 34 }}
               />
             </div>
           </div>
@@ -218,7 +147,7 @@ export function NotificationFilterDrawer({ open, onClose, filters, onChange }: P
                   value={filters.dateFrom?.slice(0, 10) ?? ""}
                   max={filters.dateTo?.slice(0, 10)}
                   onChange={(e) => set("dateFrom", e.target.value || undefined)}
-                  style={fieldStyle}
+                  style={inputStyle}
                 />
               </div>
               <div style={{ flex: 1 }}>
@@ -228,35 +157,24 @@ export function NotificationFilterDrawer({ open, onClose, filters, onChange }: P
                   value={filters.dateTo?.slice(0, 10) ?? ""}
                   min={filters.dateFrom?.slice(0, 10)}
                   onChange={(e) => set("dateTo", e.target.value ? `${e.target.value}T23:59:59.999` : undefined)}
-                  style={fieldStyle}
+                  style={inputStyle}
                 />
               </div>
             </div>
           </div>
         </div>
 
-        {/* Footer */}
-        <div style={{
-          padding: "16px 24px", borderTop: "1px solid #1F2937", flexShrink: 0,
-        }}>
-          <button
+        <div style={{ marginTop: 24 }}>
+          <Btn
+            variant="ghost"
+            fullWidth
+            icon={<RotateCcw size={13} />}
             onClick={handleReset}
             disabled={!hasActiveFilters && !searchDraft}
-            style={{
-              display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
-              width: "100%",
-              background: "transparent", border: "1px solid #1F2937",
-              borderRadius: 8, padding: "9px 12px",
-              color: "#6B7280", fontSize: 13,
-              cursor: hasActiveFilters || searchDraft ? "pointer" : "default",
-              opacity: hasActiveFilters || searchDraft ? 1 : 0.5,
-            }}
           >
-            <RotateCcw size={13} />
             {t("resetButton")}
-          </button>
+          </Btn>
         </div>
-      </div>
-    </>
+    </DetailDrawer>
   );
 }

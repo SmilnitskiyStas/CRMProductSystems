@@ -1,19 +1,14 @@
 "use client";
 
-import { use } from "react";
-import { useRouter } from "next/navigation";
-import { ArrowLeft } from "lucide-react";
+import { useParams } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { useModules } from "@/features/modules/hooks/useModules";
+import { PageContainer } from "@/components/ui/PageContainer";
+import { BackLink } from "@/components/ui/BackLink";
 import { WorkOrderDetail } from "@/features/auto-service/components/WorkOrderDetail";
 
-interface Props {
-  params: Promise<{ id: string }>;
-}
-
-export default function WorkOrderDetailPage({ params }: Props) {
-  const { id } = use(params);
-  const router = useRouter();
+export default function WorkOrderDetailPage() {
+  const { id } = useParams<{ id: string }>();
   const t = useTranslations("Dashboard.autoService.moduleGate");
   const tPage = useTranslations("Dashboard.autoService.workOrdersPage");
   const { data: modulesData } = useModules();
@@ -40,28 +35,9 @@ export default function WorkOrderDetailPage({ params }: Props) {
   }
 
   return (
-    <div>
-      {/* Back button */}
-      <div style={{ padding: "16px 32px 0", borderBottom: "1px solid #1F2937" }}>
-        <button
-          onClick={() => router.push("/auto-service")}
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 8,
-            background: "transparent",
-            border: "none",
-            color: "#6B7280",
-            fontSize: 13,
-            cursor: "pointer",
-            padding: "6px 0",
-          }}
-        >
-          <ArrowLeft size={14} />
-          {tPage("backToBoard")}
-        </button>
-      </div>
+    <PageContainer>
+      <BackLink href="/auto-service">{tPage("backToBoard")}</BackLink>
       <WorkOrderDetail id={id} />
-    </div>
+    </PageContainer>
   );
 }

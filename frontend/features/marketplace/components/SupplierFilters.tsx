@@ -3,6 +3,8 @@
 import { useTranslations } from "next-intl";
 import { RegionSelect } from "@/features/geo/components/RegionSelect";
 import type { MarketplaceFilters } from "../types";
+import { Btn } from "@/components/ui/Btn";
+import { filterInputStyle } from "@/components/ui/fieldStyles";
 
 interface Props {
   filters: MarketplaceFilters;
@@ -13,15 +15,6 @@ interface Props {
 export function SupplierFilters({ filters, onChange, categories }: Props) {
   const t = useTranslations("Dashboard.marketplace.filters");
   const tPlan = useTranslations("Dashboard.marketplace.planLabel");
-  const inputStyle: React.CSSProperties = {
-    padding: "8px 12px",
-    background: "#111827",
-    border: "1px solid #1F2937",
-    borderRadius: 8,
-    color: "#E8EDF5",
-    fontSize: 13,
-    outline: "none",
-  };
 
   return (
     <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
@@ -39,7 +32,7 @@ export function SupplierFilters({ filters, onChange, categories }: Props) {
       <select
         value={filters.category}
         onChange={(e) => onChange({ ...filters, category: e.target.value })}
-        style={{ ...inputStyle, width: 200, cursor: "pointer" }}
+        style={{ ...filterInputStyle, width: 200, cursor: "pointer" }}
       >
         <option value="">{t("allCategoriesOption")}</option>
         {categories.map((cat) => (
@@ -54,23 +47,14 @@ export function SupplierFilters({ filters, onChange, categories }: Props) {
         {(["all", "free", "premium"] as const).map((plan) => {
           const active = filters.plan === plan;
           return (
-            <button
+            <Btn
               key={plan}
+              variant={active ? "primary" : "ghost"}
               onClick={() => onChange({ ...filters, plan })}
-              style={{
-                padding: "7px 14px",
-                borderRadius: 8,
-                border: `1px solid ${active ? "#3B82F6" : "#1F2937"}`,
-                background: active ? "#1D3461" : "transparent",
-                color: active ? "#93C5FD" : "#6B7280",
-                fontSize: 13,
-                cursor: "pointer",
-                fontWeight: active ? 600 : 400,
-                transition: "all 0.1s",
-              }}
+              style={{ padding: "7px 14px" }}
             >
               {tPlan(plan)}
-            </button>
+            </Btn>
           );
         })}
       </div>

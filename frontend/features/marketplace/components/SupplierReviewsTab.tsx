@@ -7,6 +7,8 @@ import { StarRating } from "./StarRating";
 import { ReviewModal } from "./ReviewModal";
 import { useMe } from "@/features/auth/hooks/useAuth";
 import { TENANT_ROLES, hasRole } from "@/lib/roles";
+import { Btn } from "@/components/ui/Btn";
+import { Pagination } from "@/components/ui/Pagination";
 
 interface Props {
   supplierId: string;
@@ -99,21 +101,7 @@ export function SupplierReviewsTab({ supplierId }: Props) {
           {tMarketplace("reviewCount", { count: total })}
         </span>
         {canReview && (
-          <button
-            onClick={() => setShowModal(true)}
-            style={{
-              padding: "9px 20px",
-              borderRadius: 8,
-              border: "none",
-              background: "#1D4ED8",
-              color: "#E8EDF5",
-              fontSize: 13,
-              fontWeight: 600,
-              cursor: "pointer",
-            }}
-          >
-            {t("leaveReview")}
-          </button>
+          <Btn onClick={() => setShowModal(true)}>{t("leaveReview")}</Btn>
         )}
       </div>
 
@@ -200,49 +188,7 @@ export function SupplierReviewsTab({ supplierId }: Props) {
 
       {/* Pagination */}
       {data && data.total > data.pageSize && (
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "center",
-            alignItems: "center",
-            gap: 12,
-            marginTop: 24,
-          }}
-        >
-          <button
-            disabled={page === 1}
-            onClick={() => setPage((p) => Math.max(1, p - 1))}
-            style={{
-              padding: "8px 18px",
-              borderRadius: 8,
-              border: "1px solid #1F2937",
-              background: "transparent",
-              color: page === 1 ? "#374151" : "#6B7280",
-              fontSize: 13,
-              cursor: page === 1 ? "not-allowed" : "pointer",
-            }}
-          >
-            {t("prev")}
-          </button>
-          <span style={{ color: "#4B5563", fontSize: 13 }}>
-            {t("pageOf", { page, total: totalPages })}
-          </span>
-          <button
-            disabled={page >= totalPages}
-            onClick={() => setPage((p) => p + 1)}
-            style={{
-              padding: "8px 18px",
-              borderRadius: 8,
-              border: "1px solid #1F2937",
-              background: "transparent",
-              color: page >= totalPages ? "#374151" : "#6B7280",
-              fontSize: 13,
-              cursor: page >= totalPages ? "not-allowed" : "pointer",
-            }}
-          >
-            {t("next")}
-          </button>
-        </div>
+        <Pagination page={page} totalPages={totalPages} totalCount={total} onPageChange={setPage} />
       )}
 
       {/* Review modal */}

@@ -2,6 +2,9 @@
 
 import { useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
+import { Modal } from "@/components/ui/Modal";
+import { Btn } from "@/components/ui/Btn";
+import { inputStyle, labelStyle } from "@/components/ui/fieldStyles";
 import type { ServiceMeta, IntegrationService } from "../types";
 import { useIntegration, useUpsertIntegration, useDeleteIntegration } from "../hooks/useIntegrations";
 
@@ -9,26 +12,6 @@ interface Props {
   meta: ServiceMeta;
   onClose: () => void;
 }
-
-const inputStyle: React.CSSProperties = {
-  width: "100%",
-  background: "#0D1117",
-  border: "1px solid #374151",
-  borderRadius: 8,
-  padding: "9px 12px",
-  color: "#E8EDF5",
-  fontSize: 13,
-  outline: "none",
-  boxSizing: "border-box",
-};
-
-const labelStyle: React.CSSProperties = {
-  display: "block",
-  color: "#9CA3AF",
-  fontSize: 12,
-  fontWeight: 500,
-  marginBottom: 6,
-};
 
 const hintStyle: React.CSSProperties = {
   color: "#4B5563",
@@ -96,53 +79,12 @@ export function IntegrationConfigModal({ meta, onClose }: Props) {
   const isBusy = upsert.isPending || remove.isPending;
 
   return (
-    <>
-      {/* Backdrop */}
-      <div
-        onClick={onClose}
-        style={{
-          position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)",
-          zIndex: 40, backdropFilter: "blur(2px)",
-        }}
-      />
-
-      {/* Modal */}
-      <div
-        style={{
-          position: "fixed",
-          top: "50%", left: "50%",
-          transform: "translate(-50%, -50%)",
-          zIndex: 50,
-          background: "#111827",
-          border: "1px solid #1F2937",
-          borderRadius: 14,
-          padding: 28,
-          width: "min(520px, calc(100vw - 32px))",
-          maxHeight: "90vh",
-          overflowY: "auto",
-        }}
-      >
-        {/* Header */}
+    <Modal title={tServices(`${meta.service}.label`)} onClose={onClose} width={520}>
         <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 24 }}>
           <span style={{ fontSize: 28 }}>{meta.icon}</span>
-          <div>
-            <h2 style={{ color: "#E8EDF5", fontSize: 16, fontWeight: 700, margin: 0 }}>
-              {tServices(`${meta.service}.label`)}
-            </h2>
-            <p style={{ color: "#4B5563", fontSize: 12, margin: 0, marginTop: 3 }}>
-              {tServices(`${meta.service}.description`)}
-            </p>
-          </div>
-          <button
-            onClick={onClose}
-            style={{
-              marginLeft: "auto", background: "transparent", border: "none",
-              color: "#4B5563", fontSize: 20, cursor: "pointer", lineHeight: 1,
-              padding: "4px 8px",
-            }}
-          >
-            ✕
-          </button>
+          <p style={{ color: "#4B5563", fontSize: 12, margin: 0 }}>
+            {tServices(`${meta.service}.description`)}
+          </p>
         </div>
 
         {isLoading ? (
@@ -175,7 +117,7 @@ export function IntegrationConfigModal({ meta, onClose }: Props) {
                       }}
                       style={{
                         ...inputStyle,
-                        borderColor: errors[field.key] ? "#EF4444" : "#374151",
+                        borderColor: errors[field.key] ? "#EF4444" : "#1F2937",
                       }}
                       autoComplete={field.type === "password" ? "new-password" : undefined}
                     />
@@ -229,50 +171,21 @@ export function IntegrationConfigModal({ meta, onClose }: Props) {
             {/* Actions */}
             <div style={{ display: "flex", gap: 8, justifyContent: "space-between" }}>
               {existing && (
-                <button
-                  type="button"
-                  onClick={handleDelete}
-                  disabled={isBusy}
-                  style={{
-                    padding: "8px 16px", borderRadius: 8, background: "transparent",
-                    border: "1px solid #450a0a", color: "#F87171",
-                    fontSize: 13, cursor: "pointer", opacity: isBusy ? 0.5 : 1,
-                  }}
-                >
+                <Btn variant="dangerOutline" onClick={handleDelete} disabled={isBusy}>
                   {t("deleteButton")}
-                </button>
+                </Btn>
               )}
               <div style={{ display: "flex", gap: 8, marginLeft: "auto" }}>
-                <button
-                  type="button"
-                  onClick={onClose}
-                  disabled={isBusy}
-                  style={{
-                    padding: "8px 16px", borderRadius: 8, background: "transparent",
-                    border: "1px solid #374151", color: "#6B7280",
-                    fontSize: 13, cursor: "pointer",
-                  }}
-                >
+                <Btn variant="ghost" onClick={onClose} disabled={isBusy}>
                   {t("cancelButton")}
-                </button>
-                <button
-                  type="submit"
-                  disabled={isBusy}
-                  style={{
-                    padding: "8px 20px", borderRadius: 8,
-                    background: isBusy ? "#1e3a5f" : "#1D3461",
-                    border: "1px solid #3B82F6", color: "#93C5FD",
-                    fontSize: 13, fontWeight: 600, cursor: "pointer",
-                    opacity: isBusy ? 0.7 : 1,
-                  }}
-                >
+                </Btn>
+                <Btn type="submit" disabled={isBusy}>
                   {isBusy ? t("savingButton") : t("saveButton")}
-                </button>
+                </Btn>
               </div>
             </div>
           </form>
         )}
-      </div>
-    </>
+    </Modal>
   );
 }

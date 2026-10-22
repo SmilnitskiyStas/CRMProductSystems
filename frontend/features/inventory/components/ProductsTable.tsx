@@ -6,6 +6,9 @@ import { Eye, Pencil, Trash2, BarChart2, ExternalLink } from "lucide-react";
 import { useTranslations, useLocale } from "next-intl";
 import type { Product, ProductSortBy } from "../types";
 import { ActionMenu } from "@/components/ui/ActionMenu";
+import { Btn } from "@/components/ui/Btn";
+import { Modal } from "@/components/ui/Modal";
+import { Tabs } from "@/components/ui/Tabs";
 import { BarcodeCell } from "./BarcodeCell";
 import { Table, type TableColumn } from "@/components/ui/Table";
 import {
@@ -109,71 +112,19 @@ function DeleteDialog({
   const t = useTranslations("Dashboard.inventory.table.deleteDialog");
   const tCommon = useTranslations("Common");
   return (
-    <>
-      <div
-        onClick={onCancel}
-        style={{
-          position: "fixed", inset: 0,
-          background: "rgba(0,0,0,0.6)",
-          zIndex: 400,
-          backdropFilter: "blur(2px)",
-        }}
-      />
-      <div
-        style={{
-          position: "fixed",
-          top: "50%", left: "50%",
-          transform: "translate(-50%, -50%)",
-          width: "min(420px, 95vw)",
-          background: "#0D1117",
-          border: "1px solid #1F2937",
-          borderRadius: 14,
-          zIndex: 401,
-          padding: "24px 28px",
-        }}
-      >
-        <h3 style={{ color: "#E8EDF5", fontSize: 15, fontWeight: 700, margin: "0 0 8px" }}>
-          {t("title")}
-        </h3>
-        <p style={{ color: "#6B7280", fontSize: 13, margin: "0 0 20px" }}>
-          {t("body", { name: product.name })}
-        </p>
-        <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
-          <button
-            onClick={onCancel}
-            style={{
-              padding: "8px 16px",
-              background: "transparent",
-              border: "1px solid #374151",
-              borderRadius: 8,
-              color: "#9CA3AF",
-              fontSize: 13,
-              fontWeight: 600,
-              cursor: "pointer",
-            }}
-          >
-            {tCommon("cancel")}
-          </button>
-          <button
-            onClick={onConfirm}
-            disabled={isDeleting}
-            style={{
-              padding: "8px 16px",
-              background: "#2d0a0a",
-              border: "1px solid #7F1D1D",
-              borderRadius: 8,
-              color: "#F87171",
-              fontSize: 13,
-              fontWeight: 600,
-              cursor: isDeleting ? "not-allowed" : "pointer",
-              opacity: isDeleting ? 0.6 : 1,
-            }}
-          >
-            {isDeleting ? t("confirming") : t("confirm")}
-          </button>
-        </div>
+    <Modal title={t("title")} onClose={onCancel} width={420}>
+      <p style={{ color: "#6B7280", fontSize: 13, margin: "0 0 20px" }}>
+        {t("body", { name: product.name })}
+      </p>
+      <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+        <Btn variant="ghost" onClick={onCancel}>
+          {tCommon("cancel")}
+        </Btn>
+        <Btn variant="danger" onClick={onConfirm} disabled={isDeleting}>
+          {isDeleting ? t("confirming") : t("confirm")}
+        </Btn>
       </div>
-    </>
+    </Modal>
   );
 }
 
@@ -188,31 +139,20 @@ function TabBar({ active, onChange }: { active: DrawerTab; onChange: (t: DrawerT
   ];
   return (
     // Negative margins break out of DetailDrawer's 20px/24px padding
-    <div style={{
-      display: "flex", gap: 4,
-      margin: "-20px -24px 16px",
-      padding: "10px 24px",
-      borderBottom: "1px solid #1F2937",
-      background: "#0D1117",
-    }}>
-      {tabs.map((t) => (
-        <button
-          key={t.key}
-          onClick={() => onChange(t.key)}
-          style={{
-            display: "flex", alignItems: "center", gap: 5,
-            padding: "5px 12px", borderRadius: 7, fontSize: 12, fontWeight: 600,
-            cursor: "pointer",
-            background: active === t.key ? "#161B26" : "transparent",
-            border: `1px solid ${active === t.key ? "#374151" : "transparent"}`,
-            color: active === t.key ? "#E8EDF5" : "#6B7280",
-            transition: "all 0.1s",
-          }}
-        >
-          {t.icon}
-          {t.label}
-        </button>
-      ))}
+    <div style={{ margin: "-20px -24px 16px", padding: "10px 24px 0", background: "#0D1117" }}>
+      <Tabs<DrawerTab>
+        items={tabs.map((tb) => ({
+          key: tb.key,
+          label: (
+            <>
+              {tb.icon}
+              {tb.label}
+            </>
+          ),
+        }))}
+        value={active}
+        onChange={onChange}
+      />
     </div>
   );
 }

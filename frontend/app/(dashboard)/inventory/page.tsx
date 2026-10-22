@@ -6,6 +6,9 @@ import { Plus } from "lucide-react";
 import { toast } from "sonner";
 import { useTranslations } from "next-intl";
 import { Btn } from "@/components/ui/Btn";
+import { PageContainer } from "@/components/ui/PageContainer";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { filterInputStyle } from "@/components/ui/fieldStyles";
 import { Pagination } from "@/components/ui/Pagination";
 import { ProductsTable } from "@/features/inventory/components/ProductsTable";
 import { useDeleteProduct, useProductsPaged } from "@/features/inventory/hooks/useProducts";
@@ -15,16 +18,6 @@ import { RangeFilter } from "@/components/ui/RangeFilter";
 import type { ProductSortBy } from "@/features/inventory/types";
 
 const PAGE_SIZE = 50;
-
-const inputStyle: React.CSSProperties = {
-  background: "#111827",
-  border: "1px solid #1F2937",
-  borderRadius: 8,
-  color: "#E8EDF5",
-  fontSize: 13,
-  padding: "7px 12px",
-  outline: "none",
-};
 
 export default function InventoryPage() {
   const t = useTranslations("Dashboard.inventory.page");
@@ -97,50 +90,38 @@ export default function InventoryPage() {
 
   if (isError) {
     return (
-      <div style={{ padding: "28px 32px", color: "#F87171", fontSize: 13 }}>
-        {t("errorLoading")}
-      </div>
+      <PageContainer>
+        <div style={{ color: "#F87171", fontSize: 13 }}>{t("errorLoading")}</div>
+      </PageContainer>
     );
   }
 
   return (
-    <div style={{ padding: "28px 32px" }}>
-      {/* Header */}
-      <div
-        style={{
-          display: "flex",
-          alignItems: "flex-start",
-          justifyContent: "space-between",
-          marginBottom: 28,
-        }}
-      >
-        <div>
-          <h1 style={{ color: "#E8EDF5", fontSize: 22, fontWeight: 700, margin: 0 }}>
-            {t("title")}
-          </h1>
-          <p style={{ color: "#4B5563", fontSize: 13, marginTop: 6, marginBottom: 0 }}>
-            {isLoading ? tCommon("loading") : t("count", { count: totalCount })}
-          </p>
-        </div>
-        <Btn icon={<Plus size={15} />} onClick={() => router.push("/inventory/new")}>
-          {t("addButton")}
-        </Btn>
-      </div>
+    <PageContainer>
+      <PageHeader
+        title={t("title")}
+        subtitle={isLoading ? tCommon("loading") : t("count", { count: totalCount })}
+        actions={
+          <Btn icon={<Plus size={15} />} onClick={() => router.push("/inventory/new")}>
+            {t("addButton")}
+          </Btn>
+        }
+      />
 
       {/* Filters */}
-      <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center", marginBottom: 16 }}>
+      <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
         <input
           type="text"
           placeholder={t("searchPlaceholder")}
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          style={{ ...inputStyle, width: 260 }}
+          style={{ ...filterInputStyle, width: 260 }}
         />
 
         <select
           value={categoryId}
           onChange={(e) => setCategoryId(e.target.value)}
-          style={{ ...inputStyle, cursor: "pointer" }}
+          style={{ ...filterInputStyle, cursor: "pointer" }}
         >
           <option value="">{t("allCategories")}</option>
           <option value="__none__">{t("uncategorized")}</option>
@@ -178,6 +159,6 @@ export default function InventoryPage() {
           <Pagination page={page} totalPages={totalPages} totalCount={totalCount} onPageChange={setPage} />
         </>
       )}
-    </div>
+    </PageContainer>
   );
 }

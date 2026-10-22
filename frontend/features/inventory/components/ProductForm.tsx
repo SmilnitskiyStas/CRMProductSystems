@@ -7,6 +7,7 @@ import { z } from "zod";
 import { useTranslations, useLocale } from "next-intl";
 import { Power } from "lucide-react";
 import { Btn } from "@/components/ui/Btn";
+import { inputStyle, labelStyle } from "@/components/ui/fieldStyles";
 import type { CreateProductPayload, Product, UpdateProductPayload } from "../types";
 import { productsApi } from "../api/products";
 import { useCategories } from "../hooks/useCategories";
@@ -76,26 +77,6 @@ interface Props {
   onUpdate: (id: string, payload: UpdateProductPayload) => void;
 }
 
-const inputStyle: React.CSSProperties = {
-  width: "100%",
-  background: "#111827",
-  border: "1px solid #1F2937",
-  borderRadius: 8,
-  color: "#E8EDF5",
-  fontSize: 13,
-  padding: "8px 12px",
-  outline: "none",
-  boxSizing: "border-box",
-};
-
-const labelStyle: React.CSSProperties = {
-  display: "block",
-  color: "#9CA3AF",
-  fontSize: 12,
-  fontWeight: 500,
-  marginBottom: 5,
-};
-
 // Vertical field stack inside a CollapsibleSection body.
 const sectionBodyStyle: React.CSSProperties = {
   display: "flex",
@@ -103,25 +84,6 @@ const sectionBodyStyle: React.CSSProperties = {
   gap: 14,
 };
 const twoColStyle: React.CSSProperties = { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 };
-
-// Active/inactive toggle button, next to Cancel/Save in the top action bar. Same green/gray
-// convention as the product-page header status badge (app/(dashboard)/inventory/[id]/page.tsx).
-function activeToggleStyle(active: boolean): React.CSSProperties {
-  return {
-    display: "flex",
-    alignItems: "center",
-    gap: 6,
-    padding: "7px 14px",
-    borderRadius: 8,
-    fontSize: 13,
-    fontWeight: 600,
-    cursor: "pointer",
-    background: active ? "#052e16" : "#111827",
-    border: `1px solid ${active ? "#166534" : "#374151"}`,
-    color: active ? "#4ADE80" : "#6B7280",
-    transition: "background 0.15s, border-color 0.15s, color 0.15s",
-  };
-}
 
 // Slice 4c/4d — the "system suggests …" box and the promo note inside the stock section.
 const noteBoxStyle: React.CSSProperties = {
@@ -134,17 +96,6 @@ const noteBoxStyle: React.CSSProperties = {
   lineHeight: 1.5,
 };
 const noteHeadStyle: React.CSSProperties = { color: "#93C5FD", fontWeight: 600, marginBottom: 4 };
-const applyBtnStyle: React.CSSProperties = {
-  marginTop: 8,
-  background: "#1D4ED8",
-  border: "none",
-  borderRadius: 6,
-  color: "#fff",
-  fontSize: 12,
-  fontWeight: 600,
-  padding: "5px 12px",
-  cursor: "pointer",
-};
 const promoNoteStyle: React.CSSProperties = {
   background: "rgba(251,191,36,0.08)",
   border: "1px solid rgba(251,191,36,0.3)",
@@ -355,14 +306,13 @@ export function ProductForm({ product, isPending, onCancel, onCreate, onUpdate }
         }}
       >
         {isEditing && (
-          <button
-            type="button"
+          <Btn
+            variant={watch("isActive") ? "success" : "ghost"}
+            icon={<Power size={14} />}
             onClick={() => setValue("isActive", !watch("isActive"), { shouldDirty: true })}
-            style={activeToggleStyle(watch("isActive"))}
           >
-            <Power size={14} />
             {watch("isActive") ? t("isActiveOn") : t("isActiveOff")}
-          </button>
+          </Btn>
         )}
         <div style={{ display: "flex", gap: 10 }}>
           <Btn variant="ghost" type="button" onClick={onCancel}>
@@ -453,22 +403,10 @@ export function ProductForm({ product, isPending, onCancel, onCreate, onUpdate }
                 placeholder={t("barcodePlaceholder")}
                 style={{ ...inputStyle, flex: 1 }}
               />
-              <button type="button" onClick={addBarcode}
-                style={{
-                  padding: "8px 12px", borderRadius: 8, cursor: "pointer",
-                  background: "#1D3461", border: "1px solid #3B82F6",
-                  color: "#93C5FD", fontSize: 13, whiteSpace: "nowrap",
-                }}>
-                +
-              </button>
-              <button type="button" onClick={handleLookup} disabled={lookupLoading}
-                style={{
-                  padding: "8px 12px", borderRadius: 8, cursor: lookupLoading ? "default" : "pointer",
-                  background: lookupLoading ? "#1F2937" : "#0F2D1A", border: "1px solid #166534",
-                  color: lookupLoading ? "#4B5563" : "#4ADE80", fontSize: 12, whiteSpace: "nowrap",
-                }}>
+              <Btn onClick={addBarcode}>+</Btn>
+              <Btn variant="success" onClick={handleLookup} disabled={lookupLoading}>
                 {lookupLoading ? t("lookupSearching") : t("lookupFind")}
-              </button>
+              </Btn>
             </div>
             {lookupError && <p style={{ color: "#EF4444", fontSize: 11, marginTop: 4 }}>{lookupError}</p>}
           </div>
@@ -568,10 +506,10 @@ export function ProductForm({ product, isPending, onCancel, onCreate, onUpdate }
                   max: suggestion.max,
                   safety: suggestion.safety,
                 })}
-                <div>
-                  <button type="button" style={applyBtnStyle} onClick={applySuggestion}>
+                <div style={{ marginTop: 8 }}>
+                  <Btn size="sm" onClick={applySuggestion}>
                     {t("bufferSuggestionApply")}
-                  </button>
+                  </Btn>
                 </div>
               </div>
             )}

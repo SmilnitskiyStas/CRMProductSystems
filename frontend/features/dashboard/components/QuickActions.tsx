@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useTranslations, useLocale } from "next-intl";
 import { X, AlertTriangle, Trash2, ShoppingCart, CheckCircle, ChevronRight, ChevronRight as Arrow, Loader2, ExternalLink, Package } from "lucide-react";
 import { Btn } from "@/components/ui/Btn";
+import { Modal } from "@/components/ui/Modal";
 import { useCreateWriteOff } from "@/features/write-offs/hooks/useWriteOffs";
 import { useVerifyStock, useStockById } from "@/features/shelf/hooks/useStock";
 import { useGenerateOrder } from "@/features/orders/hooks/useOrders";
@@ -17,49 +18,6 @@ interface Props {
   items: AttentionItem[] | undefined;
   isLoading: boolean;
   stats: DashboardStats | undefined;
-}
-
-// ── Modal shell ───────────────────────────────────────────────────────────────
-
-function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
-  return (
-    <div
-      style={{
-        position: "fixed", inset: 0, zIndex: 2000,
-        display: "flex", alignItems: "center", justifyContent: "center",
-        background: "rgba(0,0,0,0.7)",
-      }}
-      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
-    >
-      <div
-        style={{
-          background: "#111827",
-          border: "1px solid #1F2937",
-          borderRadius: 14,
-          width: 480,
-          maxWidth: "calc(100vw - 32px)",
-          maxHeight: "80vh",
-          display: "flex",
-          flexDirection: "column",
-          boxShadow: "0 24px 64px rgba(0,0,0,0.7)",
-        }}
-      >
-        <div style={{
-          display: "flex", alignItems: "center", justifyContent: "space-between",
-          padding: "16px 20px", borderBottom: "1px solid #1F2937", flexShrink: 0,
-        }}>
-          <span style={{ color: "#E8EDF5", fontSize: 15, fontWeight: 600 }}>{title}</span>
-          <button
-            onClick={onClose}
-            style={{ background: "none", border: "none", color: "#6B7280", cursor: "pointer", padding: 4, borderRadius: 6 }}
-          >
-            <X size={16} />
-          </button>
-        </div>
-        {children}
-      </div>
-    </div>
-  );
 }
 
 // ── 1. Critical items modal ───────────────────────────────────────────────────
@@ -75,8 +33,8 @@ function CriticalModal({ items, onClose }: { items: AttentionItem[]; onClose: ()
   };
 
   return (
-    <Modal title={t("title")} onClose={onClose}>
-      <div style={{ flex: 1, overflowY: "auto", padding: "16px 20px" }}>
+    <Modal title={t("title")} onClose={onClose} width={480}>
+      <div>
         {items.length === 0 ? (
           <div style={{ textAlign: "center", padding: "32px 0", color: "#4ADE80", fontSize: 14 }}>
             {t("empty")}
@@ -126,7 +84,7 @@ function CriticalModal({ items, onClose }: { items: AttentionItem[]; onClose: ()
           </div>
         )}
       </div>
-      <div style={{ borderTop: "1px solid #1F2937", padding: "12px 20px", flexShrink: 0, display: "flex", gap: 8 }}>
+      <div style={{ marginTop: 16, display: "flex", gap: 8 }}>
         <Btn onClick={() => { router.push("/stock"); onClose(); }} style={{ flex: 1, justifyContent: "center" }}>
           {t("openStock")}
           <ChevronRight size={14} />

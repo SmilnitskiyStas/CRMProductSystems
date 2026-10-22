@@ -2,6 +2,7 @@
 
 import { useTranslations } from "next-intl";
 import { useModules } from "@/features/modules/hooks/useModules";
+import { PageContainer } from "@/components/ui/PageContainer";
 import { CustomerTable } from "@/features/auto-service/components/CustomerTable";
 
 export default function AutoServiceCustomersPage() {
@@ -33,8 +34,8 @@ export default function AutoServiceCustomersPage() {
   }
 
   return (
-    <div style={{ padding: "28px 32px", maxWidth: 1100 }}>
+    <PageContainer style={{ maxWidth: 1100 }}>
       <CustomerTable />
-    </div>
+    </PageContainer>
   );
 }

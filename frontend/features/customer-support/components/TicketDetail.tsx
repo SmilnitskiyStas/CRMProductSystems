@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { X, Phone, User } from "lucide-react";
+import { Phone, User } from "lucide-react";
 import { toast } from "sonner";
 import { useTranslations, useLocale } from "next-intl";
 import {
@@ -13,6 +13,9 @@ import { useUsers } from "@/features/users/hooks/useUsers";
 import type { ConsumerSupportTicketMessageDto, TicketStatus } from "../types";
 import { TICKET_STATUSES, getTicketStatusLabel } from "../types";
 import { TicketStatusBadge } from "./TicketStatusBadge";
+import { Btn } from "@/components/ui/Btn";
+import { DetailDrawer } from "@/components/ui/DetailDrawer";
+import { filterInputStyle, labelStyle, textareaStyle } from "@/components/ui/fieldStyles";
 
 interface Props {
   ticketId: string;
@@ -72,77 +75,12 @@ export function TicketDetail({ ticketId, onClose }: Props) {
     );
   }
 
-  const selectStyle = {
-    background: "#111827",
-    border: "1px solid #1F2937",
-    borderRadius: 6,
-    color: "#9CA3AF",
-    fontSize: 12,
-    padding: "6px 10px",
-    cursor: "pointer",
-    outline: "none",
-  };
-
-  const labelStyle = {
-    color: "#4B5563",
-    fontSize: 11,
-    fontWeight: 600,
-    textTransform: "uppercase" as const,
-    letterSpacing: "0.04em",
-    marginBottom: 4,
-    display: "block",
-  };
-
   return (
-    <>
-      {/* Backdrop */}
-      <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 40 }} />
-
-      {/* Sheet */}
-      <div
-        style={{
-          position: "fixed",
-          top: 0,
-          right: 0,
-          bottom: 0,
-          width: "min(560px, 100vw)",
-          background: "#0D1117",
-          borderLeft: "1px solid #1F2937",
-          zIndex: 50,
-          display: "flex",
-          flexDirection: "column",
-          overflowY: "auto",
-        }}
-      >
-        {/* Header */}
-        <div
-          style={{
-            padding: "16px 20px",
-            borderBottom: "1px solid #1F2937",
-            display: "flex",
-            alignItems: "flex-start",
-            gap: 12,
-          }}
-        >
-          <div style={{ flex: 1 }}>
-            {!isLoading && ticket && (
-              <div style={{ color: "#E8EDF5", fontSize: 16, fontWeight: 700, lineHeight: 1.4 }}>
-                {ticket.subject}
-              </div>
-            )}
-          </div>
-          <button
-            onClick={onClose}
-            style={{ background: "transparent", border: "none", color: "#4B5563", cursor: "pointer", padding: 4, flexShrink: 0 }}
-          >
-            <X size={18} />
-          </button>
-        </div>
-
-        {isLoading && <div style={{ padding: 24, color: "#4B5563", fontSize: 13 }}>{t("loading")}</div>}
+    <DetailDrawer isOpen onClose={onClose} title={!isLoading && ticket ? ticket.subject : ""} width={560}>
+        {isLoading && <div style={{ color: "#4B5563", fontSize: 13 }}>{t("loading")}</div>}
 
         {ticket && (
-          <div style={{ padding: 20, display: "flex", flexDirection: "column", gap: 20 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
             {/* Status badge */}
             <div>
               <TicketStatusBadge status={ticket.status} />
@@ -182,7 +120,7 @@ export function TicketDetail({ ticketId, onClose }: Props) {
               <select
                 value={ticket.status}
                 onChange={(e) => handleStatusChange(e.target.value as TicketStatus)}
-                style={{ ...selectStyle, width: "100%" }}
+                style={{ ...filterInputStyle, width: "100%" }}
                 disabled={statusMutation.isPending}
               >
                 {TICKET_STATUSES.map((s) => (
@@ -230,43 +168,21 @@ export function TicketDetail({ ticketId, onClose }: Props) {
                   onChange={(e) => setReplyBody(e.target.value)}
                   placeholder={t("replyPlaceholder")}
                   rows={3}
-                  style={{
-                    background: "#0D1117",
-                    border: "1px solid #1F2937",
-                    borderRadius: 6,
-                    color: "#E8EDF5",
-                    fontSize: 13,
-                    padding: "8px 10px",
-                    outline: "none",
-                    resize: "vertical",
-                    width: "100%",
-                    boxSizing: "border-box",
-                    fontFamily: "inherit",
-                  }}
+                  style={textareaStyle}
                 />
-                <button
+                <Btn
+                  size="sm"
                   onClick={handleReply}
                   disabled={!replyBody.trim() || replyMutation.isPending}
-                  style={{
-                    background: replyBody.trim() ? "#1D3461" : "#111827",
-                    border: `1px solid ${replyBody.trim() ? "#3B82F6" : "#1F2937"}`,
-                    borderRadius: 6,
-                    color: replyBody.trim() ? "#93C5FD" : "#374151",
-                    fontSize: 12,
-                    fontWeight: 600,
-                    padding: "6px 14px",
-                    cursor: replyBody.trim() ? "pointer" : "not-allowed",
-                    marginLeft: "auto",
-                  }}
+                  style={{ marginLeft: "auto" }}
                 >
                   {replyMutation.isPending ? t("sendingButton") : t("sendButton")}
-                </button>
+                </Btn>
               </div>
             </div>
           </div>
         )}
-      </div>
-    </>
+    </DetailDrawer>
   );
 }
 

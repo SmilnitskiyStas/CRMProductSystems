@@ -1,6 +1,10 @@
 {
   "extends": "next/core-web-vitals",
-  "ignorePatterns": ["**/*.test.ts", "**/*.test.tsx", "vitest.config.ts"],
+  "ignorePatterns": [
+    "**/*.test.ts",
+    "**/*.test.tsx",
+    "vitest.config.ts"
+  ],
   "overrides": [
     {
       "files": [
@@ -8,7 +12,34 @@
         "features/production/**/*.{ts,tsx}",
         "app/(dashboard)/orders/**/*.{ts,tsx}",
         "features/orders/**/*.{ts,tsx}",
-        "features/order-tracking/**/*.{ts,tsx}"
+        "features/order-tracking/**/*.{ts,tsx}",
+        "features/marketplace/**/*.{ts,tsx}",
+        "features/auto-service/**/*.{ts,tsx}",
+        "features/customers/**/*.{ts,tsx}",
+        "features/customer-support/**/*.{ts,tsx}",
+        "features/service-desk/**/*.{ts,tsx}",
+        "features/notifications/**/*.{ts,tsx}",
+        "features/chat/**/*.{ts,tsx}",
+        "features/users/**/*.{ts,tsx}",
+        "features/integrations/**/*.{ts,tsx}",
+        "features/inventory/**/*.{ts,tsx}",
+        "features/locations/**/*.{ts,tsx}",
+        "features/stores/**/*.{ts,tsx}",
+        "features/legal-entities/**/*.{ts,tsx}",
+        "features/dashboard/**/*.{ts,tsx}",
+        "features/settings/**/*.{ts,tsx}",
+        "features/ai-assistant/**/*.{ts,tsx}",
+        "features/promotion-rules/**/*.{ts,tsx}",
+        "features/marketing-analytics/post-campaign/components/!(ColumnPreviewPicker|TransitionMatrix).tsx",
+        "app/(dashboard)/marketplace/page.tsx",
+        "app/(dashboard)/marketplace/orders/page.tsx",
+        "app/(dashboard)/auto-service/**/*.{ts,tsx}",
+        "app/(dashboard)/customer-support/**/*.{ts,tsx}",
+        "app/(dashboard)/service-desk/**/*.{ts,tsx}",
+        "app/(dashboard)/notifications/**/*.{ts,tsx}",
+        "app/(dashboard)/users/**/*.{ts,tsx}",
+        "app/(dashboard)/promotion-rules/**/*.{ts,tsx}",
+        "app/(dashboard)/dashboard/**/*.{ts,tsx}"
       ],
       "rules": {
         "no-restricted-syntax": [

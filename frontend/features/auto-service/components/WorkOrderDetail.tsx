@@ -4,6 +4,8 @@ import { useState } from "react";
 import { Plus, Trash2 } from "lucide-react";
 import { useTranslations, useLocale } from "next-intl";
 import { useWorkOrder, useCompleteWorkOrder, useRemoveWorkOrderLine } from "../hooks/useAutoService";
+import { Btn } from "@/components/ui/Btn";
+import { Table, type TableColumn } from "@/components/ui/Table";
 import { StatusBadge } from "./WorkOrderCard";
 import { WorkOrderLineForm } from "./WorkOrderLineForm";
 import type { WorkOrderStatus } from "../types";
@@ -57,6 +59,58 @@ export function WorkOrderDetail({ id }: Props) {
     });
   }
 
+  const lineColumns: TableColumn<(typeof order.lines)[number]>[] = [
+    {
+      key: "type",
+      header: t("headerType"),
+      render: (line) => <span style={{ fontSize: 16 }}>{line.type === "service" ? "🔧" : "⚙️"}</span>,
+    },
+    {
+      key: "name",
+      header: t("headerName"),
+      render: (line) => <span style={{ color: "#E8EDF5", fontSize: 13 }}>{line.name}</span>,
+    },
+    { key: "qty", header: t("headerQty"), render: (line) => line.qty },
+    {
+      key: "price",
+      header: t("headerPrice"),
+      render: (line) => `${line.unitPrice.toFixed(2)} ${t("priceUnit")}`,
+    },
+    {
+      key: "discount",
+      header: t("headerDiscount"),
+      render: (line) => (
+        <span style={{ color: line.discount > 0 ? "#FBBF24" : "#374151" }}>
+          {line.discount > 0 ? `${line.discount}%` : "—"}
+        </span>
+      ),
+    },
+    {
+      key: "total",
+      header: t("headerTotal"),
+      render: (line) => (
+        <span style={{ color: "#E8EDF5", fontWeight: 700 }}>
+          {line.totalPrice.toLocaleString(intlLocale, { style: "currency", currency: "UAH" })}
+        </span>
+      ),
+    },
+    {
+      key: "actions",
+      header: "",
+      render: (line) =>
+        canEdit ? (
+          <button
+            onClick={() => removeLineQuery.mutate(line.id)}
+            disabled={removeLineQuery.isPending}
+            style={{ background: "transparent", border: "none", color: "#6B7280", cursor: "pointer", padding: "4px 8px" }}
+            title={t("removeLineTitle")}
+          >
+            <Trash2 size={14} />
+          </button>
+        ) : null,
+    },
+  ];
+
   const createdDate = new Date(order.createdAt).toLocaleDateString(intlLocale, {
     day: "2-digit",
     month: "long",
@@ -66,14 +120,13 @@ export function WorkOrderDetail({ id }: Props) {
   });
 
   return (
-    <div style={{ padding: "28px 32px", maxWidth: 900 }}>
+    <div style={{ maxWidth: 900, display: "flex", flexDirection: "column", gap: 20 }}>
       {/* Header */}
       <div
         style={{
           display: "flex",
           alignItems: "flex-start",
           justifyContent: "space-between",
-          marginBottom: 28,
           gap: 16,
         }}
       >
@@ -117,34 +170,25 @@ export function WorkOrderDetail({ id }: Props) {
         </div>
 
         {canComplete && (
-          <button
+          <Btn
+            variant="success"
             onClick={handleComplete}
             disabled={completeWorkOrder.isPending}
-            style={{
-              padding: "9px 20px",
-              borderRadius: 8,
-              border: "none",
-              background: "#065F46",
-              color: "#34D399",
-              fontSize: 13,
-              fontWeight: 600,
-              cursor: "pointer",
-              flexShrink: 0,
-            }}
+            style={{ flexShrink: 0 }}
           >
             {completeWorkOrder.isPending ? t("completing") : t("complete")}
-          </button>
+          </Btn>
         )}
       </div>
 
       {/* Complete feedback */}
       {completedMsg && (
-        <div style={{ marginBottom: 16, padding: "10px 14px", background: "#064E3B", borderRadius: 8, color: "#34D399", fontSize: 13 }}>
+        <div style={{ padding: "10px 14px", background: "#064E3B", borderRadius: 8, color: "#34D399", fontSize: 13 }}>
           {t("completedMsg")}
         </div>
       )}
       {completeError && (
-        <div style={{ marginBottom: 16, padding: "10px 14px", background: "#1F1010", borderRadius: 8, color: "#F87171", fontSize: 13 }}>
+        <div style={{ padding: "10px 14px", background: "#1F1010", borderRadius: 8, color: "#F87171", fontSize: 13 }}>
           <strong>{t("completeErrorPrefix")}</strong> {completeError}
           {completeError.includes("422") || completeError.toLowerCase().includes("stock") ? (
             <div style={{ marginTop: 6, color: "#FCA5A5" }}>
@@ -155,143 +199,27 @@ export function WorkOrderDetail({ id }: Props) {
       )}
 
       {/* Lines table */}
-      <div
-        style={{
-          background: "#111827",
-          border: "1px solid #1F2937",
-          borderRadius: 10,
-          overflow: "hidden",
-        }}
-      >
-        {/* Table header */}
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            padding: "14px 16px",
-            borderBottom: "1px solid #1F2937",
-          }}
-        >
+      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <h2 style={{ color: "#E8EDF5", fontSize: 14, fontWeight: 600, margin: 0 }}>
             {t("linesTitle")}
           </h2>
           {canEdit && (
-            <button
-              onClick={() => setShowAddLine(true)}
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 6,
-                padding: "6px 12px",
-                borderRadius: 6,
-                border: "1px solid #1F2937",
-                background: "transparent",
-                color: "#9CA3AF",
-                fontSize: 12,
-                cursor: "pointer",
-              }}
-            >
-              <Plus size={14} />
+            <Btn variant="ghost" size="sm" icon={<Plus size={14} />} onClick={() => setShowAddLine(true)}>
               {t("addLine")}
-            </button>
+            </Btn>
           )}
         </div>
 
-        {/* Lines */}
-        {order.lines.length === 0 ? (
-          <div style={{ padding: "32px 16px", textAlign: "center", color: "#4B5563", fontSize: 13 }}>
-            {t("noLines")}
-          </div>
-        ) : (
-          <table style={{ width: "100%", borderCollapse: "collapse" }}>
-            <thead>
-              <tr>
-                {[t("headerType"), t("headerName"), t("headerQty"), t("headerPrice"), t("headerDiscount"), t("headerTotal"), ""].map((h, i) => (
-                  <th
-                    key={i}
-                    style={{
-                      padding: "10px 14px",
-                      textAlign: "left",
-                      color: "#4B5563",
-                      fontSize: 11,
-                      fontWeight: 600,
-                      textTransform: "uppercase",
-                      borderBottom: "1px solid #1F2937",
-                    }}
-                  >
-                    {h}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {order.lines.map((line) => (
-                <tr key={line.id} style={{ borderBottom: "1px solid #1F2937" }}>
-                  <td style={tdStyle}>
-                    <span style={{ fontSize: 16 }}>
-                      {line.type === "service" ? "🔧" : "⚙️"}
-                    </span>
-                  </td>
-                  <td style={tdStyle}>
-                    <span style={{ color: "#E8EDF5", fontSize: 13 }}>{line.name}</span>
-                  </td>
-                  <td style={tdStyle}>
-                    <span style={{ color: "#9CA3AF", fontSize: 13 }}>{line.qty}</span>
-                  </td>
-                  <td style={tdStyle}>
-                    <span style={{ color: "#9CA3AF", fontSize: 13 }}>
-                      {line.unitPrice.toFixed(2)} {t("priceUnit")}
-                    </span>
-                  </td>
-                  <td style={tdStyle}>
-                    <span style={{ color: line.discount > 0 ? "#FBBF24" : "#374151", fontSize: 13 }}>
-                      {line.discount > 0 ? `${line.discount}%` : "—"}
-                    </span>
-                  </td>
-                  <td style={tdStyle}>
-                    <span style={{ color: "#E8EDF5", fontWeight: 700, fontSize: 13 }}>
-                      {line.totalPrice.toLocaleString(intlLocale, {
-                        style: "currency",
-                        currency: "UAH",
-                      })}
-                    </span>
-                  </td>
-                  <td style={{ ...tdStyle, textAlign: "right" }}>
-                    {canEdit && (
-                      <button
-                        onClick={() => removeLineQuery.mutate(line.id)}
-                        disabled={removeLineQuery.isPending}
-                        style={{
-                          background: "transparent",
-                          border: "none",
-                          color: "#6B7280",
-                          cursor: "pointer",
-                          padding: "4px 8px",
-                        }}
-                        title={t("removeLineTitle")}
-                      >
-                        <Trash2 size={14} />
-                      </button>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
+        <Table
+          columns={lineColumns}
+          rows={order.lines}
+          rowKey={(line) => line.id}
+          emptyMessage={t("noLines")}
+        />
 
         {/* Total */}
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "flex-end",
-            padding: "14px 16px",
-            borderTop: "1px solid #1F2937",
-            gap: 12,
-            alignItems: "center",
-          }}
-        >
+        <div style={{ display: "flex", justifyContent: "flex-end", gap: 12, alignItems: "center" }}>
           <span style={{ color: "#9CA3AF", fontSize: 13 }}>{t("totalLabel")}</span>
           <span style={{ color: "#E8EDF5", fontSize: 18, fontWeight: 700 }}>
             {order.totalAmount.toLocaleString(intlLocale, {
@@ -309,8 +237,3 @@ export function WorkOrderDetail({ id }: Props) {
     </div>
   );
 }
-
-const tdStyle: React.CSSProperties = {
-  padding: "12px 14px",
-  verticalAlign: "middle",
-};
