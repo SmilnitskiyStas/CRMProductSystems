@@ -149,6 +149,7 @@ export function UsersList() {
   const [statusFilter, setStatusFilter] = useState<"all" | "active" | "inactive">("all");
   // TASK-396: client-side only — filters the already-loaded list, no separate API request.
   const [onlyMissingLocation, setOnlyMissingLocation] = useState(false);
+  const [missingFocused, setMissingFocused] = useState(false);
 
   const filtered = (users ?? []).filter((u) => {
     const matchSearch =
@@ -348,24 +349,50 @@ export function UsersList() {
         </select>
         <label
           style={{
+            position: "relative",
             display: "flex",
             alignItems: "center",
             gap: 8,
-            background: "#0D1117",
-            border: "1px solid #1F2937",
+            background: onlyMissingLocation ? "#0D1F3A" : "#0D1117",
+            border: `1px solid ${onlyMissingLocation ? "#1D4ED8" : "#1F2937"}`,
             borderRadius: 8,
             padding: "8px 12px",
-            color: "#E8EDF5",
+            color: onlyMissingLocation ? "#93C5FD" : "#E8EDF5",
             fontSize: 13,
             cursor: "pointer",
             whiteSpace: "nowrap",
+            boxShadow: missingFocused ? "0 0 0 2px #3B82F655" : undefined,
+            transition: "background 0.15s, border-color 0.15s, color 0.15s",
           }}
         >
           <input
             type="checkbox"
             checked={onlyMissingLocation}
             onChange={(e) => setOnlyMissingLocation(e.target.checked)}
+            onFocus={() => setMissingFocused(true)}
+            onBlur={() => setMissingFocused(false)}
+            style={{ position: "absolute", opacity: 0, width: 0, height: 0 }}
           />
+          <span
+            aria-hidden
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "center",
+              width: 16,
+              height: 16,
+              borderRadius: 4,
+              border: `1px solid ${onlyMissingLocation ? "#3B82F6" : "#374151"}`,
+              background: onlyMissingLocation ? "#2563EB" : "#161B26",
+              transition: "background 0.15s, border-color 0.15s",
+            }}
+          >
+            {onlyMissingLocation && (
+              <svg width="10" height="10" viewBox="0 0 12 12" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M2.5 6.5l2.5 2.5 4.5-5" />
+              </svg>
+            )}
+          </span>
           {t("onlyMissingLocationLabel")}
         </label>
       </div>

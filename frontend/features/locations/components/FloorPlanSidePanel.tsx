@@ -208,7 +208,7 @@ export function FloorPlanSidePanel({
 
       {/* Object type palette */}
       <Panel title={t("paletteTitle")}>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 6 }}>
           {ZONE_PALETTE_TYPES.map((type) => {
             const meta = zoneTypeMeta(type);
             return (
@@ -225,12 +225,14 @@ export function FloorPlanSidePanel({
                   borderRadius: 8,
                   padding: "7px 8px",
                   fontSize: 11,
+                  lineHeight: 1.25,
                   cursor: "pointer",
                   textAlign: "left",
+                  minWidth: 0,
                 }}
               >
-                <span>{meta.icon}</span>
-                <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{tTypes(type)}</span>
+                <span style={{ flexShrink: 0 }}>{meta.icon}</span>
+                <span style={{ minWidth: 0, overflowWrap: "anywhere" }}>{tTypes(type)}</span>
               </button>
             );
           })}

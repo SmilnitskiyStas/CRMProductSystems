@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Eye, Pencil, PanelRightClose, PanelRightOpen, Save } from "lucide-react";
+import { PanelRightClose, PanelRightOpen, Save } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { FloorPlanCanvas } from "@/features/locations/components/FloorPlanCanvas";
 import { FloorPlanSidePanel } from "@/features/locations/components/FloorPlanSidePanel";
@@ -20,6 +20,8 @@ import type { FloorPlanLayout, LocationZoneDto } from "@/features/locations/type
 
 const DEFAULT_W = 160;
 const DEFAULT_H = 100;
+const COMPACT_W = 60;
+const COMPACT_H = 40;
 
 export default function FloorPlanPage() {
   const t = useTranslations("Dashboard.locations.floorPlanPage");
@@ -36,7 +38,6 @@ export default function FloorPlanPage() {
   const updateFloorPlan = useUpdateFloorPlan(locationId);
   const uploadBackground = useUploadFloorPlanBackground(locationId);
   const [preparingPlan, setPreparingPlan] = useState(false);
-  const [mode, setMode] = useState<"edit" | "view">("edit");
   const [zoneDialogType, setZoneDialogType] = useState<string | undefined>(undefined);
 
   const [layout, setLayout] = useState<FloorPlanLayout | null>(null);
@@ -77,9 +78,12 @@ export default function FloorPlanPage() {
   function handleAdd(zoneId: string) {
     patchLayout((prev) => {
       const n = prev.zones.length;
-      const x = prev.grid * 2 + (n % 4) * (DEFAULT_W + prev.grid);
-      const y = prev.grid * 2 + Math.floor(n / 4) * (DEFAULT_H + prev.grid);
-      return { ...prev, zones: [...prev.zones, { zoneId, x, y, w: DEFAULT_W, h: DEFAULT_H }] };
+      // Over a real plan, new objects start small so they can be dragged onto the drawn shapes.
+      const w = prev.background ? COMPACT_W : DEFAULT_W;
+      const h = prev.background ? COMPACT_H : DEFAULT_H;
+      const x = prev.grid * 2 + (n % 4) * (w + prev.grid);
+      const y = prev.grid * 2 + Math.floor(n / 4) * (h + prev.grid);
+      return { ...prev, zones: [...prev.zones, { zoneId, x, y, w, h }] };
     });
     setSelectedZoneId(zoneId);
   }
@@ -234,29 +238,6 @@ export default function FloorPlanPage() {
             {panelCollapsed ? tFloorPlan("showPanel") : tFloorPlan("hidePanel")}
           </button>
           <button
-            onClick={() => {
-              setMode((m) => (m === "edit" ? "view" : "edit"));
-              setSelectedZoneId(null);
-            }}
-            title={mode === "edit" ? t("modeViewHint") : t("modeEditHint")}
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 8,
-              background: mode === "view" ? "#0d1f3a" : "#161B26",
-              border: `1px solid ${mode === "view" ? "#1D4ED8" : "#1F2937"}`,
-              color: mode === "view" ? "#60A5FA" : "#9CA3AF",
-              borderRadius: 8,
-              padding: "9px 16px",
-              fontSize: 13,
-              fontWeight: 600,
-              cursor: "pointer",
-            }}
-          >
-            {mode === "edit" ? <Eye size={15} /> : <Pencil size={15} />}
-            {mode === "edit" ? t("modeView") : t("modeEdit")}
-          </button>
-          <button
             onClick={handleSave}
             disabled={!dirty || updateFloorPlan.isPending}
             style={{
@@ -302,10 +283,8 @@ export default function FloorPlanPage() {
             onSelect={setSelectedZoneId}
             onMove={handleMove}
             onResize={handleResize}
-            mode={mode}
-            onOpen={handleOpenShelves}
           />
-          {!panelCollapsed && mode === "edit" && (
+          {!panelCollapsed && (
             <FloorPlanSidePanel
               zones={zones}
               layout={layout}

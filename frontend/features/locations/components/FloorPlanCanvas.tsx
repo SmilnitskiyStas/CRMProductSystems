@@ -81,7 +81,8 @@ export function FloorPlanCanvas({
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 4 } })
   );
-  const grid = layout.grid;
+  // Snap step for drag/resize — finer than the visual grid so small objects fit the plan.
+  const [snap, setSnap] = useState(10);
   const [zoom, setZoom] = useState(1);
   const wrapperRef = useRef<HTMLDivElement>(null);
 
@@ -115,7 +116,7 @@ export function FloorPlanCanvas({
     const dy = event.delta.y / zoom;
     const x = Math.max(0, placement.x + dx);
     const y = Math.max(0, placement.y + dy);
-    onMove(placement.zoneId, Math.round(x / grid) * grid, Math.round(y / grid) * grid);
+    onMove(placement.zoneId, Math.round(x / snap) * snap, Math.round(y / snap) * snap);
   }
 
   const bg = layout.background ?? null;
@@ -136,7 +137,7 @@ export function FloorPlanCanvas({
       >
         <DndContext
           sensors={sensors}
-          modifiers={[createSnapModifier(grid * zoom)]}
+          modifiers={[createSnapModifier(snap * zoom)]}
           onDragEnd={handleDragEnd}
         >
           <div
@@ -159,7 +160,7 @@ export function FloorPlanCanvas({
                 background: "#0B0E14",
                 backgroundImage:
                   "linear-gradient(#161B26 1px, transparent 1px), linear-gradient(90deg, #161B26 1px, transparent 1px)",
-                backgroundSize: `${grid}px ${grid}px`,
+                backgroundSize: `${layout.grid}px ${layout.grid}px`,
               }}
             >
               {bg && (
@@ -190,7 +191,8 @@ export function FloorPlanCanvas({
                     zone={zone}
                     placement={placement}
                     counts={counts?.get(placement.zoneId)}
-                    grid={grid}
+                    grid={snap}
+                    hasBackground={!!bg}
                     zoom={zoom}
                     selected={selectedZoneId === placement.zoneId}
                     onSelect={onSelect}
@@ -263,6 +265,28 @@ export function FloorPlanCanvas({
           <ZoomIn size={15} />
         </ToolbarButton>
         <div style={{ width: 1, height: 20, background: "#1F2937", margin: "0 2px" }} />
+        {SNAP_STEPS.map((s) => (
+          <button
+            key={s}
+            onClick={() => setSnap(s)}
+            title={t("snapStep", { step: s })}
+            style={{
+              height: 26,
+              minWidth: 26,
+              padding: "0 6px",
+              fontSize: 11,
+              fontWeight: 600,
+              borderRadius: 6,
+              cursor: "pointer",
+              background: snap === s ? "#3B82F6" : "#0B0E14",
+              color: snap === s ? "#fff" : "#9CA3AF",
+              border: "1px solid #1F2937",
+            }}
+          >
+            {s}
+          </button>
+        ))}
+        <div style={{ width: 1, height: 20, background: "#1F2937", margin: "0 2px" }} />
         <ToolbarButton onClick={fitToView} title={t("fitToView")}>
           <Maximize2 size={15} />
         </ToolbarButton>
@@ -310,6 +334,7 @@ interface ZoneBoxProps {
   placement: FloorPlanZonePlacement;
   counts: ZoneStatusCounts | undefined;
   grid: number;
+  hasBackground: boolean;
   zoom: number;
   selected: boolean;
   onSelect: (zoneId: string) => void;
@@ -318,7 +343,9 @@ interface ZoneBoxProps {
   onOpen?: (zoneId: string) => void;
 }
 
-function ZoneBox({ zone, placement, counts, grid, zoom, selected, onSelect, onResize, mode, onOpen }: ZoneBoxProps) {
+const SNAP_STEPS = [5, 10, 20];
+
+function ZoneBox({ zone, placement, counts, grid, hasBackground, zoom, selected, onSelect, onResize, mode, onOpen }: ZoneBoxProps) {
   const t = useTranslations("Dashboard.locations.zoneStatus");
   const tTypes = useTranslations("Dashboard.locations.zoneTypes");
   const viewOnly = mode === "view";
@@ -337,6 +364,11 @@ function ZoneBox({ zone, placement, counts, grid, zoom, selected, onSelect, onRe
 
   const tooltipAbove = placement.y >= 120;
 
+  // Small objects drawn over a real plan: drop padding/status text so they don't cover it.
+  const compact = placement.w < 100 || placement.h < 70;
+  const tiny = placement.w < 44 || placement.h < 36;
+  const typeLabel = tTypes.has(zone.type) ? tTypes(zone.type) : zone.type;
+
   function startResize(e: React.PointerEvent) {
     e.stopPropagation();
     e.preventDefault();
@@ -346,8 +378,8 @@ function ZoneBox({ zone, placement, counts, grid, zoom, selected, onSelect, onRe
     const startH = placement.h;
 
     function move(ev: PointerEvent) {
-      const w = Math.max(grid * 4, startW + (ev.clientX - startX) / zoom);
-      const h = Math.max(grid * 3, startH + (ev.clientY - startY) / zoom);
+      const w = Math.max(grid * 2, startW + (ev.clientX - startX) / zoom);
+      const h = Math.max(grid * 2, startH + (ev.clientY - startY) / zoom);
       onResize(placement.zoneId, Math.round(w / grid) * grid, Math.round(h / grid) * grid);
     }
     function up() {
@@ -377,38 +409,60 @@ function ZoneBox({ zone, placement, counts, grid, zoom, selected, onSelect, onRe
         width: placement.w,
         height: placement.h,
         transform: transform ? `translate(${transform.x / zoom}px, ${transform.y / zoom}px)` : undefined,
-        background: markerOnly ? `${meta.color}26` : cfg.bg,
-        border: `1px solid ${selected ? "#3B82F6" : accent}`,
-        boxShadow: selected ? "0 0 0 2px #3B82F655" : undefined,
-        borderRadius: 8,
-        padding: "10px 12px",
+        // Over a real plan the type colour must stand out; stock status stays as a corner dot.
+        background: markerOnly ? `${meta.color}33` : hasBackground ? `${meta.color}4D` : cfg.bg,
+        border: `${hasBackground ? 2 : 1}px solid ${selected ? "#3B82F6" : hasBackground ? meta.color : accent}`,
+        boxShadow: selected
+          ? "0 0 0 2px #3B82F655"
+          : hasBackground
+            ? `0 0 0 1px #0B0E14AA, 0 0 8px ${meta.color}88`
+            : undefined,
+        borderRadius: compact ? 4 : 8,
+        padding: tiny ? 1 : compact ? "3px 5px" : "10px 12px",
+        boxSizing: "border-box",
         cursor: viewOnly ? "pointer" : isDragging ? "grabbing" : "grab",
         zIndex: isDragging ? 50 : hovered ? 50 : 1,
         userSelect: "none",
         touchAction: "none",
         display: "flex",
         flexDirection: "column",
-        gap: 4,
+        gap: compact ? 1 : 4,
         overflow: "visible",
       }}
+      title={compact ? `${zone.name} · ${typeLabel}` : undefined}
     >
-      <div style={{ fontSize: 16, lineHeight: 1 }}>{icon}</div>
-      <div
-        style={{
-          color: "#E8EDF5",
-          fontSize: 12,
-          fontWeight: 600,
-          lineHeight: 1.3,
-          overflow: "hidden",
-          textOverflow: "ellipsis",
-        }}
-      >
-        {zone.name}
-      </div>
-      {markerOnly ? (
-        <div style={{ color: meta.color, fontSize: 10, fontWeight: 600 }}>
-          {tTypes.has(zone.type) ? tTypes(zone.type) : zone.type}
+      {hasBackground && compact && !markerOnly && (
+        <span
+          style={{
+            position: "absolute",
+            top: 2,
+            right: 2,
+            width: 8,
+            height: 8,
+            borderRadius: "50%",
+            background: cfg.color,
+            border: "1px solid #0B0E14",
+          }}
+        />
+      )}
+      <div style={{ fontSize: compact ? 12 : 16, lineHeight: 1 }}>{icon}</div>
+      {!tiny && (
+        <div
+          style={{
+            color: "#E8EDF5",
+            fontSize: compact ? 10 : 12,
+            fontWeight: 600,
+            lineHeight: 1.2,
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            whiteSpace: compact ? "nowrap" : undefined,
+          }}
+        >
+          {zone.name}
         </div>
+      )}
+      {compact ? null : markerOnly ? (
+        <div style={{ color: meta.color, fontSize: 10, fontWeight: 600 }}>{typeLabel}</div>
       ) : (
         <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
           <span style={{ width: 6, height: 6, borderRadius: "50%", background: cfg.color }} />

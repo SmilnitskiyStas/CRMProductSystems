@@ -2453,6 +2453,7 @@
         "placedTitle": "Зони на плані",
         "zoomIn": "Збільшити",
         "zoomOut": "Зменшити",
+        "snapStep": "Крок прив'язки: {step}px",
         "fitToView": "Показати весь план",
         "showPanel": "Показати панель",
         "hidePanel": "Сховати панель",

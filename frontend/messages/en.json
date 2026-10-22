@@ -2453,6 +2453,7 @@
         "placedTitle": "Zones on the plan",
         "zoomIn": "Zoom in",
         "zoomOut": "Zoom out",
+        "snapStep": "Snap step: {step}px",
         "fitToView": "Fit to view",
         "showPanel": "Show panel",
         "hidePanel": "Hide panel",
