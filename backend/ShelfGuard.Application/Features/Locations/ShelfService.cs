@@ -17,7 +17,14 @@ public sealed class ShelfService : IShelfService
     private readonly ILocationRepository _locations;
     private readonly IShelfRepository _repo;
     private readonly IShelfPhotoAdvisor _advisor;
+    private readonly IShelfInsightService _insights;
+    private readonly IShelfRestockAdvisor _restock;
     private readonly ILogger<ShelfService> _log;
+
+    public const long MaxFloorPlanBytes = 8 * 1024 * 1024;
+
+    /// <summary>Root for floor-plan background images; overridable for tests.</summary>
+    public string FloorPlanRoot { get; init; } = Path.Combine("wwwroot", "uploads", "floor-plans");
 
     private const int MaxReferenceImages = 12;
     private const int MaxImagesPerItem = 3;
@@ -31,8 +38,11 @@ public sealed class ShelfService : IShelfService
     public string UploadRoot { get; init; } = Path.Combine("wwwroot", "uploads", "shelf-scans");
 
     public ShelfService(
-        ILocationRepository locations, IShelfRepository repo, IShelfPhotoAdvisor advisor, ILogger<ShelfService> log)
+        ILocationRepository locations, IShelfRepository repo, IShelfPhotoAdvisor advisor,
+        IShelfInsightService insights, IShelfRestockAdvisor restock, ILogger<ShelfService> log)
     {
+        _insights = insights;
+        _restock = restock;
         _locations = locations;
         _repo = repo;
         _advisor = advisor;
@@ -139,18 +149,29 @@ public sealed class ShelfService : IShelfService
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
             _log.LogWarning(ex, "Shelf photo analysis failed for zone {ZoneId}", zoneId);
+            await TryPersistFailedScanAsync(tenantId, userId, locationId, zoneId, shelfId, bytes, ext, ct);
             return (null, "AI analysis failed. Try again later.", 502);
         }
 
         var scanId = Guid.NewGuid();
-        var dir = Path.Combine(UploadRoot, tenantId.ToString());
-        Directory.CreateDirectory(dir);
-        var fileOnDisk = $"{scanId}{ext}";
-        await File.WriteAllBytesAsync(Path.Combine(dir, fileOnDisk), bytes, ct);
+        var fileOnDisk = await SaveScanImageAsync(tenantId, scanId, ext, bytes, ct);
 
         var items = analysis.Items
             .Select(v => new ShelfScanItemDto(v.ItemId, v.Name, v.Status, v.EstimatedCount, v.Confidence, v.Note))
             .ToList();
+        var summary = analysis.Summary;
+
+        // Enrichment is best-effort: stock/sales lookup or the text summary failing must never fail the scan.
+        try
+        {
+            var insights = await _insights.BuildAsync(locationId, zoneId, planogram, ct);
+            items = ShelfRecommendationRules.Enrich(items, insights);
+            summary = await TrySummarizeAsync(items, insights, summary, ct);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            _log.LogWarning(ex, "Shelf scan enrichment failed for zone {ZoneId}", zoneId);
+        }
         var missing = items.Count(i => i.Status == "missing");
         var low = items.Count(i => i.Status == "low");
 
@@ -163,7 +184,7 @@ public sealed class ShelfService : IShelfService
             ShelfId = shelfId,
             ImagePath = $"/uploads/shelf-scans/{tenantId}/{fileOnDisk}",
             Status = ShelfScan.StatusCompleted,
-            ResultJson = JsonSerializer.Serialize(new ShelfScanResult(analysis.Summary, items), Json),
+            ResultJson = JsonSerializer.Serialize(new ShelfScanResult(summary, items), Json),
             MissingCount = missing,
             LowCount = low,
             AlertPending = missing + low > 0,
@@ -176,6 +197,91 @@ public sealed class ShelfService : IShelfService
         await _repo.SaveChangesAsync(ct);
 
         return (ToDto(scan), null, null);
+    }
+
+    private async Task<string> SaveScanImageAsync(Guid tenantId, Guid scanId, string ext, byte[] bytes, CancellationToken ct)
+    {
+        var dir = Path.Combine(UploadRoot, tenantId.ToString());
+        Directory.CreateDirectory(dir);
+        var fileOnDisk = $"{scanId}{ext}";
+        await File.WriteAllBytesAsync(Path.Combine(dir, fileOnDisk), bytes, ct);
+        return fileOnDisk;
+    }
+
+    /// <summary>Keeps a trace (status failed + message) of a vision failure; never throws.</summary>
+    private async Task TryPersistFailedScanAsync(
+        Guid tenantId, Guid? userId, Guid locationId, Guid zoneId, Guid? shelfId, byte[] bytes, string ext, CancellationToken ct)
+    {
+        try
+        {
+            var scanId = Guid.NewGuid();
+            var file = await SaveScanImageAsync(tenantId, scanId, ext, bytes, ct);
+            await _repo.AddScanAsync(new ShelfScan
+            {
+                Id = scanId, TenantId = tenantId, LocationId = locationId, ZoneId = zoneId, ShelfId = shelfId,
+                ImagePath = $"/uploads/shelf-scans/{tenantId}/{file}",
+                Status = ShelfScan.StatusFailed,
+                ErrorMessage = "AI analysis failed.",
+                CreatedBy = userId,
+            }, ct);
+            await _repo.SaveChangesAsync(ct);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            _log.LogWarning(ex, "Could not persist failed shelf scan for zone {ZoneId}", zoneId);
+        }
+    }
+
+    private async Task<string?> TrySummarizeAsync(
+        List<ShelfScanItemDto> items, List<ShelfItemInsightDto> insights, string? visionSummary, CancellationToken ct)
+    {
+        var facings = insights.ToDictionary(i => i.ItemId, i => i.ExpectedFacings);
+        var lines = items.Where(ShelfRecommendationRules.NeedsAction)
+            .Where(i => i.Recommendation is not null)
+            .Select(i => new ShelfRestockLine(
+                i.Name, i.Status, facings.GetValueOrDefault(i.ItemId), i.EstimatedCount,
+                i.OnShelfQty ?? 0, i.StoreQty ?? 0, i.WarehouseQty ?? 0, i.Sold7d ?? 0,
+                i.Recommendation!.Action, i.Recommendation.SuggestedQty, i.Recommendation.Priority))
+            .ToList();
+        if (lines.Count == 0) return visionSummary;
+
+        try
+        {
+            var text = await _restock.SummarizeAsync(lines, ct);
+            return string.IsNullOrWhiteSpace(text) ? visionSummary : text;
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            _log.LogWarning(ex, "Shelf restock summary failed; keeping the vision summary");
+            return visionSummary;
+        }
+    }
+
+    // ── Floor-plan background ──────────────────────────────────────────────
+
+    public async Task<(string? Url, string? Error, int? StatusCode)> SaveFloorPlanBackgroundAsync(
+        Guid tenantId, Guid locationId, Stream image, long length, string fileName, CancellationToken ct = default)
+    {
+        var location = await _locations.GetByIdAsync(locationId, ct);
+        if (location is null || location.TenantId != tenantId) return (null, "Location not found.", 404);
+
+        var ext = Path.GetExtension(fileName ?? string.Empty).ToLowerInvariant();
+        if (!AllowedTypes.TryGetValue(ext, out var mediaType))
+            return (null, "Unsupported image format. Use jpg, png or webp.", 400);
+        if (length <= 0) return (null, "No file uploaded.", 400);
+        if (length > MaxFloorPlanBytes) return (null, "File too large. Max 8 MB.", 400);
+
+        using var ms = new MemoryStream();
+        await image.CopyToAsync(ms, ct);
+        var bytes = ms.ToArray();
+        if (bytes.Length > MaxFloorPlanBytes) return (null, "File too large. Max 8 MB.", 400);
+        if (!MatchesSignature(bytes, mediaType)) return (null, "File content does not match its image type.", 400);
+
+        var dir = Path.Combine(FloorPlanRoot, tenantId.ToString());
+        Directory.CreateDirectory(dir);
+        var fileOnDisk = $"{Guid.NewGuid()}{ext}";
+        await File.WriteAllBytesAsync(Path.Combine(dir, fileOnDisk), bytes, ct);
+        return ($"/uploads/floor-plans/{tenantId}/{fileOnDisk}", null, null);
     }
 
     /// <summary>

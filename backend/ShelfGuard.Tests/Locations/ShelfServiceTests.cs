@@ -17,6 +17,8 @@ public sealed class ShelfServiceTests : IDisposable
     private readonly ILocationRepository _locations = Substitute.For<ILocationRepository>();
     private readonly IShelfRepository _repo = Substitute.For<IShelfRepository>();
     private readonly IShelfPhotoAdvisor _advisor = Substitute.For<IShelfPhotoAdvisor>();
+    private readonly IShelfInsightService _insights = Substitute.For<IShelfInsightService>();
+    private readonly IShelfRestockAdvisor _restock = Substitute.For<IShelfRestockAdvisor>();
     private readonly string _uploadRoot = Path.Combine(Path.GetTempPath(), "shelf-scan-tests-" + Guid.NewGuid().ToString("N"));
     private readonly string _itemsRoot = Path.Combine(Path.GetTempPath(), "shelf-items-tests-" + Guid.NewGuid().ToString("N"), "items");
     private readonly ShelfService _sut;
@@ -30,7 +32,8 @@ public sealed class ShelfServiceTests : IDisposable
         _location = new Location { TenantId = _tenantId, Name = "Shop" };
         _zone = new LocationZone { LocationId = _location.Id, Name = "Z", Location = _location };
         _locations.GetZoneWithLocationAsync(_zone.Id, Arg.Any<CancellationToken>()).Returns(_zone);
-        _sut = new ShelfService(_locations, _repo, _advisor, NullLogger<ShelfService>.Instance) { UploadRoot = _uploadRoot, ItemImagesRoot = _itemsRoot };
+        _insights.BuildAsync(default, default, default!, default).ReturnsForAnyArgs(new List<ShelfItemInsightDto>());
+        _sut = new ShelfService(_locations, _repo, _advisor, _insights, _restock, NullLogger<ShelfService>.Instance) { UploadRoot = _uploadRoot, ItemImagesRoot = _itemsRoot };
     }
 
     public void Dispose()
@@ -168,7 +171,7 @@ public sealed class ShelfServiceTests : IDisposable
     }
 
     [Fact]
-    public async Task CreateScan_AiThrows_502_NothingPersisted()
+    public async Task CreateScan_AiThrows_502_PersistsFailedScan()
     {
         SeedPlanogram(Guid.NewGuid());
         _advisor.AnalyzeAsync(default!, default!, default!, default)
@@ -179,7 +182,9 @@ public sealed class ShelfServiceTests : IDisposable
         Assert.Null(scan);
         Assert.Equal(502, status);
         Assert.DoesNotContain("credit", error!);
-        await _repo.DidNotReceive().AddScanAsync(Arg.Any<ShelfScan>(), Arg.Any<CancellationToken>());
+        await _repo.Received(1).AddScanAsync(
+            Arg.Is<ShelfScan>(s => s.Status == ShelfScan.StatusFailed && s.ErrorMessage != null && !s.ErrorMessage.Contains("credit")),
+            Arg.Any<CancellationToken>());
     }
 
     [Fact]

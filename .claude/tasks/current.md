@@ -1631,3 +1631,9 @@ single-flight refresh + cross-tab lock (`lib/api.ts`), 10 с grace у `AuthServi
 
 ### TASK-749 — Акційні товари без продажів (сповіщення + `/analytics/pos`) — review
 Детектор (3 джерела акцій, пороги в `PromoNoSalesThresholds`), `GET /api/analytics/pos/promo-no-sales`, worker `promo-no-sales` (07:00, дедуп `promo_no_sales_alerts`, міграція `AddPromoNoSalesAlerts`), банер на `/analytics/pos`. Лог: `.claude/logs/tasks/749_*`. Не закомічено.
+
+### TASK-750 — Планограма backend: підкладка плану, типи зон, інсайти полиці, збагачення AI-скану — review
+Upload фону плану, нові типи зон, `GET .../shelves/{shelfId}/insights`, enrich скану (склад/продажі/рекомендація) + `ShelfRestockAdvisor`. Без міграцій. Лог: `.claude/logs/tasks/750_*` (раніше позначався TASK-747).
+
+### TASK-751 — Планограма frontend: підкладка плану, типи зон, ShelfInsightPanel, збагачений скан, компактні зони — review
+tsc/lint/next build OK. Лог: `.claude/logs/tasks/751_*` (раніше TASK-748).

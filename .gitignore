@@ -53,3 +53,6 @@ cashier/node_modules/
 cashier/out/
 cashier/dist/
 cashier/release/
+
+# User-uploaded files (floor plans, scans, item photos) must not be committed
+backend/ShelfGuard.Api/wwwroot/uploads/

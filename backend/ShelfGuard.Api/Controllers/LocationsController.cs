@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 using ShelfGuard.Application.Features.Locations;
 using ShelfGuard.Application.Features.Locations.Dtos;
+using ShelfGuard.Domain.Constants;
 using ShelfGuard.Infrastructure.Authorization;
 
 namespace ShelfGuard.Api.Controllers;
@@ -92,6 +93,29 @@ public sealed class LocationsController : ControllerBase
             return BadRequest(new { error });
 
         return Ok(location);
+    }
+
+    /// <summary>
+    /// Uploads a floor-plan background image (png/jpeg/webp, max 8 MB) and returns its url.
+    /// The frontend stores the url inside the layout JSON via the normal floor-plan PUT.
+    /// </summary>
+    [HttpPost("{id:guid}/floor-plan/background")]
+    [Authorize(Policy = AppPolicies.AtLeastStoreManager)]
+    [RequestSizeLimit(ShelfService.MaxFloorPlanBytes + 1024 * 1024)]
+    [ProducesResponseType(typeof(object), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(object), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> UploadFloorPlanBackground(Guid id, IFormFile file, CancellationToken ct)
+    {
+        var tenantId = GetTenantId();
+        if (tenantId is null) return Forbid();
+        if (file is null || file.Length == 0) return BadRequest(new { error = "No file uploaded." });
+
+        await using var stream = file.OpenReadStream();
+        var (url, error, status) = await _shelves.SaveFloorPlanBackgroundAsync(
+            tenantId.Value, id, stream, file.Length, file.FileName, ct);
+
+        return error is null ? Ok(new { url }) : StatusCode(status ?? 400, new { error });
     }
 
     /// <summary>
@@ -208,7 +232,6 @@ public sealed class LocationsController : ControllerBase
     }
 
     [HttpPost("{id:guid}/zones/{zoneId:guid}/scans")]
-    [Authorize(Policy = AppPolicies.AtLeastStoreManager)]
     [EnableRateLimiting("shelf-scan-ai")]
     [RequestSizeLimit(ShelfService.MaxImageBytes + 1024 * 1024)]
     [ProducesResponseType(typeof(ShelfScanDto), StatusCodes.Status201Created)]
@@ -219,6 +242,10 @@ public sealed class LocationsController : ControllerBase
     {
         var tenantId = GetTenantId();
         if (tenantId is null) return Forbid();
+        // Explicit role check (instead of a bare policy 403) so clients can show a clear message.
+        if (!CanRunShelfScan(GetRole()))
+            return StatusCode(StatusCodes.Status403Forbidden,
+                new { error = "AI-перевірка полиць доступна менеджеру магазину та вище." });
         if (file is null || file.Length == 0) return BadRequest(new { error = "No file uploaded." });
 
         await using var stream = file.OpenReadStream();
@@ -227,6 +254,19 @@ public sealed class LocationsController : ControllerBase
 
         if (error is not null) return StatusCode(status ?? 400, new { error });
         return CreatedAtAction(nameof(GetScan), new { id, zoneId, scanId = scan!.Id }, scan);
+    }
+
+    [HttpGet("{id:guid}/zones/{zoneId:guid}/shelves/{shelfId:guid}/insights")]
+    [ProducesResponseType(typeof(List<ShelfItemInsightDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetShelfInsights(
+        Guid id, Guid zoneId, Guid shelfId, [FromServices] IShelfInsightService insights, CancellationToken ct)
+    {
+        var tenantId = GetTenantId();
+        if (tenantId is null) return Forbid();
+
+        var (items, error) = await insights.GetShelfInsightsAsync(tenantId.Value, id, zoneId, shelfId, ct);
+        return error is null ? Ok(items) : NotFound(new { error });
     }
 
     [HttpGet("{id:guid}/zones/{zoneId:guid}/scans")]
@@ -267,6 +307,9 @@ public sealed class LocationsController : ControllerBase
                  ?? User.FindFirstValue("sub");
         return Guid.TryParse(claim, out var id) ? id : null;
     }
+
+    private static bool CanRunShelfScan(string? role) =>
+        role is AppRoles.Provider or AppRoles.EnterpriseAdmin or AppRoles.NetworkManager or AppRoles.StoreManager;
 
     private string? GetRole() =>
         User.FindFirstValue(ClaimTypes.Role) ?? User.FindFirstValue("role");
