@@ -38,6 +38,8 @@ public interface IProductionRepository
 
     Task<Item?> GetItemByIdAsync(Guid itemId, CancellationToken ct = default);
 
+    Task<Location?> GetLocationByIdAsync(Guid locationId, CancellationToken ct = default);
+
     /// <summary>Returns batches for itemId ordered by expiry_date ASC (FEFO).</summary>
     Task<List<ProductStock>> GetFefoOrderedAsync(Guid itemId, Guid locationId, CancellationToken ct = default);
 

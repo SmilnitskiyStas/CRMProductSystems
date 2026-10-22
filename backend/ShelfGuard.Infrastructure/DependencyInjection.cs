@@ -26,7 +26,10 @@ public static class DependencyInjection
         // TASK-528: centralized replacement for the per-controller ResolveTenantId()/GetTenantId()
         // duplication — see ITenantContext's doc for the contract and how it differs from
         // ITenantSessionOverride below. Scoped: wraps the request-scoped HttpContext.
-        services.AddScoped<Application.Services.ITenantContext, Services.TenantContext>();
+        // TASK-754: concrete TenantContext is also resolvable so ProductionDemandTenantRunner can
+        // use its internal job-tenant binding; ITenantContext resolves to the SAME scoped instance.
+        services.AddScoped<Services.TenantContext>();
+        services.AddScoped<Application.Services.ITenantContext>(sp => sp.GetRequiredService<Services.TenantContext>());
 
         var npgsqlDataSource = new NpgsqlDataSourceBuilder(
                 configuration.GetConnectionString("DefaultConnection"))
@@ -237,6 +240,18 @@ public static class DependencyInjection
         // v4 Phase 5 - Production Module (TASK-241)
         services.AddScoped<Domain.Interfaces.IProductionRepository,
             Data.Repositories.ProductionRepository>();
+        services.AddScoped<Domain.Interfaces.IProductionDemandRepository,
+            Data.Repositories.ProductionDemandRepository>();
+        services.AddScoped<Domain.Interfaces.IProductionRequestRepository,
+            Data.Repositories.ProductionRequestRepository>();
+        services.AddScoped<Domain.Interfaces.IProductionInsightsRepository,
+            Data.Repositories.ProductionInsightsRepository>();
+        // TASK-754: per-tenant auto-demand run for the worker-only internal endpoint.
+        services.AddScoped<Application.Features.Production.IProductionDemandTenantRunner,
+            Services.ProductionDemandTenantRunner>();
+        // TASK-755: per-tenant auto supplier-order drafts run for the worker-only internal endpoint.
+        services.AddScoped<Application.Features.Receipts.IAutoReplenishmentTenantRunner,
+            Services.AutoReplenishmentTenantRunner>();
 
         // v4 Phase 3 - AI Supplier Recommendation (TASK-223)
         services.AddScoped<Application.Features.Marketplace.ISupplierAdvisor,

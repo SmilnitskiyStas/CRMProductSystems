@@ -1,4 +1,28 @@
 {
   "extends": "next/core-web-vitals",
-  "ignorePatterns": ["**/*.test.ts", "**/*.test.tsx", "vitest.config.ts"]
+  "ignorePatterns": ["**/*.test.ts", "**/*.test.tsx", "vitest.config.ts"],
+  "overrides": [
+    {
+      "files": [
+        "app/(dashboard)/production/**/*.{ts,tsx}",
+        "features/production/**/*.{ts,tsx}",
+        "app/(dashboard)/orders/**/*.{ts,tsx}",
+        "features/orders/**/*.{ts,tsx}",
+        "features/order-tracking/**/*.{ts,tsx}"
+      ],
+      "rules": {
+        "no-restricted-syntax": [
+          "error",
+          {
+            "selector": "JSXOpeningElement[name.name='table']",
+            "message": "Use components/ui/Table instead of a raw <table>."
+          },
+          {
+            "selector": "Property[key.name='position'][value.value='fixed']",
+            "message": "Use components/ui/Modal or components/ui/DetailDrawer instead of a hand-rolled position:fixed overlay."
+          }
+        ]
+      }
+    }
+  ]
 }

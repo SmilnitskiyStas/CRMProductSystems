@@ -38,6 +38,32 @@ const DISPATCH_EVENT_ROLES: Record<string, { roles: string[]; channels: string[]
     roles: ["merchandiser", "store_manager", "network_manager", "enterprise_admin"],
     channels: ["telegram", "push"],
   },
+  // Store -> production request submitted (ProductionRequestService.SubmitAsync). StoreId on the
+  // outbox row = the production location. storekeeper is included: it is the warehouse/production
+  // staff role that can review and ship requests (CanReceiveStock).
+  "production_request.submitted": {
+    roles: ["storekeeper", "store_manager", "network_manager", "enterprise_admin"],
+    channels: ["telegram", "push"],
+  },
+  // TASK-761: every production order of a store request is Done -> ready to ship. StoreId on the outbox
+  // row = the requesting store; its managers collect/accept the goods.
+  "production_request.ready": {
+    roles: ["store_manager", "network_manager", "enterprise_admin"],
+    channels: ["telegram", "push"],
+  },
+  // TASK-752: auto DRAFT created by ProductionDemandService. StoreId on the outbox row = the
+  // requesting store; the store manager must review and submit the draft (never auto-submitted).
+  "production_request.auto_draft": {
+    roles: ["store_manager", "network_manager", "enterprise_admin"],
+    channels: ["telegram", "push"],
+  },
+  // TASK-755: auto DRAFT supplier order created by AutoReplenishmentService (daily 07:00).
+  // StoreId on the outbox row = the destination store; managers take it into work, correct
+  // quantities and confirm it on /orders.
+  "order.auto_draft": {
+    roles: ["store_manager", "network_manager", "enterprise_admin"],
+    channels: ["telegram", "push"],
+  },
   "supplier.message": {
     roles: ["store_manager", "network_manager", "enterprise_admin"],
     channels: ["telegram", "push"],
@@ -131,6 +157,10 @@ function formatText(row: PendingIntentRow): string {
 
   const icons: Record<string, string> = {
     "receipt.created": "📦",
+    "production_request.submitted": "🏭",
+    "production_request.auto_draft": "📝",
+    "production_request.ready": "✅",
+    "order.auto_draft": "🛒",
     "supplier.message": "💬",
     "supplier_agreement.signed": "✍️",
     "supplier_support_ticket.opened": "⚠️",

@@ -23,6 +23,18 @@ public sealed class StockReceipt
     public Guid? CreatedBy { get; init; }
     public Guid? ReceivedBy { get; set; }
     public string? Notes { get; set; }
+
+    // ── Auto replenishment drafts (TASK-755) ─────────────────────────────────────────────────────────
+    /// <summary><see cref="ReceiptSource.Manual"/> (default) or <see cref="ReceiptSource.AutoReplenishment"/>.</summary>
+    public string Source { get; set; } = ReceiptSource.Manual;
+    /// <summary>Manager who took an auto draft into work; null = untaken (the daily job may still rewrite it).</summary>
+    public Guid? TakenByUserId { get; set; }
+    public DateTime? TakenAt { get; set; }
+
+    // ── Sent to supplier (TASK-757): draft -> ordered ───────────────────────────────────────────────
+    public DateTime? OrderedAt { get; set; }
+    public Guid? OrderedByUserId { get; set; }
+
     public DateTime CreatedAt { get; init; } = DateTime.UtcNow;
 
     public ICollection<StockReceiptItem> Items { get; init; } = new List<StockReceiptItem>();
@@ -30,4 +42,10 @@ public sealed class StockReceipt
     // Navigation properties
     public Supplier? Supplier { get; set; }
     public Location? DestinationStore { get; set; }
+}
+
+public static class ReceiptSource
+{
+    public const string Manual = "manual";
+    public const string AutoReplenishment = "auto_replenishment";
 }

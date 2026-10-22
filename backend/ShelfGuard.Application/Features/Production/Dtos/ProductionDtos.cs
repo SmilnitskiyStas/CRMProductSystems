@@ -56,7 +56,11 @@ public record ProductionOrderListItemDto(
     decimal PlannedQty,
     string Status,
     DateTimeOffset CreatedAt,
-    DateTimeOffset? CompletedAt);
+    DateTimeOffset? CompletedAt,
+    DateOnly? NeededBy = null,
+    DateOnly? PlannedDate = null,
+    int RequestCount = 0,
+    int StoreCount = 0);
 
 public record ProductionOrderDetailDto(
     Guid Id,
@@ -69,7 +73,19 @@ public record ProductionOrderDetailDto(
     DateTimeOffset CreatedAt,
     DateTimeOffset? StartedAt,
     DateTimeOffset? CompletedAt,
-    List<ProductionConsumptionDto> Consumptions);
+    List<ProductionConsumptionDto> Consumptions,
+    DateOnly? NeededBy = null,
+    DateOnly? PlannedDate = null,
+    List<ProductionOrderRequestRefDto>? Requests = null);
+
+/// <summary>A store request allocation feeding a production order.</summary>
+public record ProductionOrderRequestRefDto(
+    Guid RequestId,
+    Guid RequestLineId,
+    string StoreLocationName,
+    decimal Qty,
+    string RequestStatus = "",
+    Guid? ShipmentTransferId = null);
 
 public record ProductionConsumptionDto(
     Guid ItemId,
@@ -82,11 +98,19 @@ public record ProductionOrderCreateDto(
     Guid RecipeId,
     Guid LocationId,
     decimal PlannedQty,
-    string? Notes);
+    string? Notes,
+    DateOnly? NeededBy = null,
+    DateOnly? PlannedDate = null);
 
+/// <summary>
+/// Status is accepted only for backward compatibility and must equal the current status:
+/// transitions go through start / complete / cancel.
+/// </summary>
 public record ProductionOrderUpdateDto(
     string? Status,
-    string? Notes);
+    string? Notes,
+    DateOnly? NeededBy = null,
+    DateOnly? PlannedDate = null);
 
 public record ProductionCompleteResultDto(
     Guid ProductionOrderId,

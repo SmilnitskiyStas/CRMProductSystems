@@ -176,6 +176,9 @@ public sealed class AppDbContext : DbContext
     public DbSet<RecipeIngredient>           RecipeIngredients           => Set<RecipeIngredient>();
     public DbSet<ProductionOrder>            ProductionOrders            => Set<ProductionOrder>();
     public DbSet<ProductionOrderConsumption> ProductionOrderConsumptions => Set<ProductionOrderConsumption>();
+    public DbSet<ProductionRequest>          ProductionRequests          => Set<ProductionRequest>();
+    public DbSet<ProductionRequestLine>      ProductionRequestLines      => Set<ProductionRequestLine>();
+    public DbSet<ProductionOrderRequestLine> ProductionOrderRequestLines => Set<ProductionOrderRequestLine>();
 
     // Temporary per-user permission grants (ADR-019, TASK-341)
     public DbSet<UserPermissionGrant> UserPermissionGrants => Set<UserPermissionGrant>();
@@ -761,6 +764,8 @@ public sealed class AppDbContext : DbContext
             e.Property(r => r.DestinationStoreId).HasColumnName("DestinationLocationId");
             e.Property(r => r.PostponeCount).HasDefaultValue(0);
             e.Property(r => r.DelayReason).HasMaxLength(500);
+            // TASK-755: auto replenishment drafts (Source manual | auto_replenishment, taken-by lock).
+            e.Property(r => r.Source).HasMaxLength(30).HasDefaultValue("manual");
             // TASK-354: TenantId had no index at all on this table (RLS filters every
             // query by TenantId — same gap pattern as WriteOff had before its
             // idx_write_offs_tenant_store_status index further below).
@@ -2057,6 +2062,8 @@ public sealed class AppDbContext : DbContext
              .HasMaxLength(30)
              .HasDefaultValue(ProductionOrderStatus.Planned);
             e.Property(o => o.Notes).HasColumnType("text");
+            e.Property(o => o.NeededBy).HasColumnType("date");
+            e.Property(o => o.PlannedDate).HasColumnType("date");
             e.Property(o => o.CreatedAt).HasDefaultValueSql("NOW()");
             e.Property(o => o.UpdatedAt).HasDefaultValueSql("NOW()");
             e.HasIndex(o => o.TenantId);
@@ -2088,6 +2095,64 @@ public sealed class AppDbContext : DbContext
              .HasForeignKey(c => c.ItemId).OnDelete(DeleteBehavior.Restrict);
             e.HasOne(c => c.ProductStock).WithMany()
              .HasForeignKey(c => c.ProductStockId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        // ── ProductionRequest (store -> production request) ───────────────────
+        builder.Entity<ProductionRequest>(e =>
+        {
+            e.ToTable("production_requests");
+            e.HasKey(r => r.Id);
+            e.Property(r => r.Id).ValueGeneratedNever();
+            e.Property(r => r.NeededBy).HasColumnType("date");
+            e.Property(r => r.Status).HasMaxLength(20).IsRequired().HasDefaultValue(ProductionRequestStatus.Draft);
+            e.Property(r => r.Source).HasMaxLength(20).IsRequired().HasDefaultValue(ProductionRequestSource.Manual);
+            e.Property(r => r.Notes).HasColumnType("text");
+            e.Property(r => r.ReviewNote).HasColumnType("text");
+            e.Property(r => r.CreatedAt).HasDefaultValueSql("NOW()");
+            e.Property(r => r.UpdatedAt).HasDefaultValueSql("NOW()");
+            e.HasIndex(r => r.TenantId).HasDatabaseName("idx_production_requests_tenant");
+            e.HasIndex(r => new { r.ProductionLocationId, r.Status }).HasDatabaseName("idx_production_requests_prod_status");
+            e.HasIndex(r => new { r.StoreLocationId, r.Status }).HasDatabaseName("idx_production_requests_store_status");
+            e.HasOne<Tenant>().WithMany().HasForeignKey(r => r.TenantId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne(r => r.StoreLocation).WithMany()
+             .HasForeignKey(r => r.StoreLocationId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne(r => r.ProductionLocation).WithMany()
+             .HasForeignKey(r => r.ProductionLocationId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne(r => r.ShipmentTransfer).WithMany()
+             .HasForeignKey(r => r.ShipmentTransferId).OnDelete(DeleteBehavior.SetNull).IsRequired(false);
+            e.HasMany(r => r.Lines).WithOne(l => l.Request)
+             .HasForeignKey(l => l.RequestId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        builder.Entity<ProductionRequestLine>(e =>
+        {
+            e.ToTable("production_request_lines");
+            e.HasKey(l => l.Id);
+            e.Property(l => l.Id).ValueGeneratedNever();
+            e.Property(l => l.RequestedQty).HasColumnType("numeric(10,3)").IsRequired();
+            e.Property(l => l.AcceptedQty).HasColumnType("numeric(10,3)");
+            e.Property(l => l.Reason).HasColumnType("text");
+            e.Property(l => l.AutoReason).HasColumnType("text");
+            e.HasIndex(l => l.RequestId).HasDatabaseName("idx_production_request_lines_request");
+            e.HasIndex(l => l.TenantId).HasDatabaseName("idx_production_request_lines_tenant");
+            e.HasOne(l => l.Item).WithMany()
+             .HasForeignKey(l => l.ItemId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        builder.Entity<ProductionOrderRequestLine>(e =>
+        {
+            e.ToTable("production_order_request_lines");
+            e.HasKey(l => l.Id);
+            e.Property(l => l.Id).ValueGeneratedNever();
+            e.Property(l => l.Qty).HasColumnType("numeric(10,3)").IsRequired();
+            e.HasIndex(l => l.TenantId).HasDatabaseName("idx_production_order_request_lines_tenant");
+            e.HasIndex(l => l.RequestLineId).HasDatabaseName("idx_production_order_request_lines_line");
+            e.HasIndex(l => new { l.ProductionOrderId, l.RequestLineId }).IsUnique()
+             .HasDatabaseName("ux_production_order_request_lines_pair");
+            e.HasOne(l => l.ProductionOrder).WithMany(o => o.RequestLines)
+             .HasForeignKey(l => l.ProductionOrderId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(l => l.RequestLine).WithMany()
+             .HasForeignKey(l => l.RequestLineId).OnDelete(DeleteBehavior.Restrict);
         });
 
         // ── Customer (CRM) ───────────────────────────────────────────────────

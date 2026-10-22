@@ -86,12 +86,17 @@ services:
       postgres:
         condition: service_healthy
     # Dockerfile hardcodes ASPNETCORE_URLS=http://+:5100 inside the container
-    # (same image as production); no host port - reached only via the gateway.
+    # (same image as production); public traffic reaches it only via the gateway.
+    # TASK-754: loopback-only port for the worker's /api/internal/* calls (blocked at the gateway).
+    ports:
+      - '127.0.0.1:5111:5100'
     volumes:
       - shelfguard_staging_api_uploads:/app/wwwroot/uploads
     environment:
       <<: *api-env
       API_ROLE: core
+      # TASK-754: shared secret for /api/internal/* (>= 32 chars; unset = endpoint disabled).
+      InternalJobs__Key: ${INTERNAL_JOB_KEY:-}
       # KI-006 fix: staging opts into DbSeeder on every fresh boot so the audit
       # environment always has test data. Production never sets this. Core ONLY
       # (core also owns migrations).
@@ -188,6 +193,8 @@ services:
       API_BASE_URL: ${API_BASE_URL:-http://localhost:5101}
       WORKER_API_EMAIL: ${WORKER_API_EMAIL:-}
       WORKER_API_PASSWORD: ${WORKER_API_PASSWORD:-}
+      INTERNAL_API_BASE_URL: ${INTERNAL_API_BASE_URL:-http://localhost:5111}
+      INTERNAL_JOB_KEY: ${INTERNAL_JOB_KEY:-}
       MQTT_URL: ${WORKER_MQTT_URL:-mqtt://localhost:1885}
     network_mode: host
 

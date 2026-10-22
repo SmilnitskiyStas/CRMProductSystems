@@ -2,18 +2,30 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowLeft } from "lucide-react";
 import { useTranslations, useLocale } from "next-intl";
 import {
   useProductionOrder,
-  useUpdateProductionOrder,
+  useStartProductionOrder,
   useCompleteProductionOrder,
   useCancelProductionOrder,
+  useShipOrderRequests,
 } from "../hooks/useProduction";
 import { OrderStatusBadge } from "./ProductionOrderTable";
+import { useShipProductionRequest } from "../hooks/useProductionRequests";
+import { RequestStatusBadge } from "./ProductionRequestStatusBadge";
+import Link from "next/link";
 import { ApiError } from "@/lib/api";
 import { Table, type TableColumn } from "@/components/ui/Table";
-import type { ProductionConsumptionDto } from "../types";
+import { Btn } from "@/components/ui/Btn";
+import { BackLink } from "@/components/ui/BackLink";
+import { PageContainer } from "@/components/ui/PageContainer";
+import { PageHeader } from "@/components/ui/PageHeader";
+import type {
+  ProductionConsumptionDto,
+  ProductionOrderRequestRefDto,
+  ShipRequestResultDto,
+} from "../types";
+import { formatDateOnly } from "./ProductionRequestStatusBadge";
 
 interface Props {
   id: string;
@@ -39,27 +51,30 @@ export function ProductionOrderDetail({ id }: Props) {
   const intlLocale = locale === "en" ? "en-US" : "uk-UA";
   const router = useRouter();
   const { data: order, isLoading, isError } = useProductionOrder(id);
-  const startOrder = useUpdateProductionOrder(id);
+  const startOrder = useStartProductionOrder(id);
   const completeOrder = useCompleteProductionOrder(id);
   const cancelOrder = useCancelProductionOrder(id);
+  const shipAll = useShipOrderRequests(id);
+  const shipOne = useShipProductionRequest();
 
   const [successInfo, setSuccessInfo] = useState<CompleteSuccess | null>(null);
   const [insufficientStock, setInsufficientStock] =
     useState<InsufficientStockError | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [shipResults, setShipResults] = useState<ShipRequestResultDto[] | null>(null);
 
   if (isLoading) {
     return (
-      <div style={{ padding: "48px 32px", color: "#6B7280", fontSize: 14 }}>
+      <PageContainer style={{ color: "#6B7280", fontSize: 13 }}>
         {tCommon("loading")}
-      </div>
+      </PageContainer>
     );
   }
   if (isError || !order) {
     return (
-      <div style={{ padding: "48px 32px", color: "#F87171", fontSize: 14 }}>
+      <PageContainer style={{ color: "#F87171", fontSize: 13 }}>
         {t("loadError")}
-      </div>
+      </PageContainer>
     );
   }
 
@@ -74,7 +89,7 @@ export function ProductionOrderDetail({ id }: Props) {
 
   function handleStart() {
     clearFeedback();
-    startOrder.mutate({ status: "in_progress" });
+    startOrder.mutate();
   }
 
   function handleComplete() {
@@ -128,6 +143,27 @@ export function ProductionOrderDetail({ id }: Props) {
 
   const anyPending =
     startOrder.isPending || completeOrder.isPending || cancelOrder.isPending;
+  const shipPending = shipAll.isPending || shipOne.isPending;
+  const isDone = status === "done";
+  const unshipped = (order.requests ?? []).filter((r) => !r.shipmentTransferId);
+
+  function handleShipAll() {
+    if (!confirm(t("shipAllConfirm"))) return;
+    clearFeedback();
+    setShipResults(null);
+    shipAll.mutate(undefined, {
+      onSuccess: (res) => setShipResults(res),
+      onError: (err) => setActionError(err instanceof Error ? err.message : t("shipError")),
+    });
+  }
+
+  function handleShipOne(requestId: string) {
+    clearFeedback();
+    setShipResults(null);
+    shipOne.mutate(requestId, {
+      onError: (err) => setActionError(err instanceof Error ? err.message : t("shipError")),
+    });
+  }
 
   const consumptionColumns: TableColumn<ProductionConsumptionDto>[] = [
     {
@@ -155,137 +191,129 @@ export function ProductionOrderDetail({ id }: Props) {
     },
   ];
 
+  const requestColumns: TableColumn<ProductionOrderRequestRefDto>[] = [
+    {
+      key: "store",
+      header: t("requestsHeaderStore"),
+      cellStyle: { color: "#E8EDF5" },
+      render: (r) => r.storeLocationName,
+    },
+    { key: "qty", header: t("requestsHeaderQty"), render: (r) => r.qty },
+    {
+      key: "reqStatus",
+      header: t("requestsHeaderStatus"),
+      render: (r) => (r.requestStatus ? <RequestStatusBadge status={r.requestStatus} /> : "—"),
+    },
+    {
+      key: "shipment",
+      header: t("requestsHeaderShipment"),
+      render: (r) =>
+        r.shipmentTransferId ? (
+          <Link
+            href="/transfers"
+            onClick={(e) => e.stopPropagation()}
+            style={{ color: "#34D399", fontSize: 12 }}
+          >
+            {t("shipped")}
+          </Link>
+        ) : (
+          <span style={{ color: "#6B7280", fontSize: 12 }}>{t("notShipped")}</span>
+        ),
+    },
+    ...(isDone
+      ? [
+          {
+            key: "shipAction",
+            header: "",
+
+            render: (r: ProductionOrderRequestRefDto) =>
+              r.shipmentTransferId ? null : (
+                <span onClick={(e) => e.stopPropagation()}>
+                  <Btn variant="success" disabled={shipPending} onClick={() => handleShipOne(r.requestId)}>
+                    {t("shipOne")}
+                  </Btn>
+                </span>
+              ),
+          } as TableColumn<ProductionOrderRequestRefDto>,
+        ]
+      : []),
+  ];
+
   return (
-    <div>
-      {/* Back navigation */}
-      <div
-        style={{
-          padding: "16px 32px 0",
-          borderBottom: "1px solid #1F2937",
-        }}
-      >
-        <button
-          onClick={() => router.push("/production/orders")}
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 8,
-            background: "transparent",
-            border: "none",
-            color: "#6B7280",
-            fontSize: 13,
-            cursor: "pointer",
-            padding: "6px 0",
-          }}
-        >
-          <ArrowLeft size={14} />
-          {t("backToOrders")}
-        </button>
-      </div>
+    <PageContainer style={{ maxWidth: 900 }}>
+      <BackLink onClick={() => router.push("/production/orders")}>{t("backToOrders")}</BackLink>
 
-      <div style={{ padding: "28px 32px", maxWidth: 900 }}>
-        {/* Header */}
-        <div
-          style={{
-            display: "flex",
-            alignItems: "flex-start",
-            justifyContent: "space-between",
-            marginBottom: 24,
-            gap: 16,
-            flexWrap: "wrap",
-          }}
-        >
-          <div>
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 12,
-                marginBottom: 8,
-              }}
-            >
-              <h1 style={{ color: "#E8EDF5", fontSize: 22, fontWeight: 700, margin: 0 }}>
-                {order.recipeName}
-              </h1>
-              <OrderStatusBadge status={order.status} />
-            </div>
-            <div
-              style={{
-                color: "#9CA3AF",
-                fontSize: 13,
-                display: "flex",
-                gap: 20,
-                flexWrap: "wrap",
-              }}
-            >
-              <span>📍 {order.locationName}</span>
-              <span>{"📦 "}{t("plannedOutputLabel")} {order.plannedQty}</span>
-              <span>{"📅 "}{formatDateTime(order.createdAt, intlLocale)}</span>
-              {order.startedAt && (
-                <span>{"▶ "}{t("startedLabel")} {formatDateTime(order.startedAt, intlLocale)}</span>
-              )}
-              {order.completedAt && (
-                <span>{"✅ "}{t("completedLabel")} {formatDateTime(order.completedAt, intlLocale)}</span>
-              )}
-            </div>
-            {order.notes && (
-              <div
-                style={{
-                  marginTop: 10,
-                  padding: "8px 12px",
-                  background: "#0D1117",
-                  border: "1px solid #1F2937",
-                  borderRadius: 6,
-                  color: "#9CA3AF",
-                  fontSize: 13,
-                }}
-              >
-                {order.notes}
-              </div>
-            )}
-          </div>
-
-          {/* Status action buttons */}
-          {!isReadOnly && (
-            <div style={{ display: "flex", gap: 10, flexShrink: 0 }}>
+      <PageHeader
+        title={
+          <span style={{ display: "inline-flex", alignItems: "center", gap: 12 }}>
+            {order.recipeName}
+            <OrderStatusBadge status={order.status} />
+          </span>
+        }
+        actions={
+          !isReadOnly ? (
+            <>
               {status === "planned" && (
-                <button
-                  onClick={handleStart}
-                  disabled={anyPending}
-                  style={btnStyle("#1E3A5F", "#60A5FA")}
-                >
+                <Btn onClick={handleStart} disabled={anyPending}>
                   {startOrder.isPending ? t("starting") : t("start")}
-                </button>
+                </Btn>
               )}
 
               {status === "in_progress" && (
-                <button
-                  onClick={handleComplete}
-                  disabled={anyPending}
-                  style={btnStyle("#064E3B", "#34D399")}
-                >
+                <Btn variant="success" onClick={handleComplete} disabled={anyPending}>
                   {completeOrder.isPending ? t("completing") : t("complete")}
-                </button>
+                </Btn>
               )}
 
               {(status === "planned" || status === "in_progress") && (
-                <button
-                  onClick={handleCancel}
-                  disabled={anyPending}
-                  style={btnStyle("#1F1010", "#F87171")}
-                >
+                <Btn variant="danger" onClick={handleCancel} disabled={anyPending}>
                   {cancelOrder.isPending ? t("cancelling") : t("cancel")}
-                </button>
+                </Btn>
               )}
-            </div>
+            </>
+          ) : undefined
+        }
+      />
+
+      <div>
+        <div style={{ color: "#9CA3AF", fontSize: 13, display: "flex", gap: 20, flexWrap: "wrap" }}>
+          <span>📍 {order.locationName}</span>
+          <span>{"📦 "}{t("plannedOutputLabel")} {order.plannedQty}</span>
+          <span>{"📅 "}{formatDateTime(order.createdAt, intlLocale)}</span>
+          {order.neededBy && (
+            <span>{"⏰ "}{t("neededByLabel")} {formatDateOnly(order.neededBy, intlLocale)}</span>
+          )}
+          {order.plannedDate && (
+            <span>{"🗓 "}{t("plannedDateLabel")} {formatDateOnly(order.plannedDate, intlLocale)}</span>
+          )}
+          {order.startedAt && (
+            <span>{"▶ "}{t("startedLabel")} {formatDateTime(order.startedAt, intlLocale)}</span>
+          )}
+          {order.completedAt && (
+            <span>{"✅ "}{t("completedLabel")} {formatDateTime(order.completedAt, intlLocale)}</span>
           )}
         </div>
+        {order.notes && (
+          <div
+            style={{
+              marginTop: 10,
+              padding: "8px 12px",
+              background: "#0D1117",
+              border: "1px solid #1F2937",
+              borderRadius: 6,
+              color: "#9CA3AF",
+              fontSize: 13,
+            }}
+          >
+            {order.notes}
+          </div>
+        )}
+      </div>
 
         {/* Success toast */}
         {successInfo && (
           <div
             style={{
-              marginBottom: 20,
               padding: "14px 18px",
               background: "#064E3B",
               border: "1px solid #065F46",
@@ -310,7 +338,6 @@ export function ProductionOrderDetail({ id }: Props) {
         {insufficientStock && (
           <div
             style={{
-              marginBottom: 20,
               padding: "14px 18px",
               background: "#1F1010",
               border: "1px solid #7F1D1D",
@@ -340,7 +367,6 @@ export function ProductionOrderDetail({ id }: Props) {
         {actionError && (
           <div
             style={{
-              marginBottom: 20,
               padding: "14px 18px",
               background: "#1F1010",
               border: "1px solid #7F1D1D",
@@ -350,6 +376,65 @@ export function ProductionOrderDetail({ id }: Props) {
             }}
           >
             <strong>{t("actionErrorPrefix")}</strong> {actionError}
+          </div>
+        )}
+
+        {/* Store requests feeding this order */}
+        {order.requests && order.requests.length > 0 && (
+          <div
+            style={{
+              background: "#111827",
+              border: "1px solid #1F2937",
+              borderRadius: 10,
+              padding: 16,
+              display: "flex",
+              flexDirection: "column",
+              gap: 12,
+            }}
+          >
+            <h2 style={{ color: "#E8EDF5", fontSize: 14, fontWeight: 600, margin: 0 }}>
+              {t("requestsTitle")}
+            </h2>
+            <Table
+              columns={requestColumns}
+              rows={order.requests}
+              rowKey={(r) => r.requestLineId}
+              onRowClick={() => router.push("/production/requests")}
+            />
+            {isDone && (
+              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+                  <h3 style={{ color: "#E8EDF5", fontSize: 13, fontWeight: 600, margin: 0 }}>
+                    {t("shipmentsTitle")}
+                  </h3>
+                  {unshipped.length > 0 ? (
+                    <Btn variant="success" onClick={handleShipAll} disabled={shipPending}>
+                      {shipAll.isPending ? t("shippingAll") : t("shipAll")}
+                    </Btn>
+                  ) : (
+                    <span style={{ color: "#34D399", fontSize: 12 }}>{t("allShipped")}</span>
+                  )}
+                </div>
+                {shipResults && (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                    {shipResults.map((r) => (
+                      <div
+                        key={r.requestId}
+                        style={{
+                          fontSize: 12,
+                          padding: "6px 10px",
+                          borderRadius: 6,
+                          background: r.ok ? "#064E3B" : "#1F1010",
+                          color: r.ok ? "#34D399" : "#F87171",
+                        }}
+                      >
+                        {r.storeLocationName}: {r.ok ? t("shipOk") : r.error || t("shipError")}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         )}
 
@@ -393,8 +478,7 @@ export function ProductionOrderDetail({ id }: Props) {
             {t("consumptionsEmpty")}
           </div>
         )}
-      </div>
-    </div>
+    </PageContainer>
   );
 }
 
@@ -408,18 +492,4 @@ function formatDateTime(iso: string, intlLocale: string) {
     hour: "2-digit",
     minute: "2-digit",
   });
-}
-
-function btnStyle(bg: string, color: string): React.CSSProperties {
-  return {
-    padding: "9px 18px",
-    borderRadius: 8,
-    border: "none",
-    background: bg,
-    color,
-    fontSize: 13,
-    fontWeight: 600,
-    cursor: "pointer",
-    whiteSpace: "nowrap",
-  };
 }

@@ -13,6 +13,7 @@ export function useReceipts(
     page?: number;
     pageSize?: number;
     search?: string;
+    source?: string;
     sortBy?: string;
     sortDescending?: boolean;
   },

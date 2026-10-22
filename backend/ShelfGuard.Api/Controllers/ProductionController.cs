@@ -18,8 +18,13 @@ namespace ShelfGuard.Api.Controllers;
 public sealed class ProductionController : ControllerBase
 {
     private readonly IProductionService _svc;
+    private readonly IProductionRequestService _requests;
 
-    public ProductionController(IProductionService svc) => _svc = svc;
+    public ProductionController(IProductionService svc, IProductionRequestService requests)
+    {
+        _svc = svc;
+        _requests = requests;
+    }
 
     // ─────────────────────────────────────────────────────────────────────────
     // Recipes
@@ -125,6 +130,28 @@ public sealed class ProductionController : ControllerBase
         return StatusCode(StatusCodes.Status201Created, order);
     }
 
+    /// <summary>
+    /// Aggregates accepted/partial store requests by item and creates one Planned production
+    /// order per item (recipe = active recipe producing it). All-or-nothing.
+    /// </summary>
+    [HttpPost("orders/from-requests")]
+    [ProducesResponseType(typeof(List<ProductionOrderCreatedDto>), StatusCodes.Status201Created)]
+    [ProducesResponseType(typeof(object), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(object), StatusCodes.Status409Conflict)]
+    [ProducesResponseType(typeof(object), StatusCodes.Status422UnprocessableEntity)]
+    public async Task<IActionResult> CreateOrdersFromRequests(
+        [FromBody] ProductionOrdersFromRequestsDto dto, CancellationToken ct)
+    {
+        var tenantId = ResolveTenantId();
+        var userId   = ResolveUserId();
+        if (tenantId is null || userId is null) return Forbid();
+
+        var (orders, error, statusCode) =
+            await _requests.CreateOrdersFromRequestsAsync(dto, tenantId.Value, userId.Value, ct);
+        if (error is not null) return StatusCode(statusCode!.Value, new { error });
+        return StatusCode(StatusCodes.Status201Created, orders);
+    }
+
     [HttpPut("orders/{id:guid}")]
     [ProducesResponseType(typeof(ProductionOrderDetailDto), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(object), StatusCodes.Status400BadRequest)]
@@ -167,6 +194,37 @@ public sealed class ProductionController : ControllerBase
             order.RecipeName);
 
         return Ok(result);
+    }
+
+    /// <summary>
+    /// For a Done order: ships every linked accepted/partial request whose orders are all Done.
+    /// Per-request results; one failure never aborts the batch.
+    /// </summary>
+    [HttpPost("orders/{id:guid}/ship-requests")]
+    [Authorize(Policy = AppPolicies.CanReceiveStock)]
+    [ProducesResponseType(typeof(List<ProductionShipRequestResultDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(object), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(object), StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> ShipOrderRequests(Guid id, CancellationToken ct)
+    {
+        var tenantId = ResolveTenantId();
+        var userId   = ResolveUserId();
+        if (tenantId is null || userId is null) return Forbid();
+
+        var (results, error, statusCode) = await _requests.ShipOrderRequestsAsync(id, tenantId.Value, userId.Value, ct);
+        if (error is not null) return StatusCode(statusCode!.Value, new { error });
+        return Ok(results);
+    }
+
+    [HttpPost("orders/{id:guid}/start")]
+    [ProducesResponseType(typeof(ProductionOrderDetailDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(object), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(object), StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> StartOrder(Guid id, CancellationToken ct)
+    {
+        var (order, error, statusCode) = await _svc.StartOrderAsync(id, ct);
+        if (error is not null) return StatusCode(statusCode!.Value, new { error });
+        return Ok(order);
     }
 
     [HttpPost("orders/{id:guid}/cancel")]

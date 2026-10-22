@@ -11,8 +11,13 @@ namespace ShelfGuard.Application.Features.Production;
 public sealed class ProductionService : IProductionService
 {
     private readonly IProductionRepository _repo;
+    private readonly IProductionOrderSyncService _sync;
 
-    public ProductionService(IProductionRepository repo) => _repo = repo;
+    public ProductionService(IProductionRepository repo, IProductionOrderSyncService sync)
+    {
+        _repo = repo;
+        _sync = sync;
+    }
 
     // ── Recipes ───────────────────────────────────────────────────────────────
 
@@ -153,9 +158,14 @@ public sealed class ProductionService : IProductionService
             o.Recipe?.Name ?? string.Empty,
             o.Location?.Name ?? string.Empty,
             o.PlannedQty,
-            o.Status.ToString(),
+            o.Status.ToApiString(),
             o.CreatedAt,
-            o.CompletedAt)).ToList();
+            o.CompletedAt,
+            o.NeededBy,
+            o.PlannedDate,
+            o.RequestLines.Select(l => l.RequestLine?.RequestId).Where(x => x.HasValue).Distinct().Count(),
+            o.RequestLines.Select(l => l.RequestLine?.Request?.StoreLocationId).Where(x => x.HasValue).Distinct().Count()))
+            .ToList();
     }
 
     public async Task<ProductionOrderDetailDto?> GetOrderByIdAsync(
@@ -178,6 +188,13 @@ public sealed class ProductionService : IProductionService
         if (!recipe.IsActive)
             return (null, "Cannot create order for inactive recipe.", 409);
 
+        var location = await _repo.GetLocationByIdAsync(dto.LocationId, ct);
+        if (location is null)
+            return (null, "Локацію не знайдено.", 404);
+
+        if (location.Type != "production")
+            return (null, "Виробниче замовлення можна створити лише на виробничій локації.", 422);
+
         var order = new ProductionOrder
         {
             TenantId   = tenantId,
@@ -186,6 +203,8 @@ public sealed class ProductionService : IProductionService
             PlannedQty = dto.PlannedQty,
             Status     = ProductionOrderStatus.Planned,
             Notes      = dto.Notes,
+            NeededBy   = dto.NeededBy,
+            PlannedDate = dto.PlannedDate,
             CreatedBy  = userId,
         };
 
@@ -202,15 +221,24 @@ public sealed class ProductionService : IProductionService
         var order = await _repo.GetOrderByIdAsync(id, ct);
         if (order is null) return (null, "Production order not found.", 404);
 
+        // Status transitions are owned by start / complete / cancel (they enforce preconditions and
+        // FEFO write-down); a PUT must never bypass them.
         if (dto.Status is not null)
         {
-            if (!Enum.TryParse<ProductionOrderStatus>(dto.Status, true, out var newStatus))
+            if (!ProductionOrderStatusExtensions.TryParseApi(dto.Status, out var newStatus))
                 return (null, $"Invalid status value '{dto.Status}'.", 400);
-            order.Status = newStatus;
+            if (newStatus != order.Status)
+                return (null,
+                    "Статус замовлення змінюється лише діями start / complete / cancel, а не через оновлення.",
+                    409);
         }
 
         if (dto.Notes is not null)
             order.Notes = dto.Notes;
+        if (dto.NeededBy.HasValue)
+            order.NeededBy = dto.NeededBy;
+        if (dto.PlannedDate.HasValue)
+            order.PlannedDate = dto.PlannedDate;
 
         order.UpdatedAt = DateTimeOffset.UtcNow;
         _repo.UpdateOrder(order);
@@ -375,6 +403,9 @@ public sealed class ProductionService : IProductionService
 
         await _repo.SaveChangesAsync(ct);
 
+        // Store requests whose every order is now Done become ready to ship -> notify the store (once).
+        await _sync.NotifyOrderCompletedAsync(order.Id, ct);
+
         return (ToOrderDetail(order), null, null, null, outputStock.Id);
     }
 
@@ -393,6 +424,9 @@ public sealed class ProductionService : IProductionService
         order.Status    = ProductionOrderStatus.Cancelled;
         order.UpdatedAt = DateTimeOffset.UtcNow;
         _repo.UpdateOrder(order);
+        // Request lines become unassigned again (stage awaiting_order); production re-plans explicitly
+        // via POST /api/production-requests/{id}/sync-orders. Same DbContext: one SaveChanges.
+        await _sync.UnlinkOrderAsync(order.Id, ct);
         await _repo.SaveChangesAsync(ct);
 
         return (ToOrderDetail(order), null, null);
@@ -422,7 +456,7 @@ public sealed class ProductionService : IProductionService
             o.Recipe?.Name ?? string.Empty,
             o.Location?.Name ?? string.Empty,
             o.PlannedQty,
-            o.Status.ToString(),
+            o.Status.ToApiString(),
             o.Notes,
             o.CreatedAt,
             o.StartedAt,
@@ -432,5 +466,14 @@ public sealed class ProductionService : IProductionService
                 c.Item?.Name ?? string.Empty,
                 c.QtyConsumed,
                 c.ProductStock?.BatchNumber,
-                c.ConsumedAt)).ToList());
+                c.ConsumedAt)).ToList(),
+            o.NeededBy,
+            o.PlannedDate,
+            o.RequestLines.Select(l => new ProductionOrderRequestRefDto(
+                l.RequestLine?.RequestId ?? Guid.Empty,
+                l.RequestLineId,
+                l.RequestLine?.Request?.StoreLocation?.Name ?? string.Empty,
+                l.Qty,
+                l.RequestLine?.Request?.Status ?? string.Empty,
+                l.RequestLine?.Request?.ShipmentTransferId)).ToList());
 }

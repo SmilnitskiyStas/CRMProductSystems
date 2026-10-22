@@ -113,6 +113,17 @@ export function useUpdateProductionOrder(id: string) {
   });
 }
 
+export function useStartProductionOrder(id: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => productionApi.startOrder(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: PRODUCTION_KEYS.order(id) });
+      queryClient.invalidateQueries({ queryKey: ["production", "orders"] });
+    },
+  });
+}
+
 export function useCompleteProductionOrder(id: string) {
   const queryClient = useQueryClient();
   return useMutation({
@@ -131,6 +142,18 @@ export function useCancelProductionOrder(id: string) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: PRODUCTION_KEYS.order(id) });
       queryClient.invalidateQueries({ queryKey: ["production", "orders"] });
+    },
+  });
+}
+
+export function useShipOrderRequests(id: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => productionApi.shipOrderRequests(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: PRODUCTION_KEYS.order(id) });
+      queryClient.invalidateQueries({ queryKey: ["production", "orders"] });
+      queryClient.invalidateQueries({ queryKey: ["production", "requests"] });
     },
   });
 }

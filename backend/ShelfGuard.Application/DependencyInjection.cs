@@ -137,6 +137,12 @@ services.AddScoped<IAuthService, AuthService>();
 
         // v4 Phase 5 - Production Module (TASK-241)
         services.AddScoped<IProductionService, ProductionService>();
+        services.AddScoped<IProductionOrderSyncService, ProductionOrderSyncService>();
+        services.AddScoped<IProductionRequestService, ProductionRequestService>();
+        services.AddScoped<IProductionDemandService, ProductionDemandService>();
+        services.AddScoped<IProductionInsightsService, ProductionInsightsService>();
+        // TASK-755: automatic supplier-order drafts (non-own-production items)
+        services.AddScoped<IAutoReplenishmentService, AutoReplenishmentService>();
 
         // v4 Phase 6 - AI Business Assistant (TASK-250)
         services.AddScoped<IAiAssistantService, AiAssistantService>();

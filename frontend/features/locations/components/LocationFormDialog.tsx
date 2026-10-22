@@ -85,7 +85,13 @@ export function LocationFormDialog({ location, isPending, onClose, onSubmit }: P
 
   const { data: modules } = useModules();
   const businessType = modules?.businessType ?? "retail";
-  const allowedTypes = TYPES_FOR_BUSINESS[businessType] ?? LOCATION_TYPE_VALUES;
+  const baseTypes = TYPES_FOR_BUSINESS[businessType] ?? LOCATION_TYPE_VALUES;
+  // A tenant with the own-production module (e.g. a retail chain with its own workshop) must be able
+  // to create a production location whatever its business type is.
+  const allowedTypes =
+    modules?.modules.includes("production") && !baseTypes.includes("production")
+      ? [...baseTypes, "production" as LocationType]
+      : baseTypes;
   const locationTypes = allowedTypes.map((k) => [k, tTypes(k)] as [LocationType, string]);
 
   const { data: legalEntities } = useLegalEntities();

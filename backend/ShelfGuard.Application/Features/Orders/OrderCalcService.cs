@@ -26,7 +26,7 @@ public sealed class OrderCalcService : IOrderCalcService
     }
 
     public async Task<(OrderCalcResult? Result, string? Error)> CalculateAsync(
-        Guid storeId, CancellationToken ct = default)
+        Guid storeId, CancellationToken ct = default, bool excludeAutoUntakenDrafts = false)
     {
         if (!await _repo.StoreExistsAsync(storeId, ct))
             return (null, "Store not found.");
@@ -37,7 +37,7 @@ public sealed class OrderCalcService : IOrderCalcService
 
         var productIds = buffers.Select(b => b.ProductId).ToList();
         var stock = await _repo.GetStockOnHandAsync(storeId, productIds, ct);
-        var inTransit = await _repo.GetInTransitAsync(storeId, productIds, ct);
+        var inTransit = await _repo.GetInTransitAsync(storeId, productIds, ct, excludeAutoUntakenDrafts);
 
         // Phase 4 (plan D5): fold open B2B marketplace orders into the same "in transit" figure
         // the formula already subtracts — a product the buyer has on an unreceived marketplace

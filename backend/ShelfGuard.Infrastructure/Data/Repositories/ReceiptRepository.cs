@@ -37,6 +37,7 @@ public sealed class ReceiptRepository : IReceiptRepository
         Guid? storeId, string? status, string? search, string? sortBy, bool? sortDescending,
         int page, int pageSize,
         Guid? categoryId = null, int? minItems = null, int? maxItems = null,
+        string? source = null,
         CancellationToken ct = default)
     {
         var query = _db.StockReceipts
@@ -52,6 +53,8 @@ public sealed class ReceiptRepository : IReceiptRepository
             query = query.Where(r => r.Status == status);
         // TASK-640: category_id/min_items/max_items filters for the frontend table filter UI.
         // `.HasValue` checks (never a truthy/non-zero check) — 0 is a valid items-count bound.
+        if (!string.IsNullOrWhiteSpace(source))
+            query = query.Where(r => r.Source == source);
         if (categoryId.HasValue)
             query = query.Where(r => r.Items.Any(i => i.Product != null && i.Product.CategoryId == categoryId));
         if (minItems.HasValue)
@@ -117,6 +120,53 @@ public sealed class ReceiptRepository : IReceiptRepository
         await _db.StockMovements.AddAsync(movement, ct);
 
     public void Update(StockReceipt receipt) => _db.StockReceipts.Update(receipt);
+
+    public Task<List<StockReceipt>> GetUntakenAutoDraftsAsync(Guid storeId, CancellationToken ct = default) =>
+        _db.StockReceipts
+            .Include(r => r.Items).ThenInclude(i => i.Product)
+            .Include(r => r.Supplier)
+            .Include(r => r.DestinationStore)
+            .Where(r => r.DestinationStoreId == storeId && r.Status == "draft"
+                        && r.Source == ReceiptSource.AutoReplenishment && r.TakenByUserId == null)
+            .OrderByDescending(r => r.CreatedAt)
+            .ToListAsync(ct);
+
+    public async Task AddItemAsync(StockReceiptItem item, CancellationToken ct = default) =>
+        await _db.StockReceiptItems.AddAsync(item, ct);
+
+    public void RemoveItems(IEnumerable<StockReceiptItem> items) => _db.StockReceiptItems.RemoveRange(items);
+
+    public async Task<bool> TryTakeAsync(Guid id, Guid userId, DateTime takenAt, CancellationToken ct = default)
+    {
+        var rows = await _db.StockReceipts
+            .Where(r => r.Id == id && r.Status == "draft"
+                        && (r.TakenByUserId == null || r.TakenByUserId == userId))
+            .ExecuteUpdateAsync(s => s
+                .SetProperty(r => r.TakenByUserId, userId)
+                .SetProperty(r => r.TakenAt, r => r.TakenAt ?? takenAt), ct);
+        if (rows == 0) return false;
+
+        // The bulk UPDATE bypasses the change tracker: refresh a tracked copy so callers see the lock.
+        var tracked = _db.ChangeTracker.Entries<StockReceipt>().FirstOrDefault(e => e.Entity.Id == id);
+        if (tracked is not null) await tracked.ReloadAsync(ct);
+        return true;
+    }
+
+    public async Task<Dictionary<Guid, string>> GetUserNamesAsync(
+        IReadOnlyCollection<Guid> userIds, CancellationToken ct = default) =>
+        await _db.Users.Where(u => userIds.Contains(u.Id))
+            .ToDictionaryAsync(u => u.Id, u => u.FullName, ct);
+
+    public Task<bool> SupplierExistsAsync(Guid supplierId, CancellationToken ct = default) =>
+        _db.Suppliers.AnyAsync(s => s.Id == supplierId, ct);
+
+    public async Task<(bool Exists, decimal? PricePurchase)> GetItemPurchaseInfoAsync(
+        Guid productId, CancellationToken ct = default)
+    {
+        var row = await _db.Items.Where(i => i.Id == productId)
+            .Select(i => new { i.PricePurchase }).FirstOrDefaultAsync(ct);
+        return row is null ? (false, null) : (true, row.PricePurchase);
+    }
 
     public void UpdateItem(StockReceiptItem item) => _db.StockReceiptItems.Update(item);
 

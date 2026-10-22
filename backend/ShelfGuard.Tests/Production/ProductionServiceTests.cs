@@ -17,6 +17,10 @@ file sealed class FakeProductionRepo : IProductionRepository
     public List<Item>                        Items         { get; } = [];
     public List<ProductStock>                Stock         { get; } = [];
     public List<StockEvent>                  StockEvents   { get; } = [];
+    public List<Location>                    Locations     { get; } = [];
+
+    public Task<Location?> GetLocationByIdAsync(Guid locationId, CancellationToken ct = default) =>
+        Task.FromResult(Locations.FirstOrDefault(l => l.Id == locationId));
 
     // ── Recipes ────────────────────────────────────────────────────────────
 
@@ -211,7 +215,8 @@ public sealed class ProductionServiceTests
     private static readonly Guid TenantId = Guid.NewGuid();
     private static readonly Guid UserId   = Guid.NewGuid();
 
-    private static ProductionService BuildSvc(IProductionRepository repo) => new(repo);
+    private static ProductionService BuildSvc(IProductionRepository repo) =>
+        new(repo, NSubstitute.Substitute.For<IProductionOrderSyncService>());
 
     // ── CompleteOrderAsync — wrong status (Done) → 409 ───────────────────────
 
@@ -502,5 +507,93 @@ public sealed class ProductionServiceTests
         Assert.True(ok);
         Assert.Null(error);
         Assert.False(recipe.IsActive);
+    }
+
+    // ── UpdateOrderAsync — must not bypass start/complete/cancel ─────────────
+
+    [Fact]
+    public async Task UpdateOrderAsync_StatusChange_Returns409_AndKeepsStatus()
+    {
+        var repo   = new FakeProductionRepo();
+        var svc    = BuildSvc(repo);
+        var output = Build.FinishedProduct();
+        var recipe = Build.Recipe(output.Id);
+        var order  = Build.Order(recipe.Id, ProductionOrderStatus.Planned);
+        repo.Items.Add(output);
+        repo.Recipes.Add(recipe);
+        repo.Orders.Add(order);
+
+        var (result, error, statusCode) =
+            await svc.UpdateOrderAsync(order.Id, new ProductionOrderUpdateDto("Done", null));
+
+        Assert.Null(result);
+        Assert.Equal(409, statusCode);
+        Assert.NotNull(error);
+        Assert.Equal(ProductionOrderStatus.Planned, order.Status);
+    }
+
+    [Fact]
+    public async Task UpdateOrderAsync_SameStatusAndNotes_Succeeds()
+    {
+        var repo   = new FakeProductionRepo();
+        var svc    = BuildSvc(repo);
+        var output = Build.FinishedProduct();
+        var recipe = Build.Recipe(output.Id);
+        var order  = Build.Order(recipe.Id, ProductionOrderStatus.Planned);
+        repo.Items.Add(output);
+        repo.Recipes.Add(recipe);
+        repo.Orders.Add(order);
+        var planned = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(2));
+
+        var (result, error, _) = await svc.UpdateOrderAsync(
+            order.Id, new ProductionOrderUpdateDto("Planned", "note", null, planned));
+
+        Assert.Null(error);
+        Assert.NotNull(result);
+        Assert.Equal("note", order.Notes);
+        Assert.Equal(planned, order.PlannedDate);
+    }
+
+    // ── CreateOrderAsync — location must be a production location ────────────
+
+    [Fact]
+    public async Task CreateOrderAsync_NonProductionLocation_Returns422()
+    {
+        var repo   = new FakeProductionRepo();
+        var svc    = BuildSvc(repo);
+        var output = Build.FinishedProduct();
+        var recipe = Build.Recipe(output.Id);
+        var shop   = new Location { TenantId = TenantId, Name = "Shop", Type = "shop" };
+        repo.Items.Add(output);
+        repo.Recipes.Add(recipe);
+        repo.Locations.Add(shop);
+
+        var (order, error, statusCode) = await svc.CreateOrderAsync(
+            new ProductionOrderCreateDto(recipe.Id, shop.Id, 5m, null), TenantId, UserId);
+
+        Assert.Null(order);
+        Assert.Equal(422, statusCode);
+        Assert.NotNull(error);
+        Assert.Empty(repo.Orders);
+    }
+
+    [Fact]
+    public async Task CreateOrderAsync_ProductionLocation_Succeeds()
+    {
+        var repo   = new FakeProductionRepo();
+        var svc    = BuildSvc(repo);
+        var output = Build.FinishedProduct();
+        var recipe = Build.Recipe(output.Id);
+        var prod   = new Location { TenantId = TenantId, Name = "Цех", Type = "production" };
+        repo.Items.Add(output);
+        repo.Recipes.Add(recipe);
+        repo.Locations.Add(prod);
+
+        var (order, error, _) = await svc.CreateOrderAsync(
+            new ProductionOrderCreateDto(recipe.Id, prod.Id, 5m, null), TenantId, UserId);
+
+        Assert.Null(error);
+        Assert.NotNull(order);
+        Assert.Single(repo.Orders);
     }
 }

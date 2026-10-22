@@ -8,6 +8,12 @@ import { useProductionOrders } from "../hooks/useProduction";
 import { ProductionOrderForm } from "./ProductionOrderForm";
 import type { ProductionOrderListItemDto, ProductionOrderStatus } from "../types";
 import { Table, type TableColumn } from "@/components/ui/Table";
+import { Btn } from "@/components/ui/Btn";
+import { PageContainer } from "@/components/ui/PageContainer";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { StatusPill } from "@/components/ui/StatusPill";
+import { filterInputStyle } from "@/components/ui/fieldStyles";
+import { formatDateOnly } from "./ProductionRequestStatusBadge";
 
 export function ProductionOrderTable() {
   const t = useTranslations("Dashboard.production.orderTable");
@@ -29,18 +35,11 @@ export function ProductionOrderTable() {
     statusFilter || undefined
   );
 
-  if (isLoading) {
-    return (
-      <div style={{ padding: "48px 32px", color: "#6B7280", fontSize: 14 }}>
-        {t("loading")}
-      </div>
-    );
-  }
   if (isError) {
     return (
-      <div style={{ padding: "48px 32px", color: "#F87171", fontSize: 14 }}>
+      <PageContainer style={{ color: "#F87171", fontSize: 13 }}>
         {t("loadError")}
-      </div>
+      </PageContainer>
     );
   }
 
@@ -62,6 +61,27 @@ export function ProductionOrderTable() {
       render: (order) => order.plannedQty,
     },
     {
+      key: "stores",
+      header: t("headerStores"),
+      cellStyle: { color: "#9CA3AF", fontSize: 12 },
+      render: (order) =>
+        order.requestCount
+          ? t("storesCell", { requests: order.requestCount, stores: order.storeCount ?? 0 })
+          : "—",
+    },
+    {
+      key: "neededBy",
+      header: t("headerNeededBy"),
+      cellStyle: { color: "#9CA3AF", fontSize: 12 },
+      render: (order) => formatDateOnly(order.neededBy, intlLocale),
+    },
+    {
+      key: "plannedDate",
+      header: t("headerPlannedDate"),
+      cellStyle: { color: "#9CA3AF", fontSize: 12 },
+      render: (order) => formatDateOnly(order.plannedDate, intlLocale),
+    },
+    {
       key: "status",
       header: t("headerStatus"),
       render: (order) => <OrderStatusBadge status={order.status} />,
@@ -81,63 +101,29 @@ export function ProductionOrderTable() {
   ];
 
   return (
-    <div>
-      {/* Toolbar */}
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          marginBottom: 20,
-          gap: 16,
-          flexWrap: "wrap",
-        }}
-      >
-        <h1 style={{ color: "#E8EDF5", fontSize: 20, fontWeight: 700, margin: 0 }}>
-          {t("title")}
-        </h1>
-        <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-          {/* Status filter */}
-          <select
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-            style={{
-              padding: "7px 12px",
-              background: "#0D1117",
-              border: "1px solid #374151",
-              borderRadius: 8,
-              color: "#9CA3AF",
-              fontSize: 13,
-              cursor: "pointer",
-            }}
-          >
-            {STATUS_OPTIONS.map((opt) => (
-              <option key={opt.value} value={opt.value}>
-                {opt.label}
-              </option>
-            ))}
-          </select>
-
-          <button
-            onClick={() => setCreateOpen(true)}
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 6,
-              padding: "8px 16px",
-              borderRadius: 8,
-              border: "none",
-              background: "#3B82F6",
-              color: "#fff",
-              fontSize: 13,
-              fontWeight: 600,
-              cursor: "pointer",
-            }}
-          >
-            <Plus size={15} />
+    <PageContainer>
+      <PageHeader
+        title={t("title")}
+        actions={
+          <Btn icon={<Plus size={15} />} onClick={() => setCreateOpen(true)}>
             {t("addOrder")}
-          </button>
-        </div>
+          </Btn>
+        }
+      />
+
+      {/* Filters */}
+      <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
+        <select
+          value={statusFilter}
+          onChange={(e) => setStatusFilter(e.target.value)}
+          style={{ ...filterInputStyle, cursor: "pointer" }}
+        >
+          {STATUS_OPTIONS.map((opt) => (
+            <option key={opt.value} value={opt.value}>
+              {opt.label}
+            </option>
+          ))}
+        </select>
       </div>
 
       {/* Table */}
@@ -146,11 +132,12 @@ export function ProductionOrderTable() {
         rows={orders}
         rowKey={(order) => order.id}
         onRowClick={(order) => router.push(`/production/orders/${order.id}`)}
-        emptyMessage={t("empty")}
+        isLoading={isLoading}
+        emptyMessage={isLoading ? t("loading") : t("empty")}
       />
 
       {createOpen && <ProductionOrderForm onClose={() => setCreateOpen(false)} />}
-    </div>
+    </PageContainer>
   );
 }
 
@@ -165,21 +152,7 @@ export function OrderStatusBadge({ status }: { status: ProductionOrderStatus }) 
     cancelled: { bg: "#1F1010", color: "#F87171" },
   };
   const { bg, color } = cfg[status] ?? cfg.planned;
-  return (
-    <span
-      style={{
-        display: "inline-block",
-        padding: "3px 10px",
-        borderRadius: 12,
-        fontSize: 12,
-        fontWeight: 600,
-        background: bg,
-        color,
-      }}
-    >
-      {t(status)}
-    </span>
-  );
+  return <StatusPill bg={bg} text={color}>{t(status)}</StatusPill>;
 }
 
 function formatDate(iso: string, intlLocale: string) {

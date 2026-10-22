@@ -61,9 +61,17 @@ services:
     restart: unless-stopped
     volumes:
       - shelfguard_api_uploads:/app/wwwroot/uploads
+    # TASK-754: loopback-ONLY port for worker -> api_core internal job calls (/api/internal/*,
+    # blocked at the gateway). Deliberately 127.0.0.1 (unlike the gateway's public 5100): the
+    # provider edge cannot reach it, only processes on this host (the network_mode:host worker).
+    ports:
+      - '127.0.0.1:5110:5100'
     environment:
       <<: *api-env
       API_ROLE: core
+      # TASK-754: shared secret for /api/internal/* (>= 32 chars; unset = endpoint disabled).
+      # Core only - consumer/provider do not host the internal controller.
+      InternalJobs__Key: ${INTERNAL_JOB_KEY:-}
       # core owns EF migrations (Migrations__RunOnStartup defaults to true)
     external_links:
       - shelfguard_postgres
@@ -196,6 +204,10 @@ services:
       API_BASE_URL: ${API_BASE_URL:-http://localhost:5100}
       WORKER_API_EMAIL: ${WORKER_API_EMAIL:-}
       WORKER_API_PASSWORD: ${WORKER_API_PASSWORD:-}
+      # TASK-754: per-tenant production-demand cron -> api_core internal endpoint (loopback port
+      # above, NOT the gateway) + the same shared secret as api_core's InternalJobs__Key.
+      INTERNAL_API_BASE_URL: ${INTERNAL_API_BASE_URL:-http://localhost:5110}
+      INTERNAL_JOB_KEY: ${INTERNAL_JOB_KEY:-}
       # worker is network_mode:host → mosquitto reachable via published host port
       MQTT_URL: ${MQTT_URL:-mqtt://localhost:1884}
     network_mode: host
