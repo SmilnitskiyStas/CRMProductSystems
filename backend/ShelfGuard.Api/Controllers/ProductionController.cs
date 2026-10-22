@@ -196,6 +196,17 @@ public sealed class ProductionController : ControllerBase
         return Ok(result);
     }
 
+    [HttpPost("orders/{id:guid}/start")]
+    [ProducesResponseType(typeof(ProductionOrderDetailDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(object), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(object), StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> StartOrder(Guid id, CancellationToken ct)
+    {
+        var (order, error, statusCode) = await _svc.StartOrderAsync(id, ct);
+        if (error is not null) return StatusCode(statusCode!.Value, new { error });
+        return Ok(order);
+    }
+
     [HttpPost("orders/{id:guid}/cancel")]
     [ProducesResponseType(typeof(ProductionOrderDetailDto), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(object), StatusCodes.Status404NotFound)]

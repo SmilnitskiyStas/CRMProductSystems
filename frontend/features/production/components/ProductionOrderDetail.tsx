@@ -6,7 +6,7 @@ import { ArrowLeft } from "lucide-react";
 import { useTranslations, useLocale } from "next-intl";
 import {
   useProductionOrder,
-  useUpdateProductionOrder,
+  useStartProductionOrder,
   useCompleteProductionOrder,
   useCancelProductionOrder,
 } from "../hooks/useProduction";
@@ -40,7 +40,7 @@ export function ProductionOrderDetail({ id }: Props) {
   const intlLocale = locale === "en" ? "en-US" : "uk-UA";
   const router = useRouter();
   const { data: order, isLoading, isError } = useProductionOrder(id);
-  const startOrder = useUpdateProductionOrder(id);
+  const startOrder = useStartProductionOrder(id);
   const completeOrder = useCompleteProductionOrder(id);
   const cancelOrder = useCancelProductionOrder(id);
 
@@ -75,7 +75,7 @@ export function ProductionOrderDetail({ id }: Props) {
 
   function handleStart() {
     clearFeedback();
-    startOrder.mutate({ status: "in_progress" });
+    startOrder.mutate();
   }
 
   function handleComplete() {

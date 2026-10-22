@@ -113,6 +113,17 @@ export function useUpdateProductionOrder(id: string) {
   });
 }
 
+export function useStartProductionOrder(id: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => productionApi.startOrder(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: PRODUCTION_KEYS.order(id) });
+      queryClient.invalidateQueries({ queryKey: ["production", "orders"] });
+    },
+  });
+}
+
 export function useCompleteProductionOrder(id: string) {
   const queryClient = useQueryClient();
   return useMutation({

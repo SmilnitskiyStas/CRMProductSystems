@@ -68,6 +68,10 @@ export const productionApi = {
   updateOrder: (id: string, body: ProductionOrderUpdateDto) =>
     api.put<ProductionOrderDetailDto>(`/api/production/orders/${id}`, body),
 
+  /** POST /api/production/orders/{id}/start */
+  startOrder: (id: string) =>
+    api.post<ProductionOrderDetailDto>(`/api/production/orders/${id}/start`),
+
   /** POST /api/production/orders/{id}/complete */
   completeOrder: (id: string) =>
     api.post<ProductionCompleteResultDto>(
