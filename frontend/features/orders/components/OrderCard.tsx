@@ -114,7 +114,7 @@ function OrderBody({ order }: { order: ReceiptDto }) {
     );
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 14, maxWidth: 980 }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: 14, width: "100%" }}>
       <style>{PRINT_CSS}</style>
 
       <div>
