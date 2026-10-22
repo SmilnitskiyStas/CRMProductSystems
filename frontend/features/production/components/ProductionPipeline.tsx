@@ -142,7 +142,7 @@ export function ProductionPipeline({ locationId }: { locationId?: string }) {
   };
 
   return (
-    <section style={{ marginBottom: 24 }}>
+    <section>
       <style>{`
         .pl-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:28px}
         .pl-arrow{position:absolute;right:-22px;top:50%;transform:translateY(-50%);font-size:20px;font-weight:700}

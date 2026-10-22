@@ -1,7 +1,9 @@
 "use client";
 
-import { useTranslations } from "next-intl";
 import type { CSSProperties } from "react";
+import { useTranslations } from "next-intl";
+import { StatusPill } from "@/components/ui/StatusPill";
+import { inputStyle, labelStyle } from "@/components/ui/fieldStyles";
 import type { ProductionRequestStatus, ProductionStage } from "../types";
 
 const COLORS: Record<ProductionRequestStatus, { bg: string; color: string }> = {
@@ -17,21 +19,7 @@ const COLORS: Record<ProductionRequestStatus, { bg: string; color: string }> = {
 export function RequestStatusBadge({ status }: { status: ProductionRequestStatus }) {
   const t = useTranslations("Dashboard.production.requests.status");
   const { bg, color } = COLORS[status] ?? COLORS.draft;
-  return (
-    <span
-      style={{
-        display: "inline-block",
-        padding: "3px 8px",
-        borderRadius: 20,
-        fontSize: 11,
-        fontWeight: 600,
-        background: bg,
-        color,
-      }}
-    >
-      {t(status)}
-    </span>
-  );
+  return <StatusPill bg={bg} text={color}>{t(status)}</StatusPill>;
 }
 
 /** Origin badge: auto-generated (buffer / promo) vs manual. Renders nothing for manual by default. */
@@ -39,22 +27,7 @@ export function RequestSourceBadge({ source, showManual = false }: { source: str
   const t = useTranslations("Dashboard.production.requests.source");
   if (source !== "auto_buffer" && source !== "auto_promo" && !showManual) return null;
   const auto = source === "auto_buffer" || source === "auto_promo";
-  return (
-    <span
-      style={{
-        display: "inline-block",
-        padding: "3px 8px",
-        borderRadius: 20,
-        fontSize: 11,
-        fontWeight: 600,
-        background: auto ? "#2E1065" : "#1F2937",
-        color: auto ? "#C4B5FD" : "#9CA3AF",
-        whiteSpace: "nowrap",
-      }}
-    >
-      {auto ? t(source) : t("manual")}
-    </span>
-  );
+  return <StatusPill bg={auto ? "#2E1065" : "#1F2937"} text={auto ? "#C4B5FD" : "#9CA3AF"}>{auto ? t(source) : t("manual")}</StatusPill>;
 }
 
 const STAGE_COLORS: Record<string, { bg: string; color: string }> = {
@@ -70,42 +43,12 @@ export function RequestStageBadge({ stage }: { stage?: ProductionStage | null })
   const t = useTranslations("Dashboard.production.requests.stage");
   if (!stage || !STAGE_COLORS[stage]) return null;
   const { bg, color } = STAGE_COLORS[stage];
-  return (
-    <span
-      style={{
-        display: "inline-block",
-        padding: "3px 8px",
-        borderRadius: 20,
-        fontSize: 11,
-        fontWeight: 600,
-        background: bg,
-        color,
-        whiteSpace: "nowrap",
-      }}
-    >
-      {t(stage)}
-    </span>
-  );
+  return <StatusPill bg={bg} text={color}>{t(stage)}</StatusPill>;
 }
 
-export const reqInputStyle: CSSProperties = {
-  width: "100%",
-  background: "#111827",
-  border: "1px solid #1F2937",
-  borderRadius: 8,
-  color: "#E8EDF5",
-  fontSize: 13,
-  padding: "8px 12px",
-  outline: "none",
-  boxSizing: "border-box",
-};
+export const reqInputStyle = inputStyle;
 
-export const reqLabelStyle: CSSProperties = {
-  display: "block",
-  color: "#9CA3AF",
-  fontSize: 12,
-  marginBottom: 5,
-};
+export const reqLabelStyle = labelStyle;
 
 export const reqErrorStyle: CSSProperties = {
   padding: "10px 14px",

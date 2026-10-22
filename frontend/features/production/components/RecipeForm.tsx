@@ -5,6 +5,7 @@ import { Plus, Trash2 } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { Btn } from "@/components/ui/Btn";
 import { Modal } from "@/components/ui/Modal";
+import { inputStyle, labelStyle, textareaStyle } from "@/components/ui/fieldStyles";
 import {
   useRecipe,
   useCreateRecipe,
@@ -213,7 +214,7 @@ export function RecipeForm({ recipeId, onClose }: Props) {
           onChange={(e) => setNotes(e.target.value)}
           rows={2}
           placeholder={t("notesPlaceholder")}
-          style={{ ...inputStyle, resize: "vertical" }}
+          style={textareaStyle}
         />
       </div>
 
@@ -281,27 +282,16 @@ export function RecipeForm({ recipeId, onClose }: Props) {
                   placeholder={t("ingredientUnitPlaceholder")}
                   style={inputStyle}
                 />
-                <button
-                  type="button"
+                <Btn
+                  variant="dangerOutline"
+                  size="xs"
+                  icon={<Trash2 size={13} />}
                   onClick={() => removeIngredient(idx)}
                   disabled={ingredients.length === 1}
                   title={t("removeIngredientTitle")}
-                  style={{
-                    background: "transparent",
-                    border: "1px solid #1F2937",
-                    borderRadius: 6,
-                    color:
-                      ingredients.length === 1 ? "#374151" : "#F87171",
-                    cursor:
-                      ingredients.length === 1 ? "not-allowed" : "pointer",
-                    padding: "5px",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                  }}
                 >
-                  <Trash2 size={13} />
-                </button>
+                  {null}
+                </Btn>
               </div>
             ))}
           </div>
@@ -338,24 +328,3 @@ export function RecipeForm({ recipeId, onClose }: Props) {
     </Modal>
   );
 }
-
-// ── Styles ─────────────────────────────────────────────────────────────────────
-
-const labelStyle: React.CSSProperties = {
-  display: "block",
-  color: "#9CA3AF",
-  fontSize: 12,
-  marginBottom: 5,
-};
-
-const inputStyle: React.CSSProperties = {
-  width: "100%",
-  padding: "8px 12px",
-  background: "#111827",
-  border: "1px solid #1F2937",
-  borderRadius: 8,
-  color: "#E8EDF5",
-  fontSize: 13,
-  outline: "none",
-  boxSizing: "border-box",
-};

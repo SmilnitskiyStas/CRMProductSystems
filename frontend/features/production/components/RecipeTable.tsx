@@ -8,6 +8,9 @@ import { RecipeForm } from "./RecipeForm";
 import type { RecipeListItemDto } from "../types";
 import { Table, type TableColumn } from "@/components/ui/Table";
 import { Btn } from "@/components/ui/Btn";
+import { PageContainer } from "@/components/ui/PageContainer";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { StatusPill } from "@/components/ui/StatusPill";
 import { ActionMenu } from "@/components/ui/ActionMenu";
 
 interface Props {
@@ -50,18 +53,7 @@ export function RecipeTable({ showInactive, toolbarExtra }: Props) {
       key: "ingredients",
       header: t("headerIngredients"),
       render: (recipe) => (
-        <span
-          style={{
-            display: "inline-block",
-            padding: "3px 8px",
-            borderRadius: 20,
-            background: "#1F2937",
-            color: "#9CA3AF",
-            fontSize: 11,
-          }}
-        >
-          {recipe.ingredientCount}
-        </span>
+        <StatusPill bg="#1F2937" text="#9CA3AF" style={{ fontWeight: 400 }}>{recipe.ingredientCount}</StatusPill>
       ),
     },
     {
@@ -95,24 +87,25 @@ export function RecipeTable({ showInactive, toolbarExtra }: Props) {
 
   if (isError) {
     return (
-      <div style={{ padding: "28px 32px", color: "#F87171", fontSize: 13 }}>
+      <PageContainer style={{ color: "#F87171", fontSize: 13 }}>
         {t("loadError")}
-      </div>
+      </PageContainer>
     );
   }
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-      {/* Header */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 16, flexWrap: "wrap" }}>
-        <h1 style={{ color: "#E8EDF5", fontSize: 22, fontWeight: 700, margin: 0 }}>{t("title")}</h1>
-        <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-          {toolbarExtra}
-          <Btn icon={<Plus size={15} />} onClick={() => setCreateOpen(true)}>
-            {t("addRecipe")}
-          </Btn>
-        </div>
-      </div>
+    <PageContainer>
+      <PageHeader
+        title={t("title")}
+        actions={
+          <>
+            {toolbarExtra}
+            <Btn icon={<Plus size={15} />} onClick={() => setCreateOpen(true)}>
+              {t("addRecipe")}
+            </Btn>
+          </>
+        }
+      />
 
       {/* Table */}
       <Table
@@ -133,7 +126,7 @@ export function RecipeTable({ showInactive, toolbarExtra }: Props) {
           onClose={() => setEditRecipe(null)}
         />
       )}
-    </div>
+    </PageContainer>
   );
 }
 
@@ -142,18 +135,8 @@ export function RecipeTable({ showInactive, toolbarExtra }: Props) {
 function StatusBadge({ active }: { active: boolean }) {
   const t = useTranslations("Dashboard.production.recipeTable");
   return (
-    <span
-      style={{
-        display: "inline-block",
-        padding: "3px 8px",
-        borderRadius: 20,
-        fontSize: 11,
-        fontWeight: 600,
-        background: active ? "#064E3B" : "#1F2937",
-        color: active ? "#34D399" : "#6B7280",
-      }}
-    >
+    <StatusPill bg={active ? "#064E3B" : "#1F2937"} text={active ? "#34D399" : "#6B7280"}>
       {active ? t("statusActive") : t("statusInactive")}
-    </span>
+    </StatusPill>
   );
 }

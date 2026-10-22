@@ -4,9 +4,14 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations, useLocale } from "next-intl";
 import { toast } from "sonner";
-import { ArrowLeft, Printer, Trash2 } from "lucide-react";
+import { Printer, Trash2 } from "lucide-react";
 import { Btn } from "@/components/ui/Btn";
 import { Modal } from "@/components/ui/Modal";
+import { BackLink } from "@/components/ui/BackLink";
+import { PageContainer } from "@/components/ui/PageContainer";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { StatusPill } from "@/components/ui/StatusPill";
+import { filterInputStyle, inputStyle, labelStyle, textareaStyle } from "@/components/ui/fieldStyles";
 import { Table, type TableColumn } from "@/components/ui/Table";
 import { useMe } from "@/features/auth/hooks/useAuth";
 import { useSuppliers } from "@/features/suppliers/hooks/useSuppliers";
@@ -19,11 +24,6 @@ const RELEASE_OVERRIDE_ROLES = new Set(["enterprise_admin", "network_manager", "
 
 const panel: React.CSSProperties = {
   background: "#0D1117", border: "1px solid #1F2937", borderRadius: 10, padding: "14px 16px",
-};
-const label: React.CSSProperties = { color: "#9CA3AF", fontSize: 12, marginBottom: 5, display: "block" };
-const input: React.CSSProperties = {
-  background: "#111827", border: "1px solid #1F2937", borderRadius: 8, color: "#E8EDF5",
-  padding: "6px 10px", fontSize: 13, outline: "none", boxSizing: "border-box",
 };
 
 function NumInput({
@@ -40,7 +40,7 @@ function NumInput({
   return (
     <input type="number" min={0} step="any" value={text} disabled={disabled}
       onChange={(e) => setText(e.target.value)} onBlur={commit}
-      style={{ ...input, width, opacity: disabled ? 0.6 : 1 }} />
+      style={{ ...filterInputStyle, width, opacity: disabled ? 0.6 : 1 }} />
   );
 }
 
@@ -56,7 +56,7 @@ function ItemSearch({ onPick }: { onPick: (p: { id: string; name: string }) => v
   return (
     <div style={{ marginTop: 10 }}>
       <input value={search} onChange={(e) => setSearch(e.target.value)}
-        placeholder={t("addPlaceholder")} style={{ ...input, width: "100%" }} />
+        placeholder={t("addPlaceholder")} style={inputStyle} />
       {debounced.trim() && found.length > 0 && search === debounced && (
         <div style={{ border: "1px solid #1F2937", borderRadius: 8, marginTop: 4, maxHeight: 180, overflowY: "auto" }}>
           {found.map((p) => (
@@ -144,11 +144,11 @@ function OrderBody({ order }: { order: ReceiptDto }) {
             header: "",
             width: 48,
             render: (i: ReceiptItemDto) => (
-              <button aria-label={t("removeLine")} disabled={busy || order.items.length <= 1}
-                onClick={() => a.removeItem.mutate(i.id, { onSuccess: () => toast.success(t("toastRemoved")), onError: fail })}
-                style={{ background: "transparent", border: "none", color: "#F87171", cursor: "pointer", opacity: order.items.length <= 1 ? 0.4 : 1 }}>
-                <Trash2 size={15} />
-              </button>
+              <Btn variant="dangerOutline" size="xs" icon={<Trash2 size={13} />} aria-label={t("removeLine")} title={t("removeLine")}
+                disabled={busy || order.items.length <= 1}
+                onClick={() => a.removeItem.mutate(i.id, { onSuccess: () => toast.success(t("toastRemoved")), onError: fail })}>
+                {null}
+              </Btn>
             ),
           } as TableColumn<ReceiptItemDto>,
         ]
@@ -156,30 +156,27 @@ function OrderBody({ order }: { order: ReceiptDto }) {
   ];
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 20, width: "100%", padding: "28px 32px" }}>
+    <PageContainer style={{ width: "100%" }}>
       <style>{PRINT_CSS}</style>
 
-      <div>
-        <button onClick={() => router.push("/orders")}
-          style={{ background: "transparent", border: "none", color: "#9CA3AF", cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 6, fontSize: 13, padding: 0 }}>
-          <ArrowLeft size={15} /> {t("back")}
-        </button>
-      </div>
+      <BackLink onClick={() => router.push("/orders")}>{t("back")}</BackLink>
 
-      <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-        <h1 style={{ color: "#E8EDF5", fontSize: 22, fontWeight: 700, margin: 0 }}>
-          {t("title", { store: order.destinationStoreName })}
-        </h1>
-        <ReceiptStatusBadge status={order.status} />
-        {order.source === "auto_replenishment" && (
-          <span style={{ fontSize: 11, fontWeight: 600, padding: "3px 8px", borderRadius: 20, background: "#1E1B2E", color: "#A78BFA" }}>{t("autoBadge")}</span>
-        )}
-        {isDraft && order.takenByUserId && (
-          <span style={{ fontSize: 11, fontWeight: 600, padding: "3px 8px", borderRadius: 20, background: "#1C2A3A", color: "#60A5FA" }}>
-            {order.takenByName ? t("takenBy", { name: order.takenByName }) : t("takenUnknown")}
+      <PageHeader
+        title={
+          <span style={{ display: "inline-flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+            {t("title", { store: order.destinationStoreName })}
+            <ReceiptStatusBadge status={order.status} />
+            {order.source === "auto_replenishment" && (
+              <StatusPill bg="#1E1B2E" text="#A78BFA">{t("autoBadge")}</StatusPill>
+            )}
+            {isDraft && order.takenByUserId && (
+              <StatusPill bg="#1C2A3A" text="#60A5FA">
+                {order.takenByName ? t("takenBy", { name: order.takenByName }) : t("takenUnknown")}
+              </StatusPill>
+            )}
           </span>
-        )}
-      </div>
+        }
+      />
 
       {!isDraft && (
         <div style={{ ...panel, color: "#A78BFA", fontSize: 13 }}>
@@ -197,15 +194,15 @@ function OrderBody({ order }: { order: ReceiptDto }) {
 
       <div style={{ ...panel, display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 14 }}>
         <div>
-          <span style={label}>{t("store")}</span>
+          <span style={labelStyle}>{t("store")}</span>
           <div style={{ color: "#E8EDF5", fontSize: 14 }}>{order.destinationStoreName}</div>
         </div>
         <div>
-          <span style={label}>{t("supplier")}{canEdit ? " *" : ""}</span>
+          <span style={labelStyle}>{t("supplier")}{canEdit ? " *" : ""}</span>
           {canEdit ? (
             <select value={order.supplierId ?? ""} disabled={busy}
               onChange={(e) => a.header.mutate({ supplierId: e.target.value || null }, { onSuccess: () => toast.success(t("toastSaved")), onError: fail })}
-              style={{ ...input, width: "100%" }}>
+              style={inputStyle}>
               <option value="">{t("selectSupplier")}</option>
               {suppliers.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
             </select>
@@ -214,9 +211,9 @@ function OrderBody({ order }: { order: ReceiptDto }) {
           )}
         </div>
         <div>
-          <span style={label}>{t("expectedAt")}</span>
+          <span style={labelStyle}>{t("expectedAt")}</span>
           {canEdit ? (
-            <input type="date" value={expected} style={{ ...input, width: "100%" }}
+            <input type="date" value={expected} style={inputStyle}
               onChange={(e) => setExpected(e.target.value)}
               onBlur={() => {
                 if (expected !== (order.expectedAt ? order.expectedAt.slice(0, 10) : ""))
@@ -227,9 +224,9 @@ function OrderBody({ order }: { order: ReceiptDto }) {
           )}
         </div>
         <div style={{ gridColumn: "1 / -1" }}>
-          <span style={label}>{t("notes")}</span>
+          <span style={labelStyle}>{t("notes")}</span>
           {canEdit ? (
-            <textarea value={notes} rows={2} style={{ ...input, width: "100%", resize: "vertical" }}
+            <textarea value={notes} rows={2} style={textareaStyle}
               onChange={(e) => setNotes(e.target.value)}
               onBlur={() => {
                 if (notes !== (order.notes ?? ""))
@@ -330,6 +327,7 @@ function OrderBody({ order }: { order: ReceiptDto }) {
         <div>{t("supplier")}: {supplierName ?? "—"}</div>
         <div>{t("date")}: {new Date(order.orderedAt ?? order.createdAt).toLocaleDateString(intl)}</div>
         {order.expectedAt && <div>{t("expectedAt")}: {order.expectedAt.slice(0, 10)}</div>}
+        {/* eslint-disable-next-line no-restricted-syntax -- print sheet: plain table styled by PRINT_CSS */}
         <table>
           <thead><tr><th>{t("colItem")}</th><th>{t("colQty")}</th><th>{t("colPrice")}</th><th>{t("colAmount")}</th></tr></thead>
           <tbody>
@@ -345,7 +343,7 @@ function OrderBody({ order }: { order: ReceiptDto }) {
         <p style={{ textAlign: "right", fontWeight: 700 }}>{t("total")}: {money(total)} ₴</p>
         {order.notes && <p>{t("notes")}: {order.notes}</p>}
       </div>
-    </div>
+    </PageContainer>
   );
 }
 
@@ -353,7 +351,7 @@ export function OrderCard({ id }: { id: string }) {
   const t = useTranslations("Dashboard.orders.page.card");
   const { data, isLoading, isError } = useOrderCard(id);
   if (isLoading) return null;
-  if (isError || !data) return <div style={{ color: "#F87171", fontSize: 13, padding: "28px 32px" }}>{t("loadFailed")}</div>;
+  if (isError || !data) return <PageContainer style={{ color: "#F87171", fontSize: 13 }}>{t("loadFailed")}</PageContainer>;
   // key resets local field state when the server copy changes owner/status.
   return <OrderBody key={`${data.id}-${data.status}-${data.takenByUserId ?? ""}`} order={data} />;
 }

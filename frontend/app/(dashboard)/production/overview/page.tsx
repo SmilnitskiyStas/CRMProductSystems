@@ -4,8 +4,6 @@ import { ProductionOverview } from "@/features/production/components/ProductionO
 
 export default function ProductionOverviewRoute() {
   return (
-    <div style={{ padding: "28px 32px" }}>
-      <ProductionOverview />
-    </div>
+    <ProductionOverview />
   );
 }

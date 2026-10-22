@@ -1,16 +1,13 @@
 "use client";
 
-import { use } from "react";
+import { useParams } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { useModules } from "@/features/modules/hooks/useModules";
 import { ProductionOrderDetail } from "@/features/production/components/ProductionOrderDetail";
 
-interface Props {
-  params: Promise<{ id: string }>;
-}
-
-export default function ProductionOrderDetailPage({ params }: Props) {
-  const { id } = use(params);
+// Next 14: route params are a plain object (React `use(params)` is Next 15-only and crashed this page).
+export default function ProductionOrderDetailPage() {
+  const { id } = useParams<{ id: string }>();
   const t = useTranslations("Dashboard.production.moduleGate");
   const { data: modulesData } = useModules();
   const isActive = !modulesData || modulesData.modules.includes("production");

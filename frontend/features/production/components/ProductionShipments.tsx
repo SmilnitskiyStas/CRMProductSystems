@@ -6,6 +6,8 @@ import { useTranslations } from "next-intl";
 import { useQueryClient } from "@tanstack/react-query";
 import { Printer } from "lucide-react";
 import { Btn } from "@/components/ui/Btn";
+import { PageContainer } from "@/components/ui/PageContainer";
+import { Tabs } from "@/components/ui/Tabs";
 import { Table, type TableColumn } from "@/components/ui/Table";
 import { useProductionShipments } from "../hooks/useProductionInsights";
 import { useShipProductionRequest } from "../hooks/useProductionRequests";
@@ -182,7 +184,7 @@ export function ProductionShipments() {
   const bulkable = readyRows.filter((r) => r.canShip !== false && results[r.requestId]?.ok !== true).length;
 
   return (
-    <div>
+    <PageContainer>
       <style>{PRINT_CSS}</style>
       <PageHeader
         title={t("title")}
@@ -199,14 +201,14 @@ export function ProductionShipments() {
         }
       />
 
-      <div style={{ display: "flex", gap: 6, marginBottom: 16 }}>
-        <Btn size="sm" variant={tab === "ready" ? "primary" : "ghost"} onClick={() => setTab("ready")}>
-          {t("tabReady")}
-        </Btn>
-        <Btn size="sm" variant={tab === "shipped" ? "primary" : "ghost"} onClick={() => setTab("shipped")}>
-          {t("tabShipped")}
-        </Btn>
-      </div>
+      <Tabs
+        items={[
+          { key: "ready", label: t("tabReady") },
+          { key: "shipped", label: t("tabShipped") },
+        ]}
+        value={tab}
+        onChange={setTab}
+      />
 
       {isLoading ? (
         <StateBox kind="loading">{t("loading")}</StateBox>
@@ -224,6 +226,7 @@ export function ProductionShipments() {
           <div style={{ marginTop: 8 }}>{t("printStore")}: {printing.storeName ?? "—"}</div>
           <div>{t("printDate")}: {new Date().toLocaleDateString(intl)}</div>
           {printing.neededBy && <div>{t("colNeededBy")}: {fmtDate(printing.neededBy, intl)}</div>}
+          {/* eslint-disable-next-line no-restricted-syntax -- print sheet: plain table styled by PRINT_CSS */}
           <table>
             <thead>
               <tr>
@@ -248,6 +251,6 @@ export function ProductionShipments() {
           </div>
         </div>
       )}
-    </div>
+    </PageContainer>
   );
 }

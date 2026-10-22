@@ -4,6 +4,8 @@ import { useState } from "react";
 import { useTranslations } from "next-intl";
 import { toast } from "sonner";
 import { Btn } from "@/components/ui/Btn";
+import { Modal } from "@/components/ui/Modal";
+import { inputStyle, labelStyle, textareaStyle } from "@/components/ui/fieldStyles";
 import { usePostponeOrder } from "../hooks/useOrderTracking";
 import type { TrackedOrder } from "../types";
 
@@ -41,36 +43,26 @@ export function PostponeDialog({ order, onClose }: { order: TrackedOrder; onClos
     );
 
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      onClick={() => !postpone.isPending && onClose()}
-      style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", zIndex: 300, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}
-    >
-      <div
-        onClick={(e) => e.stopPropagation()}
-        style={{ background: "#0D1117", border: "1px solid #1F2937", borderRadius: 12, width: "min(460px, 100%)", padding: 22 }}
-      >
-        <h2 style={{ color: "#E8EDF5", fontSize: 17, fontWeight: 700, margin: "0 0 6px" }}>{t("title")}</h2>
+    <Modal title={t("title")} width={460} onClose={() => !postpone.isPending && onClose()}>
         <p style={{ color: "#6B7280", fontSize: 13, margin: "0 0 16px" }}>{t("body")}</p>
 
-        <label style={{ display: "block", color: "#9CA3AF", fontSize: 12, marginBottom: 4 }}>{t("newDate")}</label>
+        <label style={labelStyle}>{t("newDate")}</label>
         <input
           type="date"
           value={date}
           min={minDate}
           onChange={(e) => setDate(e.target.value)}
-          style={{ ...field, marginBottom: 14 }}
+          style={{ ...inputStyle, marginBottom: 14 }}
         />
 
-        <label style={{ display: "block", color: "#9CA3AF", fontSize: 12, marginBottom: 4 }}>{t("reason")}</label>
+        <label style={labelStyle}>{t("reason")}</label>
         <textarea
           value={reason}
           onChange={(e) => setReason(e.target.value)}
           maxLength={500}
           rows={3}
           placeholder={t("reasonPlaceholder")}
-          style={{ ...field, resize: "vertical", marginBottom: 18 }}
+          style={{ ...textareaStyle, marginBottom: 18 }}
         />
 
         <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
@@ -79,19 +71,6 @@ export function PostponeDialog({ order, onClose }: { order: TrackedOrder; onClos
             {postpone.isPending ? t("saving") : t("confirm")}
           </Btn>
         </div>
-      </div>
-    </div>
+    </Modal>
   );
 }
-
-const field: React.CSSProperties = {
-  width: "100%",
-  boxSizing: "border-box",
-  background: "#0A0F1A",
-  border: "1px solid #1F2937",
-  borderRadius: 8,
-  color: "#E8EDF5",
-  fontSize: 13,
-  padding: "8px 12px",
-  outline: "none",
-};

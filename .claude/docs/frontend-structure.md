@@ -67,7 +67,29 @@ Block 13. For the current inventory see CLAUDE.md's frontend layout.
 | /marketplace /suppliers /ai-orders /ai-assistant /service-desk /provider /admin ... | ✅ done | v2–v4 feature pages |
 | /* (catch-all) | ✅ placeholder | "Сторінка в розробці" (KI-011, intended) |
 
-## shadcn/ui Components
+## UI standard (single source of truth)
+The shared kit lives in `components/ui/` (inline-styled, dependency-free). The shadcn files
+(`badge/button/input/form/label/dialog`) are legacy and unused.
+
+| Piece | Tokens / how to |
+|---|---|
+| `Btn` | variants `primary` (#1D3461/#3B82F6/#93C5FD), `danger`, `dangerOutline`, `success`, `ghost`, `link`; sizes `md` (9px 18px/13), `sm` (4px 10px/11), `xs` (2px 8px/11); props `icon`, `title`, `aria-label`, `fullWidth`, `form`, `style`. Icon-only: pass `icon` + `aria-label`, children `{null}` |
+| `PageContainer` + `PageHeader` | root of every page: padding 28px 32px, column, gap 20. Header: title #E8EDF5 22/700, subtitle #4B5563 13, `actions` slot right. No manual margins between blocks (gap does it) |
+| `BackLink` | detail pages: `<BackLink href=… / onClick=…>label</BackLink>` above the header |
+| `Tabs` | underline tabs `items=[{key,label,count?}] value onChange` (#3B82F6 2px active). Filter chips/presets use `Btn size="sm"` primary/ghost |
+| `StatusPill` | `bg`/`text` colour maps stay with the caller; radius 20, 3px 8px, 11/600 |
+| `fieldStyles` | `inputStyle` (forms, width 100%), `filterInputStyle` (toolbar), `selectStyle`, `textareaStyle`, `labelStyle`; `Field` wraps label + control. Never re-declare local copies |
+| `Table` | all data tables (sorting, pagination, expandable rows). Print sheets are the only exception |
+| `Modal` / `ReasonModal` / `DetailDrawer` | all overlays (Esc + backdrop). No hand-rolled `position: fixed` |
+| `Pagination`, `ActionMenu` | list paging; row action menus |
+
+Rule: no new raw `<button>` (use `Btn`; icon-only/row-click buttons may stay raw with standard colours),
+no raw `<table>`, no `position: fixed` overlays outside special cases (print sheet, tooltips).
+Enforced by ESLint `no-restricted-syntax` (error) in the production + procurement-orders block
+(`features/production`, `features/orders`, `features/order-tracking`, their `app/(dashboard)` routes);
+extend the `overrides` in `frontend/.eslintrc.json` as other modules are migrated.
+
+## shadcn/ui Components (legacy)
 Install via: `npx shadcn@latest add {component}`
 Never copy-paste shadcn source — always install through CLI.
 
@@ -75,4 +97,4 @@ Never copy-paste shadcn source — always install through CLI.
 - `"use client"` only on components that use hooks or browser events
 - CSR for all authenticated dashboard views (no SSR needed, no SEO requirement)
 - Forms: `react-hook-form` + `zod` validation
-- Tables: custom inline-styled (consistent with dark theme) until a shadcn table component is adopted project-wide
+- Tables: always `components/ui/Table` (inline-styled dark theme) — see "UI standard" below

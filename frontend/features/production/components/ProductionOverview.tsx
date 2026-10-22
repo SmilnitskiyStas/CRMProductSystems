@@ -3,6 +3,7 @@
 import { useState, type ReactNode } from "react";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
+import { PageContainer } from "@/components/ui/PageContainer";
 import { useProductionOverview } from "../hooks/useProductionInsights";
 import { ProductionPipeline } from "./ProductionPipeline";
 import {
@@ -71,7 +72,7 @@ export function ProductionOverview() {
   const kpiSum = (d.shortages ?? 0) + (d.expiringSoon ?? 0);
 
   return (
-    <div>
+    <PageContainer>
       <PageHeader
         title={t("title")}
         subtitle={t("subtitle")}
@@ -79,20 +80,20 @@ export function ProductionOverview() {
       />
       <ProductionPipeline locationId={locationId || undefined} />
 
-      <div style={{ color: "#E8EDF5", fontSize: 16, fontWeight: 700, marginBottom: 10 }}>{t("attentionTitle")}</div>
+      <div style={{ color: "#E8EDF5", fontSize: 16, fontWeight: 700 }}>{t("attentionTitle")}</div>
       {isLoading ? (
         <StateBox kind="loading">{t("loading")}</StateBox>
       ) : isError ? (
         <StateBox kind="error">{t("loadError")}</StateBox>
       ) : (
         <>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(190px, 1fr))", gap: 12, marginBottom: 16 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(190px, 1fr))", gap: 12 }}>
             <Kpi href="/production/plan" label={t("kpiShortages")} value={d.shortages ?? 0} accent="#F87171" />
             <Kpi href="/production/warehouse" label={t("kpiExpiring")} value={d.expiringSoon ?? 0} accent="#FBBF24" />
           </div>
 
           {kpiSum === 0 && (
-            <div style={{ ...cardStyle, color: "#4ADE80", fontSize: 14, fontWeight: 600, marginBottom: 16 }}>{t("allClear")}</div>
+            <div style={{ ...cardStyle, color: "#4ADE80", fontSize: 14, fontWeight: 600 }}>{t("allClear")}</div>
           )}
 
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: 12 }}>
@@ -129,6 +130,6 @@ export function ProductionOverview() {
           </div>
         </>
       )}
-    </div>
+    </PageContainer>
   );
 }

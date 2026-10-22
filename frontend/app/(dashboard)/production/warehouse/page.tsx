@@ -4,8 +4,6 @@ import { ProductionWarehouse } from "@/features/production/components/Production
 
 export default function ProductionWarehouseRoute() {
   return (
-    <div style={{ padding: "28px 32px" }}>
-      <ProductionWarehouse />
-    </div>
+    <ProductionWarehouse />
   );
 }

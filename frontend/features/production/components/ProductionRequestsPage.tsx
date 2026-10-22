@@ -4,6 +4,9 @@ import { useState } from "react";
 import { Plus } from "lucide-react";
 import { useTranslations, useLocale } from "next-intl";
 import { Btn } from "@/components/ui/Btn";
+import { PageContainer } from "@/components/ui/PageContainer";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { filterInputStyle } from "@/components/ui/fieldStyles";
 import { Table, type TableColumn } from "@/components/ui/Table";
 import { useModules } from "@/features/modules/hooks/useModules";
 import { useLocations } from "@/features/locations/hooks/useLocations";
@@ -17,7 +20,6 @@ import {
   RequestStageBadge,
   formatDateOnly,
   errMessage,
-  reqInputStyle,
   reqErrorStyle,
 } from "./ProductionRequestStatusBadge";
 
@@ -120,26 +122,12 @@ export function ProductionRequestsPage({ mode }: PageProps) {
   ];
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-      <div
-        style={{
-          display: "flex",
-          alignItems: "flex-start",
-          justifyContent: "space-between",
-          gap: 16,
-          flexWrap: "wrap",
-        }}
-      >
-        <div>
-          <h1 style={{ color: "#E8EDF5", fontSize: 22, fontWeight: 700, margin: 0 }}>
-            {isProd ? t("title") : t("storeTitle")}
-          </h1>
-          <p style={{ color: "#6B7280", fontSize: 13, margin: "6px 0 0" }}>
-            {isProd ? t("subtitle") : t("storeSubtitle")}
-          </p>
-        </div>
-        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-          {!isProd && (
+    <PageContainer>
+      <PageHeader
+        title={isProd ? t("title") : t("storeTitle")}
+        subtitle={isProd ? t("subtitle") : t("storeSubtitle")}
+        actions={
+          !isProd ? (
             <>
               <Btn variant="ghost" onClick={handleAutoGenerate} disabled={autoGen.isPending}>
                 {autoGen.isPending ? t("calcRunning") : t("calcNeeds")}
@@ -148,16 +136,16 @@ export function ProductionRequestsPage({ mode }: PageProps) {
                 {t("newRequest")}
               </Btn>
             </>
-          )}
-        </div>
-      </div>
+          ) : undefined
+        }
+      />
 
       <>
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
             <select
               value={status}
               onChange={(e) => setStatus(e.target.value)}
-              style={{ ...reqInputStyle, width: "auto", padding: "7px 12px", cursor: "pointer" }}
+              style={{ ...filterInputStyle, cursor: "pointer" }}
             >
               <option value="">{t("filterAllStatuses")}</option>
               {isProd && (
@@ -170,7 +158,7 @@ export function ProductionRequestsPage({ mode }: PageProps) {
             <select
               value={storeId}
               onChange={(e) => setStoreId(e.target.value)}
-              style={{ ...reqInputStyle, width: "auto", padding: "7px 12px", cursor: "pointer" }}
+              style={{ ...filterInputStyle, cursor: "pointer" }}
             >
               <option value="">{t("filterAllStores")}</option>
               {locations
@@ -211,6 +199,6 @@ export function ProductionRequestsPage({ mode }: PageProps) {
       {openId && (
         <ProductionRequestDetail id={openId} mode={mode} canProduce={canProduce} onClose={() => setOpenId(null)} />
       )}
-    </div>
+    </PageContainer>
   );
 }

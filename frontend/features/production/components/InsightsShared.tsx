@@ -2,6 +2,9 @@
 
 import type { CSSProperties, ReactNode } from "react";
 import { useLocale } from "next-intl";
+import { filterInputStyle } from "@/components/ui/fieldStyles";
+import { StatusPill } from "@/components/ui/StatusPill";
+import { PageHeader as SharedPageHeader } from "@/components/ui/PageHeader";
 import { useProductionLocationList } from "../hooks/useProductionInsights";
 
 export const cardStyle: CSSProperties = {
@@ -9,16 +12,6 @@ export const cardStyle: CSSProperties = {
   border: "1px solid #1F2937",
   borderRadius: 12,
   padding: 16,
-};
-
-export const selectStyle: CSSProperties = {
-  background: "#111827",
-  border: "1px solid #1F2937",
-  borderRadius: 8,
-  color: "#E8EDF5",
-  fontSize: 13,
-  padding: "8px 12px",
-  outline: "none",
 };
 
 export const mutedText: CSSProperties = { color: "#6B7280", fontSize: 12 };
@@ -58,16 +51,9 @@ export function expiryColor(days: number | null | undefined): string {
   return "#E8EDF5";
 }
 
+/** Thin adapter over the shared ui/PageHeader (keeps the `right` prop name). */
 export function PageHeader({ title, subtitle, right }: { title: string; subtitle?: string; right?: ReactNode }) {
-  return (
-    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 16, flexWrap: "wrap", marginBottom: 20 }}>
-      <div>
-        <h1 style={{ color: "#E8EDF5", fontSize: 22, fontWeight: 700, margin: 0 }}>{title}</h1>
-        {subtitle && <p style={{ color: "#6B7280", fontSize: 13, margin: "4px 0 0" }}>{subtitle}</p>}
-      </div>
-      <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>{right}</div>
-    </div>
-  );
+  return <SharedPageHeader title={title} subtitle={subtitle} actions={right} />;
 }
 
 /** Location filter — renders nothing unless the tenant has more than one production location. */
@@ -83,7 +69,7 @@ export function ProductionLocationSelect({
   const { list } = useProductionLocationList();
   if (list.length <= 1) return null;
   return (
-    <select value={value} onChange={(e) => onChange(e.target.value)} style={selectStyle}>
+    <select value={value} onChange={(e) => onChange(e.target.value)} style={filterInputStyle}>
       <option value="">{allLabel}</option>
       {list.map((l) => (
         <option key={l.id} value={l.id}>
@@ -99,10 +85,7 @@ export function StateBox({ kind, children }: { kind: "loading" | "error" | "empt
   return <div style={{ ...cardStyle, color, fontSize: 13, textAlign: "center", padding: 32 }}>{children}</div>;
 }
 
+/** Neutral-by-default status pill (delegates to the shared ui/StatusPill). */
 export function Pill({ children, color = "#9CA3AF", bg = "#1F2937" }: { children: ReactNode; color?: string; bg?: string }) {
-  return (
-    <span style={{ display: "inline-block", padding: "2px 8px", borderRadius: 999, fontSize: 11, fontWeight: 600, color, background: bg }}>
-      {children}
-    </span>
-  );
+  return <StatusPill bg={bg} text={color}>{children}</StatusPill>;
 }

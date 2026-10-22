@@ -5,6 +5,9 @@ import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { useQueryClient } from "@tanstack/react-query";
 import { Btn } from "@/components/ui/Btn";
+import { PageContainer } from "@/components/ui/PageContainer";
+import { Tabs } from "@/components/ui/Tabs";
+import { filterInputStyle, inputStyle as formInputStyle, labelStyle } from "@/components/ui/fieldStyles";
 import { Modal } from "@/components/ui/Modal";
 import { Table, type TableColumn } from "@/components/ui/Table";
 import { receiptsApi } from "@/features/receipts/api/receipts";
@@ -16,7 +19,6 @@ import {
   StateBox,
   Pill,
   cardStyle,
-  selectStyle,
   mutedText,
   fmtQty,
   useIntlLocale,
@@ -202,17 +204,17 @@ export function ProductionPlan() {
     { key: "supplier", header: t("colSupplier"), render: (i) => i.defaultSupplierName ?? <span style={mutedText}>{t("noSupplier")}</span> },
   ];
 
-  const inputStyle = { ...selectStyle, colorScheme: "dark" } as const;
+  const inputStyle = { ...filterInputStyle, colorScheme: "dark" } as const;
 
   return (
-    <div>
+    <PageContainer>
       <PageHeader
         title={t("title")}
         subtitle={t("subtitle")}
         right={<ProductionLocationSelect value={locationId} onChange={setLocationId} allLabel={t("allLocations")} />}
       />
 
-      <div style={{ ...cardStyle, display: "flex", gap: 14, flexWrap: "wrap", alignItems: "center", marginBottom: 16 }}>
+      <div style={{ ...cardStyle, display: "flex", gap: 14, flexWrap: "wrap", alignItems: "center" }}>
         <div style={{ display: "flex", gap: 6 }}>
           {GRANULARITIES.map((g) => (
             <Btn key={g} size="sm" variant={granularity === g ? "primary" : "ghost"} onClick={() => setGranularity(g)}>
@@ -228,22 +230,21 @@ export function ProductionPlan() {
           {t("to")}
           <input type="date" value={to} min={from} onChange={(e) => setTo(e.target.value)} style={inputStyle} />
         </label>
-        <div style={{ marginLeft: "auto", display: "flex", gap: 6 }}>
-          <Btn size="sm" variant={tab === "products" ? "primary" : "ghost"} onClick={() => setTab("products")}>
-            {t("tabProducts")}
-          </Btn>
-          <Btn size="sm" variant={tab === "ingredients" ? "primary" : "ghost"} onClick={() => setTab("ingredients")}>
-            {t("tabIngredients")}
-            {missingIngredients.length > 0 ? ` (${missingIngredients.length})` : ""}
-          </Btn>
-        </div>
       </div>
+
+      <Tabs
+        items={[
+          { key: "products", label: t("tabProducts") },
+          { key: "ingredients", label: t("tabIngredients"), count: missingIngredients.length > 0 ? missingIngredients.length : undefined },
+        ]}
+        value={tab}
+        onChange={setTab}
+      />
 
       {resultMsg && (
         <div
           style={{
             padding: "12px 16px",
-            marginBottom: 12,
             borderRadius: 10,
             fontSize: 13,
             background: resultMsg.ok ? "#064E3B" : "#2d0a0a",
@@ -295,9 +296,9 @@ export function ProductionPlan() {
         <Modal title={t("confirmTitle")} onClose={() => !creating && setShowConfirm(false)} width={560}>
           <p style={{ color: "#9CA3AF", fontSize: 13, marginTop: 0 }}>{t("confirmBody", { count: groups.length })}</p>
           {!locationId && prodLocations.length > 1 && (
-            <label style={{ ...mutedText, display: "block", marginBottom: 12 }}>
+            <label style={{ ...labelStyle, marginBottom: 12 }}>
               {t("destination")}
-              <select value={destId} onChange={(e) => setDestId(e.target.value)} style={{ ...selectStyle, width: "100%", marginTop: 4 }}>
+              <select value={destId} onChange={(e) => setDestId(e.target.value)} style={{ ...formInputStyle, marginTop: 4 }}>
                 <option value="">{t("chooseDestination")}</option>
                 {prodLocations.map((l) => (
                   <option key={l.id} value={l.id}>{l.name}</option>
@@ -328,6 +329,6 @@ export function ProductionPlan() {
           </div>
         </Modal>
       )}
-    </div>
+    </PageContainer>
   );
 }

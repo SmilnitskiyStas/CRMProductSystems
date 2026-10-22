@@ -7,6 +7,7 @@ import { useTranslations, useLocale } from "next-intl";
 import { toast } from "sonner";
 import { ChevronDown, ChevronRight, RefreshCw } from "lucide-react";
 import { Btn } from "@/components/ui/Btn";
+import { StatusPill } from "@/components/ui/StatusPill";
 import { Table, type TableColumn } from "@/components/ui/Table";
 import { useMe } from "@/features/auth/hooks/useAuth";
 import { useAutoDrafts, useAutoDraftActions } from "../hooks/useAutoDrafts";
@@ -106,15 +107,14 @@ function DraftCard({ draft, meId, meRole }: { draft: ReceiptDto; meId?: string; 
         <span style={{ color: "#9CA3AF", fontSize: 12, fontFamily: "monospace" }}>
           {total.toLocaleString(intl, { maximumFractionDigits: 0 })} ₴
         </span>
-        <span style={{
-          fontSize: 11, fontWeight: 600, padding: "3px 8px", borderRadius: 20,
-          background: draft.takenByUserId ? "#1C2A3A" : "#111827",
-          color: draft.takenByUserId ? "#60A5FA" : "#9CA3AF",
-        }}>
+        <StatusPill
+          bg={draft.takenByUserId ? "#1C2A3A" : "#111827"}
+          text={draft.takenByUserId ? "#60A5FA" : "#9CA3AF"}
+        >
           {draft.takenByUserId
             ? draft.takenByName ? t("statusTaken", { name: draft.takenByName }) : t("statusTakenUnknown")
             : t("statusNew")}
-        </span>
+        </StatusPill>
         <div style={{ marginLeft: "auto", display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
           {!draft.takenByUserId && (
             <Btn
@@ -177,7 +177,7 @@ export function AutoOrdersSection({ storeId }: { storeId: string | undefined }) 
   };
 
   return (
-    <section style={{ marginBottom: 28 }}>
+    <section>
       <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12, marginBottom: 12 }}>
         <div>
           <h2 style={{ color: "#E8EDF5", fontSize: 17, fontWeight: 700, margin: 0 }}>{t("title")}</h2>

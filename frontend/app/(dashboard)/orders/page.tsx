@@ -5,6 +5,9 @@ import { Calculator, CheckCircle2 } from "lucide-react";
 import { toast } from "sonner";
 import { useTranslations, useLocale } from "next-intl";
 import { Btn } from "@/components/ui/Btn";
+import { Modal } from "@/components/ui/Modal";
+import { PageContainer } from "@/components/ui/PageContainer";
+import { PageHeader } from "@/components/ui/PageHeader";
 import { AutoOrdersSection } from "@/features/orders/components/AutoOrdersSection";
 import { OrderLinesTable } from "@/features/orders/components/OrderLinesTable";
 import { useGenerateOrder } from "@/features/orders/hooks/useOrders";
@@ -138,36 +141,31 @@ export default function OrdersPage() {
   const totalQty = summary.reduce((s, g) => s + g.qty, 0);
 
   return (
-    <div style={{ padding: "28px 32px" }}>
-      {/* Header */}
-      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 22 }}>
-        <div>
-          <h1 style={{ color: "#E8EDF5", fontSize: 22, fontWeight: 700, margin: 0 }}>
-            {t("title")}
-          </h1>
-          <p style={{ color: "#4B5563", fontSize: 13, marginTop: 6, marginBottom: 0 }}>
-            {t("subtitle")}
-          </p>
-        </div>
-        <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-          {!primaryStoreId && (
-            <span style={{ color: "#6B7280", fontSize: 12 }}>{t("selectStoreHint")}</span>
-          )}
-          <Btn
-            icon={<Calculator size={15} />}
-            onClick={handleGenerate}
-            disabled={generate.isPending || !primaryStoreId}
-          >
-            {generate.isPending ? t("generating") : t("generate")}
-          </Btn>
-        </div>
-      </div>
+    <PageContainer>
+      <PageHeader
+        title={t("title")}
+        subtitle={t("subtitle")}
+        actions={
+          <>
+            {!primaryStoreId && (
+              <span style={{ color: "#6B7280", fontSize: 12 }}>{t("selectStoreHint")}</span>
+            )}
+            <Btn
+              icon={<Calculator size={15} />}
+              onClick={handleGenerate}
+              disabled={generate.isPending || !primaryStoreId}
+            >
+              {generate.isPending ? t("generating") : t("generate")}
+            </Btn>
+          </>
+        }
+      />
 
       <AutoOrdersSection storeId={primaryStoreId} />
 
       {/* Pipeline stats after generation */}
       {result && (
-        <div style={{ display: "flex", gap: 12, marginBottom: 20 }}>
+        <div style={{ display: "flex", gap: 12 }}>
           <div style={statCard}>
             <div style={{ color: "#6B7280", fontSize: 11, textTransform: "uppercase" }}>{t("statAduCalculated")}</div>
             <div style={{ color: "#E8EDF5", fontSize: 20, fontWeight: 700 }}>
@@ -199,7 +197,7 @@ export default function OrdersPage() {
         <>
           {/* Selection toolbar */}
           <div style={{
-            display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", marginBottom: 14,
+            display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap",
             background: "#0D1117", border: "1px solid #1F2937", borderRadius: 10, padding: "10px 14px",
           }}>
             <label style={{ display: "flex", alignItems: "center", gap: 6, color: "#9CA3AF", fontSize: 13, cursor: "pointer" }}>
@@ -212,16 +210,16 @@ export default function OrdersPage() {
               {t("onlyToOrder")}
             </label>
 
-            <button
+            <Btn
+              variant="link"
               onClick={() => setSelected(new Set(orderableAll.map((l) => l.productId)))}
               disabled={orderableAll.length === 0}
-              style={linkBtn}
             >
               {t("selectAll", { count: orderableAll.length.toLocaleString(intl) })}
-            </button>
-            <button onClick={() => setSelected(new Set())} disabled={selected.size === 0} style={linkBtn}>
+            </Btn>
+            <Btn variant="link" onClick={() => setSelected(new Set())} disabled={selected.size === 0}>
               {t("clearSelection")}
-            </button>
+            </Btn>
 
             <span style={{ marginLeft: "auto", color: "#6B7280", fontSize: 13 }}>
               {t("selectedCount", { count: selectedLines.length.toLocaleString(intl) })}
@@ -255,25 +253,11 @@ export default function OrdersPage() {
 
       {/* Confirmation dialog */}
       {confirmOpen && (
-        <div
-          role="dialog"
-          aria-modal="true"
-          style={{
-            position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", zIndex: 300,
-            display: "flex", alignItems: "center", justifyContent: "center", padding: 16,
-          }}
-          onClick={() => !confirm.isPending && setConfirmOpen(false)}
+        <Modal
+          title={t("confirmDialog.title")}
+          width={560}
+          onClose={() => !confirm.isPending && setConfirmOpen(false)}
         >
-          <div
-            onClick={(e) => e.stopPropagation()}
-            style={{
-              background: "#0D1117", border: "1px solid #1F2937", borderRadius: 12,
-              width: "min(560px, 100%)", maxHeight: "86vh", overflowY: "auto", padding: 22,
-            }}
-          >
-            <h2 style={{ color: "#E8EDF5", fontSize: 17, fontWeight: 700, margin: "0 0 6px" }}>
-              {t("confirmDialog.title")}
-            </h2>
             <p style={{ color: "#6B7280", fontSize: 13, margin: "0 0 16px" }}>
               {t("confirmDialog.body", { positions: selectedLines.length, suppliers: summary.length })}
             </p>
@@ -312,18 +296,8 @@ export default function OrdersPage() {
                 {confirm.isPending ? t("confirmDialog.confirming") : t("confirmDialog.confirm")}
               </Btn>
             </div>
-          </div>
-        </div>
+        </Modal>
       )}
-    </div>
+    </PageContainer>
   );
 }
-
-const linkBtn: React.CSSProperties = {
-  background: "transparent",
-  border: "none",
-  color: "#60A5FA",
-  fontSize: 13,
-  cursor: "pointer",
-  padding: 0,
-};

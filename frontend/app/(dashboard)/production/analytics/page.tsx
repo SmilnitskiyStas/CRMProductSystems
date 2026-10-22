@@ -4,8 +4,6 @@ import { ProductionAnalytics } from "@/features/production/components/Production
 
 export default function ProductionAnalyticsRoute() {
   return (
-    <div style={{ padding: "28px 32px" }}>
-      <ProductionAnalytics />
-    </div>
+    <ProductionAnalytics />
   );
 }

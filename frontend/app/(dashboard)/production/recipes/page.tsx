@@ -36,8 +36,7 @@ export default function RecipesPage() {
   }
 
   return (
-    <div style={{ padding: "28px 32px" }}>
-      <RecipeTable
+    <RecipeTable
         showInactive={showInactive}
         toolbarExtra={
           <label
@@ -60,6 +59,5 @@ export default function RecipesPage() {
           </label>
         }
       />
-    </div>
   );
 }

@@ -9,6 +9,10 @@ import { ProductionOrderForm } from "./ProductionOrderForm";
 import type { ProductionOrderListItemDto, ProductionOrderStatus } from "../types";
 import { Table, type TableColumn } from "@/components/ui/Table";
 import { Btn } from "@/components/ui/Btn";
+import { PageContainer } from "@/components/ui/PageContainer";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { StatusPill } from "@/components/ui/StatusPill";
+import { filterInputStyle } from "@/components/ui/fieldStyles";
 import { formatDateOnly } from "./ProductionRequestStatusBadge";
 
 export function ProductionOrderTable() {
@@ -33,9 +37,9 @@ export function ProductionOrderTable() {
 
   if (isError) {
     return (
-      <div style={{ padding: "28px 32px", color: "#F87171", fontSize: 13 }}>
+      <PageContainer style={{ color: "#F87171", fontSize: 13 }}>
         {t("loadError")}
-      </div>
+      </PageContainer>
     );
   }
 
@@ -97,30 +101,22 @@ export function ProductionOrderTable() {
   ];
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-      {/* Header */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 16, flexWrap: "wrap" }}>
-        <h1 style={{ color: "#E8EDF5", fontSize: 22, fontWeight: 700, margin: 0 }}>{t("title")}</h1>
-        <Btn icon={<Plus size={15} />} onClick={() => setCreateOpen(true)}>
-          {t("addOrder")}
-        </Btn>
-      </div>
+    <PageContainer>
+      <PageHeader
+        title={t("title")}
+        actions={
+          <Btn icon={<Plus size={15} />} onClick={() => setCreateOpen(true)}>
+            {t("addOrder")}
+          </Btn>
+        }
+      />
 
       {/* Filters */}
       <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
         <select
           value={statusFilter}
           onChange={(e) => setStatusFilter(e.target.value)}
-          style={{
-            background: "#111827",
-            border: "1px solid #1F2937",
-            borderRadius: 8,
-            color: "#E8EDF5",
-            fontSize: 13,
-            padding: "7px 12px",
-            outline: "none",
-            cursor: "pointer",
-          }}
+          style={{ ...filterInputStyle, cursor: "pointer" }}
         >
           {STATUS_OPTIONS.map((opt) => (
             <option key={opt.value} value={opt.value}>
@@ -141,7 +137,7 @@ export function ProductionOrderTable() {
       />
 
       {createOpen && <ProductionOrderForm onClose={() => setCreateOpen(false)} />}
-    </div>
+    </PageContainer>
   );
 }
 
@@ -156,21 +152,7 @@ export function OrderStatusBadge({ status }: { status: ProductionOrderStatus }) 
     cancelled: { bg: "#1F1010", color: "#F87171" },
   };
   const { bg, color } = cfg[status] ?? cfg.planned;
-  return (
-    <span
-      style={{
-        display: "inline-block",
-        padding: "3px 8px",
-        borderRadius: 20,
-        fontSize: 11,
-        fontWeight: 600,
-        background: bg,
-        color,
-      }}
-    >
-      {t(status)}
-    </span>
-  );
+  return <StatusPill bg={bg} text={color}>{t(status)}</StatusPill>;
 }
 
 function formatDate(iso: string, intlLocale: string) {

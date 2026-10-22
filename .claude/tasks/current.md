@@ -1682,3 +1682,5 @@ Overview/plan/shipments/stock GETs under api/production + TenantRoleTabs keys; t
 - TASK-768 (frontend-developer): production Overview compact cards + detail modal, shipped-today window; new /production/analytics page (KPIs, chart, tables, CSV) + sidebar item; tsc+eslint clean; verify vs TASK-767. Log: logs/tasks/768_*.md
 
 - TASK-767 (backend-developer): GET /api/production/analytics + TenantRoleTabs `/production/analytics`; 9 tests, build OK. Log: logs/tasks/767_*.md
+
+- TASK-769 (frontend-developer): UI standard consolidation - shared PageContainer/PageHeader/BackLink/Tabs/StatusPill/fieldStyles + Btn extensions; applied to production + orders block; ESLint guard; docs. tsc+lint clean. Log: logs/tasks/769_*.md

@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useTranslations } from "next-intl";
 import { Btn } from "@/components/ui/Btn";
 import { Modal } from "@/components/ui/Modal";
+import { inputStyle, labelStyle, textareaStyle } from "@/components/ui/fieldStyles";
 import {
   useCreateProductionOrder,
   useRecipes,
@@ -118,7 +119,7 @@ export function ProductionOrderForm({ onClose }: Props) {
           onChange={(e) => setNotes(e.target.value)}
           rows={2}
           placeholder={t("notesPlaceholder")}
-          style={{ ...inputStyle, resize: "vertical" }}
+          style={textareaStyle}
         />
       </div>
 
@@ -150,22 +151,3 @@ export function ProductionOrderForm({ onClose }: Props) {
     </Modal>
   );
 }
-
-const labelStyle: React.CSSProperties = {
-  display: "block",
-  color: "#9CA3AF",
-  fontSize: 12,
-  marginBottom: 5,
-};
-
-const inputStyle: React.CSSProperties = {
-  width: "100%",
-  padding: "8px 12px",
-  background: "#111827",
-  border: "1px solid #1F2937",
-  borderRadius: 8,
-  color: "#E8EDF5",
-  fontSize: 13,
-  outline: "none",
-  boxSizing: "border-box",
-};

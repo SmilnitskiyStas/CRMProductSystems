@@ -4,6 +4,8 @@ import { useMemo, useState, type ReactNode } from "react";
 import { useTranslations } from "next-intl";
 import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { Btn } from "@/components/ui/Btn";
+import { PageContainer } from "@/components/ui/PageContainer";
+import { filterInputStyle } from "@/components/ui/fieldStyles";
 import { Table, type TableColumn } from "@/components/ui/Table";
 import { useProductionAnalytics } from "../hooks/useProductionInsights";
 import type { ProductionAnalyticsDto } from "../insights-types";
@@ -15,7 +17,6 @@ import {
   fmtDate,
   fmtQty,
   mutedText,
-  selectStyle,
   useIntlLocale,
 } from "./InsightsShared";
 
@@ -219,7 +220,7 @@ export function ProductionAnalytics() {
   const hasData = !!data && ((tot.received ?? 0) > 0 || (d.perDay?.length ?? 0) > 0 || (d.byItem?.length ?? 0) > 0);
 
   return (
-    <div>
+    <PageContainer>
       <PageHeader
         title={t("title")}
         subtitle={t("subtitle")}
@@ -233,34 +234,21 @@ export function ProductionAnalytics() {
         }
       />
 
-      <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap", marginBottom: 16 }}>
+      <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
         {presets.map((p) => (
-          <button
-            key={p.key}
-            type="button"
-            onClick={() => setPreset(p.key)}
-            style={{
-              ...selectStyle,
-              cursor: "pointer",
-              padding: "6px 12px",
-              background: preset === p.key ? "#1D4ED8" : "#111827",
-              borderColor: preset === p.key ? "#1D4ED8" : "#1F2937",
-              color: preset === p.key ? "#fff" : "#E8EDF5",
-              fontWeight: preset === p.key ? 600 : 400,
-            }}
-          >
+          <Btn key={p.key} size="sm" variant={preset === p.key ? "primary" : "ghost"} onClick={() => setPreset(p.key)}>
             {p.label}
-          </button>
+          </Btn>
         ))}
         {preset === "custom" && (
           <>
-            <input type="date" aria-label={t("from")} value={customFrom} max={customTo || undefined} onChange={(e) => setCustomFrom(e.target.value)} style={selectStyle} />
+            <input type="date" aria-label={t("from")} value={customFrom} max={customTo || undefined} onChange={(e) => setCustomFrom(e.target.value)} style={filterInputStyle} />
             <span style={mutedText}>—</span>
-            <input type="date" aria-label={t("to")} value={customTo} min={customFrom || undefined} onChange={(e) => setCustomTo(e.target.value)} style={selectStyle} />
+            <input type="date" aria-label={t("to")} value={customTo} min={customFrom || undefined} onChange={(e) => setCustomTo(e.target.value)} style={filterInputStyle} />
           </>
         )}
       </div>
-      {rangeError && <div style={{ color: "#F87171", fontSize: 12, marginBottom: 10 }}>{rangeError}</div>}
+      {rangeError && <div style={{ color: "#F87171", fontSize: 12 }}>{rangeError}</div>}
 
       {rangeError ? null : isLoading ? (
         <StateBox kind="loading">{t("loading")}</StateBox>
@@ -304,21 +292,9 @@ export function ProductionAnalytics() {
               <div style={{ ...sectionTitle, marginBottom: 0 }}>{t("chartTitle")}</div>
               <div style={{ display: "flex", gap: 6 }}>
                 {(["counts", "volumes"] as const).map((m) => (
-                  <button
-                    key={m}
-                    type="button"
-                    onClick={() => setMode(m)}
-                    style={{
-                      ...selectStyle,
-                      cursor: "pointer",
-                      padding: "4px 10px",
-                      background: mode === m ? "#1D4ED8" : "#111827",
-                      borderColor: mode === m ? "#1D4ED8" : "#1F2937",
-                      color: mode === m ? "#fff" : "#E8EDF5",
-                    }}
-                  >
+                  <Btn key={m} size="sm" variant={mode === m ? "primary" : "ghost"} onClick={() => setMode(m)}>
                     {t(m === "counts" ? "modeCounts" : "modeVolumes")}
-                  </button>
+                  </Btn>
                 ))}
               </div>
             </div>
@@ -400,6 +376,6 @@ export function ProductionAnalytics() {
           </div>
         </div>
       )}
-    </div>
+    </PageContainer>
   );
 }

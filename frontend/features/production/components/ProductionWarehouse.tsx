@@ -3,7 +3,8 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
-import { Btn } from "@/components/ui/Btn";
+import { PageContainer } from "@/components/ui/PageContainer";
+import { Tabs } from "@/components/ui/Tabs";
 import { Table, type TableColumn } from "@/components/ui/Table";
 import { useProductionStock } from "../hooks/useProductionInsights";
 import type { ProductionStockItemDto, ProductionStockBatchDto, StockKind } from "../insights-types";
@@ -56,42 +57,51 @@ export function ProductionWarehouse() {
     { key: "batches", header: t("colBatches"), render: (r) => r.batches?.length ?? 0 },
   ];
 
-  function batchRow(b: ProductionStockBatchDto) {
-    const days = b.daysToExpiry ?? daysUntil(b.expiryDate);
-    return (
-      <tr key={b.id} style={{ borderTop: "1px solid #1F2937" }}>
-        <td style={{ padding: "6px 10px", color: "#E8EDF5" }}>{b.batchNumber ?? "—"}</td>
-        <td style={{ padding: "6px 10px" }}>{fmtQty(b.quantity, intl)}</td>
-        <td style={{ padding: "6px 10px", color: expiryColor(days), fontWeight: 600 }}>{fmtDate(b.expiryDate, intl)}</td>
-        <td style={{ padding: "6px 10px", color: expiryColor(days) }}>{days != null ? t("daysLeft", { days }) : "—"}</td>
-        <td style={{ padding: "6px 10px" }}>{b.status ? <Pill>{b.status}</Pill> : "—"}</td>
-        <td style={{ padding: "6px 10px" }}>
-          {b.sourceType === "production" && b.sourceId ? (
-            <Link href={`/production/orders/${b.sourceId}`} style={{ color: "#60A5FA" }}>
-              {t("sourceOrder")}
-            </Link>
-          ) : (
-            <span style={mutedText}>{b.sourceType ?? "—"}</span>
-          )}
-        </td>
-      </tr>
-    );
-  }
+  const batchColumns: TableColumn<ProductionStockBatchDto>[] = [
+    { key: "batch", header: t("batchNumber"), render: (b) => <span style={{ color: "#E8EDF5" }}>{b.batchNumber ?? "—"}</span> },
+    { key: "qty", header: t("colQty"), render: (b) => fmtQty(b.quantity, intl) },
+    {
+      key: "expiry",
+      header: t("batchExpiry"),
+      render: (b) => (
+        <span style={{ color: expiryColor(b.daysToExpiry ?? daysUntil(b.expiryDate)), fontWeight: 600 }}>{fmtDate(b.expiryDate, intl)}</span>
+      ),
+    },
+    {
+      key: "days",
+      header: t("batchDaysLeft"),
+      render: (b) => {
+        const days = b.daysToExpiry ?? daysUntil(b.expiryDate);
+        return <span style={{ color: expiryColor(days) }}>{days != null ? t("daysLeft", { days }) : "—"}</span>;
+      },
+    },
+    { key: "status", header: t("batchStatus"), render: (b) => (b.status ? <Pill>{b.status}</Pill> : "—") },
+    {
+      key: "source",
+      header: t("batchSource"),
+      render: (b) =>
+        b.sourceType === "production" && b.sourceId ? (
+          <Link href={`/production/orders/${b.sourceId}`} style={{ color: "#60A5FA" }}>
+            {t("sourceOrder")}
+          </Link>
+        ) : (
+          <span style={mutedText}>{b.sourceType ?? "—"}</span>
+        ),
+    },
+  ];
 
   return (
-    <div>
+    <PageContainer>
       <PageHeader
         title={t("title")}
         subtitle={t("subtitle")}
         right={<ProductionLocationSelect value={locationId} onChange={setLocationId} allLabel={t("allLocations")} />}
       />
-      <div style={{ display: "flex", gap: 6, marginBottom: 16 }}>
-        {KINDS.map((k) => (
-          <Btn key={k} size="sm" variant={kind === k ? "primary" : "ghost"} onClick={() => setKind(k)}>
-            {t(`filter_${k}`)}
-          </Btn>
-        ))}
-      </div>
+      <Tabs
+        items={KINDS.map((k) => ({ key: k, label: t(`filter_${k}`) }))}
+        value={kind}
+        onChange={setKind}
+      />
 
       {isLoading ? (
         <StateBox kind="loading">{t("loading")}</StateBox>
@@ -107,19 +117,7 @@ export function ProductionWarehouse() {
           expandedRowKey={expanded}
           renderExpanded={(r) =>
             r.batches?.length ? (
-              <table style={{ width: "100%", fontSize: 12, color: "#9CA3AF", textAlign: "left", borderCollapse: "collapse" }}>
-                <thead>
-                  <tr style={{ color: "#4B5563", fontSize: 11, textTransform: "uppercase" }}>
-                    <th style={{ padding: "6px 10px", textAlign: "left" }}>{t("batchNumber")}</th>
-                    <th style={{ padding: "6px 10px", textAlign: "left" }}>{t("colQty")}</th>
-                    <th style={{ padding: "6px 10px", textAlign: "left" }}>{t("batchExpiry")}</th>
-                    <th style={{ padding: "6px 10px", textAlign: "left" }}>{t("batchDaysLeft")}</th>
-                    <th style={{ padding: "6px 10px", textAlign: "left" }}>{t("batchStatus")}</th>
-                    <th style={{ padding: "6px 10px", textAlign: "left" }}>{t("batchSource")}</th>
-                  </tr>
-                </thead>
-                <tbody>{r.batches.map(batchRow)}</tbody>
-              </table>
+              <Table columns={batchColumns} rows={r.batches} rowKey={(b) => b.id} minWidth={560} />
             ) : (
               <div style={mutedText}>{t("noBatches")}</div>
             )
@@ -127,6 +125,6 @@ export function ProductionWarehouse() {
           minWidth={720}
         />
       )}
-    </div>
+    </PageContainer>
   );
 }

@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowLeft } from "lucide-react";
 import { useTranslations, useLocale } from "next-intl";
 import {
   useProductionOrder,
@@ -18,6 +17,9 @@ import Link from "next/link";
 import { ApiError } from "@/lib/api";
 import { Table, type TableColumn } from "@/components/ui/Table";
 import { Btn } from "@/components/ui/Btn";
+import { BackLink } from "@/components/ui/BackLink";
+import { PageContainer } from "@/components/ui/PageContainer";
+import { PageHeader } from "@/components/ui/PageHeader";
 import type {
   ProductionConsumptionDto,
   ProductionOrderRequestRefDto,
@@ -63,16 +65,16 @@ export function ProductionOrderDetail({ id }: Props) {
 
   if (isLoading) {
     return (
-      <div style={{ padding: "28px 32px", color: "#6B7280", fontSize: 13 }}>
+      <PageContainer style={{ color: "#6B7280", fontSize: 13 }}>
         {tCommon("loading")}
-      </div>
+      </PageContainer>
     );
   }
   if (isError || !order) {
     return (
-      <div style={{ padding: "28px 32px", color: "#F87171", fontSize: 13 }}>
+      <PageContainer style={{ color: "#F87171", fontSize: 13 }}>
         {t("loadError")}
-      </div>
+      </PageContainer>
     );
   }
 
@@ -238,86 +240,19 @@ export function ProductionOrderDetail({ id }: Props) {
   ];
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 20, padding: "28px 32px", maxWidth: 900 }}>
-      {/* Back navigation */}
-      <div>
-        <button
-          onClick={() => router.push("/production/orders")}
-          style={{ background: "transparent", border: "none", color: "#9CA3AF", cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 6, fontSize: 13, padding: 0 }}
-        >
-          <ArrowLeft size={15} /> {t("backToOrders")}
-        </button>
-      </div>
+    <PageContainer style={{ maxWidth: 900 }}>
+      <BackLink onClick={() => router.push("/production/orders")}>{t("backToOrders")}</BackLink>
 
-        {/* Header */}
-        <div
-          style={{
-            display: "flex",
-            alignItems: "flex-start",
-            justifyContent: "space-between",
-            gap: 16,
-            flexWrap: "wrap",
-          }}
-        >
-          <div>
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 12,
-                marginBottom: 8,
-              }}
-            >
-              <h1 style={{ color: "#E8EDF5", fontSize: 22, fontWeight: 700, margin: 0 }}>
-                {order.recipeName}
-              </h1>
-              <OrderStatusBadge status={order.status} />
-            </div>
-            <div
-              style={{
-                color: "#9CA3AF",
-                fontSize: 13,
-                display: "flex",
-                gap: 20,
-                flexWrap: "wrap",
-              }}
-            >
-              <span>📍 {order.locationName}</span>
-              <span>{"📦 "}{t("plannedOutputLabel")} {order.plannedQty}</span>
-              <span>{"📅 "}{formatDateTime(order.createdAt, intlLocale)}</span>
-              {order.neededBy && (
-                <span>{"⏰ "}{t("neededByLabel")} {formatDateOnly(order.neededBy, intlLocale)}</span>
-              )}
-              {order.plannedDate && (
-                <span>{"🗓 "}{t("plannedDateLabel")} {formatDateOnly(order.plannedDate, intlLocale)}</span>
-              )}
-              {order.startedAt && (
-                <span>{"▶ "}{t("startedLabel")} {formatDateTime(order.startedAt, intlLocale)}</span>
-              )}
-              {order.completedAt && (
-                <span>{"✅ "}{t("completedLabel")} {formatDateTime(order.completedAt, intlLocale)}</span>
-              )}
-            </div>
-            {order.notes && (
-              <div
-                style={{
-                  marginTop: 10,
-                  padding: "8px 12px",
-                  background: "#0D1117",
-                  border: "1px solid #1F2937",
-                  borderRadius: 6,
-                  color: "#9CA3AF",
-                  fontSize: 13,
-                }}
-              >
-                {order.notes}
-              </div>
-            )}
-          </div>
-
-          {/* Status action buttons */}
-          {!isReadOnly && (
-            <div style={{ display: "flex", gap: 10, flexShrink: 0 }}>
+      <PageHeader
+        title={
+          <span style={{ display: "inline-flex", alignItems: "center", gap: 12 }}>
+            {order.recipeName}
+            <OrderStatusBadge status={order.status} />
+          </span>
+        }
+        actions={
+          !isReadOnly ? (
+            <>
               {status === "planned" && (
                 <Btn onClick={handleStart} disabled={anyPending}>
                   {startOrder.isPending ? t("starting") : t("start")}
@@ -335,9 +270,45 @@ export function ProductionOrderDetail({ id }: Props) {
                   {cancelOrder.isPending ? t("cancelling") : t("cancel")}
                 </Btn>
               )}
-            </div>
+            </>
+          ) : undefined
+        }
+      />
+
+      <div>
+        <div style={{ color: "#9CA3AF", fontSize: 13, display: "flex", gap: 20, flexWrap: "wrap" }}>
+          <span>📍 {order.locationName}</span>
+          <span>{"📦 "}{t("plannedOutputLabel")} {order.plannedQty}</span>
+          <span>{"📅 "}{formatDateTime(order.createdAt, intlLocale)}</span>
+          {order.neededBy && (
+            <span>{"⏰ "}{t("neededByLabel")} {formatDateOnly(order.neededBy, intlLocale)}</span>
+          )}
+          {order.plannedDate && (
+            <span>{"🗓 "}{t("plannedDateLabel")} {formatDateOnly(order.plannedDate, intlLocale)}</span>
+          )}
+          {order.startedAt && (
+            <span>{"▶ "}{t("startedLabel")} {formatDateTime(order.startedAt, intlLocale)}</span>
+          )}
+          {order.completedAt && (
+            <span>{"✅ "}{t("completedLabel")} {formatDateTime(order.completedAt, intlLocale)}</span>
           )}
         </div>
+        {order.notes && (
+          <div
+            style={{
+              marginTop: 10,
+              padding: "8px 12px",
+              background: "#0D1117",
+              border: "1px solid #1F2937",
+              borderRadius: 6,
+              color: "#9CA3AF",
+              fontSize: 13,
+            }}
+          >
+            {order.notes}
+          </div>
+        )}
+      </div>
 
         {/* Success toast */}
         {successInfo && (
@@ -507,7 +478,7 @@ export function ProductionOrderDetail({ id }: Props) {
             {t("consumptionsEmpty")}
           </div>
         )}
-    </div>
+    </PageContainer>
   );
 }
 
