@@ -15,6 +15,11 @@ proxies to `127.0.0.1:5100` and the provider edge still hits host port 5100 - bo
 gateway; no host nginx change. Routing table: `infra/gateway/nginx.conf` (anchored prefixes - do
 not loosen, e.g. `/api/admin/service-desk` is provider but `/api/service-desk` is core).
 
+Exception (TASK-754): `api_core` also publishes a **loopback-only** host port (`127.0.0.1:5110`,
+staging `127.0.0.1:5111`) used only by the host-network worker for `/api/internal/*` (shared
+secret `INTERNAL_JOB_KEY`). The gateway always answers 404 for `/api/internal/` (case-insensitive),
+so those routes are never reachable through 5100 / the provider edge. Never bind that port to 0.0.0.0.
+
 ## Which role served a request
 Every response has `X-Served-By: core|consumer|provider` (`gateway` for gateway-made 503).
 `curl -sI https://api.agrusystems.pp.ua/api/chat | grep -i x-served-by`. Gateway logs show
