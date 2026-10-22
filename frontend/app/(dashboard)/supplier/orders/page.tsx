@@ -2,6 +2,8 @@
 
 import { useEffect } from "react";
 import { useTranslations } from "next-intl";
+import { PageContainer } from "@/components/ui/PageContainer";
+import { PageHeader } from "@/components/ui/PageHeader";
 import { CabinetOrdersTab } from "@/features/supplier-cabinet/components/CabinetOrdersTab";
 import { useMarkOrdersSeen } from "@/features/supplier-cabinet/hooks/useCabinetCooperation";
 import { useMe } from "@/features/auth/hooks/useAuth";
@@ -20,23 +22,16 @@ export default function SupplierOrdersPage() {
 
   if (me && !hasRole(me.role, SUPPLIER_ONLY)) {
     return (
-      <div style={{ padding: "28px 32px", color: "#F87171", fontSize: 14 }}>
-        {t("supplierOnlyAccess")}
-      </div>
+      <PageContainer>
+        <div style={{ color: "#F87171", fontSize: 14 }}>{t("supplierOnlyAccess")}</div>
+      </PageContainer>
     );
   }
 
   return (
-    <div style={{ padding: "28px 32px" }}>
-      <div style={{ marginBottom: 24 }}>
-        <h1 style={{ color: "#E8EDF5", fontSize: 22, fontWeight: 700, margin: 0 }}>
-          {t("orders.title")}
-        </h1>
-        <p style={{ color: "#4B5563", fontSize: 14, marginTop: 6 }}>
-          {t("orders.subtitle")}
-        </p>
-      </div>
+    <PageContainer>
+      <PageHeader title={t("orders.title")} subtitle={t("orders.subtitle")} />
       <CabinetOrdersTab />
-    </div>
+    </PageContainer>
   );
 }

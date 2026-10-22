@@ -1,4 +1,5 @@
 "use client";
+import { inputStyle as input, labelStyle as label } from "@/components/ui/fieldStyles";
 
 import { useEffect, useMemo, useState } from "react";
 import { useFieldArray, useForm, useWatch, type Control, type UseFormRegister, type UseFormSetValue } from "react-hook-form";
@@ -16,8 +17,6 @@ import { useUnsavedChangesGuard } from "../hooks/useUnsavedChangesGuard";
 import type { LoyaltyTierDefinitionDto, UpsertTierRequest } from "../types";
 
 const card: React.CSSProperties = { background: "#0D1117", border: "1px solid #1F2937", borderRadius: 12, padding: 20 };
-const input: React.CSSProperties = { width: "100%", background: "#0D1117", border: "1px solid #374151", borderRadius: 8, padding: "9px 11px", color: "#E8EDF5", fontSize: 13, boxSizing: "border-box" };
-const label: React.CSSProperties = { color: "#9CA3AF", fontSize: 12, fontWeight: 600, display: "block", marginBottom: 6 };
 const hint: React.CSSProperties = { color: "#6B7280", fontSize: 11, margin: "4px 0 0" };
 
 const optionalNumber = z.preprocess((value) => value === "" || Number.isNaN(value) ? null : value, z.number().min(0).nullable());

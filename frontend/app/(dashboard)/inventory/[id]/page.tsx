@@ -4,10 +4,15 @@ import { useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import {
-  ArrowLeft, BarChart2, Info, ExternalLink,
+  BarChart2, Info, ExternalLink,
   ArrowDownToLine, TrendingUp, Trash2, RefreshCw, Loader2,
 } from "lucide-react";
 import { useTranslations, useLocale } from "next-intl";
+import { PageContainer } from "@/components/ui/PageContainer";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { BackLink } from "@/components/ui/BackLink";
+import { Tabs } from "@/components/ui/Tabs";
+import { StatusPill } from "@/components/ui/StatusPill";
 import { useProduct, useItemZones } from "@/features/inventory/hooks/useProducts";
 import { useProductBuffer, resolveStockLevels } from "@/features/inventory/hooks/useProductBuffer";
 import { usePrimaryStoreId } from "@/lib/useStoreContext";
@@ -22,31 +27,18 @@ type PageTab = "info" | "analytics";
 
 function TabBar({ active, onChange }: { active: PageTab; onChange: (t: PageTab) => void }) {
   const tFields = useTranslations("Dashboard.inventory.fields");
-  const tabs: { key: PageTab; label: string; icon: React.ReactNode }[] = [
-    { key: "info",      label: tFields("tabInfo"), icon: <Info size={14} /> },
-    { key: "analytics", label: tFields("tabAnalytics"),  icon: <BarChart2 size={14} /> },
-  ];
+  const icon = (node: React.ReactNode, text: string) => (
+    <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>{node}{text}</span>
+  );
   return (
-    <div style={{ display: "flex", gap: 4 }}>
-      {tabs.map((t) => (
-        <button
-          key={t.key}
-          onClick={() => onChange(t.key)}
-          style={{
-            display: "flex", alignItems: "center", gap: 6,
-            padding: "7px 16px", borderRadius: 8, fontSize: 13, fontWeight: 600,
-            cursor: "pointer",
-            background: active === t.key ? "#161B26" : "transparent",
-            border: `1px solid ${active === t.key ? "#374151" : "transparent"}`,
-            color: active === t.key ? "#E8EDF5" : "#6B7280",
-            transition: "all 0.1s",
-          }}
-        >
-          {t.icon}
-          {t.label}
-        </button>
-      ))}
-    </div>
+    <Tabs
+      items={[
+        { key: "info", label: icon(<Info size={14} />, tFields("tabInfo")) },
+        { key: "analytics", label: icon(<BarChart2 size={14} />, tFields("tabAnalytics")) },
+      ]}
+      value={active}
+      onChange={onChange}
+    />
   );
 }
 
@@ -249,53 +241,29 @@ export default function ProductPage() {
   const levels = resolveStockLevels(product, buffer);
 
   return (
-    <div style={{ padding: "24px 32px", display: "flex", flexDirection: "column", gap: 20 }}>
-
-      {/* Header */}
-      <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-        <button
-          onClick={() => router.back()}
-          style={{
-            background: "transparent", border: "none",
-            color: "#6B7280", cursor: "pointer",
-            display: "flex", alignItems: "center", gap: 4,
-            fontSize: 13, padding: 0, flexShrink: 0,
-          }}
-        >
-          <ArrowLeft size={15} /> {tCommon("back")}
-        </button>
-
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-            <h1 style={{ color: "#E8EDF5", fontSize: 20, fontWeight: 700, margin: 0 }}>
-              {product.name}
-            </h1>
-            <span style={{
-              display: "inline-block", padding: "2px 8px", borderRadius: 20,
-              background: product.isActive ? "#052e16" : "#111827",
-              color: product.isActive ? "#4ADE80" : "#6B7280",
-              fontSize: 11, fontWeight: 600,
-            }}>
+    <PageContainer>
+      <BackLink onClick={() => router.back()}>{tCommon("back")}</BackLink>
+      <PageHeader
+        title={
+          <span style={{ display: "inline-flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+            {product.name}
+            <StatusPill bg={product.isActive ? "#052e16" : "#111827"} text={product.isActive ? "#4ADE80" : "#6B7280"}>
               {product.isActive ? t("statusActive") : t("statusInactive")}
-            </span>
-          </div>
-          <p style={{ color: "#4B5563", fontSize: 12, marginTop: 3, marginBottom: 0 }}>
+            </StatusPill>
+          </span>
+        }
+        subtitle={
+          <>
             {product.categoryName ?? t("noCategory")}
             {product.barcodes?.[0] && ` · ${product.barcodes[0]}`}
             {` · ${product.unit}`}
-          </p>
-        </div>
-      </div>
+          </>
+        }
+      />
 
       <PromoBanner product={product} />
 
-      {/* Tabs */}
-      <div style={{
-        borderBottom: "1px solid #1F2937",
-        paddingBottom: 0,
-      }}>
-        <TabBar active={tab} onChange={setTab} />
-      </div>
+      <TabBar active={tab} onChange={setTab} />
 
       {/* ── Info tab ─────────────────────────────────────────────────────── */}
       {tab === "info" && (
@@ -458,6 +426,6 @@ export default function ProductPage() {
           }}
         />
       )}
-    </div>
+    </PageContainer>
   );
 }

@@ -669,7 +669,7 @@ export function ProductAnalyticsTab({
               cursor: "pointer",
               background: rangeDays === days ? "#1D3461" : "transparent",
               border: `1px solid ${rangeDays === days ? "#3B82F6" : "#1F2937"}`,
-              color: rangeDays === days ? "#60A5FA" : "#6B7280",
+              color: rangeDays === days ? "#93C5FD" : "#6B7280",
               transition: "all 0.1s",
             }}
           >

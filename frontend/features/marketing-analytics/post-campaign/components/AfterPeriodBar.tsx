@@ -3,6 +3,7 @@
 import { useTranslations } from "next-intl";
 import { Loader2 } from "lucide-react";
 import { Btn } from "@/components/ui/Btn";
+import { filterInputStyle, labelStyle } from "@/components/ui/fieldStyles";
 
 interface BeforeWindow {
   start: string;
@@ -25,16 +26,6 @@ interface Props {
   onAnalyzeClick: () => void;
 }
 
-const labelStyle: React.CSSProperties = { color: "#4B5563", fontSize: 12, marginBottom: 4, display: "block" };
-const inputStyle: React.CSSProperties = {
-  background: "#0D1117",
-  border: "1px solid #1F2937",
-  borderRadius: 6,
-  color: "#E8EDF5",
-  fontSize: 13,
-  padding: "7px 10px",
-  outline: "none",
-};
 
 function toDateStr(d: Date): string {
   return d.toISOString().slice(0, 10);
@@ -89,11 +80,11 @@ export function AfterPeriodBar({
       <div style={{ display: "flex", flexWrap: "wrap", gap: 16, alignItems: "flex-end" }}>
         <div>
           <label style={labelStyle}>{t("fromLabel")}</label>
-          <input type="date" value={afterStart} max={afterEnd || undefined} onChange={(e) => e.target.value && onRangeChange(e.target.value, afterEnd)} style={inputStyle} />
+          <input type="date" value={afterStart} max={afterEnd || undefined} onChange={(e) => e.target.value && onRangeChange(e.target.value, afterEnd)} style={filterInputStyle} />
         </div>
         <div>
           <label style={labelStyle}>{t("toLabel")}</label>
-          <input type="date" value={afterEnd} min={afterStart || undefined} onChange={(e) => e.target.value && onRangeChange(afterStart, e.target.value)} style={inputStyle} />
+          <input type="date" value={afterEnd} min={afterStart || undefined} onChange={(e) => e.target.value && onRangeChange(afterStart, e.target.value)} style={filterInputStyle} />
         </div>
 
         <Btn

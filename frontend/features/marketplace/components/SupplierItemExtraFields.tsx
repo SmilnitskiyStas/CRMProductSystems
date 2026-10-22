@@ -2,6 +2,7 @@
 
 import { Plus, Trash2 } from "lucide-react";
 import { useTranslations } from "next-intl";
+import { Btn } from "@/components/ui/Btn";
 
 const INPUT_STYLE: React.CSSProperties = {
   width: "100%",
@@ -107,26 +108,15 @@ function StringListEditor({
             </button>
           </div>
         ))}
-        <button
-          type="button"
+        <Btn
+          size="sm"
+          variant="ghost"
           onClick={() => onChange([...items, ""])}
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            gap: 6,
-            alignSelf: "flex-start",
-            padding: "5px 10px",
-            background: "transparent",
-            border: "1px solid #374151",
-            borderRadius: 7,
-            color: "#9CA3AF",
-            fontSize: 12,
-            fontWeight: 600,
-            cursor: "pointer",
-          }}
+          style={{ alignSelf: "flex-start" }}
+          icon={<Plus size={13} />}
         >
-          <Plus size={13} /> {addLabel}
-        </button>
+          {addLabel}
+        </Btn>
       </div>
     </div>
   );

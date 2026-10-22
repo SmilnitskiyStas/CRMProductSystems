@@ -10,6 +10,7 @@ import { StatusBadge } from "./StatusBadge";
 import { AddBatchForm } from "./AddBatchForm";
 import { Modal } from "@/components/ui/Modal";
 import { Btn } from "@/components/ui/Btn";
+import { Table, type TableColumn } from "@/components/ui/Table";
 import type { BatchStatus } from "../types";
 
 interface Props {
@@ -25,15 +26,6 @@ interface ExpiryGroup {
   status: BatchStatus;
   stores: Map<string, number>;
 }
-
-const thStyle: React.CSSProperties = {
-  textAlign: "left", color: "#4B5563", fontSize: 11, fontWeight: 600,
-  padding: "6px 8px", borderBottom: "1px solid #1F2937",
-};
-const tdStyle: React.CSSProperties = {
-  color: "#E8EDF5", fontSize: 13, padding: "8px",
-  borderBottom: "1px solid #111827",
-};
 
 /** Item-page section: stock of this item grouped by expiry date (FEFO order). */
 export function ItemBatchesSection({ productId, productName, unit }: Props) {
@@ -64,6 +56,26 @@ export function ItemBatchesSection({ productId, productName, unit }: Props) {
   const multiStore = new Set(groups.flatMap((g) => [...g.stores.keys()])).size > 1;
   const fmtQty = (n: number) => `${n.toLocaleString(intlLocale)} ${unit}`;
 
+  const columns: TableColumn<ExpiryGroup>[] = [
+    {
+      key: "expiry",
+      header: t("batchesExpiry"),
+      cellStyle: { fontFamily: "monospace", color: "#E8EDF5" },
+      render: (g) => new Date(`${g.expiryDate}T00:00:00`).toLocaleDateString(intlLocale),
+    },
+    { key: "quantity", header: t("batchesQuantity"), cellStyle: { fontFamily: "monospace", fontWeight: 600, color: "#E8EDF5" }, render: (g) => fmtQty(g.quantity) },
+    { key: "daysLeft", header: t("batchesDaysLeft"), cellStyle: { fontFamily: "monospace", color: "#E8EDF5" }, render: (g) => g.daysLeft },
+    { key: "status", header: t("batchesStatus"), render: (g) => <StatusBadge status={g.status} /> },
+    ...(multiStore
+      ? [{
+          key: "stores",
+          header: t("batchesStores"),
+          cellStyle: { fontSize: 12 },
+          render: (g: ExpiryGroup) => [...g.stores].map(([name, qty]) => `${name}: ${qty}`).join(", "),
+        }]
+      : []),
+  ];
+
   const storeOptions = stores.map((s) => ({
     id: s.id, name: s.name, zones: s.zones.map((z) => ({ id: z.id, name: z.name })),
   }));
@@ -83,34 +95,12 @@ export function ItemBatchesSection({ productId, productName, unit }: Props) {
       {isLoading ? null : groups.length === 0 ? (
         <div style={{ color: "#4B5563", fontSize: 12 }}>{t("batchesEmpty")}</div>
       ) : (
-        <table style={{ width: "100%", borderCollapse: "collapse" }}>
-          <thead>
-            <tr>
-              <th style={thStyle}>{t("batchesExpiry")}</th>
-              <th style={thStyle}>{t("batchesQuantity")}</th>
-              <th style={thStyle}>{t("batchesDaysLeft")}</th>
-              <th style={thStyle}>{t("batchesStatus")}</th>
-              {multiStore && <th style={thStyle}>{t("batchesStores")}</th>}
-            </tr>
-          </thead>
-          <tbody>
-            {groups.map((g) => (
-              <tr key={g.expiryDate}>
-                <td style={{ ...tdStyle, fontFamily: "monospace" }}>
-                  {new Date(`${g.expiryDate}T00:00:00`).toLocaleDateString(intlLocale)}
-                </td>
-                <td style={{ ...tdStyle, fontFamily: "monospace", fontWeight: 600 }}>{fmtQty(g.quantity)}</td>
-                <td style={{ ...tdStyle, fontFamily: "monospace" }}>{g.daysLeft}</td>
-                <td style={tdStyle}><StatusBadge status={g.status} /></td>
-                {multiStore && (
-                  <td style={{ ...tdStyle, fontSize: 12, color: "#9CA3AF" }}>
-                    {[...g.stores].map(([name, qty]) => `${name}: ${qty}`).join(", ")}
-                  </td>
-                )}
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        <Table
+          columns={columns}
+          rows={groups}
+          rowKey={(g) => g.expiryDate}
+          density="compact"
+        />
       )}
 
       {showAdd && (

@@ -6,6 +6,8 @@ import { useRouter } from "next/navigation";
 import { Table, type TableColumn } from "@/components/ui/Table";
 import { useCustomerMessageCampaigns, useSubmitCustomerMessage } from "../hooks/useNotifications";
 import { CHANNEL_ICONS, getChannelLabel, type CustomerMessageCampaignItem } from "../types";
+import { Btn } from "@/components/ui/Btn";
+import { StatusPill } from "@/components/ui/StatusPill";
 
 type AudienceDefinition = { segment?: string; estimatedRecipients?: number };
 
@@ -32,7 +34,7 @@ export function CustomerMessageHistory() {
       key: "message",
       header: t("message"),
       render: (row) => {
-        return <div style={{ minWidth: 220 }}><button type="button" onClick={() => router.push(`/consumer-app/messages/${row.id}`)} style={{ border: 0, padding: 0, background: "transparent", color: "#E8EDF5", fontSize: 13, fontWeight: 700, cursor: "pointer", textAlign: "left" }}>{row.title}</button><p style={{ color: "#6B7280", fontSize: 12, margin: "4px 0 0", maxWidth: 440, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{row.message}</p>{row.contentTitle && <span style={{ display: "inline-flex", marginTop: 6, padding: "3px 7px", borderRadius: 999, background: "#172554", color: "#93C5FD", fontSize: 11 }}>{row.contentType === "promotion" ? "Акція" : row.contentType === "banner" ? "Банер" : "Каталог"}: {row.contentTitle}</span>}</div>;
+        return <div style={{ minWidth: 220 }}><Btn variant="link" onClick={() => router.push(`/consumer-app/messages/${row.id}`)} style={{ color: "#E8EDF5", fontSize: 13, fontWeight: 700, textAlign: "left", whiteSpace: "normal" }}>{row.title}</Btn><p style={{ color: "#6B7280", fontSize: 12, margin: "4px 0 0", maxWidth: 440, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{row.message}</p>{row.contentTitle && <span style={{ display: "inline-flex", marginTop: 6, padding: "3px 7px", borderRadius: 999, background: "#172554", color: "#93C5FD", fontSize: 11 }}>{row.contentType === "promotion" ? "Акція" : row.contentType === "banner" ? "Банер" : "Каталог"}: {row.contentTitle}</span>}</div>;
       },
     },
     {
@@ -55,7 +57,7 @@ export function CustomerMessageHistory() {
     {
       key: "status",
       header: t("status"),
-      render: (row) => <div style={{ display: "flex", alignItems: "center", gap: 7, justifyContent: "center" }}><span style={{ display: "inline-flex", padding: "4px 8px", borderRadius: 999, background: row.status === "draft" ? "#27272A" : row.status === "scheduled" ? "#422006" : "#172554", color: row.status === "draft" ? "#D4D4D8" : row.status === "scheduled" ? "#FCD34D" : "#93C5FD", fontSize: 11 }}>{row.status === "draft" ? "Чернетка" : row.status === "scheduled" ? "Заплановано" : t("integrationPending")}</span>{row.status === "draft" && <button type="button" disabled={submitCampaign.isPending} onClick={() => submitCampaign.mutate({ id: row.id, deliveryMode: "send_now" })} style={{ border: "1px solid #2563EB", background: "transparent", color: "#93C5FD", borderRadius: 6, padding: "3px 7px", cursor: "pointer", fontSize: 11 }}>Відправити</button>}</div>,
+      render: (row) => <div style={{ display: "flex", alignItems: "center", gap: 7, justifyContent: "center" }}><StatusPill bg={row.status === "draft" ? "#27272A" : row.status === "scheduled" ? "#422006" : "#172554"} text={row.status === "draft" ? "#D4D4D8" : row.status === "scheduled" ? "#FCD34D" : "#93C5FD"}>{row.status === "draft" ? "Чернетка" : row.status === "scheduled" ? "Заплановано" : t("integrationPending")}</StatusPill>{row.status === "draft" && <Btn size="xs" disabled={submitCampaign.isPending} onClick={() => submitCampaign.mutate({ id: row.id, deliveryMode: "send_now" })}>Відправити</Btn>}</div>,
     },
     {
       key: "createdAt",

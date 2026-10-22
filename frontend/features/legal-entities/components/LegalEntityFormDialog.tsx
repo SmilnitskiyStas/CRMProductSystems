@@ -6,6 +6,8 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useTranslations } from "next-intl";
 import { Btn } from "@/components/ui/Btn";
+import { Modal } from "@/components/ui/Modal";
+import { inputStyle } from "@/components/ui/fieldStyles";
 import type { LegalEntityDto } from "../types";
 
 // ── Schema ─────────────────────────────────────────────────────────────────────
@@ -130,39 +132,7 @@ export function LegalEntityFormDialog({ entity, isPending, onClose, onSubmit }: 
   }
 
   return (
-    <div
-      style={{
-        position: "fixed",
-        inset: 0,
-        background: "rgba(0,0,0,0.55)",
-        zIndex: 50,
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-      }}
-      onClick={onClose}
-    >
-      <div
-        style={{
-          background: "#161B26",
-          border: "1px solid #1F2937",
-          borderRadius: 12,
-          padding: "24px 28px",
-          width: 520,
-          maxWidth: "90vw",
-          maxHeight: "88vh",
-          overflowY: "auto",
-          display: "flex",
-          flexDirection: "column",
-          gap: 18,
-        }}
-        onClick={(e) => e.stopPropagation()}
-      >
-        {/* Title */}
-        <h2 style={{ color: "#E8EDF5", fontSize: 18, fontWeight: 700, margin: 0 }}>
-          {isEdit ? t("editTitle") : t("createTitle")}
-        </h2>
-
+    <Modal title={isEdit ? t("editTitle") : t("createTitle")} onClose={onClose} width={520}>
         <form
           onSubmit={handleSubmit(onValid)}
           style={{ display: "flex", flexDirection: "column", gap: 14 }}
@@ -275,12 +245,11 @@ export function LegalEntityFormDialog({ entity, isPending, onClose, onSubmit }: 
             </Btn>
           </div>
         </form>
-      </div>
-    </div>
+    </Modal>
   );
 }
 
-// ── Shared styles ──────────────────────────────────────────────────────────────
+// ── Field wrapper ──────────────────────────────────────────────────────────────
 
 function Field({
   label,
@@ -299,15 +268,3 @@ function Field({
     </div>
   );
 }
-
-const inputStyle: React.CSSProperties = {
-  width: "100%",
-  background: "#111827",
-  border: "1px solid #1F2937",
-  borderRadius: 8,
-  color: "#E8EDF5",
-  fontSize: 13,
-  padding: "8px 12px",
-  outline: "none",
-  boxSizing: "border-box",
-};

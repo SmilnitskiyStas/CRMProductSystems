@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { X, MapPin, User, Calendar, MessageSquare, Lock } from "lucide-react";
+import { MapPin, User, Calendar, MessageSquare, Lock } from "lucide-react";
 import { toast } from "sonner";
 import { useTranslations, useLocale } from "next-intl";
 import { useTicket, useUpdateTicket, useAddComment } from "../hooks/useTickets";
@@ -16,6 +16,10 @@ import { TicketStatusBadge } from "./TicketStatusBadge";
 import { PriorityBadge } from "./PriorityBadge";
 import { AT_LEAST_STORE_MANAGER } from "@/lib/roles";
 import type { AppRole } from "@/lib/roles";
+import { Btn } from "@/components/ui/Btn";
+import { DetailDrawer } from "@/components/ui/DetailDrawer";
+import { StatusPill } from "@/components/ui/StatusPill";
+import { filterInputStyle, labelStyle, textareaStyle } from "@/components/ui/fieldStyles";
 
 interface Props {
   ticketId: string;
@@ -133,115 +137,27 @@ export function TicketDetail({ ticketId, userRole, onClose }: Props) {
     );
   }
 
-  const selectStyle = {
-    background: "#111827",
-    border: "1px solid #1F2937",
-    borderRadius: 6,
-    color: "#9CA3AF",
-    fontSize: 12,
-    padding: "6px 10px",
-    cursor: "pointer",
-    outline: "none",
-    width: "100%",
-  };
-
-  const labelStyle = {
-    color: "#4B5563",
-    fontSize: 11,
-    fontWeight: 600,
-    textTransform: "uppercase" as const,
-    letterSpacing: "0.04em",
-    marginBottom: 4,
-    display: "block",
-  };
-
   return (
-    <>
-      {/* Backdrop */}
-      <div
-        onClick={onClose}
-        style={{
-          position: "fixed",
-          inset: 0,
-          background: "rgba(0,0,0,0.5)",
-          zIndex: 40,
-        }}
-      />
-
-      {/* Sheet */}
-      <div
-        style={{
-          position: "fixed",
-          top: 0,
-          right: 0,
-          bottom: 0,
-          width: "min(600px, 100vw)",
-          background: "#0D1117",
-          borderLeft: "1px solid #1F2937",
-          zIndex: 50,
-          display: "flex",
-          flexDirection: "column",
-          overflowY: "auto",
-        }}
-      >
-        {/* Header */}
-        <div
-          style={{
-            padding: "16px 20px",
-            borderBottom: "1px solid #1F2937",
-            display: "flex",
-            alignItems: "flex-start",
-            gap: 12,
-          }}
-        >
-          <div style={{ flex: 1 }}>
-            {!isLoading && ticket && (
-              <>
-                <div style={{ color: "#4B5563", fontSize: 12, marginBottom: 4 }}>
-                  #{ticket.number}
-                </div>
-                <div style={{ color: "#E8EDF5", fontSize: 16, fontWeight: 700, lineHeight: 1.4 }}>
-                  {ticket.title}
-                </div>
-              </>
-            )}
-          </div>
-          <button
-            onClick={onClose}
-            style={{
-              background: "transparent",
-              border: "none",
-              color: "#4B5563",
-              cursor: "pointer",
-              padding: 4,
-              flexShrink: 0,
-            }}
-          >
-            <X size={18} />
-          </button>
-        </div>
-
+    <DetailDrawer
+      isOpen
+      onClose={onClose}
+      title={!isLoading && ticket ? ticket.title : ""}
+      subtitle={!isLoading && ticket ? `#${ticket.number}` : undefined}
+      width={600}
+    >
         {isLoading && (
-          <div style={{ padding: 24, color: "#4B5563", fontSize: 13 }}>
+          <div style={{ color: "#4B5563", fontSize: 13 }}>
             {t("loading")}
           </div>
         )}
 
         {ticket && (
-          <div style={{ padding: "20px", display: "flex", flexDirection: "column", gap: 20 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
             {/* Badges row */}
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-              <span
-                style={{
-                  background: "#1F2937",
-                  color: "#9CA3AF",
-                  borderRadius: 4,
-                  padding: "2px 8px",
-                  fontSize: 12,
-                }}
-              >
+              <StatusPill bg="#1F2937" text="#9CA3AF">
                 {getTicketCategoryLabel(tCategories, ticket.category)}
-              </span>
+              </StatusPill>
               <PriorityBadge priority={ticket.priority} />
               <TicketStatusBadge status={ticket.status} />
             </div>
@@ -329,7 +245,7 @@ export function TicketDetail({ ticketId, userRole, onClose }: Props) {
                   <select
                     value={ticket.status}
                     onChange={(e) => handleStatusChange(e.target.value as TicketStatus)}
-                    style={selectStyle}
+                    style={{ ...filterInputStyle, width: "100%" }}
                     disabled={updateMutation.isPending}
                   >
                     {TICKET_STATUSES.map((s) => (
@@ -343,7 +259,7 @@ export function TicketDetail({ ticketId, userRole, onClose }: Props) {
                   <select
                     value={ticket.assignedTo ?? ""}
                     onChange={(e) => handleAssignChange(e.target.value)}
-                    style={selectStyle}
+                    style={{ ...filterInputStyle, width: "100%" }}
                     disabled={updateMutation.isPending}
                   >
                     <option value="">{t("unassignedOption")}</option>
@@ -401,19 +317,7 @@ export function TicketDetail({ ticketId, userRole, onClose }: Props) {
                   onChange={(e) => setCommentBody(e.target.value)}
                   placeholder={t("commentPlaceholder")}
                   rows={3}
-                  style={{
-                    background: "#0D1117",
-                    border: "1px solid #1F2937",
-                    borderRadius: 6,
-                    color: "#E8EDF5",
-                    fontSize: 13,
-                    padding: "8px 10px",
-                    outline: "none",
-                    resize: "vertical",
-                    width: "100%",
-                    boxSizing: "border-box",
-                    fontFamily: "inherit",
-                  }}
+                  style={textareaStyle}
                 />
 
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
@@ -438,29 +342,19 @@ export function TicketDetail({ ticketId, userRole, onClose }: Props) {
                     </label>
                   )}
 
-                  <button
+                  <Btn
+                    size="sm"
                     onClick={handleAddComment}
                     disabled={!commentBody.trim() || addCommentMutation.isPending}
-                    style={{
-                      background: commentBody.trim() ? "#1D3461" : "#111827",
-                      border: `1px solid ${commentBody.trim() ? "#3B82F6" : "#1F2937"}`,
-                      borderRadius: 6,
-                      color: commentBody.trim() ? "#93C5FD" : "#374151",
-                      fontSize: 12,
-                      fontWeight: 600,
-                      padding: "6px 14px",
-                      cursor: commentBody.trim() ? "pointer" : "not-allowed",
-                      marginLeft: "auto",
-                    }}
+                    style={{ marginLeft: "auto" }}
                   >
                     {addCommentMutation.isPending ? t("sendingButton") : t("sendButton")}
-                  </button>
+                  </Btn>
                 </div>
               </div>
             </div>
           </div>
         )}
-      </div>
-    </>
+    </DetailDrawer>
   );
 }

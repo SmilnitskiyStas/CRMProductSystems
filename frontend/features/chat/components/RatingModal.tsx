@@ -1,9 +1,12 @@
 "use client";
 
 import { useState } from "react";
-import { Star, X } from "lucide-react";
+import { Star } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useSubmitRating } from "../hooks/useChat";
+import { Btn } from "@/components/ui/Btn";
+import { Modal } from "@/components/ui/Modal";
+import { textareaStyle } from "@/components/ui/fieldStyles";
 
 interface Props {
   sessionId: string;
@@ -24,45 +27,11 @@ export function RatingModal({ sessionId, subject, onDone }: Props) {
     onDone();
   }
 
-  const overlay: React.CSSProperties = {
-    position: "fixed",
-    inset: 0,
-    background: "rgba(0,0,0,0.65)",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    zIndex: 9999,
-  };
-
-  const card: React.CSSProperties = {
-    background: "#111827",
-    border: "1px solid #1F2937",
-    borderRadius: 12,
-    padding: "28px 32px",
-    width: 400,
-    maxWidth: "90vw",
-  };
-
   return (
-    <div style={overlay}>
-      <div style={card}>
-        {/* Header */}
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20 }}>
-          <div>
-            <h2 style={{ color: "#E8EDF5", fontSize: 18, fontWeight: 700, margin: 0 }}>
-              {t("title")}
-            </h2>
-            <p style={{ color: "#6B7280", fontSize: 13, marginTop: 4, marginBottom: 0 }}>
-              {subject}
-            </p>
-          </div>
-          <button
-            onClick={onDone}
-            style={{ background: "none", border: "none", cursor: "pointer", color: "#4B5563", padding: 4 }}
-          >
-            <X size={18} />
-          </button>
-        </div>
+    <Modal title={t("title")} onClose={onDone} width={400}>
+        <p style={{ color: "#6B7280", fontSize: 13, margin: "-14px 0 20px" }}>
+          {subject}
+        </p>
 
         {/* Closed notice */}
         <div style={{
@@ -107,56 +76,22 @@ export function RatingModal({ sessionId, subject, onDone }: Props) {
           onChange={(e) => setComment(e.target.value)}
           placeholder={t("commentPlaceholder")}
           rows={3}
-          style={{
-            width: "100%",
-            background: "#1F2937",
-            border: "1px solid #374151",
-            borderRadius: 8,
-            color: "#E8EDF5",
-            fontSize: 13,
-            padding: "10px 12px",
-            resize: "vertical",
-            outline: "none",
-            boxSizing: "border-box",
-            marginBottom: 16,
-          }}
+          style={{ ...textareaStyle, marginBottom: 16 }}
         />
 
         {/* Actions */}
         <div style={{ display: "flex", gap: 10 }}>
-          <button
+          <Btn
             onClick={handleSubmit}
             disabled={rating === 0 || submit.isPending}
-            style={{
-              flex: 1,
-              background: rating === 0 ? "#1F2937" : "#1D3461",
-              border: `1px solid ${rating === 0 ? "#374151" : "#3B82F6"}`,
-              borderRadius: 8,
-              color: rating === 0 ? "#4B5563" : "#93C5FD",
-              fontSize: 14,
-              fontWeight: 600,
-              padding: "10px 0",
-              cursor: rating === 0 ? "not-allowed" : "pointer",
-            }}
+            style={{ flex: 1, justifyContent: "center" }}
           >
             {submit.isPending ? t("savingButton") : t("submitButton")}
-          </button>
-          <button
-            onClick={onDone}
-            style={{
-              background: "transparent",
-              border: "1px solid #374151",
-              borderRadius: 8,
-              color: "#6B7280",
-              fontSize: 14,
-              padding: "10px 16px",
-              cursor: "pointer",
-            }}
-          >
+          </Btn>
+          <Btn variant="ghost" onClick={onDone}>
             {t("skipButton")}
-          </button>
+          </Btn>
         </div>
-      </div>
-    </div>
+    </Modal>
   );
 }

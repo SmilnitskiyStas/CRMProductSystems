@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { X } from "lucide-react";
 import { toast } from "sonner";
 import { useTranslations } from "next-intl";
 import { useCreateTicket } from "../hooks/useTickets";
@@ -13,6 +12,9 @@ import {
   getTicketCategoryLabel,
   getTicketPriorityLabel,
 } from "../types";
+import { Btn } from "@/components/ui/Btn";
+import { Modal } from "@/components/ui/Modal";
+import { inputStyle, selectStyle, textareaStyle, labelStyle } from "@/components/ui/fieldStyles";
 
 interface Props {
   onClose: () => void;
@@ -53,95 +55,12 @@ export function CreateTicketForm({ onClose }: Props) {
     );
   }
 
-  const inputStyle = {
-    width: "100%",
-    background: "#111827",
-    border: "1px solid #1F2937",
-    borderRadius: 6,
-    color: "#E8EDF5",
-    fontSize: 13,
-    padding: "8px 10px",
-    outline: "none",
-    boxSizing: "border-box" as const,
-    fontFamily: "inherit",
-  };
-
-  const selectStyle = {
-    ...inputStyle,
-    cursor: "pointer",
-  };
-
-  const labelStyle = {
-    display: "block",
-    color: "#9CA3AF",
-    fontSize: 12,
-    fontWeight: 600,
-    marginBottom: 6,
-  };
-
   return (
-    <>
-      {/* Backdrop */}
-      <div
-        onClick={onClose}
-        style={{
-          position: "fixed",
-          inset: 0,
-          background: "rgba(0,0,0,0.6)",
-          zIndex: 50,
-        }}
-      />
-
-      {/* Dialog */}
-      <div
-        style={{
-          position: "fixed",
-          top: "50%",
-          left: "50%",
-          transform: "translate(-50%, -50%)",
-          width: "min(520px, calc(100vw - 32px))",
-          background: "#0D1117",
-          border: "1px solid #1F2937",
-          borderRadius: 12,
-          zIndex: 51,
-          display: "flex",
-          flexDirection: "column",
-        }}
-      >
-        {/* Header */}
-        <div
-          style={{
-            padding: "18px 20px",
-            borderBottom: "1px solid #1F2937",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-          }}
-        >
-          <div>
-            <div style={{ color: "#E8EDF5", fontSize: 16, fontWeight: 700 }}>
-              {t("title")}
-            </div>
-            <div style={{ color: "#4B5563", fontSize: 12, marginTop: 2 }}>
-              {t("subtitle")}
-            </div>
-          </div>
-          <button
-            onClick={onClose}
-            style={{
-              background: "transparent",
-              border: "none",
-              color: "#4B5563",
-              cursor: "pointer",
-              padding: 4,
-            }}
-          >
-            <X size={18} />
-          </button>
-        </div>
+    <Modal title={t("title")} onClose={onClose} width={520}>
+      <p style={{ color: "#4B5563", fontSize: 12, margin: "-14px 0 16px" }}>{t("subtitle")}</p>
 
         {/* Form */}
-        <form onSubmit={handleSubmit} style={{ padding: "20px", display: "flex", flexDirection: "column", gap: 16 }}>
+        <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 16 }}>
           {/* Title */}
           <div>
             <label style={labelStyle}>
@@ -167,7 +86,7 @@ export function CreateTicketForm({ onClose }: Props) {
               placeholder={t("descriptionPlaceholder")}
               required
               rows={4}
-              style={{ ...inputStyle, resize: "vertical" }}
+              style={textareaStyle}
             />
           </div>
 
@@ -178,7 +97,7 @@ export function CreateTicketForm({ onClose }: Props) {
               <select
                 value={category}
                 onChange={(e) => setCategory(e.target.value as TicketCategory)}
-                style={selectStyle}
+                style={{ ...selectStyle, cursor: "pointer" }}
               >
                 {TICKET_CATEGORIES.map((c) => (
                   <option key={c} value={c}>{getTicketCategoryLabel(tCategories, c)}</option>
@@ -191,7 +110,7 @@ export function CreateTicketForm({ onClose }: Props) {
               <select
                 value={priority}
                 onChange={(e) => setPriority(e.target.value as TicketPriority)}
-                style={selectStyle}
+                style={{ ...selectStyle, cursor: "pointer" }}
               >
                 {TICKET_PRIORITIES.map((p) => (
                   <option key={p} value={p}>{getTicketPriorityLabel(tPriorities, p)}</option>
@@ -206,7 +125,7 @@ export function CreateTicketForm({ onClose }: Props) {
             <select
               value={locationId}
               onChange={(e) => setLocationId(e.target.value)}
-              style={selectStyle}
+              style={{ ...selectStyle, cursor: "pointer" }}
             >
               <option value="">{t("noLocationOption")}</option>
               {locations?.filter((l) => l.isActive).map((loc) => (
@@ -217,40 +136,14 @@ export function CreateTicketForm({ onClose }: Props) {
 
           {/* Actions */}
           <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 4 }}>
-            <button
-              type="button"
-              onClick={onClose}
-              style={{
-                background: "transparent",
-                border: "1px solid #374151",
-                borderRadius: 6,
-                color: "#9CA3AF",
-                fontSize: 13,
-                padding: "8px 16px",
-                cursor: "pointer",
-              }}
-            >
+            <Btn type="button" variant="ghost" onClick={onClose}>
               {t("cancelButton")}
-            </button>
-            <button
-              type="submit"
-              disabled={!title.trim() || !description.trim() || createMutation.isPending}
-              style={{
-                background: title.trim() && description.trim() ? "#1D3461" : "#111827",
-                border: `1px solid ${title.trim() && description.trim() ? "#3B82F6" : "#1F2937"}`,
-                borderRadius: 6,
-                color: title.trim() && description.trim() ? "#93C5FD" : "#374151",
-                fontSize: 13,
-                fontWeight: 600,
-                padding: "8px 20px",
-                cursor: title.trim() && description.trim() ? "pointer" : "not-allowed",
-              }}
-            >
+            </Btn>
+            <Btn type="submit" disabled={!title.trim() || !description.trim() || createMutation.isPending}>
               {createMutation.isPending ? t("creatingButton") : t("createButton")}
-            </button>
+            </Btn>
           </div>
         </form>
-      </div>
-    </>
+    </Modal>
   );
 }

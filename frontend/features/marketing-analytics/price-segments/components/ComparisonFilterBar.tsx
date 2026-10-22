@@ -3,6 +3,8 @@
 import { useTranslations } from "next-intl";
 import { RefreshCw } from "lucide-react";
 import type { PriceSegmentsPeriodPreset } from "../types";
+import { Btn } from "@/components/ui/Btn";
+import { filterInputStyle, labelStyle } from "@/components/ui/fieldStyles";
 
 interface Props {
   period: PriceSegmentsPeriodPreset;
@@ -20,16 +22,6 @@ interface Props {
 
 const PRESETS: PriceSegmentsPeriodPreset[] = ["30", "60", "90", "custom"];
 
-const labelStyle: React.CSSProperties = { color: "#4B5563", fontSize: 12, marginBottom: 4, display: "block" };
-const inputStyle: React.CSSProperties = {
-  background: "#0D1117",
-  border: "1px solid #1F2937",
-  borderRadius: 6,
-  color: "#E8EDF5",
-  fontSize: 13,
-  padding: "7px 10px",
-  outline: "none",
-};
 
 function presetBtnStyle(active: boolean): React.CSSProperties {
   return {
@@ -105,7 +97,7 @@ export function ComparisonFilterBar({
                   value={customFrom}
                   max={customTo || undefined}
                   onChange={(e) => e.target.value && onCustomRangeChange(e.target.value, customTo)}
-                  style={inputStyle}
+                  style={filterInputStyle}
                 />
               </div>
               <div>
@@ -115,7 +107,7 @@ export function ComparisonFilterBar({
                   value={customTo}
                   min={customFrom || undefined}
                   onChange={(e) => e.target.value && onCustomRangeChange(customFrom, e.target.value)}
-                  style={inputStyle}
+                  style={filterInputStyle}
                 />
               </div>
             </>
@@ -124,27 +116,14 @@ export function ComparisonFilterBar({
       )}
 
       {/* Refresh */}
-      <button
+      <Btn
+        variant="ghost"
         onClick={onRefresh}
         disabled={isRefreshing}
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: 6,
-          padding: "7px 14px",
-          borderRadius: 6,
-          border: "1px solid #1F2937",
-          background: "#0D1117",
-          color: "#9CA3AF",
-          fontSize: 12,
-          fontWeight: 600,
-          cursor: isRefreshing ? "not-allowed" : "pointer",
-          opacity: isRefreshing ? 0.6 : 1,
-        }}
+        icon={<RefreshCw size={13} className={isRefreshing ? "animate-spin" : undefined} />}
       >
-        <RefreshCw size={13} className={isRefreshing ? "animate-spin" : undefined} />
         {t("refreshButton")}
-      </button>
+      </Btn>
     </div>
   );
 }

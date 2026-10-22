@@ -5,6 +5,7 @@ import { useTranslations } from "next-intl";
 import { useCreateStock } from "../hooks/useStock";
 import type { CreateStockRequest } from "../types";
 import { Btn } from "@/components/ui/Btn";
+import { inputStyle, labelStyle } from "@/components/ui/fieldStyles";
 
 interface StoreOption {
   id: string;
@@ -27,24 +28,7 @@ interface Props {
   onCancel: () => void;
 }
 
-const inputStyle: React.CSSProperties = {
-  width: "100%",
-  background: "#111827",
-  border: "1px solid #1F2937",
-  borderRadius: 8,
-  color: "#E8EDF5",
-  fontSize: 13,
-  padding: "8px 12px",
-  outline: "none",
-  boxSizing: "border-box",
-};
 
-const labelStyle: React.CSSProperties = {
-  display: "block",
-  color: "#9CA3AF",
-  fontSize: 12,
-  marginBottom: 5,
-};
 
 export function AddBatchForm({ stores, products, productId, onSuccess, onCancel }: Props) {
   const t = useTranslations("Dashboard.shelf.addBatchForm");

@@ -7,6 +7,7 @@ import { Settings, User, LogOut } from "lucide-react";
 import { useMe, useLogout } from "@/features/auth/hooks/useAuth";
 import { getRoleLabel } from "@/features/profile/types";
 import { UserProfileCard } from "@/features/profile/components/UserProfileCard";
+import { DetailDrawer } from "@/components/ui/DetailDrawer";
 
 export function UserMenu() {
   const t = useTranslations("Dashboard.userMenu");
@@ -220,73 +221,8 @@ export function UserMenu() {
 function ProfileModal({ onClose }: { onClose: () => void }) {
   const t = useTranslations("Dashboard.userMenu");
   return (
-    <>
-      {/* Backdrop */}
-      <div
-        onClick={onClose}
-        style={{
-          position: "fixed", inset: 0,
-          background: "rgba(0,0,0,0.55)",
-          zIndex: 200,
-          backdropFilter: "blur(2px)",
-        }}
-      />
-
-      {/* Panel */}
-      <div
-        style={{
-          position: "fixed",
-          top: 0, right: 0, bottom: 0,
-          width: "min(520px, 100vw)",
-          background: "#0D1117",
-          borderLeft: "1px solid #1F2937",
-          zIndex: 201,
-          display: "flex",
-          flexDirection: "column",
-          overflowY: "auto",
-        }}
-      >
-        {/* Header */}
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            padding: "20px 24px",
-            borderBottom: "1px solid #1F2937",
-            flexShrink: 0,
-          }}
-        >
-          <div>
-            <h2 style={{ color: "#E8EDF5", fontSize: 16, fontWeight: 700, margin: 0 }}>
-              {t("profile")}
-            </h2>
-            <p style={{ color: "#4B5563", fontSize: 12, margin: "3px 0 0" }}>
-              {t("accountInfo")}
-            </p>
-          </div>
-          <button
-            onClick={onClose}
-            style={{
-              background: "transparent",
-              border: "1px solid #1F2937",
-              borderRadius: 8,
-              padding: "6px 10px",
-              color: "#4B5563",
-              fontSize: 16,
-              cursor: "pointer",
-              lineHeight: 1,
-            }}
-          >
-            ✕
-          </button>
-        </div>
-
-        {/* Content */}
-        <div style={{ padding: 24, flex: 1 }}>
-          <UserProfileCard />
-        </div>
-      </div>
-    </>
+    <DetailDrawer isOpen onClose={onClose} title={t("profile")} subtitle={t("accountInfo")}>
+      <UserProfileCard />
+    </DetailDrawer>
   );
 }

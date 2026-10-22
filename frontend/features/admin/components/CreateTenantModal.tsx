@@ -2,50 +2,18 @@
 
 import { useState } from "react";
 import { useTranslations } from "next-intl";
-import { X } from "lucide-react";
 import { useCreateTenant } from "../hooks/useAdmin";
 import { useItemCategories } from "@/features/marketplace/hooks/useMarketplace";
 import { ALL_BUSINESS_TYPES, ALL_PLANS } from "../types";
 import type { CreateTenantRequest } from "../types";
 import { Btn } from "@/components/ui/Btn";
+import { Modal } from "@/components/ui/Modal";
+import { Field } from "@/components/ui/Field";
+import { inputStyle, selectStyle } from "@/components/ui/fieldStyles";
 import { slugify } from "@/lib/slug";
 
 interface Props {
   onClose: () => void;
-}
-
-const INPUT_STYLE: React.CSSProperties = {
-  width: "100%",
-  background: "#0D1117",
-  border: "1px solid #1F2937",
-  borderRadius: 8,
-  padding: "9px 12px",
-  color: "#E8EDF5",
-  fontSize: 13,
-  outline: "none",
-  boxSizing: "border-box",
-};
-
-const LABEL_STYLE: React.CSSProperties = {
-  display: "block",
-  color: "#9CA3AF",
-  fontSize: 12,
-  fontWeight: 500,
-  marginBottom: 6,
-};
-
-interface FieldProps {
-  label: string;
-  children: React.ReactNode;
-}
-
-function Field({ label, children }: FieldProps) {
-  return (
-    <div style={{ display: "flex", flexDirection: "column" }}>
-      <label style={LABEL_STYLE}>{label}</label>
-      {children}
-    </div>
-  );
 }
 
 export function CreateTenantModal({ onClose }: Props) {
@@ -112,57 +80,13 @@ export function CreateTenantModal({ onClose }: Props) {
   }
 
   return (
-    <div
-      style={{
-        position: "fixed",
-        inset: 0,
-        background: "rgba(0,0,0,0.6)",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        zIndex: 50,
-      }}
-      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
-    >
-      <div
-        style={{
-          background: "#161B26",
-          border: "1px solid #1F2937",
-          borderRadius: 12,
-          width: "100%",
-          maxWidth: 500,
-          maxHeight: "90vh",
-          overflowY: "auto",
-          boxShadow: "0 24px 64px rgba(0,0,0,0.6)",
-        }}
-      >
-        {/* Header */}
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            padding: "20px 24px",
-            borderBottom: "1px solid #1F2937",
-          }}
-        >
-          <div style={{ color: "#E8EDF5", fontSize: 16, fontWeight: 600 }}>
-            {t("title")}
-          </div>
-          <button
-            onClick={onClose}
-            style={{ background: "none", border: "none", color: "#6B7280", cursor: "pointer", padding: 4 }}
-          >
-            <X size={18} />
-          </button>
-        </div>
-
+    <Modal title={t("title")} onClose={onClose} width={500}>
         {/* Form */}
         <form onSubmit={handleSubmit}>
-          <div style={{ padding: "20px 24px", display: "flex", flexDirection: "column", gap: 16 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
             <Field label={t("nameLabel")}>
               <input
-                style={INPUT_STYLE}
+                style={inputStyle}
                 value={form.name}
                 onChange={(e) => handleNameChange(e.target.value)}
                 placeholder={t("namePlaceholder")}
@@ -171,7 +95,7 @@ export function CreateTenantModal({ onClose }: Props) {
 
             <Field label={t("slugLabel")}>
               <input
-                style={INPUT_STYLE}
+                style={inputStyle}
                 value={form.slug}
                 onChange={(e) => handleSlugChange(e.target.value)}
                 placeholder={t("slugPlaceholder")}
@@ -180,7 +104,7 @@ export function CreateTenantModal({ onClose }: Props) {
 
             <Field label={t("planLabel")}>
               <select
-                style={{ ...INPUT_STYLE, cursor: "pointer" }}
+                style={{ ...selectStyle, cursor: "pointer" }}
                 value={form.plan}
                 onChange={(e) => setField("plan", e.target.value)}
               >
@@ -192,7 +116,7 @@ export function CreateTenantModal({ onClose }: Props) {
 
             <Field label={t("businessTypeLabel")}>
               <select
-                style={{ ...INPUT_STYLE, cursor: "pointer" }}
+                style={{ ...selectStyle, cursor: "pointer" }}
                 value={form.businessType}
                 onChange={(e) => setField("businessType", e.target.value)}
               >
@@ -210,7 +134,7 @@ export function CreateTenantModal({ onClose }: Props) {
             {form.businessType === "supplier" && (
               <Field label={t("supplierCategoryLabel")}>
                 <select
-                  style={{ ...INPUT_STYLE, cursor: "pointer" }}
+                  style={{ ...selectStyle, cursor: "pointer" }}
                   value={form.supplierCategory ?? ""}
                   onChange={(e) => setField("supplierCategory", e.target.value)}
                 >
@@ -232,7 +156,7 @@ export function CreateTenantModal({ onClose }: Props) {
               <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
                 <Field label={t("emailLabel")}>
                   <input
-                    style={INPUT_STYLE}
+                    style={inputStyle}
                     type="email"
                     value={form.adminEmail}
                     onChange={(e) => setField("adminEmail", e.target.value)}
@@ -241,7 +165,7 @@ export function CreateTenantModal({ onClose }: Props) {
                 </Field>
                 <Field label={t("fullNameLabel")}>
                   <input
-                    style={INPUT_STYLE}
+                    style={inputStyle}
                     value={form.adminFullName}
                     onChange={(e) => setField("adminFullName", e.target.value)}
                     placeholder={t("fullNamePlaceholder")}
@@ -249,7 +173,7 @@ export function CreateTenantModal({ onClose }: Props) {
                 </Field>
                 <Field label={t("passwordLabel")}>
                   <input
-                    style={INPUT_STYLE}
+                    style={inputStyle}
                     type="password"
                     value={form.adminPassword}
                     onChange={(e) => setField("adminPassword", e.target.value)}
@@ -270,7 +194,8 @@ export function CreateTenantModal({ onClose }: Props) {
               display: "flex",
               justifyContent: "flex-end",
               gap: 10,
-              padding: "16px 24px",
+              marginTop: 20,
+              paddingTop: 16,
               borderTop: "1px solid #1F2937",
             }}
           >
@@ -282,7 +207,6 @@ export function CreateTenantModal({ onClose }: Props) {
             </Btn>
           </div>
         </form>
-      </div>
-    </div>
+    </Modal>
   );
 }

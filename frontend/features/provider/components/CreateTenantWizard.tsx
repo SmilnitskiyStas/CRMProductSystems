@@ -2,10 +2,13 @@
 
 import { useState } from "react";
 import { useTranslations } from "next-intl";
-import { X, ChevronRight, ChevronLeft, Check, Building2 } from "lucide-react";
+import { ChevronRight, ChevronLeft, Check } from "lucide-react";
 import { useCreateTenant } from "../hooks/useProvider";
 import { useItemCategories } from "@/features/marketplace/hooks/useMarketplace";
 import { slugify } from "@/lib/slug";
+import { Btn } from "@/components/ui/Btn";
+import { Modal } from "@/components/ui/Modal";
+import { inputStyle, labelStyle } from "@/components/ui/fieldStyles";
 import type { BusinessType, TenantModule, TenantPlan } from "../types";
 import {
   ALL_BUSINESS_TYPES,
@@ -85,77 +88,22 @@ export function CreateTenantWizard({ onClose, onCreated }: Props) {
     businessType !== null && (!isSupplier || supplierCategory !== "");
 
   return (
-    <>
-      {/* Backdrop */}
-      <div
-        onClick={onClose}
-        style={{
-          position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)",
-          zIndex: 100, backdropFilter: "blur(2px)",
-        }}
-      />
-
-      {/* Modal */}
-      <div style={{
-        position: "fixed", top: "50%", left: "50%",
-        transform: "translate(-50%, -50%)",
-        width: "min(640px, calc(100vw - 32px))",
-        background: "#0D1117",
-        border: "1px solid #1F2937",
-        borderRadius: 14,
-        zIndex: 101,
-        display: "flex", flexDirection: "column",
-        maxHeight: "calc(100vh - 48px)",
-        overflow: "hidden",
-      }}>
-
-        {/* Header */}
-        <div style={{
-          padding: "20px 24px 16px",
-          borderBottom: "1px solid #1F2937",
-          display: "flex", alignItems: "center", justifyContent: "space-between",
-          flexShrink: 0,
-        }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <div style={{
-              width: 32, height: 32, borderRadius: 8,
-              background: "linear-gradient(135deg, #7C3AED, #3B82F6)",
-              display: "flex", alignItems: "center", justifyContent: "center",
-            }}>
-              <Building2 size={15} color="#fff" />
-            </div>
-            <div>
-              <div style={{ color: "#E8EDF5", fontSize: 15, fontWeight: 600 }}>
-                {t("title")}
-              </div>
-              <div style={{ color: "#4B5563", fontSize: 12, marginTop: 1 }}>
-                {t("stepLabel", {
-                  step,
-                  name:
-                    step === 1
-                      ? t("stepSubtitleCompany")
-                      : step === 2
-                        ? t("stepSubtitleBusinessType")
-                        : t("stepSubtitleModules"),
-                })}
-              </div>
-            </div>
-          </div>
-          <button
-            onClick={onClose}
-            style={{
-              background: "transparent", border: "1px solid #1F2937",
-              borderRadius: 8, padding: "6px 8px", cursor: "pointer",
-              color: "#6B7280", display: "flex", alignItems: "center",
-            }}
-          >
-            <X size={15} />
-          </button>
-        </div>
-
+    <Modal title={t("title")} onClose={onClose} width={640}>
+      <div style={{ color: "#4B5563", fontSize: 12, marginTop: -14, marginBottom: 16 }}>
+        {t("stepLabel", {
+          step,
+          name:
+            step === 1
+              ? t("stepSubtitleCompany")
+              : step === 2
+                ? t("stepSubtitleBusinessType")
+                : t("stepSubtitleModules"),
+        })}
+      </div>
+      <div>
         {/* Step indicators */}
         <div style={{
-          display: "flex", gap: 0, padding: "0 24px",
+          display: "flex", gap: 0,
           borderBottom: "1px solid #1F2937", flexShrink: 0,
         }}>
           {([1, 2, 3] as const).map((s) => (
@@ -172,7 +120,7 @@ export function CreateTenantWizard({ onClose, onCreated }: Props) {
         </div>
 
         {/* Body */}
-        <div style={{ padding: 24, overflowY: "auto", flex: 1 }}>
+        <div style={{ paddingTop: 20 }}>
 
           {/* ── Step 1: Company info ── */}
           {step === 1 && (
@@ -359,82 +307,47 @@ export function CreateTenantWizard({ onClose, onCreated }: Props) {
 
         {/* Footer */}
         <div style={{
-          padding: "16px 24px",
+          marginTop: 20, paddingTop: 16,
           borderTop: "1px solid #1F2937",
           display: "flex", justifyContent: "space-between", alignItems: "center",
-          flexShrink: 0,
         }}>
-          <button
+          <Btn
+            variant="ghost"
+            icon={<ChevronLeft size={14} />}
             onClick={() => step > 1 ? setStep((s) => (s - 1) as 1 | 2 | 3) : onClose()}
-            style={{
-              display: "flex", alignItems: "center", gap: 6,
-              padding: "8px 16px", borderRadius: 8, cursor: "pointer",
-              background: "transparent", border: "1px solid #1F2937",
-              color: "#6B7280", fontSize: 13,
-            }}
           >
-            <ChevronLeft size={14} />
             {step === 1 ? t("cancelButton") : t("backButton")}
-          </button>
+          </Btn>
 
           {step < 3 ? (
-            <button
+            <Btn
               onClick={() => setStep((s) => (s + 1) as 2 | 3)}
               disabled={step === 1 ? !canGoStep2 : !canGoStep3}
-              style={{
-                display: "flex", alignItems: "center", gap: 6,
-                padding: "8px 18px", borderRadius: 8, cursor: (step === 1 ? canGoStep2 : canGoStep3) ? "pointer" : "default",
-                background: (step === 1 ? canGoStep2 : canGoStep3) ? "#3B82F6" : "#1F2937",
-                border: "none",
-                color: (step === 1 ? canGoStep2 : canGoStep3) ? "#fff" : "#374151",
-                fontSize: 13, fontWeight: 600,
-              }}
             >
               {t("nextButton")}
               <ChevronRight size={14} />
-            </button>
+            </Btn>
           ) : (
-            <button
+            <Btn
+              icon={<Check size={14} />}
               onClick={handleSubmit}
               disabled={createTenant.isPending || modules.length === 0 || !canGoStep3}
-              style={{
-                display: "flex", alignItems: "center", gap: 6,
-                padding: "8px 18px", borderRadius: 8,
-                cursor: createTenant.isPending || modules.length === 0 || !canGoStep3 ? "default" : "pointer",
-                background: createTenant.isPending || modules.length === 0 || !canGoStep3 ? "#1F2937" : "#3B82F6",
-                border: "none",
-                color: createTenant.isPending || modules.length === 0 || !canGoStep3 ? "#374151" : "#fff",
-                fontSize: 13, fontWeight: 600,
-              }}
             >
-              <Check size={14} />
               {createTenant.isPending ? t("creating") : t("createButton")}
-            </button>
+            </Btn>
           )}
         </div>
       </div>
-    </>
+    </Modal>
   );
 }
 
 // ── Internal helpers ──────────────────────────────────────────────────────────
 
-const inputStyle: React.CSSProperties = {
-  width: "100%",
-  background: "#111827",
-  border: "1px solid #1F2937",
-  borderRadius: 8,
-  padding: "9px 12px",
-  color: "#E8EDF5",
-  fontSize: 13,
-  outline: "none",
-  boxSizing: "border-box",
-};
-
 function Field({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
   return (
     <div>
-      <label style={{ display: "block", color: "#9CA3AF", fontSize: 12, fontWeight: 600, marginBottom: 6 }}>
+      <label style={labelStyle}>
         {label}
       </label>
       {children}

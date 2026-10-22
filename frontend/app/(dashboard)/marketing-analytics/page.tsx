@@ -22,6 +22,8 @@ import type {
   MarketingAnalyticsPeriodPreset,
   RfmSegmentKey,
 } from "@/features/marketing-analytics/types";
+import { PageContainer } from "@/components/ui/PageContainer";
+import { PageHeader } from "@/components/ui/PageHeader";
 
 function toDateStr(d: Date): string {
   return d.toISOString().slice(0, 10);
@@ -164,11 +166,8 @@ export default function MarketingAnalyticsPage() {
   }
 
   return (
-    <div style={{ padding: "28px 32px", display: "flex", flexDirection: "column", gap: 24, width: "100%" }}>
-      <div>
-        <h1 style={{ color: "#E8EDF5", fontSize: 22, fontWeight: 700, margin: 0 }}>{t("title")}</h1>
-        <p style={{ color: "#4B5563", fontSize: 13, marginTop: 6, marginBottom: 0 }}>{t("subtitle")}</p>
-      </div>
+    <PageContainer>
+      <PageHeader title={t("title")} subtitle={t("subtitle")} />
 
       {/* Historical-data disclaimer — a visible banner, not a footnote (plan requirement):
           RFM/LTV only reflects sales with a customer link, which only exists going forward
@@ -268,6 +267,6 @@ export default function MarketingAnalyticsPage() {
       )}
 
       {showMigration && migrationCard && <StoreMigrationSection filters={filters} enabled={enabled} />}
-    </div>
+    </PageContainer>
   );
 }

@@ -2,6 +2,7 @@
 
 import { User, Lock, ShieldCheck, Send } from "lucide-react";
 import { useTranslations } from "next-intl";
+import { PageContainer } from "@/components/ui/PageContainer";
 import { ProfileInfoForm } from "@/features/profile/components/ProfileInfoForm";
 import { ChangePasswordForm } from "@/features/profile/components/ChangePasswordForm";
 import { TwoFactorSection } from "@/features/profile/components/TwoFactorSection";
@@ -42,21 +43,20 @@ export default function UserSettingsPage() {
   ];
 
   return (
-    <div style={{ padding: "28px 32px", maxWidth: 780 }}>
-      {/* Header */}
-      <PageHeader />
+    <PageContainer style={{ maxWidth: 780 }}>
+      <ProfileCard />
 
       {/* Sections */}
-      <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
         {SECTIONS.map((section) => (
           <SectionCard key={section.id} section={section} />
         ))}
       </div>
-    </div>
+    </PageContainer>
   );
 }
 
-function PageHeader() {
+function ProfileCard() {
   const t = useTranslations("Dashboard.settings.userSettingsPage");
   const tRoles = useTranslations("Dashboard.roles");
   const { data: me } = useMe();
@@ -71,7 +71,6 @@ function PageHeader() {
         display: "flex",
         alignItems: "center",
         gap: 16,
-        marginBottom: 32,
         padding: "20px 24px",
         background: "#0D1117",
         border: "1px solid #1F2937",
@@ -100,7 +99,7 @@ function PageHeader() {
 
       {/* Info */}
       <div style={{ flex: 1 }}>
-        <h1 style={{ color: "#E8EDF5", fontSize: 18, fontWeight: 700, margin: "0 0 4px" }}>
+        <h1 style={{ color: "#E8EDF5", fontSize: 22, fontWeight: 700, margin: "0 0 4px" }}>
           {me?.fullName ?? "…"}
         </h1>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>

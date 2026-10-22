@@ -41,6 +41,8 @@ import type {
   FrequencyAudienceKey,
   FrequencySortBy,
 } from "@/features/marketing-analytics/price-segments/types";
+import { PageContainer } from "@/components/ui/PageContainer";
+import { PageHeader } from "@/components/ui/PageHeader";
 
 function toDateStr(d: Date): string {
   return d.toISOString().slice(0, 10);
@@ -269,11 +271,8 @@ export default function PriceSegmentsPage() {
   }
 
   return (
-    <div style={{ padding: "28px 32px", display: "flex", flexDirection: "column", gap: 24, width: "100%" }}>
-      <div>
-        <h1 style={{ color: "#E8EDF5", fontSize: 22, fontWeight: 700, margin: 0 }}>{t("title")}</h1>
-        <p style={{ color: "#4B5563", fontSize: 13, marginTop: 6, marginBottom: 0 }}>{t("subtitle")}</p>
-      </div>
+    <PageContainer>
+      <PageHeader title={t("title")} subtitle={t("subtitle")} />
 
       {/* Same historical-data caveat as the RFM dashboard — every metric here is also derived
           solely from customer-linked (loyalty) POS sales. */}
@@ -440,6 +439,6 @@ export default function PriceSegmentsPage() {
           />
         </>
       )}
-    </div>
+    </PageContainer>
   );
 }

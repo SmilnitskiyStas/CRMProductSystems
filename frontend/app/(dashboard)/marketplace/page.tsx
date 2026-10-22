@@ -8,6 +8,10 @@ import { SupplierCard } from "@/features/marketplace/components/SupplierCard";
 import { SupplierFilters } from "@/features/marketplace/components/SupplierFilters";
 import { useModules } from "@/features/modules/hooks/useModules";
 import type { MarketplaceFilters, SupplierListItemDto } from "@/features/marketplace/types";
+import { Btn } from "@/components/ui/Btn";
+import { PageContainer } from "@/components/ui/PageContainer";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { Pagination } from "@/components/ui/Pagination";
 
 const DEFAULT_FILTERS: MarketplaceFilters = {
   regionCode: "",
@@ -80,23 +84,14 @@ export default function MarketplacePage() {
   }
 
   return (
-    <div style={{ padding: "28px 32px" }}>
-      {/* Header */}
-      <div style={{ marginBottom: 28 }}>
-        <h1 style={{ color: "#E8EDF5", fontSize: 22, fontWeight: 700, margin: 0 }}>
-          {t("title")}
-        </h1>
-        <p style={{ color: "#4B5563", fontSize: 14, marginTop: 6 }}>
-          {t("subtitle")}
-        </p>
-      </div>
+    <PageContainer>
+      <PageHeader title={t("title")} subtitle={t("subtitle")} />
 
       {/* Search bar */}
       <div
         style={{
           display: "flex",
           gap: 10,
-          marginBottom: 20,
           alignItems: "center",
         }}
       >
@@ -131,43 +126,19 @@ export default function MarketplacePage() {
             }}
           />
         </div>
-        <button
-          onClick={handleSearch}
-          disabled={searchMutation.isPending}
-          style={{
-            padding: "9px 20px",
-            borderRadius: 8,
-            border: "none",
-            background: "#1D4ED8",
-            color: "#E8EDF5",
-            fontSize: 13,
-            fontWeight: 600,
-            cursor: "pointer",
-          }}
-        >
+        <Btn onClick={handleSearch} disabled={searchMutation.isPending}>
           {searchMutation.isPending ? t("searching") : t("searchButton")}
-        </button>
+        </Btn>
         {isSearchMode && (
-          <button
-            onClick={handleClearSearch}
-            style={{
-              padding: "9px 16px",
-              borderRadius: 8,
-              border: "1px solid #1F2937",
-              background: "transparent",
-              color: "#6B7280",
-              fontSize: 13,
-              cursor: "pointer",
-            }}
-          >
+          <Btn variant="ghost" onClick={handleClearSearch}>
             {t("reset")}
-          </button>
+          </Btn>
         )}
       </div>
 
       {/* Filters (hidden in search mode) */}
       {!isSearchMode && (
-        <div style={{ marginBottom: 24 }}>
+        <div>
           <SupplierFilters
             filters={filters}
             onChange={(f) => {
@@ -246,55 +217,12 @@ export default function MarketplacePage() {
 
           {/* Pagination (only in browse mode) */}
           {!isSearchMode && data && data.total > data.pageSize && (
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "center",
-                alignItems: "center",
-                gap: 12,
-                marginTop: 32,
-              }}
-            >
-              <button
-                disabled={page === 1}
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
-                style={{
-                  padding: "8px 18px",
-                  borderRadius: 8,
-                  border: "1px solid #1F2937",
-                  background: "transparent",
-                  color: page === 1 ? "#374151" : "#6B7280",
-                  fontSize: 13,
-                  cursor: page === 1 ? "not-allowed" : "pointer",
-                }}
-              >
-                {t("prev")}
-              </button>
-              <span style={{ color: "#4B5563", fontSize: 13 }}>
-                {t("pageOf", { page, total: Math.ceil(data.total / data.pageSize) })}
-              </span>
-              <button
-                disabled={page >= Math.ceil(data.total / data.pageSize)}
-                onClick={() => setPage((p) => p + 1)}
-                style={{
-                  padding: "8px 18px",
-                  borderRadius: 8,
-                  border: "1px solid #1F2937",
-                  background: "transparent",
-                  color:
-                    page >= Math.ceil(data.total / data.pageSize)
-                      ? "#374151"
-                      : "#6B7280",
-                  fontSize: 13,
-                  cursor:
-                    page >= Math.ceil(data.total / data.pageSize)
-                      ? "not-allowed"
-                      : "pointer",
-                }}
-              >
-                {t("next")}
-              </button>
-            </div>
+            <Pagination
+              page={page}
+              totalPages={Math.ceil(data.total / data.pageSize)}
+              totalCount={data.total}
+              onPageChange={setPage}
+            />
           )}
         </>
       )}
@@ -304,6 +232,6 @@ export default function MarketplacePage() {
           {t("errorLoad")}
         </div>
       )}
-    </div>
+    </PageContainer>
   );
 }

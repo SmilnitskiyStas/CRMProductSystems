@@ -15,6 +15,8 @@ import {
 } from "@/features/customers/hooks/useCustomers";
 import type { Customer, CreateCustomerPayload, UpdateCustomerPayload } from "@/features/customers/types";
 import { Btn } from "@/components/ui/Btn";
+import { PageContainer } from "@/components/ui/PageContainer";
+import { PageHeader } from "@/components/ui/PageHeader";
 
 const PAGE_SIZE = 50;
 
@@ -79,28 +81,16 @@ export default function CustomersPage() {
   // ── Render ────────────────────────────────────────────────────────────────────
 
   return (
-    <div style={{ padding: "28px 32px" }}>
-      {/* Header */}
-      <div
-        style={{
-          display: "flex",
-          alignItems: "flex-start",
-          justifyContent: "space-between",
-          marginBottom: 22,
-        }}
-      >
-        <div>
-          <h1 style={{ color: "#E8EDF5", fontSize: 22, fontWeight: 700, margin: 0 }}>
-            {t("title")}
-          </h1>
-          <p style={{ color: "#4B5563", fontSize: 13, marginTop: 6, marginBottom: 0 }}>
-            {t("subtitle")}
-          </p>
-        </div>
-        <Btn icon={<Plus size={15} />} onClick={() => { setEditing(null); setFormOpen(true); }}>
-          {t("addCustomer")}
-        </Btn>
-      </div>
+    <PageContainer>
+      <PageHeader
+        title={t("title")}
+        subtitle={t("subtitle")}
+        actions={
+          <Btn icon={<Plus size={15} />} onClick={() => { setEditing(null); setFormOpen(true); }}>
+            {t("addCustomer")}
+          </Btn>
+        }
+      />
 
       {/* Table */}
       <CustomerTable
@@ -137,6 +127,6 @@ export default function CustomersPage() {
           onSubmit={handleUpdate}
         />
       )}
-    </div>
+    </PageContainer>
   );
 }

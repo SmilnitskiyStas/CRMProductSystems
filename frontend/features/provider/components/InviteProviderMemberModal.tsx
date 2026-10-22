@@ -2,7 +2,6 @@
 
 import { useState, useMemo } from "react";
 import { useTranslations } from "next-intl";
-import { X } from "lucide-react";
 import { useInviteProviderMember } from "../hooks/useProviderTeam";
 import { useProviderRoles } from "../hooks/useProviderRoles";
 import {
@@ -10,6 +9,9 @@ import {
   SYSTEM_ROLE_PERMISSIONS,
   resolvePermissions,
 } from "@/lib/providerPermissions";
+import { Btn } from "@/components/ui/Btn";
+import { Modal } from "@/components/ui/Modal";
+import { inputStyle } from "@/components/ui/fieldStyles";
 
 interface Props {
   onClose: () => void;
@@ -117,30 +119,7 @@ export function InviteProviderMemberModal({ onClose }: Props) {
   }
 
   return (
-    <div
-      style={{
-        position: "fixed", inset: 0, zIndex: 999,
-        background: "rgba(0,0,0,0.6)",
-        display: "flex", alignItems: "center", justifyContent: "center",
-        padding: "20px",
-      }}
-      onClick={onClose}
-    >
-      <div
-        style={{
-          background: "#111827", border: "1px solid #1F2937",
-          borderRadius: 14, padding: "28px 32px",
-          width: "100%", maxWidth: 500,
-          maxHeight: "90vh", overflowY: "auto",
-        }}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
-          <h2 style={{ color: "#E8EDF5", fontSize: 17, fontWeight: 700, margin: 0 }}>{t("title")}</h2>
-          <button onClick={onClose} style={{ background: "none", border: "none", color: "#6B7280", cursor: "pointer" }}>
-            <X size={18} />
-          </button>
-        </div>
+    <Modal title={t("title")} onClose={onClose} width={500}>
 
         <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 14 }}>
           <input required type="text" placeholder={t("fullNamePlaceholder")} value={form.fullName}
@@ -220,32 +199,10 @@ export function InviteProviderMemberModal({ onClose }: Props) {
             </div>
           )}
 
-          <button
-            type="submit"
-            disabled={invite.isPending}
-            style={{
-              padding: "11px 0", borderRadius: 9,
-              background: invite.isPending ? "#1D3461" : "linear-gradient(135deg, #3B82F6, #6366F1)",
-              border: "none", color: "#fff", fontSize: 14, fontWeight: 600,
-              cursor: invite.isPending ? "not-allowed" : "pointer", marginTop: 4,
-            }}
-          >
+          <Btn type="submit" fullWidth disabled={invite.isPending} style={{ marginTop: 4 }}>
             {invite.isPending ? t("creating") : t("submitButton")}
-          </button>
+          </Btn>
         </form>
-      </div>
-    </div>
+    </Modal>
   );
 }
-
-const inputStyle: React.CSSProperties = {
-  background: "#0D1117",
-  border: "1px solid #1F2937",
-  borderRadius: 8,
-  padding: "10px 14px",
-  color: "#E8EDF5",
-  fontSize: 13,
-  outline: "none",
-  width: "100%",
-  boxSizing: "border-box",
-};

@@ -1,6 +1,8 @@
 "use client";
 
 import { useTranslations } from "next-intl";
+import { PageContainer } from "@/components/ui/PageContainer";
+import { PageHeader } from "@/components/ui/PageHeader";
 import { TasksBoard } from "@/features/supplier-cabinet/components/TasksBoard";
 import { useMe } from "@/features/auth/hooks/useAuth";
 import { SUPPLIER_ONLY, hasRole } from "@/lib/roles";
@@ -11,9 +13,9 @@ export default function SupplierTasksPage() {
 
   if (me && !hasRole(me.role, SUPPLIER_ONLY)) {
     return (
-      <div style={{ padding: "28px 32px", color: "#F87171", fontSize: 14 }}>
-        {t("supplierOnlyAccess")}
-      </div>
+      <PageContainer>
+        <div style={{ color: "#F87171", fontSize: 14 }}>{t("supplierOnlyAccess")}</div>
+      </PageContainer>
     );
   }
 
@@ -21,23 +23,16 @@ export default function SupplierTasksPage() {
   // task_board should not reach this page directly by URL either.
   if (me?.permissions && !me.permissions.task_board) {
     return (
-      <div style={{ padding: "28px 32px", color: "#F87171", fontSize: 14 }}>
-        {t("tasks.noAccess")}
-      </div>
+      <PageContainer>
+        <div style={{ color: "#F87171", fontSize: 14 }}>{t("tasks.noAccess")}</div>
+      </PageContainer>
     );
   }
 
   return (
-    <div style={{ padding: "28px 32px" }}>
-      <div style={{ marginBottom: 24 }}>
-        <h1 style={{ color: "#E8EDF5", fontSize: 22, fontWeight: 700, margin: 0 }}>
-          {t("tasks.title")}
-        </h1>
-        <p style={{ color: "#4B5563", fontSize: 14, marginTop: 6 }}>
-          {t("tasks.subtitle")}
-        </p>
-      </div>
+    <PageContainer>
+      <PageHeader title={t("tasks.title")} subtitle={t("tasks.subtitle")} />
       <TasksBoard />
-    </div>
+    </PageContainer>
   );
 }

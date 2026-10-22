@@ -4,6 +4,7 @@
 import { useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
+import { PageContainer } from "@/components/ui/PageContainer";
 
 export default function LegacyFloorPlanPage() {
   const t = useTranslations("Dashboard.stores");
@@ -15,8 +16,10 @@ export default function LegacyFloorPlanPage() {
   }, [params.id, router]);
 
   return (
-    <div style={{ color: "#4B5563", fontSize: 13, textAlign: "center", padding: "48px 0" }}>
-      {t("redirecting")}
-    </div>
+    <PageContainer>
+      <div style={{ color: "#4B5563", fontSize: 13, textAlign: "center", padding: "48px 0" }}>
+        {t("redirecting")}
+      </div>
+    </PageContainer>
   );
 }

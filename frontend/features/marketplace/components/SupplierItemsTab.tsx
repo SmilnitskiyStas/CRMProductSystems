@@ -7,6 +7,7 @@ import { Table, type TableColumn } from "@/components/ui/Table";
 import { useSupplierItems } from "../hooks/useMarketplace";
 import { SupplierItemDetailDialog } from "./SupplierItemDetailDialog";
 import type { SupplierItemDto } from "../types";
+import { Btn } from "@/components/ui/Btn";
 
 interface Props {
   supplierId: string;
@@ -57,22 +58,9 @@ function AddToCartCell({
           textAlign: "right",
         }}
       />
-      <button
-        onClick={() => onAdd(item, clamp(qty))}
-        style={{
-          background: "#1D3461",
-          border: "1px solid #3B82F6",
-          borderRadius: 7,
-          color: "#93C5FD",
-          fontSize: 12,
-          fontWeight: 600,
-          padding: "4px 10px",
-          cursor: "pointer",
-          whiteSpace: "nowrap",
-        }}
-      >
+      <Btn size="sm" onClick={() => onAdd(item, clamp(qty))}>
         {addLabel}
-      </button>
+      </Btn>
     </span>
   );
 }
@@ -241,21 +229,9 @@ export function SupplierItemsTab({ supplierId, onAddToCart }: Props) {
               <AddToCartCell item={item} addLabel={t("addButton")} onAdd={onAddToCart} />
             </span>
           )}
-          <button
-            onClick={() => setDetailItem(item)}
-            style={{
-              background: "transparent",
-              border: "1px solid #374151",
-              borderRadius: 7,
-              color: "#9CA3AF",
-              fontSize: 12,
-              fontWeight: 600,
-              padding: "4px 10px",
-              cursor: "pointer",
-            }}
-          >
+          <Btn size="sm" variant="ghost" onClick={() => setDetailItem(item)}>
             {t("detailsButton")}
-          </button>
+          </Btn>
         </>
       ),
     },

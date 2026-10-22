@@ -2,6 +2,7 @@
 
 import { useTranslations } from "next-intl";
 import { useModules } from "@/features/modules/hooks/useModules";
+import { PageContainer } from "@/components/ui/PageContainer";
 import { ServiceCatalogTable } from "@/features/auto-service/components/ServiceCatalogTable";
 
 export default function AutoServiceCatalogPage() {
@@ -33,8 +34,8 @@ export default function AutoServiceCatalogPage() {
   }
 
   return (
-    <div style={{ padding: "28px 32px", maxWidth: 1100 }}>
+    <PageContainer style={{ maxWidth: 1100 }}>
       <ServiceCatalogTable />
-    </div>
+    </PageContainer>
   );
 }

@@ -25,6 +25,8 @@ import type { AiAssistantContextSummary } from "@/features/ai-assistant/types";
 import type { ChatSessionDto } from "@/features/chat/types";
 import { PROVIDER_TEAM } from "@/lib/roles";
 import type { AppRole } from "@/lib/roles";
+import { Btn } from "@/components/ui/Btn";
+import { inputStyle, labelStyle, textareaStyle } from "@/components/ui/fieldStyles";
 
 export type ChatTab = "support" | "assistant";
 
@@ -210,21 +212,9 @@ function ChatView({
           </div>
         </div>
         {session.status === "open" && (
-          <button
-            onClick={() => closeChat.mutateAsync(session.id)}
-            disabled={closeChat.isPending}
-            style={{
-              background: "transparent",
-              border: "1px solid #1F2937",
-              borderRadius: 6,
-              padding: "4px 10px",
-              color: "#6B7280",
-              fontSize: 11,
-              cursor: "pointer",
-            }}
-          >
+          <Btn variant="ghost" size="xs" onClick={() => closeChat.mutateAsync(session.id)} disabled={closeChat.isPending}>
             {t("close")}
-          </button>
+          </Btn>
         )}
       </div>
 
@@ -347,26 +337,6 @@ function NewChatForm({ onBack }: { onBack: () => void }) {
   const [firstMessage, setFirstMessage] = useState("");
   const createChat = useCreateChat();
 
-  const inputStyle: React.CSSProperties = {
-    width: "100%",
-    background: "#0D1117",
-    border: "1px solid #1F2937",
-    borderRadius: 8,
-    padding: "9px 12px",
-    color: "#E8EDF5",
-    fontSize: 13,
-    outline: "none",
-    boxSizing: "border-box",
-    fontFamily: "inherit",
-  };
-
-  const labelStyle: React.CSSProperties = {
-    color: "#9CA3AF",
-    fontSize: 12,
-    marginBottom: 5,
-    display: "block",
-  };
-
   const canSubmit = subject.trim() && firstMessage.trim() && !createChat.isPending;
 
   async function handleSubmit() {
@@ -404,7 +374,7 @@ function NewChatForm({ onBack }: { onBack: () => void }) {
               value={subject}
               onChange={(e) => setSubject(e.target.value)}
               placeholder={tChat("subjectPlaceholder")}
-              style={inputStyle}
+              style={{ ...inputStyle, background: "#0D1117", fontFamily: "inherit" }}
             />
           </div>
           <div>
@@ -414,7 +384,7 @@ function NewChatForm({ onBack }: { onBack: () => void }) {
               onChange={(e) => setFirstMessage(e.target.value)}
               placeholder={tChat("firstMessagePlaceholder")}
               rows={5}
-              style={{ ...inputStyle, resize: "vertical", minHeight: 100 }}
+              style={{ ...textareaStyle, background: "#0D1117", minHeight: 100 }}
             />
           </div>
           {createChat.isError && (
@@ -426,28 +396,9 @@ function NewChatForm({ onBack }: { onBack: () => void }) {
       </div>
 
       <div style={{ borderTop: "1px solid #1F2937", padding: "10px 12px", flexShrink: 0 }}>
-        <button
-          onClick={handleSubmit}
-          disabled={!canSubmit}
-          style={{
-            width: "100%",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            gap: 7,
-            background: canSubmit ? "#1D3461" : "#111827",
-            border: `1px solid ${canSubmit ? "#3B82F6" : "#1F2937"}`,
-            borderRadius: 8,
-            padding: "10px 0",
-            color: canSubmit ? "#93C5FD" : "#374151",
-            fontSize: 13,
-            fontWeight: 600,
-            cursor: canSubmit ? "pointer" : "not-allowed",
-          }}
-        >
-          <Send size={14} />
+        <Btn fullWidth onClick={handleSubmit} disabled={!canSubmit} icon={<Send size={14} />}>
           {createChat.isPending ? t("sending") : t("send")}
-        </button>
+        </Btn>
       </div>
     </>
   );
@@ -897,27 +848,9 @@ export function SupportChatWidget({ userRole, onClose, activeTab, onTabChange }:
             </div>
 
             <div style={{ borderTop: "1px solid #1F2937", padding: "10px 12px", flexShrink: 0 }}>
-              <button
-                onClick={() => setView("new")}
-                style={{
-                  width: "100%",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  gap: 7,
-                  background: "#1D3461",
-                  border: "1px solid #3B82F6",
-                  borderRadius: 8,
-                  padding: "10px 0",
-                  color: "#93C5FD",
-                  fontSize: 13,
-                  fontWeight: 600,
-                  cursor: "pointer",
-                }}
-              >
-                <Plus size={14} />
+              <Btn fullWidth onClick={() => setView("new")} icon={<Plus size={14} />}>
                 {tChat("newChat")}
-              </button>
+              </Btn>
             </div>
           </>
         )}

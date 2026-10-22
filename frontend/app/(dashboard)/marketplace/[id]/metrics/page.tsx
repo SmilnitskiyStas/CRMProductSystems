@@ -1,8 +1,6 @@
 "use client";
 
 import { useEffect } from "react";
-import Link from "next/link";
-import { ChevronLeft } from "lucide-react";
 import { useParams } from "next/navigation";
 import { useTranslations, useLocale } from "next-intl";
 import {
@@ -18,6 +16,9 @@ import { DeliveryByRegionPanel } from "@/features/marketplace/components/Deliver
 import { DeliveryRegionComparison } from "@/features/marketplace/components/DeliveryRegionComparison";
 import { SupplierCoveragePanel } from "@/features/marketplace/components/SupplierCoveragePanel";
 import { StarRating } from "@/features/marketplace/components/StarRating";
+import { PageContainer } from "@/components/ui/PageContainer";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { BackLink } from "@/components/ui/BackLink";
 import type { SupplierMetricsHistoryPoint } from "@/features/marketplace/types";
 
 interface SectionProps {
@@ -31,7 +32,7 @@ interface SectionProps {
 
 function MetricSection({ id, title, value, sampleNote, explanation, children }: SectionProps) {
   return (
-    <section id={id} style={{ marginBottom: 40, scrollMarginTop: 20 }}>
+    <section id={id} style={{ scrollMarginTop: 20 }}>
       <h2 style={{ color: "#E8EDF5", fontSize: 15, fontWeight: 600, margin: "0 0 8px" }}>
         {title}
       </h2>
@@ -72,36 +73,24 @@ export default function SupplierMetricsDetailPage() {
 
   if (isLoading) {
     return (
-      <div style={{ padding: "28px 32px" }}>
-        <div style={{ height: 40, background: "#111827", borderRadius: 8, marginBottom: 20, maxWidth: 320 }} />
+      <PageContainer>
+        <div style={{ height: 40, background: "#111827", borderRadius: 8, maxWidth: 320 }} />
         {[...Array(3)].map((_, i) => (
           <div
             key={i}
-            style={{ height: 260, background: "#111827", borderRadius: 10, marginBottom: 24 }}
+            style={{ height: 260, background: "#111827", borderRadius: 10 }}
           />
         ))}
-      </div>
+      </PageContainer>
     );
   }
 
   if (isError || !supplier) {
     return (
-      <div style={{ padding: "28px 32px" }}>
+      <PageContainer>
         <div style={{ color: "#F87171", fontSize: 14 }}>{tSupplierPage("errorLoad")}</div>
-        <Link
-          href="/marketplace"
-          style={{
-            color: "#3B82F6",
-            fontSize: 13,
-            display: "inline-flex",
-            alignItems: "center",
-            gap: 4,
-            marginTop: 16,
-          }}
-        >
-          <ChevronLeft size={14} /> {tSupplierPage("backToMarketplace")}
-        </Link>
-      </div>
+        <BackLink href="/marketplace">{tSupplierPage("backToMarketplace")}</BackLink>
+      </PageContainer>
     );
   }
 
@@ -132,44 +121,29 @@ export default function SupplierMetricsDetailPage() {
   ) => <SupplierMetricTrendChart points={points} unit={unit} label={label} color={color} />;
 
   return (
-    <div style={{ padding: "28px 32px", maxWidth: 900 }}>
-      {/* Back link */}
-      <Link
-        href={`/marketplace/${id}`}
-        style={{
-          display: "inline-flex",
-          alignItems: "center",
-          gap: 4,
-          color: "#4B5563",
-          fontSize: 13,
-          textDecoration: "none",
-          marginBottom: 16,
-        }}
-      >
-        <ChevronLeft size={14} />
-        {t("backToProfile")}
-      </Link>
+    <PageContainer style={{ maxWidth: 900 }}>
+      <BackLink href={`/marketplace/${id}`}>{t("backToProfile")}</BackLink>
 
-      {/* Header */}
-      <h1 style={{ color: "#E8EDF5", fontSize: 22, fontWeight: 700, margin: "0 0 6px" }}>
-        {t("title")}
-      </h1>
-      <div style={{ color: "#9CA3AF", fontSize: 14, marginBottom: 4 }}>
-        {supplier.supplierName}
-      </div>
-      <div style={{ color: "#4B5563", fontSize: 12, marginBottom: 28 }}>
-        {computedAt
-          ? t("updatedAt", {
-              date: new Date(computedAt).toLocaleString(intlLocale, {
-                day: "2-digit",
-                month: "2-digit",
-                year: "numeric",
-                hour: "2-digit",
-                minute: "2-digit",
-              }),
-            })
-          : t("notComputed")}
-      </div>
+      <PageHeader
+        title={t("title")}
+        subtitle={
+          <>
+            {supplier.supplierName}
+            <br />
+            {computedAt
+              ? t("updatedAt", {
+                  date: new Date(computedAt).toLocaleString(intlLocale, {
+                    day: "2-digit",
+                    month: "2-digit",
+                    year: "numeric",
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  }),
+                })
+              : t("notComputed")}
+          </>
+        }
+      />
 
       {/* Composite quality score (Phase 6d) */}
       <MetricSection
@@ -314,6 +288,6 @@ export default function SupplierMetricsDetailPage() {
         </p>
         <SupplierCoveragePanel coverage={supplier.deliveryCoverage} />
       </section>
-    </div>
+    </PageContainer>
   );
 }

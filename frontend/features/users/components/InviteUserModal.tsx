@@ -13,6 +13,8 @@ import { useLocations } from "@/features/locations/hooks/useLocations";
 import { useTenantRoles, useAssignTenantRole } from "@/features/tenant-roles/hooks/useTenantRoles";
 import { useMe } from "@/features/auth/hooks/useAuth";
 import { hasRole, AT_LEAST_ENTERPRISE_ADMIN } from "@/lib/roles";
+import { Modal } from "@/components/ui/Modal";
+import { inputStyle, labelStyle } from "@/components/ui/fieldStyles";
 
 /**
  * Preferred default role when the inviter's rank allows it (TASK-392c) — keeps the previous
@@ -22,26 +24,6 @@ import { hasRole, AT_LEAST_ENTERPRISE_ADMIN } from "@/lib/roles";
  * capability-only inviter, who can only ever invite "staff").
  */
 const PREFERRED_DEFAULT_ROLE = "store_manager";
-
-const inputStyle: React.CSSProperties = {
-  width: "100%",
-  background: "#0D1117",
-  border: "1px solid #374151",
-  borderRadius: 8,
-  padding: "9px 12px",
-  color: "#E8EDF5",
-  fontSize: 13,
-  outline: "none",
-  boxSizing: "border-box",
-};
-
-const labelStyle: React.CSSProperties = {
-  display: "block",
-  color: "#9CA3AF",
-  fontSize: 12,
-  fontWeight: 500,
-  marginBottom: 6,
-};
 
 interface Props {
   onClose: () => void;
@@ -185,65 +167,11 @@ export function InviteUserModal({ onClose }: Props) {
   }
 
   return (
-    <>
-      {/* Backdrop */}
-      <div
-        onClick={onClose}
-        style={{
-          position: "fixed", inset: 0,
-          background: "rgba(0,0,0,0.6)",
-          zIndex: 300,
-          backdropFilter: "blur(2px)",
-        }}
-      />
-
-      {/* Modal */}
-      <div
-        style={{
-          position: "fixed",
-          top: "50%", left: "50%",
-          transform: "translate(-50%, -50%)",
-          width: "min(480px, 95vw)",
-          background: "#0D1117",
-          border: "1px solid #1F2937",
-          borderRadius: 14,
-          zIndex: 301,
-          display: "flex",
-          flexDirection: "column",
-        }}
-      >
-        {/* Header */}
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            padding: "18px 22px",
-            borderBottom: "1px solid #1F2937",
-          }}
-        >
-          <div>
-            <h2 style={{ color: "#E8EDF5", fontSize: 15, fontWeight: 700, margin: 0 }}>
-              {t("modalTitle")}
-            </h2>
-            <p style={{ color: "#4B5563", fontSize: 12, margin: "3px 0 0" }}>
-              {t("modalSubtitle")}
-            </p>
-          </div>
-          <button
-            onClick={onClose}
-            style={{
-              background: "transparent", border: "1px solid #1F2937",
-              borderRadius: 8, padding: "5px 9px",
-              color: "#4B5563", fontSize: 16, cursor: "pointer",
-            }}
-          >
-            ✕
-          </button>
-        </div>
+    <Modal title={t("modalTitle")} onClose={onClose} width={480}>
+      <p style={{ color: "#4B5563", fontSize: 12, margin: "-14px 0 16px" }}>{t("modalSubtitle")}</p>
 
         {/* Form */}
-        <form onSubmit={handleSubmit} style={{ padding: 22 }}>
+        <form onSubmit={handleSubmit}>
           <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
             {/* Full name */}
             <div>
@@ -442,7 +370,6 @@ export function InviteUserModal({ onClose }: Props) {
             </p>
           )}
         </form>
-      </div>
-    </>
+    </Modal>
   );
 }

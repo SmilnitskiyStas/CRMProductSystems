@@ -9,6 +9,9 @@ import { Shield } from "lucide-react";
 import { useMe } from "@/features/auth/hooks/useAuth";
 import { PROVIDER_TEAM } from "@/lib/roles";
 import type { AppRole } from "@/lib/roles";
+import { PageContainer } from "@/components/ui/PageContainer";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { Tabs } from "@/components/ui/Tabs";
 import { TeamTab } from "@/features/provider/components/TeamTab";
 import { StatsTab } from "@/features/provider/components/StatsTab";
 import { RolesSection } from "@/features/provider/components/RolesSection";
@@ -37,47 +40,31 @@ export default function ProviderTeamPage() {
 
   if (!me || !PROVIDER_TEAM.has((me.role ?? "") as AppRole)) return null;
 
-  const tabStyle = (key: Tab): React.CSSProperties => ({
-    display: "flex", alignItems: "center", gap: 6,
-    padding: "8px 16px", borderRadius: 8, fontSize: 13, cursor: "pointer",
-    fontWeight: activeTab === key ? 600 : 400,
-    background: activeTab === key ? "#1D3461" : "transparent",
-    border: `1px solid ${activeTab === key ? "#3B82F6" : "transparent"}`,
-    color: activeTab === key ? "#93C5FD" : "#6B7280",
-    whiteSpace: "nowrap" as const,
-  });
-
   return (
-    <div style={{ padding: "28px 32px" }}>
-      {/* Header */}
-      <div style={{ marginBottom: 24 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4 }}>
-          <Users size={20} style={{ color: "#3B82F6" }} />
-          <h1 style={{ color: "#E8EDF5", fontSize: 22, fontWeight: 700, margin: 0 }}>
+    <PageContainer>
+      <PageHeader
+        title={
+          <span style={{ display: "inline-flex", alignItems: "center", gap: 10 }}>
+            <Users size={20} style={{ color: "#3B82F6" }} />
             {t("title")}
-          </h1>
-        </div>
-        <p style={{ color: "#4B5563", fontSize: 13, margin: 0 }}>
-          {t("subtitle")}
-        </p>
-      </div>
+          </span>
+        }
+        subtitle={t("subtitle")}
+      />
 
-      {/* Tabs */}
-      <div style={{ display: "flex", gap: 4, marginBottom: 20 }}>
-        <button style={tabStyle("team")} onClick={() => setActiveTab("team")}>
-          <Users size={14} /> {t("tabTeam")}
-        </button>
-        <button style={tabStyle("stats")} onClick={() => setActiveTab("stats")}>
-          <BarChart2 size={14} /> {t("tabStats")}
-        </button>
-        <button style={tabStyle("roles")} onClick={() => setActiveTab("roles")}>
-          <Shield size={14} /> {t("tabRoles")}
-        </button>
-      </div>
+      <Tabs
+        items={[
+          { key: "team", label: <><Users size={14} /> {t("tabTeam")}</> },
+          { key: "stats", label: <><BarChart2 size={14} /> {t("tabStats")}</> },
+          { key: "roles", label: <><Shield size={14} /> {t("tabRoles")}</> },
+        ]}
+        value={activeTab}
+        onChange={setActiveTab}
+      />
 
       {activeTab === "team"  && <TeamTab />}
       {activeTab === "stats" && <StatsTab />}
       {activeTab === "roles" && <RolesSection standalone />}
-    </div>
+    </PageContainer>
   );
 }

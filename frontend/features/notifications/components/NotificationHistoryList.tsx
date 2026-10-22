@@ -2,12 +2,15 @@
 
 import { useState } from "react";
 import { useTranslations, useLocale } from "next-intl";
-import { CheckCheck, ChevronLeft, ChevronRight } from "lucide-react";
+import { CheckCheck } from "lucide-react";
 import { useNotificationHistory, useMarkAsRead, useMarkAllAsRead, useMarkAsUnread } from "../hooks/useNotifications";
 import { useLocations } from "@/features/locations/hooks/useLocations";
 import { NotificationDetailDrawer } from "./NotificationDetailDrawer";
 import type { NotificationHistoryItem, NotificationHistoryFilters } from "../types";
 import { getEventTypeLabel, getChannelLabel, CHANNEL_ICONS } from "../types";
+import { Btn } from "@/components/ui/Btn";
+import { Pagination } from "@/components/ui/Pagination";
+import { StatusPill } from "@/components/ui/StatusPill";
 
 function formatDate(iso: string, locale: string): string {
   const d = new Date(iso);
@@ -134,28 +137,15 @@ export function NotificationHistoryList({ filters, onFiltersChange }: Props) {
       {/* Mark all read button */}
       {unreadCount > 0 && (
         <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 12 }}>
-          <button
+          <Btn
+            size="sm"
+            variant="ghost"
+            icon={<CheckCheck size={13} />}
             onClick={() => markAllAsRead.mutate()}
             disabled={markAllAsRead.isPending}
-            style={{
-              display: "flex", alignItems: "center", gap: 6,
-              background: "transparent", border: "1px solid #1F2937",
-              borderRadius: 8, padding: "6px 12px",
-              color: "#6B7280", fontSize: 12, cursor: "pointer",
-              transition: "border-color 0.1s, color 0.1s",
-            }}
-            onMouseEnter={(e) => {
-              (e.currentTarget as HTMLElement).style.borderColor = "#374151";
-              (e.currentTarget as HTMLElement).style.color = "#9CA3AF";
-            }}
-            onMouseLeave={(e) => {
-              (e.currentTarget as HTMLElement).style.borderColor = "#1F2937";
-              (e.currentTarget as HTMLElement).style.color = "#6B7280";
-            }}
           >
-            <CheckCheck size={13} />
             {t("markAllReadButton", { count: unreadCount })}
-          </button>
+          </Btn>
         </div>
       )}
 
@@ -236,13 +226,9 @@ export function NotificationHistoryList({ filters, onFiltersChange }: Props) {
               </div>
 
               {/* Status badge */}
-              <div style={{
-                padding: "3px 10px", borderRadius: 6,
-                background: statusMeta.bg, color: statusMeta.text,
-                fontSize: 11, fontWeight: 600, flexShrink: 0,
-              }}>
+              <StatusPill bg={statusMeta.bg} text={statusMeta.text} style={{ flexShrink: 0 }}>
                 {statusLabel}
-              </div>
+              </StatusPill>
 
               {/* Date */}
               <div style={{
@@ -258,45 +244,7 @@ export function NotificationHistoryList({ filters, onFiltersChange }: Props) {
 
       {/* Pagination */}
       {totalPages > 1 && (
-        <div style={{
-          display: "flex", alignItems: "center", justifyContent: "space-between",
-          marginTop: 16, paddingTop: 16, borderTop: "1px solid #1F2937",
-        }}>
-          <span style={{ color: "#4B5563", fontSize: 12 }}>
-            {t("paginationSummary", { page, totalPages, totalCount })}
-            {isFetching && ` · ${t("updating")}`}
-          </span>
-          <div style={{ display: "flex", gap: 8 }}>
-            <button
-              onClick={() => goToPage(page - 1)}
-              disabled={page <= 1 || isFetching}
-              style={{
-                display: "flex", alignItems: "center", gap: 4,
-                background: "transparent", border: "1px solid #1F2937",
-                borderRadius: 8, padding: "6px 12px",
-                color: page <= 1 ? "#374151" : "#9CA3AF", fontSize: 12,
-                cursor: page <= 1 || isFetching ? "default" : "pointer",
-              }}
-            >
-              <ChevronLeft size={14} />
-              {t("backButton")}
-            </button>
-            <button
-              onClick={() => goToPage(page + 1)}
-              disabled={page >= totalPages || isFetching}
-              style={{
-                display: "flex", alignItems: "center", gap: 4,
-                background: "transparent", border: "1px solid #1F2937",
-                borderRadius: 8, padding: "6px 12px",
-                color: page >= totalPages ? "#374151" : "#9CA3AF", fontSize: 12,
-                cursor: page >= totalPages || isFetching ? "default" : "pointer",
-              }}
-            >
-              {t("nextButton")}
-              <ChevronRight size={14} />
-            </button>
-          </div>
-        </div>
+        <Pagination page={page} totalPages={totalPages} totalCount={totalCount} onPageChange={goToPage} />
       )}
 
       {/* Detail drawer */}
