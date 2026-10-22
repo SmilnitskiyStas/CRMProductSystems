@@ -268,11 +268,6 @@ export function ProductionPipeline({ locationId }: { locationId?: string }) {
               </>
             }
             last
-            footer={
-              <Link href="/production/analytics" style={{ color: "#60A5FA", fontSize: 12, textDecoration: "none" }}>
-                {t("statsAndAnalytics")} →
-              </Link>
-            }
           >
             {shippedReqs.length === 0 ? (
               <div style={mutedText}>{t("emptyShippedToday")}</div>
