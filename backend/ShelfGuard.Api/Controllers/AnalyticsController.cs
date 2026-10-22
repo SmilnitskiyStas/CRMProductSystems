@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using ShelfGuard.Application.Features.Analytics;
 using ShelfGuard.Application.Features.Analytics.Dtos;
+using ShelfGuard.Application.Features.Analytics.PromoNoSales;
 using ShelfGuard.Infrastructure.Authorization;
 using System.Security.Claims;
 
@@ -23,8 +24,13 @@ namespace ShelfGuard.Api.Controllers;
 public sealed class AnalyticsController : ControllerBase
 {
     private readonly IAnalyticsService _analytics;
+    private readonly IPromoNoSalesService _promoNoSales;
 
-    public AnalyticsController(IAnalyticsService analytics) => _analytics = analytics;
+    public AnalyticsController(IAnalyticsService analytics, IPromoNoSalesService promoNoSales)
+    {
+        _analytics = analytics;
+        _promoNoSales = promoNoSales;
+    }
 
     // TASK-610: storeIds is a repeated query param (`?storeIds=guid1&storeIds=guid2`) — omitted
     // or empty means "all stores" (same convention as TASK-608's other multi-store endpoints).
@@ -366,6 +372,21 @@ public sealed class AnalyticsController : ControllerBase
         return Ok(result);
     }
 
+    // Promo items that do not sell although the store holds stock - the item is probably not on the
+    // shelf / misplaced and needs a revision. Tenant-scoped (RLS + store-scope apply to every read).
+    [HttpGet("pos/promo-no-sales")]
+    [RequireModule("analytics")]
+    [ProducesResponseType(typeof(PromoNoSalesDto), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetPromoNoSales(
+        [FromQuery] Guid? store_id,
+        CancellationToken ct = default)
+    {
+        var tenantId = ResolveTenantId();
+        if (tenantId is null) return Forbid();
+
+        return Ok(await _promoNoSales.GetAsync(tenantId.Value, store_id, ct));
+    }
+
     [HttpGet("pos/cashiers")]
     [RequireModule("analytics")]
     [ProducesResponseType(typeof(PosCashierStatsDto), StatusCodes.Status200OK)]
@@ -380,6 +401,27 @@ public sealed class AnalyticsController : ControllerBase
 
         var (resolvedFrom, resolvedTo) = ResolveDateRange(from, to);
         var result = await _analytics.GetPosCashierStatsAsync(tenantId, store_id, resolvedFrom, resolvedTo, ct);
+        return Ok(result);
+    }
+
+    // On-demand per-store detail (cashiers' sales, shift hours, profit). store_id is required;
+    // cost/profit only for callers who pass AnalyticsAuthorization.CanViewMargin (ADR-027).
+    [HttpGet("pos/store-detail")]
+    [RequireModule("analytics")]
+    [ProducesResponseType(typeof(PosStoreDetailDto), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetPosStoreDetail(
+        [FromQuery] Guid? store_id,
+        [FromQuery] DateOnly? from,
+        [FromQuery] DateOnly? to,
+        CancellationToken ct = default)
+    {
+        var tenantId = ResolveTenantId();
+        if (tenantId is null && !IsProvider()) return Forbid();
+        if (store_id is null) return BadRequest("store_id is required");
+
+        var (resolvedFrom, resolvedTo) = ResolveDateRange(from, to);
+        var result = await _analytics.GetPosStoreDetailAsync(
+            tenantId, store_id.Value, resolvedFrom, resolvedTo, AnalyticsAuthorization.CanViewMargin(User), ct);
         return Ok(result);
     }
 

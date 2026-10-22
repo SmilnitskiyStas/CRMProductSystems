@@ -58,6 +58,12 @@ public sealed class AnalyticsService : IAnalyticsService
     public Task<PosCashierStatsDto> GetPosCashierStatsAsync(Guid? tenantId, Guid? storeId, DateOnly from, DateOnly to, CancellationToken ct = default)
         => _repo.GetPosCashierStatsAsync(tenantId, storeId, from, to, ct);
 
+    public async Task<PosStoreDetailDto> GetPosStoreDetailAsync(Guid? tenantId, Guid storeId, DateOnly from, DateOnly to, bool includeCost, CancellationToken ct = default)
+    {
+        var raw = await _repo.GetPosStoreDetailRawAsync(tenantId, storeId, from, to, includeCost, ct);
+        return PosStoreDetailBuilder.Build(storeId, from, to, includeCost, DateTime.UtcNow, raw);
+    }
+
     // ── TASK-482: single-product sales trend ─────────────────────────────────
 
     public Task<ProductSalesTrendDto?> GetProductSalesTrendAsync(Guid? tenantId, Guid? storeId, Guid productId, DateOnly from, DateOnly to, string groupBy, bool includeMargin, CancellationToken ct = default)

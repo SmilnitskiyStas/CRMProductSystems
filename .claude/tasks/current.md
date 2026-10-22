@@ -1626,8 +1626,14 @@ single-flight refresh + cross-tab lock (`lib/api.ts`), 10 с grace у `AuthServi
 ### TASK-746 — capability `consumer_app.manage` (розділ «Застосунок» через TenantRole) — review
 Нова capability + політика `ConsumerAppManageOrCapability` на 12 контролерах consumer-app, tab-ключі `consumer_app` + `/consumer-app/*`, Sidebar role OR capability. Лог: `.claude/logs/tasks/746_*`. Гілка feat/consumer-app-role-capability, не змерджено.
 
-### TASK-747 - Планограма backend: підкладка плану, типи зон, інсайти полиці, збагачення AI-скану - review
-Upload фону плану, нові типи зон, `GET .../shelves/{shelfId}/insights`, enrich скану (склад/продажі/рекомендація) + `ShelfRestockAdvisor`. Без міграцій. Лог: `.claude/logs/tasks/747_*`. Не закомічено.
+### TASK-747 — POS analytics: lazy «Детальніше по магазину і касирах» — review
+`GET /api/analytics/pos/store-detail?from&to&store_id` (store_id обов'язковий; виручка/чеки/сер.чек/зміни/години з `pos_shifts`/прибуток). Прибуток лише при `CanViewMargin` (інакше null). 4 згруповані запити, без N+1. Фронт: `PosStoreDetailPanel` — запит `enabled` лише після кліку. Лог: `.claude/logs/tasks/747_*`. Не закомічено.
 
-### TASK-748 - Планограма frontend: підкладка плану, типи зон, ShelfInsightPanel, збагачений скан - review
-tsc/lint/next build OK; UI не перевірено у браузері (чекає backend TASK-747). Лог: `.claude/logs/tasks/748_*`. Не закомічено.
+### TASK-749 — Акційні товари без продажів (сповіщення + `/analytics/pos`) — review
+Детектор (3 джерела акцій, пороги в `PromoNoSalesThresholds`), `GET /api/analytics/pos/promo-no-sales`, worker `promo-no-sales` (07:00, дедуп `promo_no_sales_alerts`, міграція `AddPromoNoSalesAlerts`), банер на `/analytics/pos`. Лог: `.claude/logs/tasks/749_*`. Не закомічено.
+
+### TASK-750 — Планограма backend: підкладка плану, типи зон, інсайти полиці, збагачення AI-скану — review
+Upload фону плану, нові типи зон, `GET .../shelves/{shelfId}/insights`, enrich скану (склад/продажі/рекомендація) + `ShelfRestockAdvisor`. Без міграцій. Лог: `.claude/logs/tasks/750_*` (раніше позначався TASK-747).
+
+### TASK-751 — Планограма frontend: підкладка плану, типи зон, ShelfInsightPanel, збагачений скан, компактні зони — review
+tsc/lint/next build OK. Лог: `.claude/logs/tasks/751_*` (раніше TASK-748).

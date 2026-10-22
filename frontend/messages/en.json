@@ -2940,6 +2940,25 @@
             "currentStock": "Current stock"
           }
         },
+        "promoNoSales": {
+          "title": "Promo items without sales",
+          "subtitle": "The item is on promotion and in stock, but has no or almost no sales — check that it is on the shelf.",
+          "hint": {
+            "no_sales": "Possibly not on display — run an item revision in the store.",
+            "low_sales": "Sales are far below normal — check the display and run a revision."
+          },
+          "headers": {
+            "product": "Item",
+            "store": "Store",
+            "promo": "Promotion",
+            "sold": "Sold / expected",
+            "stock": "Stock: shelf / store / warehouse",
+            "action": "Action"
+          },
+          "days": "in {days} d.",
+          "revise": "Shelf revision",
+          "reviseFloorPlan": "Open store"
+        },
         "cashiers": {
           "title": "Cashiers",
           "empty": "No data",
@@ -2949,6 +2968,32 @@
             "receipts": "Receipts",
             "averageTicket": "Average ticket",
             "shifts": "Shifts"
+          }
+        },
+        "storeDetail": {
+          "show": "Store and cashier details",
+          "hide": "Hide details",
+          "hint": "Loaded only on your request.",
+          "selectStore": "Pick a store in the header to see cashier details.",
+          "error": "Failed to load details",
+          "empty": "No sales in the selected period",
+          "title": "Store: {store}",
+          "totalRevenue": "Revenue",
+          "totalProfit": "Profit",
+          "hoursWorked": "Hours worked",
+          "hoursUnit": "{value} h",
+          "coverage": "Cost coverage: {value}% of revenue",
+          "noCostNote": "Profit is not available for your role — revenue only.",
+          "profitEstimate": "Profit is an estimate: the item's current purchase price applied to all sales. Items without a purchase price are excluded.",
+          "headers": {
+            "cashier": "Employee",
+            "revenue": "Revenue",
+            "receipts": "Receipts",
+            "averageTicket": "Average ticket",
+            "shifts": "Shifts",
+            "hours": "Hours",
+            "perHour": "Revenue/h",
+            "profit": "Profit"
           }
         },
         "revenueTrend": {

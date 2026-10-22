@@ -64,6 +64,122 @@ public sealed record CashierStatDto(
     decimal AverageTicket,
     int ShiftCount);
 
+// ── TASK-674+: on-demand per-store detail (pos/store-detail) ────────────────────────────────
+
+/// <summary>
+/// Lazy "Детальніше по магазину і касирах" payload for ONE store. <see cref="CostIncluded"/> is
+/// false when the caller lacks AnalyticsAuthorization.CanViewMargin (ADR-027): then every Cost/
+/// Profit field is null and the UI shows revenue only. When true, Profit = revenue of lines that
+/// have Item.PricePurchase minus their cost (current purchase price applied retroactively — an
+/// estimate); <see cref="CostCoveragePercent"/> is the share of revenue those lines represent so
+/// the UI can flag incomplete cost data. Hours come from POS shifts (ClosedAt, or now for an open
+/// shift) opened in the period.
+/// </summary>
+public sealed record PosStoreDetailDto(
+    Guid StoreId,
+    string StoreName,
+    DateOnly From,
+    DateOnly To,
+    bool CostIncluded,
+    decimal TotalRevenue,
+    int TransactionCount,
+    decimal AverageTicket,
+    int ShiftCount,
+    decimal HoursWorked,
+    decimal? TotalCost,
+    decimal? TotalProfit,
+    decimal? CostCoveragePercent,
+    IReadOnlyList<CashierDetailDto> Cashiers);
+
+public sealed record CashierDetailDto(
+    Guid CashierId,
+    string CashierName,
+    decimal TotalRevenue,
+    int TransactionCount,
+    decimal AverageTicket,
+    int ShiftCount,
+    decimal HoursWorked,
+    decimal? RevenuePerHour,
+    decimal? Cost,
+    decimal? Profit,
+    decimal? CostCoveragePercent);
+
+/// <summary>Raw aggregates from the repository; <see cref="PosStoreDetailBuilder"/> derives the DTO.</summary>
+public sealed record PosStoreDetailRaw(
+    string StoreName,
+    IReadOnlyList<PosCashierSalesRaw> Sales,
+    IReadOnlyList<PosShiftRaw> Shifts,
+    IReadOnlyList<PosCashierCostRaw> Costs);
+
+public sealed record PosCashierSalesRaw(Guid CashierId, string CashierName, decimal Revenue, int Transactions);
+
+public sealed record PosShiftRaw(Guid? CashierId, DateTime OpenedAt, DateTime? ClosedAt);
+
+/// <summary>RevenueWithCost = revenue of sale lines whose item has a purchase price; Cost = their cost.</summary>
+public sealed record PosCashierCostRaw(Guid CashierId, decimal RevenueWithCost, decimal Cost);
+
+public static class PosStoreDetailBuilder
+{
+    public static PosStoreDetailDto Build(
+        Guid storeId, DateOnly from, DateOnly to, bool includeCost, DateTime nowUtc, PosStoreDetailRaw raw)
+    {
+        var shiftsByCashier = raw.Shifts
+            .Where(s => s.CashierId.HasValue)
+            .GroupBy(s => s.CashierId!.Value)
+            .ToDictionary(g => g.Key, g => (
+                Count: g.Count(),
+                Hours: g.Sum(s => Hours(s, nowUtc))));
+        var costByCashier = raw.Costs.ToDictionary(c => c.CashierId);
+
+        var cashiers = raw.Sales
+            .Select(s =>
+            {
+                shiftsByCashier.TryGetValue(s.CashierId, out var sh);
+                var hours = Math.Round(sh.Hours, 2);
+                decimal? cost = null, profit = null, coverage = null;
+                if (includeCost)
+                {
+                    costByCashier.TryGetValue(s.CashierId, out var c);
+                    cost = c?.Cost ?? 0m;
+                    profit = (c?.RevenueWithCost ?? 0m) - cost;
+                    coverage = Coverage(c?.RevenueWithCost ?? 0m, s.Revenue);
+                }
+                return new CashierDetailDto(
+                    s.CashierId, s.CashierName, s.Revenue, s.Transactions,
+                    s.Transactions > 0 ? s.Revenue / s.Transactions : 0m,
+                    sh.Count, hours,
+                    hours > 0 ? Math.Round(s.Revenue / hours, 2) : null,
+                    cost, profit, coverage);
+            })
+            .OrderByDescending(c => c.TotalRevenue)
+            .ToList();
+
+        var revenue = cashiers.Sum(c => c.TotalRevenue);
+        var tx = cashiers.Sum(c => c.TransactionCount);
+        var withCost = raw.Costs.Sum(c => c.RevenueWithCost);
+        var totalCost = includeCost ? raw.Costs.Sum(c => c.Cost) : (decimal?)null;
+
+        return new PosStoreDetailDto(
+            storeId, raw.StoreName, from, to, includeCost,
+            revenue, tx, tx > 0 ? revenue / tx : 0m,
+            raw.Shifts.Count,
+            Math.Round(raw.Shifts.Sum(s => Hours(s, nowUtc)), 2),
+            totalCost,
+            includeCost ? withCost - totalCost : null,
+            includeCost ? Coverage(withCost, revenue) : null,
+            cashiers);
+    }
+
+    private static decimal Hours(PosShiftRaw s, DateTime nowUtc)
+    {
+        var end = s.ClosedAt ?? nowUtc;
+        return end > s.OpenedAt ? (decimal)(end - s.OpenedAt).TotalHours : 0m;
+    }
+
+    private static decimal Coverage(decimal revenueWithCost, decimal revenue)
+        => revenue > 0 ? Math.Round(revenueWithCost / revenue * 100m, 1) : 0m;
+}
+
 // ── TASK-482: single-product sales trend (row-click drill-down from pos/top-products) ───────
 
 /// <summary>

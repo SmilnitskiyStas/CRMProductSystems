@@ -1,4 +1,4 @@
-# TASK-747 - Planogram backend: floor-plan upload, zone types, shelf insights, scan enrichment
+# TASK-750 - Planogram backend: floor-plan upload, zone types, shelf insights, scan enrichment
 
 Plan: `~/.claude/plans/rustling-wiggling-pie.md` sections 1-4. No migrations.
 

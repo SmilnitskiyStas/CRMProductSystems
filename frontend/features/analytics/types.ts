@@ -152,6 +152,32 @@ export interface PosCashierStatsDto {
   cashiers: PosCashierStat[];
 }
 
+// On-demand pos/store-detail. cost/profit/coverage are null when the caller lacks margin access.
+export interface PosCashierDetail extends PosCashierStat {
+  hoursWorked: number;
+  revenuePerHour: number | null;
+  cost: number | null;
+  profit: number | null;
+  costCoveragePercent: number | null;
+}
+
+export interface PosStoreDetailDto {
+  storeId: string;
+  storeName: string;
+  from: string;
+  to: string;
+  costIncluded: boolean;
+  totalRevenue: number;
+  transactionCount: number;
+  averageTicket: number;
+  shiftCount: number;
+  hoursWorked: number;
+  totalCost: number | null;
+  totalProfit: number | null;
+  costCoveragePercent: number | null;
+  cashiers: PosCashierDetail[];
+}
+
 // ── Category × product breakdown (interactive analytics + margin plan, TASK-483) ───────────
 // MarginAmount/MarginPercent are null both when the caller can't see margin (ADR-027 —
 // AnalyticsAuthorization.CanViewMargin resolved false server-side) and when the product itself
@@ -336,4 +362,38 @@ export interface AduDto {
   validDays30d: number | null;
   validDays60d: number | null;
   calculatedAt: string;
+}
+
+// GET /api/analytics/pos/promo-no-sales -- promo items that do not sell although the store holds
+// stock (probably not on the shelf). `reason` drives the localized hint.
+export interface PromoNoSalesItemDto {
+  storeId: string;
+  storeName: string;
+  productId: string;
+  productName: string;
+  barcode: string | null;
+  promoSource: "discount" | "campaign" | "rule";
+  promoSourceId: string;
+  promoName: string;
+  discountPercent: number | null;
+  promoStart: string;
+  promoEnd: string | null;
+  periodFrom: string;
+  periodTo: string;
+  periodDays: number;
+  unitsSold: number;
+  expectedUnits: number | null;
+  storeStock: number;
+  onShelfStock: number;
+  warehouseStock: number;
+  zoneId: string | null;
+  zoneName: string | null;
+  reason: "no_sales" | "low_sales";
+}
+
+export interface PromoNoSalesDto {
+  asOf: string;
+  minPromoDays: number;
+  maxSalesRatio: number;
+  items: PromoNoSalesItemDto[];
 }

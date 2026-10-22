@@ -44,11 +44,28 @@ export function useWorstProducts(
   });
 }
 
+export function usePromoNoSales(params: { store_id?: string }, enabled = true) {
+  return useQuery({
+    queryKey: ["pos-analytics-promo-no-sales", params],
+    queryFn: () => posAnalyticsApi.getPromoNoSales(params),
+    enabled,
+  });
+}
+
 export function usePosCashiers(params: PosDateRangeParams, enabled = true) {
   return useQuery({
     queryKey: ["pos-analytics-cashiers", params],
     queryFn: () => posAnalyticsApi.getCashiers(params),
     enabled,
+  });
+}
+
+// Lazy: callers pass enabled=false until the user opens "Детальніше по магазину і касирах".
+export function usePosStoreDetail(params: PosDateRangeParams, enabled = false) {
+  return useQuery({
+    queryKey: ["pos-analytics-store-detail", params],
+    queryFn: () => posAnalyticsApi.getStoreDetail(params),
+    enabled: enabled && !!params.store_id,
   });
 }
 

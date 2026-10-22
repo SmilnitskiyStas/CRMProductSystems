@@ -93,6 +93,7 @@ public static class DependencyInjection
 
         // Analytics
         services.AddScoped<IAnalyticsRepository, AnalyticsRepository>();
+        services.AddScoped<ShelfGuard.Application.Features.Analytics.PromoNoSales.IPromoNoSalesRepository, PromoNoSalesRepository>();
 
         // Notifications
         services.AddScoped<INotificationRepository, NotificationRepository>();

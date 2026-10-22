@@ -167,6 +167,8 @@ jobs:
           port: 10048
           username: administrator
           key: ${{ secrets.AUTO_DEPLOY_DATABASEMATE }}
+          # Default is 10m; the on-server docker build (api + Next.js) takes longer on this 3.9 GB host.
+          command_timeout: 30m
           script: |
             cd ~/shelfguard
             bash deploy.sh
