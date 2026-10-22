@@ -5,6 +5,7 @@ import { Calculator, CheckCircle2 } from "lucide-react";
 import { toast } from "sonner";
 import { useTranslations, useLocale } from "next-intl";
 import { Btn } from "@/components/ui/Btn";
+import { AutoOrdersSection } from "@/features/orders/components/AutoOrdersSection";
 import { OrderLinesTable } from "@/features/orders/components/OrderLinesTable";
 import { useGenerateOrder } from "@/features/orders/hooks/useOrders";
 import { useConfirmOrder } from "@/features/orders/hooks/useConfirmOrder";
@@ -161,6 +162,8 @@ export default function OrdersPage() {
           </Btn>
         </div>
       </div>
+
+      <AutoOrdersSection storeId={primaryStoreId} />
 
       {/* Pipeline stats after generation */}
       {result && (

@@ -194,6 +194,7 @@ export default function ReceiptsPage() {
 
   const t = useTranslations("Dashboard.receipts");
   const tPage = useTranslations("Dashboard.receipts.page");
+  const tAuto = useTranslations("Dashboard.orders.page.auto");
   const tCommon = useTranslations("Common");
   const locale = useLocale();
   const intlLocale = locale === "en" ? "en-US" : "uk-UA";
@@ -279,7 +280,16 @@ export default function ReceiptsPage() {
       key: "supplier",
       header: tPage("headers.supplier"),
       sortKey: "supplier",
-      render: (r) => r.supplierName ?? "—",
+      render: (r) => (
+        <>
+          {r.supplierName ?? "—"}
+          {r.source === "auto_replenishment" && (
+            <span style={{ marginLeft: 6, fontSize: 10, padding: "1px 6px", borderRadius: 999, background: "#1C2A3A", color: "#60A5FA" }}>
+              {tAuto("badge")}
+            </span>
+          )}
+        </>
+      ),
     },
     {
       key: "expected",

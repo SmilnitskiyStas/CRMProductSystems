@@ -9,6 +9,10 @@ public interface IOrderCalcService
     /// Order = Buffer + SafetyBuffer − StockOnHand − InTransit, then MOQ/USQ rounding.
     /// Stateless — persistence arrives with AI suggestions (phase 5).
     /// </summary>
+    /// <param name="excludeAutoUntakenDrafts">
+    /// TASK-755: ignore untaken auto-replenishment drafts when computing "in transit" (only the daily
+    /// auto-replenishment job passes true — it rewrites those drafts). Default false.
+    /// </param>
     Task<(OrderCalcResult? Result, string? Error)> CalculateAsync(
-        Guid storeId, CancellationToken ct = default);
+        Guid storeId, CancellationToken ct = default, bool excludeAutoUntakenDrafts = false);
 }

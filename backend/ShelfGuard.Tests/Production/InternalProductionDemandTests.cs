@@ -87,7 +87,7 @@ public sealed class InternalProductionDemandTests
 
     private readonly IProductionDemandTenantRunner _runner = Substitute.For<IProductionDemandTenantRunner>();
 
-    private InternalJobsController Controller() => new(_runner)
+    private InternalJobsController Controller() => new(_runner, Substitute.For<ShelfGuard.Application.Features.Receipts.IAutoReplenishmentTenantRunner>())
     {
         ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext() },
     };

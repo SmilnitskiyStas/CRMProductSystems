@@ -5645,6 +5645,13 @@ namespace ShelfGuard.Infrastructure.Migrations
                     b.Property<Guid?>("ReceivedBy")
                         .HasColumnType("uuid");
 
+                    b.Property<string>("Source")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)")
+                        .HasDefaultValue("manual");
+
                     b.Property<string>("Status")
                         .IsRequired()
                         .ValueGeneratedOnAdd()
@@ -5653,6 +5660,12 @@ namespace ShelfGuard.Infrastructure.Migrations
                         .HasDefaultValue("draft");
 
                     b.Property<Guid?>("SupplierId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("TakenAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("TakenByUserId")
                         .HasColumnType("uuid");
 
                     b.Property<Guid>("TenantId")

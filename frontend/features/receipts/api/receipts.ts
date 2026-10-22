@@ -12,6 +12,7 @@ export const receiptsApi = {
     page?: number;
     pageSize?: number;
     search?: string;
+    source?: string;
     sortBy?: string;
     sortDescending?: boolean;
   }) => {
@@ -25,6 +26,7 @@ export const receiptsApi = {
     if (params?.page) qs.set("page", String(params.page));
     if (params?.pageSize) qs.set("pageSize", String(params.pageSize));
     if (params?.search) qs.set("search", params.search);
+    if (params?.source) qs.set("source", params.source);
     if (params?.sortBy) qs.set("sortBy", params.sortBy);
     if (params?.sortDescending !== undefined) qs.set("sortDescending", String(params.sortDescending));
     const q = qs.toString();
@@ -41,4 +43,11 @@ export const receiptsApi = {
   receive: (id: string) => api.put<ReceiptDto>(`/api/receipts/${id}/receive`),
 
   cancel: (id: string) => api.put<ReceiptDto>(`/api/receipts/${id}/cancel`),
+
+  take: (id: string) => api.post<ReceiptDto>(`/api/receipts/${id}/take`),
+
+  release: (id: string) => api.post<ReceiptDto>(`/api/receipts/${id}/release`),
+
+  autoGenerate: (storeLocationId?: string) =>
+    api.post<ReceiptDto[]>("/api/receipts/auto-generate", { storeLocationId: storeLocationId ?? null }),
 };

@@ -764,6 +764,8 @@ public sealed class AppDbContext : DbContext
             e.Property(r => r.DestinationStoreId).HasColumnName("DestinationLocationId");
             e.Property(r => r.PostponeCount).HasDefaultValue(0);
             e.Property(r => r.DelayReason).HasMaxLength(500);
+            // TASK-755: auto replenishment drafts (Source manual | auto_replenishment, taken-by lock).
+            e.Property(r => r.Source).HasMaxLength(30).HasDefaultValue("manual");
             // TASK-354: TenantId had no index at all on this table (RLS filters every
             // query by TenantId — same gap pattern as WriteOff had before its
             // idx_write_offs_tenant_store_status index further below).

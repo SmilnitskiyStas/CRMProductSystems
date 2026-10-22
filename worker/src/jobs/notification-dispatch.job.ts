@@ -51,6 +51,13 @@ const DISPATCH_EVENT_ROLES: Record<string, { roles: string[]; channels: string[]
     roles: ["store_manager", "network_manager", "enterprise_admin"],
     channels: ["telegram", "push"],
   },
+  // TASK-755: auto DRAFT supplier order created by AutoReplenishmentService (daily 07:00).
+  // StoreId on the outbox row = the destination store; managers take it into work, correct
+  // quantities and confirm it on /orders.
+  "order.auto_draft": {
+    roles: ["store_manager", "network_manager", "enterprise_admin"],
+    channels: ["telegram", "push"],
+  },
   "supplier.message": {
     roles: ["store_manager", "network_manager", "enterprise_admin"],
     channels: ["telegram", "push"],
@@ -146,6 +153,7 @@ function formatText(row: PendingIntentRow): string {
     "receipt.created": "📦",
     "production_request.submitted": "🏭",
     "production_request.auto_draft": "📝",
+    "order.auto_draft": "🛒",
     "supplier.message": "💬",
     "supplier_agreement.signed": "✍️",
     "supplier_support_ticket.opened": "⚠️",

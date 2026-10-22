@@ -12,8 +12,15 @@ public interface IOrderCalcRepository
         Guid storeId, IReadOnlyCollection<Guid> productIds, CancellationToken ct = default);
 
     /// <summary>In transit per product: SUM(QuantityOrdered) of draft receipts into the store.</summary>
+    /// <param name="excludeAutoUntakenDrafts">
+    /// TASK-755: when true, draft receipts with Source auto_replenishment AND no TakenByUserId are NOT
+    /// counted. Used only by the daily auto-replenishment job, which rewrites exactly those drafts and
+    /// would otherwise see its own previous output as "in transit" and hide its own need. Taken and
+    /// manual drafts always count. Default false (manual /orders calculate counts every draft).
+    /// </param>
     Task<Dictionary<Guid, decimal>> GetInTransitAsync(
-        Guid storeId, IReadOnlyCollection<Guid> productIds, CancellationToken ct = default);
+        Guid storeId, IReadOnlyCollection<Guid> productIds, CancellationToken ct = default,
+        bool excludeAutoUntakenDrafts = false);
 
     /// <summary>
     /// In transit per product from OPEN B2B marketplace orders headed to this store (Phase 4,

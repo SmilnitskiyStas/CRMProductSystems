@@ -5,7 +5,7 @@ public sealed class StockReceiptItem
     public Guid Id { get; init; } = Guid.NewGuid();
     public Guid ReceiptId { get; init; }
     public Guid ProductId { get; init; }
-    public decimal QuantityOrdered { get; init; }
+    public decimal QuantityOrdered { get; set; }
     public decimal? QuantityReceived { get; set; }
     public decimal? PricePurchase { get; set; }
     public DateOnly? ExpiryDate { get; set; }

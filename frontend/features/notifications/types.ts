@@ -91,6 +91,7 @@ export type NotificationEventType =
   | "stock.needs_verification"
   | "weekly_report"
   | "receipt.created"
+  | "order.auto_draft"
   | "order.replenishment_suggested"
   | "supplier.message"
   | "supplier_agreement.signed"
@@ -166,6 +167,7 @@ export const EVENT_TYPE_I18N_KEY: Record<NotificationEventType, string> = {
   "stock.needs_verification": "stockNeedsVerification",
   "weekly_report": "weeklyReport",
   "receipt.created": "receiptCreated",
+  "order.auto_draft": "orderAutoDraft",
   "order.replenishment_suggested": "orderReplenishmentSuggested",
   "supplier.message": "supplierMessage",
   "supplier_agreement.signed": "supplierAgreementSigned",

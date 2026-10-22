@@ -247,6 +247,9 @@ public static class DependencyInjection
         // TASK-754: per-tenant auto-demand run for the worker-only internal endpoint.
         services.AddScoped<Application.Features.Production.IProductionDemandTenantRunner,
             Services.ProductionDemandTenantRunner>();
+        // TASK-755: per-tenant auto supplier-order drafts run for the worker-only internal endpoint.
+        services.AddScoped<Application.Features.Receipts.IAutoReplenishmentTenantRunner,
+            Services.AutoReplenishmentTenantRunner>();
 
         // v4 Phase 3 - AI Supplier Recommendation (TASK-223)
         services.AddScoped<Application.Features.Marketplace.ISupplierAdvisor,

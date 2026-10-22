@@ -24,21 +24,22 @@ public sealed class ReceiptService : IReceiptService
     public async Task<List<ReceiptDto>> GetAllAsync(Guid? storeId, string? status, CancellationToken ct = default)
     {
         var receipts = await _repo.GetAllAsync(storeId, status, ct);
-        return receipts.Select(ToDto).ToList();
+        return await MapAsync(receipts, ct);
     }
 
     public async Task<PagedResult<ReceiptDto>> GetPagedAsync(
         Guid? storeId, string? status, string? search, string? sortBy, bool? sortDescending,
         int page, int pageSize,
         Guid? categoryId = null, int? minItems = null, int? maxItems = null,
+        string? source = null,
         CancellationToken ct = default)
     {
         var (receipts, total) = await _repo.GetPagedAsync(
             storeId, status, search, sortBy, sortDescending, page, pageSize,
-            categoryId, minItems, maxItems, ct);
+            categoryId, minItems, maxItems, source, ct);
         return new PagedResult<ReceiptDto>
         {
-            Items = receipts.Select(ToDto).ToList(),
+            Items = await MapAsync(receipts, ct),
             TotalCount = total,
             Page = page,
             PageSize = pageSize,
@@ -48,7 +49,7 @@ public sealed class ReceiptService : IReceiptService
     public async Task<ReceiptDto?> GetByIdAsync(Guid id, CancellationToken ct = default)
     {
         var receipt = await _repo.GetByIdAsync(id, ct);
-        return receipt is null ? null : ToDto(receipt);
+        return receipt is null ? null : await MapAsync(receipt, ct);
     }
 
     public async Task<(ReceiptDto? Receipt, string? Error)> CreateAsync(
@@ -92,11 +93,11 @@ public sealed class ReceiptService : IReceiptService
         await _repo.SaveChangesAsync(ct);
 
         var saved = await _repo.GetByIdAsync(receipt.Id, ct);
-        return (saved is null ? null : ToDto(saved), null);
+        return (saved is null ? null : await MapAsync(saved, ct), null);
     }
 
     public async Task<(ReceiptDto? Receipt, string? Error)> UpdateItemsAsync(
-        Guid id, UpdateItemsRequest request, CancellationToken ct = default)
+        Guid id, UpdateItemsRequest request, CancellationToken ct = default, Guid? callerUserId = null)
     {
         var receipt = await _repo.GetByIdAsync(id, ct);
         if (receipt is null)
@@ -104,6 +105,10 @@ public sealed class ReceiptService : IReceiptService
 
         if (receipt.Status is "received" or "cancelled")
             return (null, $"Cannot update items on a '{receipt.Status}' receipt.");
+
+        // TASK-755: a draft taken into work by someone else is locked for editing.
+        if (receipt.TakenByUserId is { } holder && holder != callerUserId)
+            return (null, ReceiptErrors.TakenByOther);
 
         foreach (var payload in request.Items)
         {
@@ -113,6 +118,15 @@ public sealed class ReceiptService : IReceiptService
 
             if (payload.QuantityReceived.HasValue && payload.QuantityReceived.Value < 0)
                 return (null, "QuantityReceived cannot be negative.");
+
+            if (payload.QuantityOrdered.HasValue)
+            {
+                if (receipt.Status != "draft")
+                    return (null, "The ordered quantity can only be changed on a draft.");
+                if (payload.QuantityOrdered.Value <= 0)
+                    return (null, "QuantityOrdered must be greater than 0.");
+                item.QuantityOrdered = payload.QuantityOrdered.Value;
+            }
 
             item.QuantityReceived = payload.QuantityReceived;
             item.PricePurchase = payload.PricePurchase ?? item.PricePurchase;
@@ -127,7 +141,41 @@ public sealed class ReceiptService : IReceiptService
         await _repo.SaveChangesAsync(ct);
 
         var saved = await _repo.GetByIdAsync(id, ct);
-        return (saved is null ? null : ToDto(saved), null);
+        return (saved is null ? null : await MapAsync(saved, ct), null);
+    }
+
+    public async Task<(ReceiptDto? Receipt, string? Error)> TakeAsync(
+        Guid id, Guid userId, CancellationToken ct = default)
+    {
+        var receipt = await _repo.GetByIdAsync(id, ct);
+        if (receipt is null) return (null, ReceiptErrors.NotFound);
+        if (receipt.Status != "draft") return (null, "Only a draft order can be taken into work.");
+        if (receipt.TakenByUserId == userId) return (await MapAsync(receipt, ct), null); // idempotent
+        if (receipt.TakenByUserId is not null) return (null, ReceiptErrors.TakenByOther);
+
+        // Compare-and-set: a concurrent taker that won the race leaves 0 rows for us -> 409.
+        if (!await _repo.TryTakeAsync(id, userId, DateTime.UtcNow, ct))
+            return (null, ReceiptErrors.TakenByOther);
+
+        var saved = await _repo.GetByIdAsync(id, ct);
+        return (saved is null ? null : await MapAsync(saved, ct), null);
+    }
+
+    public async Task<(ReceiptDto? Receipt, string? Error)> ReleaseAsync(
+        Guid id, Guid userId, bool canOverride, CancellationToken ct = default)
+    {
+        var receipt = await _repo.GetByIdAsync(id, ct);
+        if (receipt is null) return (null, ReceiptErrors.NotFound);
+        if (receipt.TakenByUserId is null) return (await MapAsync(receipt, ct), null); // idempotent
+        if (receipt.TakenByUserId != userId && !canOverride) return (null, ReceiptErrors.ReleaseForbidden);
+
+        receipt.TakenByUserId = null;
+        receipt.TakenAt = null;
+        _repo.Update(receipt);
+        await _repo.SaveChangesAsync(ct);
+
+        var saved = await _repo.GetByIdAsync(id, ct);
+        return (saved is null ? null : await MapAsync(saved, ct), null);
     }
 
     public async Task<(ReceiptDto? Receipt, string? Error)> ReceiveAsync(
@@ -203,7 +251,7 @@ public sealed class ReceiptService : IReceiptService
         await _repo.SaveChangesAsync(ct);
 
         var saved = await _repo.GetByIdAsync(id, ct);
-        return (saved is null ? null : ToDto(saved), null);
+        return (saved is null ? null : await MapAsync(saved, ct), null);
     }
 
     /// <summary>
@@ -283,7 +331,7 @@ public sealed class ReceiptService : IReceiptService
         await _activityLogs.SaveChangesAsync(ct);
 
         var saved = await _repo.GetByIdAsync(id, ct);
-        return (saved is null ? null : ToDto(saved), null);
+        return (saved is null ? null : await MapAsync(saved, ct), null);
     }
 
     public async Task<(ReceiptDto? Receipt, string? Error)> CancelAsync(
@@ -304,10 +352,24 @@ public sealed class ReceiptService : IReceiptService
         await _repo.SaveChangesAsync(ct);
 
         var saved = await _repo.GetByIdAsync(id, ct);
-        return (saved is null ? null : ToDto(saved), null);
+        return (saved is null ? null : await MapAsync(saved, ct), null);
     }
 
     // ── mapping ────────────────────────────────────────────────────────────
+
+    private async Task<ReceiptDto> MapAsync(StockReceipt r, CancellationToken ct) =>
+        (await MapAsync([r], ct))[0];
+
+    private async Task<List<ReceiptDto>> MapAsync(IReadOnlyCollection<StockReceipt> receipts, CancellationToken ct)
+    {
+        var dtos = receipts.Select(ToDto).ToList();
+        var ids = receipts.Where(r => r.TakenByUserId.HasValue).Select(r => r.TakenByUserId!.Value).Distinct().ToList();
+        if (ids.Count == 0) return dtos;
+
+        var names = await _repo.GetUserNamesAsync(ids, ct);
+        if (names is null) return dtos;
+        return dtos.Select(d => d.TakenByUserId is { } u && names.TryGetValue(u, out var n) ? d with { TakenByName = n } : d).ToList();
+    }
 
     private static ReceiptDto ToDto(StockReceipt r) => new(
         r.Id,
@@ -325,7 +387,11 @@ public sealed class ReceiptService : IReceiptService
         r.PostponeCount,
         r.OriginalExpectedAt,
         r.PostponedAt,
-        r.DelayReason
+        r.DelayReason,
+        r.Source,
+        r.TakenByUserId,
+        null,
+        r.TakenAt
     );
 
     private static ReceiptItemDto ToItemDto(StockReceiptItem i) => new(

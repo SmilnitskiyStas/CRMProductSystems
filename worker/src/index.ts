@@ -8,6 +8,7 @@ import { startCleanupWorker } from "./jobs/cleanup.job";
 import { startWeatherFetchWorker } from "./jobs/weather-fetch.job";
 import { startAiOrderWorker } from "./jobs/ai-order.job";
 import { startProductionDemandWorker } from "./jobs/production-demand.job";
+import { startReplenishmentDraftsWorker } from "./jobs/replenishment-drafts.job";
 import { startTelegramListener } from "./jobs/telegram-listener";
 import { startMqttListener } from "./jobs/mqtt-listener";
 import { startFiscalizationRetryWorker } from "./jobs/fiscalization-retry.job";
@@ -98,6 +99,10 @@ async function scheduleRecurringJobs(): Promise<void> {
   const productionDemandQueue = new Queue("production-demand", { connection: redisConnection });
   await productionDemandQueue.upsertJobScheduler("production-demand-cron", { pattern: "30 5 * * *" }, { name: "production-demand" });
 
+  // TASK-755: daily 07:00 per-tenant auto draft supplier orders (non-own-production items)
+  const replenishmentDraftsQueue = new Queue("replenishment-drafts", { connection: redisConnection });
+  await replenishmentDraftsQueue.upsertJobScheduler("replenishment-drafts-cron", { pattern: "0 7 * * *" }, { name: "replenishment-drafts" });
+
   // v3-spec §3: every 5 min — retry pending_fiscalization transactions (TASK-069)
   const fiscalRetryQueue = new Queue("fiscalization-retry", { connection: redisConnection });
   await fiscalRetryQueue.upsertJobScheduler(
@@ -149,6 +154,7 @@ async function main(): Promise<void> {
   startWeatherFetchWorker();
   startAiOrderWorker();
   startProductionDemandWorker();
+  startReplenishmentDraftsWorker();
   startTelegramListener();
   startMqttListener();
   startFiscalizationRetryWorker();

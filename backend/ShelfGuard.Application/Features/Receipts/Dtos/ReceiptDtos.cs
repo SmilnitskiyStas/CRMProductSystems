@@ -16,7 +16,12 @@ public sealed record ReceiptDto(
     int PostponeCount = 0,
     DateOnly? OriginalExpectedAt = null,
     DateTime? PostponedAt = null,
-    string? DelayReason = null
+    string? DelayReason = null,
+    // TASK-755: "manual" | "auto_replenishment"; taken-by lock of an auto draft (null = untaken).
+    string Source = "manual",
+    Guid? TakenByUserId = null,
+    string? TakenByName = null,
+    DateTime? TakenAt = null
 );
 
 public sealed record ReceiptItemDto(
@@ -71,5 +76,10 @@ public sealed record UpdateItemPayload(
     decimal? PricePurchase,
     DateOnly? ExpiryDate,
     string? BatchNumber,
-    string? DiscrepancyNotes
+    string? DiscrepancyNotes,
+    // TASK-755: correct the ORDERED quantity of a draft (must be > 0). Null = leave unchanged.
+    decimal? QuantityOrdered = null
 );
+
+/// <summary>Body of POST /api/receipts/auto-generate (TASK-755). Null/empty = every store the caller can see.</summary>
+public sealed record AutoReplenishmentRequest(Guid? StoreLocationId);

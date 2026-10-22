@@ -353,6 +353,8 @@ public sealed class NotificationService : INotificationService
         "iot.offline",
         "receipt.created",
         "order.replenishment_suggested",
+        // TASK-755: daily auto supplier-order drafts (AutoReplenishmentService).
+        "order.auto_draft",
         "supplier.message",
         "supplier_agreement.signed",
         // Supplier-portal expansion (plan 1-partitioned-book.md, Phase 1): supplier gets

@@ -2640,6 +2640,38 @@
         "confirmOrder": "Confirm order ({count})",
         "toastConfirmed": "Order confirmed: {positions} items, documents: {receipts}",
         "toastConfirmFailed": "Could not confirm the order: {message}",
+        "auto": {
+          "title": "Auto orders for today",
+          "subtitle": "Draft supplier orders generated automatically at 07:00. Take an order into work, adjust quantities and receive it in Receipts.",
+          "badge": "Auto",
+          "calculate": "Calculate auto orders",
+          "calculating": "Calculating…",
+          "calcResult": "Auto orders updated: {count}",
+          "calcNothing": "No new or changed auto orders",
+          "calcCancelled": "cancelled: {count}",
+          "empty": "No auto orders. Press \"Calculate auto orders\" or wait for the automatic run at 07:00.",
+          "loadFailed": "Could not load auto orders",
+          "noSupplier": "No supplier",
+          "lines": "{count} items",
+          "statusNew": "New",
+          "statusTaken": "In progress — {name}",
+          "statusTakenUnknown": "In progress",
+          "take": "Take into work",
+          "release": "Release",
+          "openInReceipts": "Open in Receipts",
+          "showLines": "Show items",
+          "hideLines": "Hide items",
+          "takenByOther": "This order is handled by {name}. Only they can edit it.",
+          "takeToEdit": "Take the order into work to change quantities.",
+          "colItem": "Item",
+          "colQty": "Ordered",
+          "colPrice": "Price",
+          "colAmount": "Amount",
+          "toastTaken": "Order taken into work",
+          "toastReleased": "Order released",
+          "toastSaved": "Quantity saved",
+          "toastFailed": "Error: {message}"
+        },
         "confirmDialog": {
           "title": "Confirm the order?",
           "body": "Orders to suppliers will be created: {positions} items, suppliers: {suppliers}. Unselected items are not ordered.",
@@ -7572,6 +7604,7 @@
         "stockNeedsVerification": "Needs verification",
         "weeklyReport": "Weekly report",
         "receiptCreated": "Goods received",
+        "orderAutoDraft": "Auto supplier order",
         "orderReplenishmentSuggested": "AI order ready",
         "supplierMessage": "Supplier message",
         "supplierAgreementSigned": "Agreement signed",
@@ -7621,6 +7654,10 @@
         "weeklyReport": {
           "service": "Task scheduler",
           "actor": "Automatic report"
+        },
+        "orderAutoDraft": {
+          "service": "Orders module",
+          "actor": "Automatic run at 07:00"
         },
         "receiptCreated": {
           "service": "Receiving module",

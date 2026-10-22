@@ -31,6 +31,11 @@ export interface ReceiptDto {
   notes: string | null;
   createdAt: string;
   items: ReceiptItemDto[];
+  /** TASK-755: "auto_replenishment" = draft produced by the daily auto-order cron. */
+  source?: "manual" | "auto_replenishment";
+  takenByUserId?: string | null;
+  takenByName?: string | null;
+  takenAt?: string | null;
 }
 
 export interface CreateReceiptRequest {
@@ -50,6 +55,8 @@ export interface CreateReceiptRequest {
 
 export interface UpdateItemPayload {
   itemId: string;
+  /** Drafts only (>0); 409 if the draft is taken by another user. */
+  quantityOrdered?: number;
   quantityReceived?: number | null;
   pricePurchase?: number | null;
   expiryDate?: string | null;
