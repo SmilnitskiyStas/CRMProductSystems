@@ -34,6 +34,29 @@ export function RequestStatusBadge({ status }: { status: ProductionRequestStatus
   );
 }
 
+/** Origin badge: auto-generated (buffer / promo) vs manual. Renders nothing for manual by default. */
+export function RequestSourceBadge({ source, showManual = false }: { source: string; showManual?: boolean }) {
+  const t = useTranslations("Dashboard.production.requests.source");
+  if (source !== "auto_buffer" && source !== "auto_promo" && !showManual) return null;
+  const auto = source === "auto_buffer" || source === "auto_promo";
+  return (
+    <span
+      style={{
+        display: "inline-block",
+        padding: "2px 8px",
+        borderRadius: 12,
+        fontSize: 11,
+        fontWeight: 600,
+        background: auto ? "#2E1065" : "#1F2937",
+        color: auto ? "#C4B5FD" : "#9CA3AF",
+        whiteSpace: "nowrap",
+      }}
+    >
+      {auto ? t(source) : t("manual")}
+    </span>
+  );
+}
+
 export const reqInputStyle: CSSProperties = {
   width: "100%",
   background: "#111827",

@@ -149,6 +149,7 @@ export interface ProductionRequestListItemDto {
   productionLocationName: string;
   neededBy: string;
   status: ProductionRequestStatus;
+  /** manual | auto_buffer | auto_promo */
   source: string;
   lineCount: number;
   totalRequestedQty: number;
@@ -165,6 +166,8 @@ export interface ProductionRequestLineDto {
   requestedQty: number;
   acceptedQty: number | null;
   reason: string | null;
+  /** Human text for auto-generated draft lines, e.g. "Буфер: на складі 4 кг, потрібно 60". */
+  autoReason?: string | null;
 }
 
 export interface ProductionRequestDetailDto

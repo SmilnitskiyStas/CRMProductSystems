@@ -69,6 +69,14 @@ export function useUpdateProductionRequest(id: string) {
   });
 }
 
+export function useAutoGenerateRequests() {
+  const invalidate = useInvalidateRequests();
+  return useMutation({
+    mutationFn: (storeLocationId?: string) => productionApi.autoGenerateRequests(storeLocationId),
+    onSuccess: invalidate,
+  });
+}
+
 export function useSubmitProductionRequest() {
   const invalidate = useInvalidateRequests();
   return useMutation({

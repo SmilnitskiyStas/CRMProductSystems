@@ -10,6 +10,7 @@ import { useLocations } from "@/features/locations/hooks/useLocations";
 import {
   useProductionRequests,
   useCreateOrdersFromRequests,
+  useAutoGenerateRequests,
 } from "../hooks/useProductionRequests";
 import type { ProductionRequestListItemDto, ProductionRequestStatus } from "../types";
 import { ProductionRequestForm } from "./ProductionRequestForm";
@@ -17,6 +18,7 @@ import { ProductionRequestDetail } from "./ProductionRequestDetail";
 import { ProductionRequestSummary } from "./ProductionRequestSummary";
 import {
   RequestStatusBadge,
+  RequestSourceBadge,
   formatDateOnly,
   errMessage,
   reqInputStyle,
@@ -59,6 +61,7 @@ export function ProductionRequestsPage() {
     storeLocationId: storeId || undefined,
   });
   const createOrders = useCreateOrdersFromRequests();
+  const autoGen = useAutoGenerateRequests();
 
   function toggle(id: string) {
     setSelected((prev) => {
@@ -82,6 +85,18 @@ export function ProductionRequestsPage() {
         onError: (e) => setFeedback({ ok: false, text: errMessage(e, t("ordersError")) }),
       }
     );
+  }
+
+  function handleAutoGenerate() {
+    setFeedback(null);
+    autoGen.mutate(storeId || undefined, {
+      onSuccess: (res) =>
+        setFeedback({
+          ok: true,
+          text: res.length > 0 ? t("calcDone", { count: res.length }) : t("calcNone"),
+        }),
+      onError: (e) => setFeedback({ ok: false, text: errMessage(e, t("calcError")) }),
+    });
   }
 
   const columns: TableColumn<ProductionRequestListItemDto>[] = [
@@ -126,7 +141,16 @@ export function ProductionRequestsPage() {
           ? `${r.totalAcceptedQty} / ${r.totalRequestedQty}`
           : r.totalRequestedQty,
     },
-    { key: "status", header: t("colStatus"), render: (r) => <RequestStatusBadge status={r.status} /> },
+    {
+      key: "status",
+      header: t("colStatus"),
+      render: (r) => (
+        <span style={{ display: "inline-flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
+          <RequestStatusBadge status={r.status} />
+          <RequestSourceBadge source={r.source} />
+        </span>
+      ),
+    },
   ];
 
   const tabBtn = (key: "requests" | "summary", label: string) => (
@@ -161,9 +185,14 @@ export function ProductionRequestsPage() {
         }}
       >
         <h1 style={{ color: "#E8EDF5", fontSize: 20, fontWeight: 700, margin: 0 }}>{t("title")}</h1>
-        <Btn icon={<Plus size={15} />} onClick={() => setFormOpen(true)}>
-          {t("newRequest")}
-        </Btn>
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+          <Btn variant="ghost" onClick={handleAutoGenerate} disabled={autoGen.isPending}>
+            {autoGen.isPending ? t("calcRunning") : t("calcNeeds")}
+          </Btn>
+          <Btn icon={<Plus size={15} />} onClick={() => setFormOpen(true)}>
+            {t("newRequest")}
+          </Btn>
+        </div>
       </div>
 
       {canProduce && (

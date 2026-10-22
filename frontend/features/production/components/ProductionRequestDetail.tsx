@@ -19,6 +19,7 @@ import { ProductionRequestForm } from "./ProductionRequestForm";
 import type { ProductionRequestLineDto } from "../types";
 import {
   RequestStatusBadge,
+  RequestSourceBadge,
   formatDateOnly,
   errMessage,
   reqInputStyle,
@@ -66,10 +67,22 @@ export function ProductionRequestDetail({ id, canProduce, onClose }: Props) {
     submit.isPending || cancel.isPending || review.isPending || reject.isPending || ship.isPending;
   const act = { onError: (e: unknown) => setError(errMessage(e, t("actionError"))) };
 
+  const isAuto = req.source === "auto_buffer" || req.source === "auto_promo";
+  const showAutoReason = req.lines.some((l) => !!l.autoReason);
   const showAccepted = req.lines.some((l) => l.acceptedQty !== null);
   const columns: TableColumn<ProductionRequestLineDto>[] = [
     { key: "item", header: t("colItem"), cellStyle: { color: "#E8EDF5" }, render: (l) => l.itemName },
     { key: "req", header: t("colRequested"), render: (l) => `${l.requestedQty} ${l.unit}` },
+    ...(showAutoReason
+      ? [
+          {
+            key: "autoReason",
+            header: t("colAutoReason"),
+            cellStyle: { color: "#C4B5FD", fontSize: 12 },
+            render: (l: ProductionRequestLineDto) => l.autoReason ?? "—",
+          },
+        ]
+      : []),
     ...(showAccepted
       ? [
           {
@@ -94,6 +107,7 @@ export function ProductionRequestDetail({ id, canProduce, onClose }: Props) {
         <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
           <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
             <RequestStatusBadge status={req.status} />
+            <RequestSourceBadge source={req.source} />
             <span style={{ color: "#9CA3AF", fontSize: 13 }}>
               {req.storeLocationName} → {req.productionLocationName}
             </span>
@@ -102,6 +116,9 @@ export function ProductionRequestDetail({ id, canProduce, onClose }: Props) {
             </span>
           </div>
 
+          {isAuto && req.status === "draft" && (
+            <div style={{ color: "#C4B5FD", fontSize: 12 }}>{t("autoDraftHint")}</div>
+          )}
           {req.notes && <div style={{ color: "#9CA3AF", fontSize: 13 }}>{req.notes}</div>}
           {req.reviewNote && (
             <div style={{ color: "#FBBF24", fontSize: 13 }}>

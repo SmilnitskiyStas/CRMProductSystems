@@ -1637,3 +1637,9 @@ single-flight refresh + cross-tab lock (`lib/api.ts`), 10 с grace у `AuthServi
 
 ### TASK-751 — Заявки на виробництво, frontend (Етап 1) — review
 `/production/requests`: список + фільтри, форма «Нова заявка» (чернетка/подати), деталі (редагувати/подати/скасувати), для тенантів з модулем production — вкладка «Зведення по товарах» (попередження без рецепта), розгляд (прийняти/змінити кількість з причиною), відхилення, відвантаження, мульти-вибір → «Створити виробничі замовлення». Ордери: neededBy/plannedDate + блок заявок. Sidebar: пункт «Заявки» у групі «Виробництво». Лог: `.claude/logs/tasks/751_*`. tsc+eslint чисті, не закомічено, у браузері не перевірено.
+
+### TASK-753 — Авто-чернетки заявок на виробництво, frontend (Етап 3) — review
+Залишки товару в магазині у формі заявки, бейдж джерела (Авто · буфер/акція), autoReason у деталях, кнопка «Розрахувати потребу» (auto-generate). tsc+eslint чисті, у браузері не перевірено. Лог: `.claude/logs/tasks/753_*`.
+
+### TASK-752 — Авто-аналіз потреби власного виробництва, backend (Етап 3) — review
+`ProductionDemandService`: для самовиробних товарів (активний рецепт) рахує потребу магазину (буфер+safety − непрострочений залишок − у дорозі − відкриті заявки, × коеф. подія/погода/промо) і ведe одну авто-чернетку на магазин (`auto_buffer`/`auto_promo`, `AutoReason` у рядку, міграція AddProductionRequestLineAutoReason). `POST /api/production-requests/auto-generate`, worker cron 05:30, outbox `production_request.auto_draft`. 2811 тестів зелені. Лог: `.claude/logs/tasks/752_*`.

@@ -7,6 +7,7 @@ import { startWeeklyReportWorker } from "./jobs/weekly-report.job";
 import { startCleanupWorker } from "./jobs/cleanup.job";
 import { startWeatherFetchWorker } from "./jobs/weather-fetch.job";
 import { startAiOrderWorker } from "./jobs/ai-order.job";
+import { startProductionDemandWorker } from "./jobs/production-demand.job";
 import { startTelegramListener } from "./jobs/telegram-listener";
 import { startMqttListener } from "./jobs/mqtt-listener";
 import { startFiscalizationRetryWorker } from "./jobs/fiscalization-retry.job";
@@ -93,6 +94,10 @@ async function scheduleRecurringJobs(): Promise<void> {
   const aiOrderQueue = new Queue("ai-order", { connection: redisConnection });
   await aiOrderQueue.upsertJobScheduler("ai-order-cron", { pattern: "0 5 * * *" }, { name: "ai-order" });
 
+  // TASK-752: daily 05:30 — auto DRAFT production requests for own-production items (after ai-order)
+  const productionDemandQueue = new Queue("production-demand", { connection: redisConnection });
+  await productionDemandQueue.upsertJobScheduler("production-demand-cron", { pattern: "30 5 * * *" }, { name: "production-demand" });
+
   // v3-spec §3: every 5 min — retry pending_fiscalization transactions (TASK-069)
   const fiscalRetryQueue = new Queue("fiscalization-retry", { connection: redisConnection });
   await fiscalRetryQueue.upsertJobScheduler(
@@ -143,6 +148,7 @@ async function main(): Promise<void> {
   startLoyaltyBonusExpiryWorker();
   startWeatherFetchWorker();
   startAiOrderWorker();
+  startProductionDemandWorker();
   startTelegramListener();
   startMqttListener();
   startFiscalizationRetryWorker();

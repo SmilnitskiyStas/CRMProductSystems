@@ -237,6 +237,8 @@ public static class DependencyInjection
         // v4 Phase 5 - Production Module (TASK-241)
         services.AddScoped<Domain.Interfaces.IProductionRepository,
             Data.Repositories.ProductionRepository>();
+        services.AddScoped<Domain.Interfaces.IProductionDemandRepository,
+            Data.Repositories.ProductionDemandRepository>();
         services.AddScoped<Domain.Interfaces.IProductionRequestRepository,
             Data.Repositories.ProductionRequestRepository>();
 

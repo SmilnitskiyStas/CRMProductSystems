@@ -6,6 +6,7 @@ import { Trash2 } from "lucide-react";
 import { Modal } from "@/components/ui/Modal";
 import { Btn } from "@/components/ui/Btn";
 import { useLocations } from "@/features/locations/hooks/useLocations";
+import { useStock } from "@/features/shelf/hooks/useStock";
 import { useProductSearch } from "@/features/inventory/hooks/useProducts";
 import {
   useCreateProductionRequest,
@@ -25,6 +26,25 @@ interface Props {
   /** When set, edits this draft instead of creating a new request. */
   draft?: ProductionRequestDetailDto;
   onClose: () => void;
+}
+
+/** Current on-hand stock of one item at the selected store (sums batches, shows nearest expiry). */
+function StockHint({ storeId, itemId, unit }: { storeId: string; itemId: string; unit: string }) {
+  const t = useTranslations("Dashboard.production.requests.form");
+  const { data, isLoading } = useStock({ store_id: storeId, product_id: itemId, pageSize: 100 }, !!storeId);
+  const base = { fontSize: 11, marginTop: 2 } as const;
+  if (!storeId) return <div style={{ ...base, color: "#4B5563" }}>{t("stockNeedStore")}</div>;
+  if (isLoading) return <div style={{ ...base, color: "#4B5563" }}>…</div>;
+  const batches = (data?.items ?? []).filter((b) => b.quantity > 0);
+  const total = batches.reduce((s, b) => s + b.quantity, 0);
+  if (total <= 0) return <div style={{ ...base, color: "#F87171" }}>{t("noStock")}</div>;
+  const nearest = batches.map((b) => b.expiryDate).filter(Boolean).sort()[0];
+  return (
+    <div style={{ ...base, color: "#34D399" }}>
+      {t("stockOnHand")}: {Math.round(total * 1000) / 1000} {unit}
+      {nearest ? ` · ${t("stockNearestExpiry")}: ${nearest}` : ""}
+    </div>
+  );
 }
 
 export function ProductionRequestForm({ draft, onClose }: Props) {
@@ -188,7 +208,10 @@ export function ProductionRequestForm({ draft, onClose }: Props) {
           <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
             {lines.map((l, i) => (
               <div key={l.itemId} style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                <span style={{ flex: 1, color: "#E8EDF5", fontSize: 13 }}>{l.itemName}</span>
+                <div style={{ flex: 1 }}>
+                  <span style={{ color: "#E8EDF5", fontSize: 13 }}>{l.itemName}</span>
+                  <StockHint storeId={storeId} itemId={l.itemId} unit={l.unit} />
+                </div>
                 <input
                   type="number"
                   min={0}

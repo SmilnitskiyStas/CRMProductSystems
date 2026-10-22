@@ -535,5 +535,5 @@ public sealed class ProductionRequestService : IProductionRequestService
         r.ShipmentTransfer?.Status,
         r.Lines.Select(l => new ProductionRequestLineDto(
             l.Id, l.ItemId, l.Item?.Name ?? string.Empty, l.Item?.Unit ?? string.Empty,
-            l.RequestedQty, l.AcceptedQty, l.Reason)).ToList());
+            l.RequestedQty, l.AcceptedQty, l.Reason, l.AutoReason)).ToList());
 }

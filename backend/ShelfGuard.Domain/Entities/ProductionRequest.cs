@@ -41,7 +41,8 @@ public sealed class ProductionRequest
     public Guid ProductionLocationId { get; init; }
     public DateOnly NeededBy { get; set; }
     public string Status { get; set; } = ProductionRequestStatus.Draft;
-    public string Source { get; init; } = ProductionRequestSource.Manual;
+    /// <summary>manual | auto_buffer | auto_promo. Auto drafts may re-evaluate it on refresh.</summary>
+    public string Source { get; set; } = ProductionRequestSource.Manual;
     public string? Notes { get; set; }
     /// <summary>Overall production-side reason (rejection or partial acceptance).</summary>
     public string? ReviewNote { get; set; }
@@ -73,6 +74,8 @@ public sealed class ProductionRequestLine
     public decimal? AcceptedQty { get; set; }
     /// <summary>Production-side reason when AcceptedQty differs from RequestedQty.</summary>
     public string? Reason { get; set; }
+    /// <summary>Why the auto-generator proposed this line (target level, stock, promo uplift). Null for manual lines.</summary>
+    public string? AutoReason { get; set; }
 
     public ProductionRequest? Request { get; init; }
     public Item? Item { get; set; }

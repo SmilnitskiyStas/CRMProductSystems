@@ -4525,6 +4525,9 @@ namespace ShelfGuard.Infrastructure.Migrations
                     b.Property<decimal?>("AcceptedQty")
                         .HasColumnType("numeric(10,3)");
 
+                    b.Property<string>("AutoReason")
+                        .HasColumnType("text");
+
                     b.Property<Guid>("ItemId")
                         .HasColumnType("uuid");
 

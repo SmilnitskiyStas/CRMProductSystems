@@ -2130,6 +2130,7 @@ public sealed class AppDbContext : DbContext
             e.Property(l => l.RequestedQty).HasColumnType("numeric(10,3)").IsRequired();
             e.Property(l => l.AcceptedQty).HasColumnType("numeric(10,3)");
             e.Property(l => l.Reason).HasColumnType("text");
+            e.Property(l => l.AutoReason).HasColumnType("text");
             e.HasIndex(l => l.RequestId).HasDatabaseName("idx_production_request_lines_request");
             e.HasIndex(l => l.TenantId).HasDatabaseName("idx_production_request_lines_tenant");
             e.HasOne(l => l.Item).WithMany()

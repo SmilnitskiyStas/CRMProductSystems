@@ -113,6 +113,12 @@ export const productionApi = {
   submitRequest: (id: string) =>
     api.post<ProductionRequestDetailDto>(`/api/production-requests/${id}/submit`),
 
+  /** POST /api/production-requests/auto-generate — creates/updates auto drafts. */
+  autoGenerateRequests: (storeLocationId?: string) =>
+    api.post<ProductionRequestDetailDto[]>("/api/production-requests/auto-generate", {
+      storeLocationId: storeLocationId || undefined,
+    }),
+
   cancelRequest: (id: string) =>
     api.post<ProductionRequestDetailDto>(`/api/production-requests/${id}/cancel`),
 
