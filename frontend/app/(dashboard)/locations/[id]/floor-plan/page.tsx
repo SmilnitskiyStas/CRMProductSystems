@@ -5,6 +5,10 @@ import { useParams, useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { PanelRightClose, PanelRightOpen, Save } from "lucide-react";
 import { useTranslations } from "next-intl";
+import { Btn } from "@/components/ui/Btn";
+import { PageContainer } from "@/components/ui/PageContainer";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { filterInputStyle } from "@/components/ui/fieldStyles";
 import { FloorPlanCanvas } from "@/features/locations/components/FloorPlanCanvas";
 import { FloorPlanSidePanel } from "@/features/locations/components/FloorPlanSidePanel";
 import { ZoneDialog } from "@/features/locations/components/ZoneDialog";
@@ -166,14 +170,11 @@ export default function FloorPlanPage() {
   const locationTypeLabel = location?.locationType ? tTypes(location.locationType) : null;
 
   return (
-    <div style={{ padding: "28px 32px", display: "flex", flexDirection: "column", gap: 20 }}>
-      {/* Header */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16 }}>
-        <div>
-          <h1 style={{ color: "#E8EDF5", fontSize: 22, fontWeight: 700, margin: 0 }}>
-            {t("title")}
-          </h1>
-          <p style={{ color: "#4B5563", fontSize: 13, marginTop: 6, marginBottom: 0 }}>
+    <PageContainer>
+      <PageHeader
+        title={t("title")}
+        subtitle={
+          <>
             {location?.name ?? "…"}
             {locationTypeLabel && (
               <span
@@ -193,72 +194,41 @@ export default function FloorPlanPage() {
               </span>
             )}
             {" "}— {t("subtitleSuffix")}
-          </p>
-        </div>
-
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          {locations && locations.length > 1 && (
-            <select
-              value={locationId}
-              onChange={(e) => router.replace(`/locations/${e.target.value}/floor-plan`)}
-              style={{
-                background: "#161B26",
-                border: "1px solid #1F2937",
-                color: "#E8EDF5",
-                borderRadius: 8,
-                padding: "8px 12px",
-                fontSize: 13,
-              }}
+          </>
+        }
+        actions={
+          <>
+            {locations && locations.length > 1 && (
+              <select
+                value={locationId}
+                onChange={(e) => router.replace(`/locations/${e.target.value}/floor-plan`)}
+                style={filterInputStyle}
+              >
+                {locations.map((loc) => (
+                  <option key={loc.id} value={loc.id}>
+                    {loc.name}
+                  </option>
+                ))}
+              </select>
+            )}
+            <Btn
+              variant="ghost"
+              icon={panelCollapsed ? <PanelRightOpen size={15} /> : <PanelRightClose size={15} />}
+              onClick={() => setPanelCollapsed((v) => !v)}
+              title={panelCollapsed ? tFloorPlan("showPanel") : tFloorPlan("hidePanel")}
             >
-              {locations.map((loc) => (
-                <option key={loc.id} value={loc.id}>
-                  {loc.name}
-                </option>
-              ))}
-            </select>
-          )}
-          <button
-            onClick={() => setPanelCollapsed((v) => !v)}
-            title={panelCollapsed ? tFloorPlan("showPanel") : tFloorPlan("hidePanel")}
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 8,
-              background: "#161B26",
-              border: "1px solid #1F2937",
-              color: "#9CA3AF",
-              borderRadius: 8,
-              padding: "9px 16px",
-              fontSize: 13,
-              fontWeight: 600,
-              cursor: "pointer",
-            }}
-          >
-            {panelCollapsed ? <PanelRightOpen size={15} /> : <PanelRightClose size={15} />}
-            {panelCollapsed ? tFloorPlan("showPanel") : tFloorPlan("hidePanel")}
-          </button>
-          <button
-            onClick={handleSave}
-            disabled={!dirty || updateFloorPlan.isPending}
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 8,
-              background: dirty ? "#2563EB" : "#1F2937",
-              border: "none",
-              color: dirty ? "#fff" : "#6B7280",
-              borderRadius: 8,
-              padding: "9px 16px",
-              fontSize: 13,
-              fontWeight: 600,
-              cursor: dirty ? "pointer" : "default",
-            }}
-          >
-            <Save size={15} />
-            {updateFloorPlan.isPending ? t("saving") : t("saveButton")}
-          </button>
-        </div>
-      </div>
+              {panelCollapsed ? tFloorPlan("showPanel") : tFloorPlan("hidePanel")}
+            </Btn>
+            <Btn
+              icon={<Save size={15} />}
+              onClick={handleSave}
+              disabled={!dirty || updateFloorPlan.isPending}
+            >
+              {updateFloorPlan.isPending ? t("saving") : t("saveButton")}
+            </Btn>
+          </>
+        }
+      />
 
       {/* Canvas + side panel */}
       {isLoading || !layout ? (
@@ -315,6 +285,6 @@ export default function FloorPlanPage() {
           onClose={() => setShowZoneDialog(false)}
         />
       )}
-    </div>
+    </PageContainer>
   );
 }

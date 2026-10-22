@@ -22,27 +22,6 @@ import {
   useSetExpectedDeliveryDate,
 } from "../hooks/useCabinetCooperation";
 
-// Inline styles for the nested items table rendered inside an expanded order
-// row — stays plain markup per the migration brief, only the outer order list
-// becomes a shared `Table`.
-const headerCellStyle: React.CSSProperties = {
-  padding: "10px 14px",
-  color: "#4B5563",
-  fontSize: 11,
-  fontWeight: 600,
-  textTransform: "uppercase",
-  letterSpacing: "0.05em",
-  textAlign: "left",
-  borderBottom: "1px solid #1F2937",
-};
-
-const cellStyle: React.CSSProperties = {
-  padding: "12px 14px",
-  color: "#E8EDF5",
-  fontSize: 13,
-  borderBottom: "1px solid #1A2235",
-};
-
 function money(v: number, locale: string): string {
   return v.toLocaleString(locale, {
     style: "currency",
@@ -323,20 +302,14 @@ function OrderExpandedContent({
         intlLocale={intlLocale}
       />
       {order.status === "shipped" && <RescheduleDeliveryControl order={order} />}
-      {/* eslint-disable-next-line no-restricted-syntax -- compact table embedded in expanded order row */}
-      <table style={{ width: "100%", borderCollapse: "collapse" }}>
-        <thead>
-          <tr>
-            <th style={headerCellStyle}>{t("headerProduct")}</th>
-            <th style={{ ...headerCellStyle, textAlign: "right" }}>{t("headerPrice")}</th>
-            <th style={{ ...headerCellStyle, textAlign: "right" }}>{t("headerQty")}</th>
-            <th style={{ ...headerCellStyle, textAlign: "right" }}>{t("headerLineTotal")}</th>
-          </tr>
-        </thead>
-        <tbody>
-          {order.items.map((item) => (
-            <tr key={item.id}>
-              <td style={cellStyle}>
+      <Table<MarketplaceOrderDto["items"][number]>
+        columns={[
+          {
+            key: "product",
+            header: t("headerProduct"),
+            cellStyle: { color: "#E8EDF5" },
+            render: (item) => (
+              <>
                 {item.itemName}
                 {item.unit && (
                   <span style={{ color: "#4B5563", fontSize: 11 }}> · {item.unit}</span>
@@ -352,20 +325,29 @@ function OrderExpandedContent({
                     ))}
                   </div>
                 )}
-              </td>
-              <td style={{ ...cellStyle, textAlign: "right", color: "#9CA3AF", whiteSpace: "nowrap" }}>
-                {money(item.price, intlLocale)}
-              </td>
-              <td style={{ ...cellStyle, textAlign: "right", color: "#9CA3AF" }}>
-                {item.qty}
-              </td>
-              <td style={{ ...cellStyle, textAlign: "right", whiteSpace: "nowrap" }}>
-                {money(item.lineTotal, intlLocale)}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+              </>
+            ),
+          },
+          {
+            key: "price",
+            header: t("headerPrice"),
+            align: "right",
+            cellStyle: { whiteSpace: "nowrap" },
+            render: (item) => money(item.price, intlLocale),
+          },
+          { key: "qty", header: t("headerQty"), align: "right", render: (item) => item.qty },
+          {
+            key: "lineTotal",
+            header: t("headerLineTotal"),
+            align: "right",
+            cellStyle: { color: "#E8EDF5", whiteSpace: "nowrap" },
+            render: (item) => money(item.lineTotal, intlLocale),
+          },
+        ]}
+        rows={order.items}
+        rowKey={(item) => item.id}
+        density="compact"
+      />
     </div>
   );
 }

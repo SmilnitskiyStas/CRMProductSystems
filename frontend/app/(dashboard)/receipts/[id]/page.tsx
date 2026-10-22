@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { ArrowLeft, Check, Package, Truck, Building2, Calendar, Hash, CheckCircle2 } from "lucide-react";
+import { Check, Package, Truck, Building2, Calendar, Hash, CheckCircle2 } from "lucide-react";
 import { useTranslations, useLocale } from "next-intl";
 import {
   useReceiptDetail,
@@ -16,6 +16,10 @@ import { useMe } from "@/features/auth/hooks/useAuth";
 import { AccessDenied } from "@/components/AccessDenied";
 import { CAN_RECEIVE_STOCK, hasRole } from "@/lib/roles";
 import { Table, type TableColumn } from "@/components/ui/Table";
+import { Btn } from "@/components/ui/Btn";
+import { PageContainer } from "@/components/ui/PageContainer";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { BackLink } from "@/components/ui/BackLink";
 
 // ── Styles ────────────────────────────────────────────────────────────────────
 
@@ -311,25 +315,14 @@ export default function ReceiptDetailPage() {
       render: (item) => {
         const edit = getEdit(item.id);
         return isEditable && !item.isProcessed ? (
-          <button
+          <Btn
+            variant="success"
+            size="sm"
+            icon={<Check size={11} />}
             onClick={() => updateEdit(item.id, { confirmed: true })}
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 4,
-              background: "#1a3a2e",
-              border: "1px solid #065F46",
-              borderRadius: 6,
-              color: "#4ADE80",
-              fontSize: 11,
-              fontWeight: 600,
-              padding: "5px 10px",
-              cursor: "pointer",
-              whiteSpace: "nowrap",
-            }}
           >
-            <Check size={11} /> {tDetail("confirmItem")}
-          </button>
+            {tDetail("confirmItem")}
+          </Btn>
         ) : (
           <span
             style={{
@@ -349,84 +342,41 @@ export default function ReceiptDetailPage() {
   ];
 
   return (
-    <div style={{ padding: "24px 32px", display: "flex", flexDirection: "column", gap: 20 }}>
-      {/* ── Header ─────────────────────────────────────────────────────── */}
-      <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-        <button
-          onClick={() => router.push("/receipts")}
-          style={{
-            background: "transparent",
-            border: "none",
-            color: "#6B7280",
-            cursor: "pointer",
-            display: "flex",
-            alignItems: "center",
-            gap: 4,
-            fontSize: 13,
-            padding: 0,
-            flexShrink: 0,
-          }}
-        >
-          <ArrowLeft size={15} /> {tCommon("back")}
-        </button>
-
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-            <h1 style={{ color: "#E8EDF5", fontSize: 18, fontWeight: 700, margin: 0 }}>
-              {t("title")}
-            </h1>
+    <PageContainer>
+      <BackLink onClick={() => router.push("/receipts")}>{tCommon("back")}</BackLink>
+      <PageHeader
+        title={
+          <span style={{ display: "inline-flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+            {t("title")}
             <ReceiptStatusBadge status={receipt.status as ReceiptStatus} />
-          </div>
-          <p style={{ color: "#4B5563", fontSize: 12, marginTop: 3, marginBottom: 0 }}>
+          </span>
+        }
+        subtitle={
+          <>
             {receipt.destinationStoreName}
             {receipt.supplierName && ` · ${receipt.supplierName}`}
             {receipt.expectedAt &&
               ` · ${t("drawer.expected")}: ${new Date(receipt.expectedAt).toLocaleDateString(intlLocale)}`}
-          </p>
-        </div>
-
-        {isEditable && (
-          <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
-            <button
-              onClick={() => cancel.mutate(id)}
-              disabled={cancel.isPending}
-              style={{
-                background: "transparent",
-                border: "1px solid #374151",
-                borderRadius: 8,
-                color: "#6B7280",
-                fontSize: 13,
-                padding: "8px 14px",
-                cursor: "pointer",
-              }}
-            >
-              {tCommon("cancel")}
-            </button>
-            <button
-              onClick={handleReceive}
-              disabled={!allProcessed || receive.isPending}
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 6,
-                background: allProcessed ? "#059669" : "#1F2937",
-                border: "none",
-                borderRadius: 8,
-                color: allProcessed ? "#fff" : "#4B5563",
-                fontSize: 13,
-                fontWeight: 600,
-                padding: "8px 16px",
-                cursor: allProcessed ? "pointer" : "not-allowed",
-                transition: "background 0.2s",
-                opacity: receive.isPending ? 0.6 : 1,
-              }}
-            >
-              <Check size={14} />
-              {tDetail("confirmReceive")}
-            </button>
-          </div>
-        )}
-      </div>
+          </>
+        }
+        actions={
+          isEditable ? (
+            <>
+              <Btn variant="ghost" onClick={() => cancel.mutate(id)} disabled={cancel.isPending}>
+                {tCommon("cancel")}
+              </Btn>
+              <Btn
+                variant="success"
+                icon={<Check size={14} />}
+                onClick={handleReceive}
+                disabled={!allProcessed || receive.isPending}
+              >
+                {tDetail("confirmReceive")}
+              </Btn>
+            </>
+          ) : undefined
+        }
+      />
 
       {/* ── Info cards ─────────────────────────────────────────────────── */}
       <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
@@ -514,6 +464,6 @@ export default function ReceiptDetailPage() {
           <div style={{ color: "#9CA3AF", fontSize: 13 }}>{receipt.notes}</div>
         </div>
       )}
-    </div>
+    </PageContainer>
   );
 }

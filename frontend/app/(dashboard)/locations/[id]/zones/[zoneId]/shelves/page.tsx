@@ -5,7 +5,11 @@ import { createPortal } from "react-dom";
 import { useParams, useRouter } from "next/navigation";
 import { useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { ArrowLeft, Camera, LayoutGrid, Link2, Plus, Save, Trash2 } from "lucide-react";
+import { Btn } from "@/components/ui/Btn";
+import { PageContainer } from "@/components/ui/PageContainer";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { BackLink } from "@/components/ui/BackLink";
+import { Camera, LayoutGrid, Link2, Plus, Save, Trash2 } from "lucide-react";
 import {
   DndContext,
   PointerSensor,
@@ -316,9 +320,11 @@ export default function ShelvesPage() {
 
   if (isLoading || !plan) {
     return (
-      <div style={{ padding: "28px 32px", color: "#4B5563", fontSize: 13, textAlign: "center" }}>
-        {tCommon("loading")}
-      </div>
+      <PageContainer>
+        <div style={{ color: "#4B5563", fontSize: 13, textAlign: "center" }}>
+          {tCommon("loading")}
+        </div>
+      </PageContainer>
     );
   }
 
@@ -347,79 +353,26 @@ export default function ShelvesPage() {
   const insightSection = insightShelfId ? plan.items.find((i) => i.shelfId === insightShelfId) ?? null : null;
 
   return (
-    <div style={{ padding: "28px 32px", display: "flex", flexDirection: "column", gap: 20 }}>
-      {/* Header */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16 }}>
-        <div>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
-            <button
-              onClick={() => router.back()}
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 4,
-                background: "transparent",
-                border: "none",
-                color: "#6B7280",
-                fontSize: 13,
-                cursor: "pointer",
-                padding: 0,
-              }}
+    <PageContainer>
+      <BackLink onClick={() => router.back()}>{t("backToPlan")}</BackLink>
+      <PageHeader
+        title={t("title")}
+        subtitle={`${location?.name ?? "…"} / ${zone?.name ?? "…"}`}
+        actions={
+          <>
+            <Btn icon={<Camera size={15} />} onClick={() => setScanOpen(true)}>
+              {t("scanButton")}
+            </Btn>
+            <Btn
+              icon={<Save size={15} />}
+              onClick={handleSave}
+              disabled={!dirty || updateZonePosition.isPending}
             >
-              <ArrowLeft size={14} />
-              {t("backToPlan")}
-            </button>
-          </div>
-          <h1 style={{ color: "#E8EDF5", fontSize: 22, fontWeight: 700, margin: 0 }}>
-            {t("title")}
-          </h1>
-          <p style={{ color: "#4B5563", fontSize: 13, marginTop: 6, marginBottom: 0 }}>
-            {location?.name ?? "…"} / {zone?.name ?? "…"}
-          </p>
-        </div>
-
-        <div style={{ display: "flex", gap: 10 }}>
-        <button
-          onClick={() => setScanOpen(true)}
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 8,
-            background: "#0d1f3a",
-            border: "1px solid #1D4ED8",
-            color: "#60A5FA",
-            borderRadius: 8,
-            padding: "9px 16px",
-            fontSize: 13,
-            fontWeight: 600,
-            cursor: "pointer",
-          }}
-        >
-          <Camera size={15} />
-          {t("scanButton")}
-        </button>
-        <button
-          onClick={handleSave}
-          disabled={!dirty || updateZonePosition.isPending}
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 8,
-            background: dirty ? "#2563EB" : "#1F2937",
-            border: "none",
-            color: dirty ? "#fff" : "#6B7280",
-            borderRadius: 8,
-            padding: "9px 16px",
-            fontSize: 13,
-            fontWeight: 600,
-            cursor: dirty ? "pointer" : "default",
-          }}
-        >
-          <Save size={15} />
-          {updateZonePosition.isPending ? t("saving") : t("save")}
-        </button>
-        </div>
-      </div>
+              {updateZonePosition.isPending ? t("saving") : t("save")}
+            </Btn>
+          </>
+        }
+      />
 
       {/* Canvas + panel */}
       <div style={{ display: "grid", gridTemplateColumns: "1fr 240px", gap: 20, alignItems: "start" }}>
@@ -447,55 +400,26 @@ export default function ShelvesPage() {
               {t("actionsTitle")}
             </h3>
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              <button
-                onClick={handleAddSection}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 6,
-                  background: "#0d1f3a",
-                  border: "1px solid #1D4ED8",
-                  color: "#60A5FA",
-                  borderRadius: 8,
-                  padding: "8px 12px",
-                  fontSize: 13,
-                  fontWeight: 600,
-                  cursor: "pointer",
-                }}
-              >
-                <Plus size={14} /> {t("addSection")}
-              </button>
+              <Btn size="sm" icon={<Plus size={14} />} onClick={handleAddSection}>
+                {t("addSection")}
+              </Btn>
               <div style={{ display: "flex", gap: 8 }}>
-                <button
+                <Btn
+                  variant="ghost"
+                  size="sm"
+                  fullWidth
                   onClick={() => handleResizeCanvas(plan.canvasW + 200, plan.canvasH)}
-                  style={{
-                    flex: 1,
-                    background: "#0B0E14",
-                    border: "1px solid #1F2937",
-                    color: "#9CA3AF",
-                    borderRadius: 8,
-                    padding: "6px 8px",
-                    fontSize: 12,
-                    cursor: "pointer",
-                  }}
                 >
                   {tFloorPlan("addWidth")}
-                </button>
-                <button
+                </Btn>
+                <Btn
+                  variant="ghost"
+                  size="sm"
+                  fullWidth
                   onClick={() => handleResizeCanvas(plan.canvasW, plan.canvasH + 200)}
-                  style={{
-                    flex: 1,
-                    background: "#0B0E14",
-                    border: "1px solid #1F2937",
-                    color: "#9CA3AF",
-                    borderRadius: 8,
-                    padding: "6px 8px",
-                    fontSize: 12,
-                    cursor: "pointer",
-                  }}
                 >
                   {tFloorPlan("addHeight")}
-                </button>
+                </Btn>
               </div>
             </div>
           </div>
@@ -632,7 +556,7 @@ export default function ShelvesPage() {
           onSelectScan={setActiveScanId}
         />
       )}
-    </div>
+    </PageContainer>
   );
 }
 
