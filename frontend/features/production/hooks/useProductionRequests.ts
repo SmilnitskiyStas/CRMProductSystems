@@ -18,6 +18,8 @@ export const REQUEST_KEYS = {
     ["production", "requests", "summary", loc, status] as const,
 };
 
+const PIPELINE_KEY = ["production", "insights", "pipeline"] as const;
+
 export function useProductionRequests(filters: ProductionRequestFilters) {
   return useQuery({
     queryKey: REQUEST_KEYS.list(filters),
@@ -50,7 +52,10 @@ export function useProductionRequestSummary(
 
 function useInvalidateRequests() {
   const qc = useQueryClient();
-  return () => qc.invalidateQueries({ queryKey: REQUEST_KEYS.all });
+  return () => {
+    qc.invalidateQueries({ queryKey: REQUEST_KEYS.all });
+    qc.invalidateQueries({ queryKey: PIPELINE_KEY });
+  };
 }
 
 export function useCreateProductionRequest() {
@@ -119,6 +124,7 @@ export function useShipProductionRequest() {
       qc.invalidateQueries({ queryKey: REQUEST_KEYS.all });
       qc.invalidateQueries({ queryKey: ["production", "order"] });
       qc.invalidateQueries({ queryKey: ["production", "orders"] });
+      qc.invalidateQueries({ queryKey: PIPELINE_KEY });
     },
   });
 }
@@ -130,6 +136,7 @@ export function useSyncRequestOrders() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: REQUEST_KEYS.all });
       qc.invalidateQueries({ queryKey: ["production", "orders"] });
+      qc.invalidateQueries({ queryKey: PIPELINE_KEY });
     },
   });
 }
@@ -141,6 +148,7 @@ export function useCreateOrdersFromRequests() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: REQUEST_KEYS.all });
       qc.invalidateQueries({ queryKey: ["production", "orders"] });
+      qc.invalidateQueries({ queryKey: PIPELINE_KEY });
     },
   });
 }

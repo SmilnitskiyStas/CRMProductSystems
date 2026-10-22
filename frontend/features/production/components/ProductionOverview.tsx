@@ -4,6 +4,7 @@ import { useState, type ReactNode } from "react";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { useProductionOverview } from "../hooks/useProductionInsights";
+import { ProductionPipeline } from "./ProductionPipeline";
 import {
   PageHeader,
   ProductionLocationSelect,
@@ -67,14 +68,7 @@ export function ProductionOverview() {
   const { data, isLoading, isError } = useProductionOverview(locationId || undefined);
 
   const d = data ?? {};
-  const kpiSum =
-    (d.incomingRequests ?? 0) +
-    (d.awaitingOrder ?? 0) +
-    (d.ordersPlanned ?? 0) +
-    (d.ordersInProgress ?? 0) +
-    (d.readyToShip ?? 0) +
-    (d.shortages ?? 0) +
-    (d.expiringSoon ?? 0);
+  const kpiSum = (d.shortages ?? 0) + (d.expiringSoon ?? 0);
 
   return (
     <div>
@@ -83,6 +77,9 @@ export function ProductionOverview() {
         subtitle={t("subtitle")}
         right={<ProductionLocationSelect value={locationId} onChange={setLocationId} allLabel={t("allLocations")} />}
       />
+      <ProductionPipeline locationId={locationId || undefined} />
+
+      <div style={{ color: "#E8EDF5", fontSize: 16, fontWeight: 700, marginBottom: 10 }}>{t("attentionTitle")}</div>
       {isLoading ? (
         <StateBox kind="loading">{t("loading")}</StateBox>
       ) : isError ? (
@@ -90,11 +87,6 @@ export function ProductionOverview() {
       ) : (
         <>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(190px, 1fr))", gap: 12, marginBottom: 16 }}>
-            <Kpi href="/production/requests" label={t("kpiNewRequests")} value={d.incomingRequests ?? 0} accent="#60A5FA" />
-            <Kpi href="/production/requests" label={t("kpiAwaitingOrder")} value={d.awaitingOrder ?? 0} accent="#FBBF24" />
-            <Kpi href="/production/orders" label={t("kpiPlanned")} value={d.ordersPlanned ?? 0} accent="#60A5FA" />
-            <Kpi href="/production/orders" label={t("kpiInProgress")} value={d.ordersInProgress ?? 0} accent="#A78BFA" />
-            <Kpi href="/production/shipments" label={t("kpiReadyToShip")} value={d.readyToShip ?? 0} accent="#4ADE80" />
             <Kpi href="/production/plan" label={t("kpiShortages")} value={d.shortages ?? 0} accent="#F87171" />
             <Kpi href="/production/warehouse" label={t("kpiExpiring")} value={d.expiringSoon ?? 0} accent="#FBBF24" />
           </div>
@@ -104,37 +96,6 @@ export function ProductionOverview() {
           )}
 
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: 12 }}>
-            <ListCard title={t("listNewRequests")} href="/production/requests" linkLabel={t("open")} empty={t("listEmpty")} isEmpty={!d.newRequests?.length}>
-              {d.newRequests?.map((r) => (
-                <Link key={r.id} href="/production/requests" style={{ ...rowStyle, textDecoration: "none" }}>
-                  <span>
-                    {r.storeName ?? "—"} <span style={mutedText}>· {t("neededBy")} {fmtDate(r.neededBy, intl)}</span>
-                  </span>
-                  <span style={{ fontWeight: 600 }}>{fmtQty(r.totalQty, intl)}</span>
-                </Link>
-              ))}
-            </ListCard>
-
-            <ListCard title={t("listInProgress")} href="/production/orders" linkLabel={t("open")} empty={t("listEmpty")} isEmpty={!d.inProgressOrders?.length}>
-              {d.inProgressOrders?.map((o) => (
-                <Link key={o.id} href={`/production/orders/${o.id}`} style={{ ...rowStyle, textDecoration: "none" }}>
-                  <span>
-                    {o.recipeName ?? "—"} <span style={mutedText}>· {fmtDate(o.startedAt, intl)}</span>
-                  </span>
-                  <span style={{ fontWeight: 600 }}>{fmtQty(o.plannedQty, intl)}</span>
-                </Link>
-              ))}
-            </ListCard>
-
-            <ListCard title={t("listReady")} href="/production/shipments" linkLabel={t("open")} empty={t("listEmpty")} isEmpty={!d.readyToShipList?.length}>
-              {d.readyToShipList?.map((r) => (
-                <Link key={r.requestId} href="/production/shipments" style={{ ...rowStyle, textDecoration: "none" }}>
-                  <span>{r.storeName ?? "—"}</span>
-                  <span style={{ fontWeight: 600 }}>{fmtQty(r.qty, intl)}</span>
-                </Link>
-              ))}
-            </ListCard>
-
             <ListCard title={t("listShortages")} href="/production/plan" linkLabel={t("open")} empty={t("listEmpty")} isEmpty={!d.shortageList?.length}>
               {d.shortageList?.map((s) => (
                 <div key={s.itemId} style={rowStyle}>

@@ -58,3 +58,39 @@ public record ProductionStockBatchDto(
 public record ProductionStockItemDto(
     Guid ItemId, string ItemName, string Unit, string Kind, decimal TotalQty, DateOnly? NearestExpiry,
     string LocationName, List<ProductionStockBatchDto> Batches);
+
+// ── GET /api/production/pipeline (TASK-765) ─────────────────────────────────
+
+public record PipelineLineDto(string ItemName, string Unit, decimal Qty);
+public record PipelineOrderDto(Guid OrderId, string Status, decimal Qty);
+public record PipelineItemQtyDto(Guid ItemId, string ItemName, string Unit, decimal Qty);
+
+public record PipelineNewRequestDto(
+    Guid Id, string StoreName, DateOnly NeededBy, DateTime? SubmittedAt, decimal TotalQty, List<PipelineLineDto> Lines);
+public record PipelineNewDto(int Count, List<PipelineNewRequestDto> Requests);
+
+public record PipelineInWorkRequestDto(
+    Guid Id, string StoreName, DateOnly NeededBy, string ProductionStage, decimal TotalQty,
+    List<PipelineLineDto> Lines, List<PipelineOrderDto> Orders);
+public record PipelineInWorkDto(int Count, List<PipelineInWorkRequestDto> Requests);
+public record PipelineInWorkByStageDto(int AwaitingOrder, int Planned, int InProduction);
+
+public record PipelineReadyRequestDto(
+    Guid Id, string StoreName, DateOnly NeededBy, decimal TotalQty, List<PipelineLineDto> Lines, List<Guid> OrderIds);
+public record PipelineReadyDto(int Count, List<PipelineReadyRequestDto> Requests, List<PipelineItemQtyDto> ByItem);
+
+public record PipelineShippedRequestDto(
+    Guid Id, string StoreName, DateTime? ShippedAt, decimal TotalQty, List<PipelineLineDto> Lines,
+    Guid? TransferId, string? TransferStatus);
+public record PipelineStoreQtyDto(Guid StoreLocationId, string StoreName, int Requests, decimal Qty);
+public record PipelineDayDto(DateOnly Date, int Requests, decimal Qty);
+public record PipelineShippedDto(
+    int Count, decimal TotalQty, List<PipelineShippedRequestDto> Requests, List<PipelineItemQtyDto> ByItem,
+    List<PipelineStoreQtyDto> ByStore, List<PipelineDayDto> PerDay);
+
+public record PipelineStatsDto(int Received, int Accepted, int Shipped, int Rejected);
+
+public record ProductionPipelineDto(
+    DateOnly From, DateOnly To,
+    PipelineNewDto NewRequests, PipelineInWorkDto InWork, PipelineInWorkByStageDto InWorkByStage,
+    PipelineReadyDto Ready, PipelineShippedDto Shipped, PipelineStatsDto Stats);

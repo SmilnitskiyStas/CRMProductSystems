@@ -32,6 +32,23 @@ public sealed class ProductionInsightsRepository : IProductionInsightsRepository
         return await q.ToListAsync(ct);
     }
 
+    public Task<List<ProductionRequest>> GetPipelineRequestsAsync(
+        IReadOnlyCollection<Guid> productionLocationIds, DateTime fromUtc, DateTime toUtcExclusive,
+        CancellationToken ct = default) =>
+        _db.ProductionRequests.AsNoTracking()
+            .Include(r => r.StoreLocation)
+            .Include(r => r.ShipmentTransfer)
+            .Include(r => r.Lines).ThenInclude(l => l.Item)
+            .Where(r => productionLocationIds.Contains(r.ProductionLocationId)
+                && (r.Status == ProductionRequestStatus.Submitted
+                    || r.Status == ProductionRequestStatus.Accepted
+                    || r.Status == ProductionRequestStatus.Partial
+                    || (r.SubmittedAt >= fromUtc && r.SubmittedAt < toUtcExclusive)
+                    || (r.ReviewedAt >= fromUtc && r.ReviewedAt < toUtcExclusive)
+                    || (r.ShippedAt >= fromUtc && r.ShippedAt < toUtcExclusive)))
+            .AsSplitQuery()
+            .ToListAsync(ct);
+
     public Task<List<ProductionOrderRequestLine>> GetLinksForRequestsAsync(
         IReadOnlyCollection<Guid> requestIds, CancellationToken ct = default) =>
         _db.ProductionOrderRequestLines.AsNoTracking()

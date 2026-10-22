@@ -24,6 +24,7 @@ import type {
 } from "../types";
 import type {
   ProductionOverviewDto,
+  ProductionPipelineDto,
   ProductionPlanDto,
   PlanGranularity,
   ReadyShipmentDto,
@@ -183,6 +184,8 @@ function qs(params: Record<string, string | undefined>) {
 export const productionInsightsApi = {
   getOverview: (locationId?: string) =>
     api.get<ProductionOverviewDto>(`/api/production/overview${qs({ locationId })}`),
+  getPipeline: (p: { from: string; to: string; locationId?: string }) =>
+    api.get<ProductionPipelineDto>(`/api/production/pipeline${qs(p)}`),
   getPlan: (p: { from: string; to: string; granularity: PlanGranularity; locationId?: string }) =>
     api.get<ProductionPlanDto>(`/api/production/plan${qs(p)}`),
   getShipments: <S extends ShipmentsStatus>(p: { status: S; from?: string; to?: string; locationId?: string }) =>

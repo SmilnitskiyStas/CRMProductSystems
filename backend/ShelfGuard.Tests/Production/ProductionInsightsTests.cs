@@ -26,6 +26,15 @@ internal sealed class FakeInsightsRepo : IProductionInsightsRepository
             && (shippedFrom == null || r.ShippedAt >= shippedFrom)
             && (shippedToExclusive == null || r.ShippedAt < shippedToExclusive)).ToList());
 
+    public Task<List<ProductionRequest>> GetPipelineRequestsAsync(
+        IReadOnlyCollection<Guid> ids, DateTime fromUtc, DateTime toUtcExclusive, CancellationToken ct = default)
+    {
+        bool In(DateTime? t) => t >= fromUtc && t < toUtcExclusive;
+        return Task.FromResult(Requests.Where(r => ids.Contains(r.ProductionLocationId)
+            && (r.Status is ProductionRequestStatus.Submitted or ProductionRequestStatus.Accepted or ProductionRequestStatus.Partial
+                || In(r.SubmittedAt) || In(r.ReviewedAt) || In(r.ShippedAt))).ToList());
+    }
+
     public Task<List<ProductionOrderRequestLine>> GetLinksForRequestsAsync(
         IReadOnlyCollection<Guid> requestIds, CancellationToken ct = default) =>
         Task.FromResult(Links.Where(l => Requests.Any(r => requestIds.Contains(r.Id) && r.Lines.Any(x => x.Id == l.RequestLineId))).ToList());
@@ -397,5 +406,154 @@ public sealed class ProductionInsightsTests
         _recipe.Ingredients.Add(new RecipeIngredient { RecipeId = _recipe.Id, ItemId = dough.Id, Qty = 1m, Item = dough });
         Batch(dough, 3m, 5);
         Assert.Equal("finished", Assert.Single(await Svc().GetStockAsync(null, null)).Kind);
+    }
+
+    // ── Pipeline (TASK-765) ──────────────────────────────────────────────────
+
+    private static DateTime Utc(int y, int m, int d, int h, int min = 0) => new(y, m, d, h, min, 0, DateTimeKind.Utc);
+
+    private ProductionRequest Shipped(DateTime at, decimal qty, Location? prod = null, Item? item = null)
+    {
+        var r = Req(ProductionRequestStatus.Fulfilled, qty, qty, -1, prod: prod, item: item);
+        r.ShippedAt = at;
+        return r;
+    }
+
+    [Fact]
+    public async Task Pipeline_EachRequestLandsInExactlyOneStage()
+    {
+        var sub = Req(ProductionRequestStatus.Submitted, 5m, null, 1);
+        var awaiting = Req(ProductionRequestStatus.Accepted, 5m, 5m, 1);
+        var planned = Req(ProductionRequestStatus.Accepted, 4m, 4m, 1);
+        Link(planned, Order(ProductionOrderStatus.Planned, 4m));
+        var inProd = Req(ProductionRequestStatus.Partial, 6m, 3m, 1);
+        Link(inProd, Order(ProductionOrderStatus.InProgress, 3m));
+        var ready = Req(ProductionRequestStatus.Accepted, 2m, 2m, 1);
+        var doneOrder = Order(ProductionOrderStatus.Done, 2m);
+        Link(ready, doneOrder);
+        var shipped = Shipped(Utc(2026, 10, 21, 8), 7m);
+        Req(ProductionRequestStatus.Draft, 1m, null, 1);
+        Req(ProductionRequestStatus.Rejected, 1m, null, 1);
+
+        var p = await Svc().GetPipelineAsync(null, null, null);
+        Assert.Equal(D(0), p.From);
+        Assert.Equal(D(0), p.To);
+        Assert.Equal(sub.Id, Assert.Single(p.NewRequests.Requests).Id);
+        Assert.Equal(1, p.NewRequests.Count);
+        Assert.Equal(5m, p.NewRequests.Requests[0].TotalQty);
+        Assert.Equal(new[] { awaiting.Id, planned.Id, inProd.Id }.OrderBy(x => x).ToArray(),
+            p.InWork.Requests.Select(r => r.Id).OrderBy(x => x).ToArray());
+        Assert.Equal(3, p.InWork.Count);
+        Assert.Equal(1, p.InWorkByStage.AwaitingOrder);
+        Assert.Equal(1, p.InWorkByStage.Planned);
+        Assert.Equal(1, p.InWorkByStage.InProduction);
+        var ip = p.InWork.Requests.Single(r => r.Id == inProd.Id);
+        Assert.Equal("in_production", ip.ProductionStage);
+        Assert.Equal(3m, ip.TotalQty); // accepted, not requested
+        var ord = Assert.Single(ip.Orders);
+        Assert.Equal("in_progress", ord.Status);
+        Assert.Equal(3m, ord.Qty);
+        Assert.Equal(ready.Id, Assert.Single(p.Ready.Requests).Id);
+        Assert.Equal(doneOrder.Id, Assert.Single(p.Ready.Requests[0].OrderIds));
+        Assert.Equal(shipped.Id, Assert.Single(p.Shipped.Requests).Id);
+        Assert.Equal(1, p.Shipped.Count);
+        Assert.Equal(7m, p.Shipped.TotalQty);
+    }
+
+    [Fact]
+    public async Task Pipeline_ShippedAndStats_FilterByPeriod_InLocationTimeZone()
+    {
+        // Kyiv is UTC+3 on 2026-10-21 (DST ends 10-25). Local day 10-21 = 10-20T21:00Z .. 10-21T21:00Z.
+        Shipped(Utc(2026, 10, 20, 20, 59), 1m);         // local 10-20 23:59 -> out
+        var a = Shipped(Utc(2026, 10, 20, 21, 0), 2m);  // local 10-21 00:00 -> in
+        var b = Shipped(Utc(2026, 10, 21, 20, 59), 3m); // local 10-21 23:59 -> in
+        Shipped(Utc(2026, 10, 21, 21, 0), 4m);          // local 10-22 00:00 -> out
+
+        var p = await Svc().GetPipelineAsync(D(0), D(0), null);
+        Assert.Equal(new[] { a.Id, b.Id }.OrderBy(x => x).ToArray(), p.Shipped.Requests.Select(r => r.Id).OrderBy(x => x).ToArray());
+        Assert.Equal(5m, p.Shipped.TotalQty);
+        Assert.Equal(2, p.Stats.Shipped);
+        var day = Assert.Single(p.Shipped.PerDay);
+        Assert.Equal(D(0), day.Date);
+        Assert.Equal(2, day.Requests);
+        Assert.Equal(5m, day.Qty);
+        Assert.Equal(b.Id, p.Shipped.Requests[0].Id); // newest first
+    }
+
+    [Fact]
+    public async Task Pipeline_Stats_CountReceivedAcceptedRejected_ByTimestampInPeriod()
+    {
+        var inside = Utc(2026, 10, 21, 5);
+        var outside = Utc(2026, 10, 18, 5);
+        Req(ProductionRequestStatus.Submitted, 1m, null, 1).SubmittedAt = inside;
+        Req(ProductionRequestStatus.Submitted, 1m, null, 1).SubmittedAt = outside;
+        var acc = Req(ProductionRequestStatus.Accepted, 1m, 1m, 1); acc.SubmittedAt = outside; acc.ReviewedAt = inside;
+        var par = Req(ProductionRequestStatus.Partial, 2m, 1m, 1); par.SubmittedAt = inside; par.ReviewedAt = inside;
+        var rej = Req(ProductionRequestStatus.Rejected, 1m, null, 1); rej.SubmittedAt = inside; rej.ReviewedAt = inside;
+        var rejOld = Req(ProductionRequestStatus.Rejected, 1m, null, 1); rejOld.SubmittedAt = outside; rejOld.ReviewedAt = outside;
+
+        var p = await Svc().GetPipelineAsync(D(0), D(0), null);
+        Assert.Equal(3, p.Stats.Received); // 1 submitted + par + rej
+        Assert.Equal(2, p.Stats.Accepted); // acc + par
+        Assert.Equal(1, p.Stats.Rejected);
+        Assert.Equal(0, p.Stats.Shipped);
+        Assert.Equal(2, p.NewRequests.Count); // current snapshot ignores the period
+    }
+
+    [Fact]
+    public async Task Pipeline_PerDay_ZeroFilled_AndByItemByStoreAggregated()
+    {
+        Shipped(Utc(2026, 10, 19, 9), 2m);
+        Shipped(Utc(2026, 10, 19, 12), 3m);
+        Shipped(Utc(2026, 10, 21, 9), 4m, item: _flour);
+        var p = await Svc().GetPipelineAsync(D(-3), D(0), null);
+        Assert.Equal(new[] { D(-3), D(-2), D(-1), D(0) }, p.Shipped.PerDay.Select(d => d.Date).ToArray());
+        Assert.Equal(new[] { 0, 2, 0, 1 }, p.Shipped.PerDay.Select(d => d.Requests).ToArray());
+        Assert.Equal(new[] { 0m, 5m, 0m, 4m }, p.Shipped.PerDay.Select(d => d.Qty).ToArray());
+        var bread = p.Shipped.ByItem.Single(i => i.ItemName == "Хліб");
+        Assert.Equal(5m, bread.Qty);
+        Assert.Equal("шт", bread.Unit);
+        Assert.Equal(4m, p.Shipped.ByItem.Single(i => i.ItemName == "Борошно").Qty);
+        var store = Assert.Single(p.Shipped.ByStore);
+        Assert.Equal(3, store.Requests);
+        Assert.Equal(9m, store.Qty);
+    }
+
+    [Fact]
+    public async Task Pipeline_ReadyByItem_Aggregates()
+    {
+        var r1 = Req(ProductionRequestStatus.Accepted, 2m, 2m, 1);
+        Link(r1, Order(ProductionOrderStatus.Done, 2m));
+        var r2 = Req(ProductionRequestStatus.Accepted, 5m, 5m, 1);
+        Link(r2, Order(ProductionOrderStatus.Done, 5m));
+        var p = await Svc().GetPipelineAsync(null, null, null);
+        Assert.Equal(2, p.Ready.Count);
+        Assert.Equal(7m, Assert.Single(p.Ready.ByItem).Qty);
+    }
+
+    [Fact]
+    public async Task Pipeline_Validation_ThrowsOnReversedOrTooLongRange()
+    {
+        await Assert.ThrowsAsync<ArgumentException>(() => Svc().GetPipelineAsync(D(1), D(0), null));
+        await Assert.ThrowsAsync<ArgumentException>(() => Svc().GetPipelineAsync(D(-366), D(0), null)); // 367 days
+        var ok = await Svc().GetPipelineAsync(D(-365), D(0), null); // 366 days
+        Assert.Equal(366, ok.Shipped.PerDay.Count);
+    }
+
+    [Fact]
+    public async Task Pipeline_LocationFilter_NarrowsAllStages()
+    {
+        Req(ProductionRequestStatus.Submitted, 1m, null, 1, prod: _prod);
+        Req(ProductionRequestStatus.Submitted, 1m, null, 1, prod: _prod2);
+        Shipped(Utc(2026, 10, 21, 9), 2m, prod: _prod2);
+
+        Assert.Equal(2, (await Svc().GetPipelineAsync(null, null, null)).NewRequests.Count);
+        var one = await Svc().GetPipelineAsync(null, null, _prod.Id);
+        Assert.Equal(1, one.NewRequests.Count);
+        Assert.Equal(0, one.Shipped.Count);
+        Assert.Equal(1, (await Svc().GetPipelineAsync(null, null, _prod2.Id)).Shipped.Count);
+        var none = await Svc().GetPipelineAsync(null, null, _store.Id);
+        Assert.Equal(0, none.NewRequests.Count);
+        Assert.Single(none.Shipped.PerDay);
     }
 }

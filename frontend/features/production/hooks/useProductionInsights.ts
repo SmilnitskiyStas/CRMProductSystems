@@ -23,6 +23,16 @@ export function useProductionOverview(locationId?: string) {
   });
 }
 
+export function useProductionPipeline(p: { from: string; to: string; locationId?: string }) {
+  return useQuery({
+    queryKey: ["production", "insights", "pipeline", p.from, p.to, p.locationId ?? ""],
+    queryFn: () => productionInsightsApi.getPipeline(p),
+    enabled: !!p.from && !!p.to,
+    staleTime: 15_000,
+    refetchInterval: 60_000,
+  });
+}
+
 export function useProductionPlan(p: { from: string; to: string; granularity: PlanGranularity; locationId?: string }) {
   return useQuery({
     queryKey: ["production", "insights", "plan", p.from, p.to, p.granularity, p.locationId ?? ""],

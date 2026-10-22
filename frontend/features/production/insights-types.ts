@@ -30,6 +30,78 @@ export interface ProductionOverviewDto {
   }[];
 }
 
+// TASK-766: GET /api/production/pipeline (TASK-765). All fields tolerant/optional.
+export interface PipelineLineDto {
+  itemId?: string;
+  itemName?: string | null;
+  unit?: string | null;
+  qty?: number;
+}
+export type PipelineStage = "awaiting_order" | "planned" | "in_production" | string;
+export interface PipelineByItemDto {
+  itemId?: string;
+  itemName?: string | null;
+  unit?: string | null;
+  qty?: number;
+}
+export interface ProductionPipelineDto {
+  from?: string;
+  to?: string;
+  newRequests?: {
+    count?: number;
+    requests?: {
+      id: string;
+      storeName?: string | null;
+      neededBy?: string | null;
+      submittedAt?: string | null;
+      totalQty?: number;
+      lines?: PipelineLineDto[];
+    }[];
+  };
+  inWork?: {
+    count?: number;
+    requests?: {
+      id: string;
+      storeName?: string | null;
+      neededBy?: string | null;
+      productionStage?: PipelineStage | null;
+      totalQty?: number;
+      lines?: PipelineLineDto[];
+      orders?: { orderId: string; status?: string | null; qty?: number }[];
+    }[];
+  };
+  inWorkByStage?: { awaitingOrder?: number; planned?: number; inProduction?: number };
+  ready?: {
+    count?: number;
+    requests?: {
+      id: string;
+      storeName?: string | null;
+      neededBy?: string | null;
+      totalQty?: number;
+      lines?: PipelineLineDto[];
+      orderIds?: string[];
+    }[];
+    byItem?: PipelineByItemDto[];
+  };
+  shipped?: {
+    count?: number;
+    totalQty?: number;
+    requests?: {
+      id: string;
+      storeName?: string | null;
+      shippedAt?: string | null;
+      totalQty?: number;
+      lines?: PipelineLineDto[];
+      transferId?: string | null;
+      transferStatus?: string | null;
+    }[];
+    byItem?: PipelineByItemDto[];
+    byStore?: { storeLocationId?: string; storeName?: string | null; requests?: number; qty?: number }[];
+    perDay?: { date: string; requests?: number; qty?: number }[];
+  };
+  stats?: { received?: number; accepted?: number; shipped?: number; rejected?: number };
+}
+
 export type PlanGranularity = "day" | "week" | "month";
 
 export interface ProductionPlanDto {

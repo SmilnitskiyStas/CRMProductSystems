@@ -17,5 +17,9 @@ public interface IProductionInsightsService
     Task<List<ShippedShipmentDto>> GetShippedShipmentsAsync(
         DateOnly? from, DateOnly? to, Guid? locationId, CancellationToken ct = default);
 
+    /// <summary>TASK-765: 4-stage pipeline (stages 1-3 current, stage 4 + stats for the period). Throws ArgumentException on bad range.</summary>
+    Task<ProductionPipelineDto> GetPipelineAsync(
+        DateOnly? from, DateOnly? to, Guid? locationId, CancellationToken ct = default);
+
     Task<List<ProductionStockItemDto>> GetStockAsync(Guid? locationId, string? kind, CancellationToken ct = default);
 }

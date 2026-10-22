@@ -337,6 +337,170 @@ public sealed class ProductionInsightsService : IProductionInsightsService
             .Select(l => l.ProductionOrderId).Distinct().ToList();
     }
 
+    // ── Pipeline (TASK-765) ──────────────────────────────────────────────────
+
+    public const int MaxPipelineDays = 366;
+    private const int MaxShippedList = 200;
+    private const string DefaultZoneId = "Europe/Kyiv";
+
+    /// <summary>
+    /// 4-stage pipeline. Stages 1-3 (new / in work / ready) are CURRENT snapshots; stage 4 (shipped) and stats are
+    /// for the inclusive date period [from, to] interpreted in the time zone of the scoped production location(s)
+    /// (single distinct zone => that zone, otherwise Europe/Kyiv). Stats: received = SubmittedAt in period;
+    /// accepted = ReviewedAt in period and status accepted/partial/fulfilled; rejected = ReviewedAt in period and
+    /// status rejected; shipped = shipped.count.
+    /// </summary>
+    public async Task<ProductionPipelineDto> GetPipelineAsync(
+        DateOnly? from, DateOnly? to, Guid? locationId, CancellationToken ct = default)
+    {
+        var locations = await _repo.GetProductionLocationsAsync(locationId, ct);
+        var tz = ResolveZone(locations);
+        var todayLocal = DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(_clock.GetUtcNow(), tz).DateTime);
+        var start = from ?? to ?? todayLocal;
+        var end = to ?? from ?? todayLocal;
+        if (from.HasValue && !to.HasValue) end = from.Value;
+        if (!from.HasValue && to.HasValue) start = to.Value;
+        if (!from.HasValue && !to.HasValue) { start = todayLocal; end = todayLocal; }
+        if (end < start) throw new ArgumentException("'from' must be on or before 'to'.");
+        if (end.DayNumber - start.DayNumber + 1 > MaxPipelineDays)
+            throw new ArgumentException($"Period must not exceed {MaxPipelineDays} days.");
+
+        var days = Enumerable.Range(0, end.DayNumber - start.DayNumber + 1).Select(i => start.AddDays(i)).ToList();
+        var fromUtc = LocalMidnightUtc(start, tz);
+        var toUtcExclusive = LocalMidnightUtc(end.AddDays(1), tz);
+
+        if (locations.Count == 0)
+            return new ProductionPipelineDto(start, end,
+                new PipelineNewDto(0, []), new PipelineInWorkDto(0, []), new PipelineInWorkByStageDto(0, 0, 0),
+                new PipelineReadyDto(0, [], []),
+                new PipelineShippedDto(0, 0m, [], [], [], days.Select(d => new PipelineDayDto(d, 0, 0m)).ToList()),
+                new PipelineStatsDto(0, 0, 0, 0));
+
+        var scope = locations.Select(l => l.Id).ToList();
+        var requests = await _repo.GetPipelineRequestsAsync(scope, fromUtc, toUtcExclusive, ct);
+        var openIds = requests
+            .Where(r => r.Status is ProductionRequestStatus.Accepted or ProductionRequestStatus.Partial)
+            .Select(r => r.Id).ToList();
+        var links = openIds.Count == 0 ? [] : await _repo.GetLinksForRequestsAsync(openIds, ct);
+        var openRequests = requests.Where(r => openIds.Contains(r.Id)).ToList();
+        var stages = StagesOf(openRequests, links);
+
+        bool In(DateTime? t) => t.HasValue && t.Value >= fromUtc && t.Value < toUtcExclusive;
+
+        // Stage 1 — new (oldest first)
+        var newList = requests.Where(r => r.Status == ProductionRequestStatus.Submitted)
+            .OrderBy(r => r.SubmittedAt ?? r.CreatedAt).ThenBy(r => r.Id)
+            .Select(r => new PipelineNewRequestDto(
+                r.Id, r.StoreLocation?.Name ?? "—", r.NeededBy, r.SubmittedAt,
+                r.Lines.Sum(l => l.RequestedQty),
+                r.Lines.Where(l => l.RequestedQty > 0)
+                    .Select(l => new PipelineLineDto(l.Item?.Name ?? "—", l.Item?.Unit ?? "", l.RequestedQty))
+                    .OrderBy(l => l.ItemName, StringComparer.CurrentCultureIgnoreCase).ToList()))
+            .ToList();
+
+        // Stage 2 — in work
+        var inWorkStages = new[]
+        {
+            ProductionRequestStage.AwaitingOrder, ProductionRequestStage.Planned, ProductionRequestStage.InProduction,
+        };
+        var inWorkReqs = openRequests.Where(r => inWorkStages.Contains(stages[r.Id]))
+            .OrderBy(r => r.NeededBy).ThenBy(r => r.Id).ToList();
+        var inWork = inWorkReqs.Select(r => new PipelineInWorkRequestDto(
+            r.Id, r.StoreLocation?.Name ?? "—", r.NeededBy, stages[r.Id], AcceptedTotal(r),
+            PipeLines(r), OrdersOf(r, links))).ToList();
+        var byStage = new PipelineInWorkByStageDto(
+            inWork.Count(x => x.ProductionStage == ProductionRequestStage.AwaitingOrder),
+            inWork.Count(x => x.ProductionStage == ProductionRequestStage.Planned),
+            inWork.Count(x => x.ProductionStage == ProductionRequestStage.InProduction));
+
+        // Stage 3 — ready
+        var readyReqs = openRequests.Where(r => stages[r.Id] == ProductionRequestStage.Ready)
+            .OrderBy(r => r.NeededBy).ThenBy(r => r.Id).ToList();
+        var ready = new PipelineReadyDto(
+            readyReqs.Count,
+            readyReqs.Select(r => new PipelineReadyRequestDto(
+                r.Id, r.StoreLocation?.Name ?? "—", r.NeededBy, AcceptedTotal(r), PipeLines(r), OrderIdsOf(r, links)))
+                .ToList(),
+            ByItem(readyReqs));
+
+        // Stage 4 — shipped in period
+        var shippedReqs = requests.Where(r => r.Status == ProductionRequestStatus.Fulfilled && In(r.ShippedAt))
+            .OrderByDescending(r => r.ShippedAt).ThenBy(r => r.Id).ToList();
+        var perDay = shippedReqs
+            .GroupBy(r => DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeFromUtc(AsUtc(r.ShippedAt!.Value), tz)))
+            .ToDictionary(g => g.Key, g => (Count: g.Count(), Qty: g.Sum(AcceptedTotal)));
+        var shipped = new PipelineShippedDto(
+            shippedReqs.Count,
+            shippedReqs.Sum(AcceptedTotal),
+            shippedReqs.Take(MaxShippedList).Select(r => new PipelineShippedRequestDto(
+                r.Id, r.StoreLocation?.Name ?? "—", r.ShippedAt, AcceptedTotal(r), PipeLines(r),
+                r.ShipmentTransferId, r.ShipmentTransfer?.Status)).ToList(),
+            ByItem(shippedReqs),
+            shippedReqs.GroupBy(r => r.StoreLocationId)
+                .Select(g => new PipelineStoreQtyDto(
+                    g.Key, g.First().StoreLocation?.Name ?? "—", g.Count(), g.Sum(AcceptedTotal)))
+                .OrderByDescending(s => s.Qty).ThenBy(s => s.StoreName, StringComparer.CurrentCultureIgnoreCase)
+                .ToList(),
+            days.Select(d => perDay.TryGetValue(d, out var v)
+                ? new PipelineDayDto(d, v.Count, v.Qty)
+                : new PipelineDayDto(d, 0, 0m)).ToList());
+
+        var stats = new PipelineStatsDto(
+            Received: requests.Count(r => In(r.SubmittedAt)),
+            Accepted: requests.Count(r => In(r.ReviewedAt) && r.Status is ProductionRequestStatus.Accepted
+                or ProductionRequestStatus.Partial or ProductionRequestStatus.Fulfilled),
+            Shipped: shippedReqs.Count,
+            Rejected: requests.Count(r => In(r.ReviewedAt) && r.Status == ProductionRequestStatus.Rejected));
+
+        return new ProductionPipelineDto(
+            start, end,
+            new PipelineNewDto(newList.Count, newList),
+            new PipelineInWorkDto(inWork.Count, inWork), byStage, ready, shipped, stats);
+    }
+
+    private static DateTime AsUtc(DateTime t) => DateTime.SpecifyKind(t, DateTimeKind.Utc);
+
+    private static List<PipelineLineDto> PipeLines(ProductionRequest r) =>
+        ShipLines(r).Select(l => new PipelineLineDto(l.ItemName, l.Unit, l.Qty)).ToList();
+
+    private static List<PipelineOrderDto> OrdersOf(ProductionRequest r, List<ProductionOrderRequestLine> links)
+    {
+        var lineIds = r.Lines.Select(l => l.Id).ToHashSet();
+        return links.Where(l => lineIds.Contains(l.RequestLineId)
+                                && l.ProductionOrder is { Status: not ProductionOrderStatus.Cancelled })
+            .GroupBy(l => l.ProductionOrderId)
+            .Select(g => new PipelineOrderDto(g.Key, g.First().ProductionOrder!.Status.ToApiString(), g.Sum(x => x.Qty)))
+            .OrderBy(o => o.OrderId).ToList();
+    }
+
+    private static List<PipelineItemQtyDto> ByItem(IEnumerable<ProductionRequest> requests) =>
+        requests.SelectMany(r => r.Lines.Where(l => l.AcceptedQty is > 0))
+            .GroupBy(l => l.ItemId)
+            .Select(g => new PipelineItemQtyDto(
+                g.Key, g.First().Item?.Name ?? "—", g.First().Item?.Unit ?? "", g.Sum(l => l.AcceptedQty!.Value)))
+            .OrderByDescending(i => i.Qty).ThenBy(i => i.ItemName, StringComparer.CurrentCultureIgnoreCase)
+            .ToList();
+
+    private static TimeZoneInfo ResolveZone(List<Location> locations)
+    {
+        var ids = locations.Select(l => l.TimeZone).Where(z => !string.IsNullOrWhiteSpace(z)).Distinct().ToList();
+        var wanted = ids.Count == 1 ? ids[0] : DefaultZoneId;
+        foreach (var id in new[] { wanted, DefaultZoneId, "Europe/Kiev", "FLE Standard Time" })
+        {
+            try { return TimeZoneInfo.FindSystemTimeZoneById(id); }
+            catch (Exception e) when (e is TimeZoneNotFoundException or InvalidTimeZoneException) { }
+        }
+        return TimeZoneInfo.Utc;
+    }
+
+    /// <summary>UTC instant of 00:00 local on <paramref name="date"/> (skips a DST gap by moving to 01:00).</summary>
+    private static DateTime LocalMidnightUtc(DateOnly date, TimeZoneInfo tz)
+    {
+        var local = date.ToDateTime(TimeOnly.MinValue, DateTimeKind.Unspecified);
+        if (tz.IsInvalidTime(local)) local = local.AddHours(1);
+        return TimeZoneInfo.ConvertTimeToUtc(local, tz);
+    }
+
     // ── Warehouse ────────────────────────────────────────────────────────────
 
     public async Task<List<ProductionStockItemDto>> GetStockAsync(

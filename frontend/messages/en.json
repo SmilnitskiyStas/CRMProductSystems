@@ -4238,7 +4238,7 @@
         "listExpiring": "Expiring soon",
         "listEmpty": "Nothing here",
         "open": "Open",
-        "neededBy": "needed by"
+        "neededBy": "needed by",        "attentionTitle": "Needs attention", "pipelineTitle": "Request flow", "pipelineSubtitle": "From a new store request to shipment", "asOfNow": "as of now", "period": "Period", "periodToday": "Today", "periodWeek": "Week", "periodMonth": "Month", "periodCustom": "Custom", "periodFrom": "From", "periodTo": "To", "periodInvalid": "Enter both dates.", "periodFromAfterTo": "\"From\" must not be after \"to\".", "periodTooLong": "Maximum period is 366 days.", "forPeriod": "For period", "totalQty": "Total", "statReceived": "Requests received", "statAccepted": "Accepted", "statRejected": "Rejected", "statShipped": "Shipped", "winNew": "New requests", "winInWork": "In progress", "winReady": "Ready to ship", "winShipped": "Shipped", "emptyNew": "No new requests", "emptyInWork": "No requests in progress", "emptyReady": "Nothing ready to ship", "emptyShipped": "Nothing shipped in this period", "openRequests": "Open requests", "toShipments": "Go to shipments", "totalByItem": "Total by item", "stage_awaiting_order": "Awaiting order", "stage_planned": "Planned", "stage_in_production": "In production", "colStore": "Store", "colNeededBy": "Needed by", "colItems": "Items", "colQty": "Qty", "colStage": "Stage", "colOrders": "Order", "colShippedAt": "Shipped", "colTransfer": "Transfer", "colItem": "Item", "colRequests": "Requests", "order": "Order", "transfer": "Transfer", "periodStats": "Period statistics", "statsByItem": "By item", "statsByStore": "By store", "statsPerDay": "Per day (qty)"
       },
       "plan": {
         "title": "Plan & demand",

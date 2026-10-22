@@ -17,6 +17,14 @@ public interface IProductionInsightsRepository
         IReadOnlyCollection<Guid> productionLocationIds, IReadOnlyCollection<string> statuses,
         DateTime? shippedFrom = null, DateTime? shippedToExclusive = null, CancellationToken ct = default);
 
+    /// <summary>
+    /// TASK-765 pipeline: requests of the given locations that are open (submitted/accepted/partial) OR whose
+    /// SubmittedAt / ReviewedAt / ShippedAt falls in [fromUtc, toUtcExclusive). Lines+items, store, transfer loaded.
+    /// </summary>
+    Task<List<ProductionRequest>> GetPipelineRequestsAsync(
+        IReadOnlyCollection<Guid> productionLocationIds, DateTime fromUtc, DateTime toUtcExclusive,
+        CancellationToken ct = default);
+
     /// <summary>Order links of every line of the given requests, with ProductionOrder loaded.</summary>
     Task<List<ProductionOrderRequestLine>> GetLinksForRequestsAsync(
         IReadOnlyCollection<Guid> requestIds, CancellationToken ct = default);
