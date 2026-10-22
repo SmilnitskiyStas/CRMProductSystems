@@ -13,7 +13,8 @@ import {
 import { OrderStatusBadge } from "./ProductionOrderTable";
 import { ApiError } from "@/lib/api";
 import { Table, type TableColumn } from "@/components/ui/Table";
-import type { ProductionConsumptionDto } from "../types";
+import type { ProductionConsumptionDto, ProductionOrderRequestRefDto } from "../types";
+import { formatDateOnly } from "./ProductionRequestStatusBadge";
 
 interface Props {
   id: string;
@@ -155,6 +156,16 @@ export function ProductionOrderDetail({ id }: Props) {
     },
   ];
 
+  const requestColumns: TableColumn<ProductionOrderRequestRefDto>[] = [
+    {
+      key: "store",
+      header: t("requestsHeaderStore"),
+      cellStyle: { color: "#E8EDF5" },
+      render: (r) => r.storeLocationName,
+    },
+    { key: "qty", header: t("requestsHeaderQty"), render: (r) => r.qty },
+  ];
+
   return (
     <div>
       {/* Back navigation */}
@@ -221,6 +232,12 @@ export function ProductionOrderDetail({ id }: Props) {
               <span>📍 {order.locationName}</span>
               <span>{"📦 "}{t("plannedOutputLabel")} {order.plannedQty}</span>
               <span>{"📅 "}{formatDateTime(order.createdAt, intlLocale)}</span>
+              {order.neededBy && (
+                <span>{"⏰ "}{t("neededByLabel")} {formatDateOnly(order.neededBy, intlLocale)}</span>
+              )}
+              {order.plannedDate && (
+                <span>{"🗓 "}{t("plannedDateLabel")} {formatDateOnly(order.plannedDate, intlLocale)}</span>
+              )}
               {order.startedAt && (
                 <span>{"▶ "}{t("startedLabel")} {formatDateTime(order.startedAt, intlLocale)}</span>
               )}
@@ -350,6 +367,32 @@ export function ProductionOrderDetail({ id }: Props) {
             }}
           >
             <strong>{t("actionErrorPrefix")}</strong> {actionError}
+          </div>
+        )}
+
+        {/* Store requests feeding this order */}
+        {order.requests && order.requests.length > 0 && (
+          <div
+            style={{
+              background: "#111827",
+              border: "1px solid #1F2937",
+              borderRadius: 10,
+              padding: 16,
+              marginBottom: 20,
+              display: "flex",
+              flexDirection: "column",
+              gap: 12,
+            }}
+          >
+            <h2 style={{ color: "#E8EDF5", fontSize: 14, fontWeight: 600, margin: 0 }}>
+              {t("requestsTitle")}
+            </h2>
+            <Table
+              columns={requestColumns}
+              rows={order.requests}
+              rowKey={(r) => r.requestLineId}
+              onRowClick={() => router.push("/production/requests")}
+            />
           </div>
         )}
 

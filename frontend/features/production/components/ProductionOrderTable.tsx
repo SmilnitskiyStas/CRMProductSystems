@@ -8,6 +8,7 @@ import { useProductionOrders } from "../hooks/useProduction";
 import { ProductionOrderForm } from "./ProductionOrderForm";
 import type { ProductionOrderListItemDto, ProductionOrderStatus } from "../types";
 import { Table, type TableColumn } from "@/components/ui/Table";
+import { formatDateOnly } from "./ProductionRequestStatusBadge";
 
 export function ProductionOrderTable() {
   const t = useTranslations("Dashboard.production.orderTable");
@@ -60,6 +61,18 @@ export function ProductionOrderTable() {
       key: "plannedQty",
       header: t("headerPlannedQty"),
       render: (order) => order.plannedQty,
+    },
+    {
+      key: "neededBy",
+      header: t("headerNeededBy"),
+      cellStyle: { color: "#9CA3AF", fontSize: 12 },
+      render: (order) => formatDateOnly(order.neededBy, intlLocale),
+    },
+    {
+      key: "plannedDate",
+      header: t("headerPlannedDate"),
+      cellStyle: { color: "#9CA3AF", fontSize: 12 },
+      render: (order) => formatDateOnly(order.plannedDate, intlLocale),
     },
     {
       key: "status",

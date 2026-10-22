@@ -136,6 +136,7 @@ services.AddScoped<IAuthService, AuthService>();
 
         // v4 Phase 5 - Production Module (TASK-241)
         services.AddScoped<IProductionService, ProductionService>();
+        services.AddScoped<IProductionRequestService, ProductionRequestService>();
 
         // v4 Phase 6 - AI Business Assistant (TASK-250)
         services.AddScoped<IAiAssistantService, AiAssistantService>();

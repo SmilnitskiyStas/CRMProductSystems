@@ -18,8 +18,13 @@ namespace ShelfGuard.Api.Controllers;
 public sealed class ProductionController : ControllerBase
 {
     private readonly IProductionService _svc;
+    private readonly IProductionRequestService _requests;
 
-    public ProductionController(IProductionService svc) => _svc = svc;
+    public ProductionController(IProductionService svc, IProductionRequestService requests)
+    {
+        _svc = svc;
+        _requests = requests;
+    }
 
     // ─────────────────────────────────────────────────────────────────────────
     // Recipes
@@ -123,6 +128,28 @@ public sealed class ProductionController : ControllerBase
         var (order, error, statusCode) = await _svc.CreateOrderAsync(dto, tenantId.Value, userId.Value, ct);
         if (error is not null) return StatusCode(statusCode!.Value, new { error });
         return StatusCode(StatusCodes.Status201Created, order);
+    }
+
+    /// <summary>
+    /// Aggregates accepted/partial store requests by item and creates one Planned production
+    /// order per item (recipe = active recipe producing it). All-or-nothing.
+    /// </summary>
+    [HttpPost("orders/from-requests")]
+    [ProducesResponseType(typeof(List<ProductionOrderCreatedDto>), StatusCodes.Status201Created)]
+    [ProducesResponseType(typeof(object), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(object), StatusCodes.Status409Conflict)]
+    [ProducesResponseType(typeof(object), StatusCodes.Status422UnprocessableEntity)]
+    public async Task<IActionResult> CreateOrdersFromRequests(
+        [FromBody] ProductionOrdersFromRequestsDto dto, CancellationToken ct)
+    {
+        var tenantId = ResolveTenantId();
+        var userId   = ResolveUserId();
+        if (tenantId is null || userId is null) return Forbid();
+
+        var (orders, error, statusCode) =
+            await _requests.CreateOrdersFromRequestsAsync(dto, tenantId.Value, userId.Value, ct);
+        if (error is not null) return StatusCode(statusCode!.Value, new { error });
+        return StatusCode(StatusCodes.Status201Created, orders);
     }
 
     [HttpPut("orders/{id:guid}")]

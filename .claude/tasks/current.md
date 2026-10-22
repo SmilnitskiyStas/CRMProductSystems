@@ -1631,3 +1631,9 @@ single-flight refresh + cross-tab lock (`lib/api.ts`), 10 с grace у `AuthServi
 
 ### TASK-749 — Акційні товари без продажів (сповіщення + `/analytics/pos`) — review
 Детектор (3 джерела акцій, пороги в `PromoNoSalesThresholds`), `GET /api/analytics/pos/promo-no-sales`, worker `promo-no-sales` (07:00, дедуп `promo_no_sales_alerts`, міграція `AddPromoNoSalesAlerts`), банер на `/analytics/pos`. Лог: `.claude/logs/tasks/749_*`. Не закомічено.
+
+### TASK-750 — Заявки магазинів на виробництво, backend (Етап 1) — review
+Сутності `ProductionRequest`/`Line`/`ProductionOrderRequestLine` + міграція `AddProductionRequests` (RLS + store_scope), `ProductionRequestService`, `api/production-requests` + `POST api/production/orders/from-requests`, ship через StockTransfer `production_to_store`, нотифікація `production_request.submitted`, фікс `UpdateOrderAsync` (без обходу статусів) і валідація `Location.Type=="production"`. Лог: `.claude/logs/tasks/750_*`. Не закомічено; фронтенд — окремо.
+
+### TASK-751 — Заявки на виробництво, frontend (Етап 1) — review
+`/production/requests`: список + фільтри, форма «Нова заявка» (чернетка/подати), деталі (редагувати/подати/скасувати), для тенантів з модулем production — вкладка «Зведення по товарах» (попередження без рецепта), розгляд (прийняти/змінити кількість з причиною), відхилення, відвантаження, мульти-вибір → «Створити виробничі замовлення». Ордери: neededBy/plannedDate + блок заявок. Sidebar: пункт «Заявки» у групі «Виробництво». Лог: `.claude/logs/tasks/751_*`. tsc+eslint чисті, не закомічено, у браузері не перевірено.

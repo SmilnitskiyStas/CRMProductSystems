@@ -75,7 +75,7 @@ public sealed class TransferService : ITransferService
             return (null, "Source and destination stores must be different.");
 
         if (!IsValidTransferType(request.TransferType))
-            return (null, $"Invalid transfer type '{request.TransferType}'. Valid: store_to_store, cs_to_store, store_to_production.");
+            return (null, $"Invalid transfer type '{request.TransferType}'. Valid: store_to_store, cs_to_store, store_to_production, production_to_store.");
 
         var transfer = new StockTransfer
         {
@@ -274,5 +274,5 @@ public sealed class TransferService : ITransferService
     );
 
     private static bool IsValidTransferType(string? type) =>
-        type is null or "store_to_store" or "cs_to_store" or "store_to_production";
+        type is null or "store_to_store" or "cs_to_store" or "store_to_production" or "production_to_store";
 }

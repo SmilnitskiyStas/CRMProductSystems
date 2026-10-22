@@ -155,7 +155,9 @@ public sealed class ProductionService : IProductionService
             o.PlannedQty,
             o.Status.ToString(),
             o.CreatedAt,
-            o.CompletedAt)).ToList();
+            o.CompletedAt,
+            o.NeededBy,
+            o.PlannedDate)).ToList();
     }
 
     public async Task<ProductionOrderDetailDto?> GetOrderByIdAsync(
@@ -178,6 +180,13 @@ public sealed class ProductionService : IProductionService
         if (!recipe.IsActive)
             return (null, "Cannot create order for inactive recipe.", 409);
 
+        var location = await _repo.GetLocationByIdAsync(dto.LocationId, ct);
+        if (location is null)
+            return (null, "Локацію не знайдено.", 404);
+
+        if (location.Type != "production")
+            return (null, "Виробниче замовлення можна створити лише на виробничій локації.", 422);
+
         var order = new ProductionOrder
         {
             TenantId   = tenantId,
@@ -186,6 +195,8 @@ public sealed class ProductionService : IProductionService
             PlannedQty = dto.PlannedQty,
             Status     = ProductionOrderStatus.Planned,
             Notes      = dto.Notes,
+            NeededBy   = dto.NeededBy,
+            PlannedDate = dto.PlannedDate,
             CreatedBy  = userId,
         };
 
@@ -202,15 +213,24 @@ public sealed class ProductionService : IProductionService
         var order = await _repo.GetOrderByIdAsync(id, ct);
         if (order is null) return (null, "Production order not found.", 404);
 
+        // Status transitions are owned by start / complete / cancel (they enforce preconditions and
+        // FEFO write-down); a PUT must never bypass them.
         if (dto.Status is not null)
         {
             if (!Enum.TryParse<ProductionOrderStatus>(dto.Status, true, out var newStatus))
                 return (null, $"Invalid status value '{dto.Status}'.", 400);
-            order.Status = newStatus;
+            if (newStatus != order.Status)
+                return (null,
+                    "Статус замовлення змінюється лише діями start / complete / cancel, а не через оновлення.",
+                    409);
         }
 
         if (dto.Notes is not null)
             order.Notes = dto.Notes;
+        if (dto.NeededBy.HasValue)
+            order.NeededBy = dto.NeededBy;
+        if (dto.PlannedDate.HasValue)
+            order.PlannedDate = dto.PlannedDate;
 
         order.UpdatedAt = DateTimeOffset.UtcNow;
         _repo.UpdateOrder(order);
@@ -432,5 +452,12 @@ public sealed class ProductionService : IProductionService
                 c.Item?.Name ?? string.Empty,
                 c.QtyConsumed,
                 c.ProductStock?.BatchNumber,
-                c.ConsumedAt)).ToList());
+                c.ConsumedAt)).ToList(),
+            o.NeededBy,
+            o.PlannedDate,
+            o.RequestLines.Select(l => new ProductionOrderRequestRefDto(
+                l.RequestLine?.RequestId ?? Guid.Empty,
+                l.RequestLineId,
+                l.RequestLine?.Request?.StoreLocation?.Name ?? string.Empty,
+                l.Qty)).ToList());
 }

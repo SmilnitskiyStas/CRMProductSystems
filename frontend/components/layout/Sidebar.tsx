@@ -231,6 +231,8 @@ export function buildNavGroups(t: SidebarGroupsT): NavGroup[] {
     items: [
       { href: "/production/recipes", label: t("production.recipes"), icon: <FlaskConical size={16} />, roles: AT_LEAST_STORE_MANAGER },
       { href: "/production/orders",  label: t("production.orders"),  icon: <ListOrdered size={16} />,  roles: AT_LEAST_STORE_MANAGER },
+      // Store -> production requests (backend: stores order, production module reviews/ships).
+      { href: "/production/requests", label: t("production.requests"), icon: <ClipboardList size={16} />, roles: AT_LEAST_STORE_MANAGER },
     ],
   },
   {

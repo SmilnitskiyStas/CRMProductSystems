@@ -11,6 +11,15 @@ import type {
   ProductionOrderUpdateDto,
   ProductionCompleteResultDto,
   ItemSlimDto,
+  ProductionRequestListItemDto,
+  ProductionRequestDetailDto,
+  ProductionRequestFilters,
+  ProductionRequestCreateDto,
+  ProductionRequestUpdateDto,
+  ProductionRequestReviewDto,
+  ProductionRequestSummaryItemDto,
+  OrdersFromRequestsDto,
+  OrderFromRequestResultDto,
 } from "../types";
 import type { LocationDto } from "@/features/locations/types";
 
@@ -68,6 +77,60 @@ export const productionApi = {
   /** POST /api/production/orders/{id}/cancel */
   cancelOrder: (id: string) =>
     api.post<void>(`/api/production/orders/${id}/cancel`),
+
+  /** POST /api/production/orders/from-requests */
+  createOrdersFromRequests: (body: OrdersFromRequestsDto) =>
+    api.post<OrderFromRequestResultDto[]>(
+      "/api/production/orders/from-requests",
+      body
+    ),
+
+  // ── Store requests ─────────────────────────────────────────────────────────
+
+  /** GET /api/production-requests */
+  getRequests: (f: ProductionRequestFilters = {}) => {
+    const qs = new URLSearchParams();
+    for (const [k, v] of Object.entries(f)) if (v) qs.set(k, v);
+    const q = qs.toString();
+    return api.get<ProductionRequestListItemDto[]>(
+      `/api/production-requests${q ? `?${q}` : ""}`
+    );
+  },
+
+  getRequest: (id: string) =>
+    api.get<ProductionRequestDetailDto>(`/api/production-requests/${id}`),
+
+  createRequest: (body: ProductionRequestCreateDto) =>
+    api.post<ProductionRequestDetailDto>("/api/production-requests", body),
+
+  updateRequest: (id: string, body: ProductionRequestUpdateDto) =>
+    api.put<ProductionRequestDetailDto>(`/api/production-requests/${id}`, body),
+
+  submitRequest: (id: string) =>
+    api.post<ProductionRequestDetailDto>(`/api/production-requests/${id}/submit`),
+
+  cancelRequest: (id: string) =>
+    api.post<ProductionRequestDetailDto>(`/api/production-requests/${id}/cancel`),
+
+  /** Production module only. */
+  getRequestSummary: (productionLocationId?: string, status?: string) => {
+    const qs = new URLSearchParams();
+    if (productionLocationId) qs.set("productionLocationId", productionLocationId);
+    if (status) qs.set("status", status);
+    const q = qs.toString();
+    return api.get<ProductionRequestSummaryItemDto[]>(
+      `/api/production-requests/summary${q ? `?${q}` : ""}`
+    );
+  },
+
+  reviewRequest: (id: string, body: ProductionRequestReviewDto) =>
+    api.post<ProductionRequestDetailDto>(`/api/production-requests/${id}/review`, body),
+
+  rejectRequest: (id: string, reason: string) =>
+    api.post<ProductionRequestDetailDto>(`/api/production-requests/${id}/reject`, { reason }),
+
+  shipRequest: (id: string) =>
+    api.post<ProductionRequestDetailDto>(`/api/production-requests/${id}/ship`),
 
   // ── Selectors ─────────────────────────────────────────────────────────────
 

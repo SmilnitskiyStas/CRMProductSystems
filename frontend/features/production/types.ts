@@ -66,6 +66,9 @@ export interface ProductionOrderListItemDto {
   status: ProductionOrderStatus;
   createdAt: string;
   completedAt: string | null;
+  /** "yyyy-MM-dd" — when the output is needed (from store requests). */
+  neededBy?: string | null;
+  plannedDate?: string | null;
 }
 
 export interface ProductionConsumptionDto {
@@ -88,6 +91,16 @@ export interface ProductionOrderDetailDto {
   startedAt: string | null;
   completedAt: string | null;
   consumptions: ProductionConsumptionDto[];
+  neededBy?: string | null;
+  plannedDate?: string | null;
+  requests?: ProductionOrderRequestRefDto[] | null;
+}
+
+export interface ProductionOrderRequestRefDto {
+  requestId: string;
+  requestLineId: string;
+  storeLocationName: string;
+  qty: number;
 }
 
 export interface ProductionOrderCreateDto {
@@ -115,4 +128,107 @@ export interface ItemSlimDto {
   id: string;
   name: string;
   unit: string;
+}
+
+// ─── Store → production requests ──────────────────────────────────────────────
+
+export type ProductionRequestStatus =
+  | "draft"
+  | "submitted"
+  | "accepted"
+  | "partial"
+  | "rejected"
+  | "fulfilled"
+  | "cancelled";
+
+export interface ProductionRequestListItemDto {
+  id: string;
+  storeLocationId: string;
+  storeLocationName: string;
+  productionLocationId: string;
+  productionLocationName: string;
+  neededBy: string;
+  status: ProductionRequestStatus;
+  source: string;
+  lineCount: number;
+  totalRequestedQty: number;
+  totalAcceptedQty: number | null;
+  createdAt: string;
+  submittedAt: string | null;
+}
+
+export interface ProductionRequestLineDto {
+  id: string;
+  itemId: string;
+  itemName: string;
+  unit: string;
+  requestedQty: number;
+  acceptedQty: number | null;
+  reason: string | null;
+}
+
+export interface ProductionRequestDetailDto
+  extends Omit<ProductionRequestListItemDto, "lineCount" | "totalRequestedQty" | "totalAcceptedQty"> {
+  notes: string | null;
+  reviewNote: string | null;
+  reviewedAt: string | null;
+  shippedAt: string | null;
+  shipmentTransferId: string | null;
+  shipmentStatus: string | null;
+  lines: ProductionRequestLineDto[];
+}
+
+export interface ProductionRequestFilters {
+  storeLocationId?: string;
+  productionLocationId?: string;
+  /** Comma-separated statuses. */
+  status?: string;
+  neededFrom?: string;
+  neededTo?: string;
+}
+
+export interface ProductionRequestCreateDto {
+  storeLocationId: string;
+  productionLocationId: string;
+  neededBy: string;
+  notes?: string;
+  lines: { itemId: string; requestedQty: number }[];
+  submit?: boolean;
+}
+
+export interface ProductionRequestUpdateDto {
+  neededBy?: string;
+  notes?: string;
+  lines?: { itemId: string; requestedQty: number }[];
+}
+
+export interface ProductionRequestReviewDto {
+  lines: { lineId: string; acceptedQty: number; reason?: string }[];
+  note?: string;
+}
+
+export interface ProductionRequestSummaryItemDto {
+  itemId: string;
+  itemName: string;
+  unit: string;
+  requestCount: number;
+  requestedQty: number;
+  qtyToProduce: number;
+  hasRecipe: boolean;
+  earliestNeededBy: string | null;
+}
+
+export interface OrdersFromRequestsDto {
+  requestIds: string[];
+  plannedDate?: string;
+  notes?: string;
+}
+
+export interface OrderFromRequestResultDto {
+  orderId: string;
+  itemId: string;
+  itemName: string;
+  recipeName: string;
+  plannedQty: number;
+  requestLineCount: number;
 }

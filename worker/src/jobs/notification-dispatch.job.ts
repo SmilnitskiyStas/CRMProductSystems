@@ -38,6 +38,13 @@ const DISPATCH_EVENT_ROLES: Record<string, { roles: string[]; channels: string[]
     roles: ["merchandiser", "store_manager", "network_manager", "enterprise_admin"],
     channels: ["telegram", "push"],
   },
+  // Store -> production request submitted (ProductionRequestService.SubmitAsync). StoreId on the
+  // outbox row = the production location. storekeeper is included: it is the warehouse/production
+  // staff role that can review and ship requests (CanReceiveStock).
+  "production_request.submitted": {
+    roles: ["storekeeper", "store_manager", "network_manager", "enterprise_admin"],
+    channels: ["telegram", "push"],
+  },
   "supplier.message": {
     roles: ["store_manager", "network_manager", "enterprise_admin"],
     channels: ["telegram", "push"],
@@ -131,6 +138,7 @@ function formatText(row: PendingIntentRow): string {
 
   const icons: Record<string, string> = {
     "receipt.created": "📦",
+    "production_request.submitted": "🏭",
     "supplier.message": "💬",
     "supplier_agreement.signed": "✍️",
     "supplier_support_ticket.opened": "⚠️",

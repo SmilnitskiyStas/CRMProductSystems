@@ -92,6 +92,10 @@ public sealed class ProductionRepository : IProductionRepository
            .Include(o => o.Location)
            .Include(o => o.Consumptions)
                .ThenInclude(c => c.Item)
+           .Include(o => o.RequestLines)
+               .ThenInclude(l => l.RequestLine!)
+                   .ThenInclude(rl => rl.Request!)
+                       .ThenInclude(r => r.StoreLocation)
            .FirstOrDefaultAsync(o => o.Id == id, ct);
 
     public Task AddOrderAsync(ProductionOrder order, CancellationToken ct = default) =>
@@ -109,6 +113,9 @@ public sealed class ProductionRepository : IProductionRepository
 
     public Task<Item?> GetItemByIdAsync(Guid itemId, CancellationToken ct = default) =>
         _db.Items.FirstOrDefaultAsync(i => i.Id == itemId, ct);
+
+    public Task<Location?> GetLocationByIdAsync(Guid locationId, CancellationToken ct = default) =>
+        _db.Locations.FirstOrDefaultAsync(l => l.Id == locationId, ct);
 
     public async Task<List<ProductStock>> GetFefoOrderedAsync(
         Guid itemId, Guid locationId, CancellationToken ct = default) =>

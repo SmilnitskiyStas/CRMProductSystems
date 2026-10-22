@@ -4321,8 +4321,14 @@ namespace ShelfGuard.Infrastructure.Migrations
                     b.Property<Guid>("LocationId")
                         .HasColumnType("uuid");
 
+                    b.Property<DateOnly?>("NeededBy")
+                        .HasColumnType("date");
+
                     b.Property<string>("Notes")
                         .HasColumnType("text");
+
+                    b.Property<DateOnly?>("PlannedDate")
+                        .HasColumnType("date");
 
                     b.Property<decimal>("PlannedQty")
                         .HasColumnType("numeric(10,3)");
@@ -4396,6 +4402,155 @@ namespace ShelfGuard.Infrastructure.Migrations
                     b.HasIndex("ProductionOrderId");
 
                     b.ToTable("production_order_consumptions", (string)null);
+                });
+
+            modelBuilder.Entity("ShelfGuard.Domain.Entities.ProductionOrderRequestLine", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("ProductionOrderId")
+                        .HasColumnType("uuid");
+
+                    b.Property<decimal>("Qty")
+                        .HasColumnType("numeric(10,3)");
+
+                    b.Property<Guid>("RequestLineId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RequestLineId")
+                        .HasDatabaseName("idx_production_order_request_lines_line");
+
+                    b.HasIndex("TenantId")
+                        .HasDatabaseName("idx_production_order_request_lines_tenant");
+
+                    b.HasIndex("ProductionOrderId", "RequestLineId")
+                        .IsUnique()
+                        .HasDatabaseName("ux_production_order_request_lines_pair");
+
+                    b.ToTable("production_order_request_lines", (string)null);
+                });
+
+            modelBuilder.Entity("ShelfGuard.Domain.Entities.ProductionRequest", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("NOW()");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateOnly>("NeededBy")
+                        .HasColumnType("date");
+
+                    b.Property<string>("Notes")
+                        .HasColumnType("text");
+
+                    b.Property<Guid>("ProductionLocationId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ReviewNote")
+                        .HasColumnType("text");
+
+                    b.Property<DateTime?>("ReviewedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("ReviewedBy")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("ShipmentTransferId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("ShippedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Source")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasDefaultValue("manual");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasDefaultValue("draft");
+
+                    b.Property<Guid>("StoreLocationId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("SubmittedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("NOW()");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ShipmentTransferId");
+
+                    b.HasIndex("TenantId")
+                        .HasDatabaseName("idx_production_requests_tenant");
+
+                    b.HasIndex("ProductionLocationId", "Status")
+                        .HasDatabaseName("idx_production_requests_prod_status");
+
+                    b.HasIndex("StoreLocationId", "Status")
+                        .HasDatabaseName("idx_production_requests_store_status");
+
+                    b.ToTable("production_requests", (string)null);
+                });
+
+            modelBuilder.Entity("ShelfGuard.Domain.Entities.ProductionRequestLine", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<decimal?>("AcceptedQty")
+                        .HasColumnType("numeric(10,3)");
+
+                    b.Property<Guid>("ItemId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Reason")
+                        .HasColumnType("text");
+
+                    b.Property<Guid>("RequestId")
+                        .HasColumnType("uuid");
+
+                    b.Property<decimal>("RequestedQty")
+                        .HasColumnType("numeric(10,3)");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ItemId");
+
+                    b.HasIndex("RequestId")
+                        .HasDatabaseName("idx_production_request_lines_request");
+
+                    b.HasIndex("TenantId")
+                        .HasDatabaseName("idx_production_request_lines_tenant");
+
+                    b.ToTable("production_request_lines", (string)null);
                 });
 
             modelBuilder.Entity("ShelfGuard.Domain.Entities.PromoCannibalization", b =>
@@ -9186,6 +9341,76 @@ namespace ShelfGuard.Infrastructure.Migrations
                     b.Navigation("ProductionOrder");
                 });
 
+            modelBuilder.Entity("ShelfGuard.Domain.Entities.ProductionOrderRequestLine", b =>
+                {
+                    b.HasOne("ShelfGuard.Domain.Entities.ProductionOrder", "ProductionOrder")
+                        .WithMany("RequestLines")
+                        .HasForeignKey("ProductionOrderId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("ShelfGuard.Domain.Entities.ProductionRequestLine", "RequestLine")
+                        .WithMany()
+                        .HasForeignKey("RequestLineId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("ProductionOrder");
+
+                    b.Navigation("RequestLine");
+                });
+
+            modelBuilder.Entity("ShelfGuard.Domain.Entities.ProductionRequest", b =>
+                {
+                    b.HasOne("ShelfGuard.Domain.Entities.Location", "ProductionLocation")
+                        .WithMany()
+                        .HasForeignKey("ProductionLocationId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("ShelfGuard.Domain.Entities.StockTransfer", "ShipmentTransfer")
+                        .WithMany()
+                        .HasForeignKey("ShipmentTransferId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("ShelfGuard.Domain.Entities.Location", "StoreLocation")
+                        .WithMany()
+                        .HasForeignKey("StoreLocationId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("ShelfGuard.Domain.Entities.Tenant", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("ProductionLocation");
+
+                    b.Navigation("ShipmentTransfer");
+
+                    b.Navigation("StoreLocation");
+                });
+
+            modelBuilder.Entity("ShelfGuard.Domain.Entities.ProductionRequestLine", b =>
+                {
+                    b.HasOne("ShelfGuard.Domain.Entities.Item", "Item")
+                        .WithMany()
+                        .HasForeignKey("ItemId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("ShelfGuard.Domain.Entities.ProductionRequest", "Request")
+                        .WithMany("Lines")
+                        .HasForeignKey("RequestId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Item");
+
+                    b.Navigation("Request");
+                });
+
             modelBuilder.Entity("ShelfGuard.Domain.Entities.PromoCannibalization", b =>
                 {
                     b.HasOne("ShelfGuard.Domain.Entities.Item", "AffectedProduct")
@@ -10344,6 +10569,13 @@ namespace ShelfGuard.Infrastructure.Migrations
             modelBuilder.Entity("ShelfGuard.Domain.Entities.ProductionOrder", b =>
                 {
                     b.Navigation("Consumptions");
+
+                    b.Navigation("RequestLines");
+                });
+
+            modelBuilder.Entity("ShelfGuard.Domain.Entities.ProductionRequest", b =>
+                {
+                    b.Navigation("Lines");
                 });
 
             modelBuilder.Entity("ShelfGuard.Domain.Entities.PromotionCampaign", b =>
