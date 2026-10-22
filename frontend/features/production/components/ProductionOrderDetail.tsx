@@ -13,6 +13,7 @@ import {
 import { OrderStatusBadge } from "./ProductionOrderTable";
 import { ApiError } from "@/lib/api";
 import { Table, type TableColumn } from "@/components/ui/Table";
+import { Btn } from "@/components/ui/Btn";
 import type { ProductionConsumptionDto, ProductionOrderRequestRefDto } from "../types";
 import { formatDateOnly } from "./ProductionRequestStatusBadge";
 
@@ -51,14 +52,14 @@ export function ProductionOrderDetail({ id }: Props) {
 
   if (isLoading) {
     return (
-      <div style={{ padding: "48px 32px", color: "#6B7280", fontSize: 14 }}>
+      <div style={{ padding: "28px 32px", color: "#6B7280", fontSize: 13 }}>
         {tCommon("loading")}
       </div>
     );
   }
   if (isError || !order) {
     return (
-      <div style={{ padding: "48px 32px", color: "#F87171", fontSize: 14 }}>
+      <div style={{ padding: "28px 32px", color: "#F87171", fontSize: 13 }}>
         {t("loadError")}
       </div>
     );
@@ -167,41 +168,23 @@ export function ProductionOrderDetail({ id }: Props) {
   ];
 
   return (
-    <div>
+    <div style={{ display: "flex", flexDirection: "column", gap: 20, padding: "28px 32px", maxWidth: 900 }}>
       {/* Back navigation */}
-      <div
-        style={{
-          padding: "16px 32px 0",
-          borderBottom: "1px solid #1F2937",
-        }}
-      >
+      <div>
         <button
           onClick={() => router.push("/production/orders")}
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 8,
-            background: "transparent",
-            border: "none",
-            color: "#6B7280",
-            fontSize: 13,
-            cursor: "pointer",
-            padding: "6px 0",
-          }}
+          style={{ background: "transparent", border: "none", color: "#9CA3AF", cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 6, fontSize: 13, padding: 0 }}
         >
-          <ArrowLeft size={14} />
-          {t("backToOrders")}
+          <ArrowLeft size={15} /> {t("backToOrders")}
         </button>
       </div>
 
-      <div style={{ padding: "28px 32px", maxWidth: 900 }}>
         {/* Header */}
         <div
           style={{
             display: "flex",
             alignItems: "flex-start",
             justifyContent: "space-between",
-            marginBottom: 24,
             gap: 16,
             flexWrap: "wrap",
           }}
@@ -266,33 +249,21 @@ export function ProductionOrderDetail({ id }: Props) {
           {!isReadOnly && (
             <div style={{ display: "flex", gap: 10, flexShrink: 0 }}>
               {status === "planned" && (
-                <button
-                  onClick={handleStart}
-                  disabled={anyPending}
-                  style={btnStyle("#1E3A5F", "#60A5FA")}
-                >
+                <Btn onClick={handleStart} disabled={anyPending}>
                   {startOrder.isPending ? t("starting") : t("start")}
-                </button>
+                </Btn>
               )}
 
               {status === "in_progress" && (
-                <button
-                  onClick={handleComplete}
-                  disabled={anyPending}
-                  style={btnStyle("#064E3B", "#34D399")}
-                >
+                <Btn variant="success" onClick={handleComplete} disabled={anyPending}>
                   {completeOrder.isPending ? t("completing") : t("complete")}
-                </button>
+                </Btn>
               )}
 
               {(status === "planned" || status === "in_progress") && (
-                <button
-                  onClick={handleCancel}
-                  disabled={anyPending}
-                  style={btnStyle("#1F1010", "#F87171")}
-                >
+                <Btn variant="danger" onClick={handleCancel} disabled={anyPending}>
                   {cancelOrder.isPending ? t("cancelling") : t("cancel")}
-                </button>
+                </Btn>
               )}
             </div>
           )}
@@ -302,7 +273,6 @@ export function ProductionOrderDetail({ id }: Props) {
         {successInfo && (
           <div
             style={{
-              marginBottom: 20,
               padding: "14px 18px",
               background: "#064E3B",
               border: "1px solid #065F46",
@@ -327,7 +297,6 @@ export function ProductionOrderDetail({ id }: Props) {
         {insufficientStock && (
           <div
             style={{
-              marginBottom: 20,
               padding: "14px 18px",
               background: "#1F1010",
               border: "1px solid #7F1D1D",
@@ -357,7 +326,6 @@ export function ProductionOrderDetail({ id }: Props) {
         {actionError && (
           <div
             style={{
-              marginBottom: 20,
               padding: "14px 18px",
               background: "#1F1010",
               border: "1px solid #7F1D1D",
@@ -378,7 +346,6 @@ export function ProductionOrderDetail({ id }: Props) {
               border: "1px solid #1F2937",
               borderRadius: 10,
               padding: 16,
-              marginBottom: 20,
               display: "flex",
               flexDirection: "column",
               gap: 12,
@@ -436,7 +403,6 @@ export function ProductionOrderDetail({ id }: Props) {
             {t("consumptionsEmpty")}
           </div>
         )}
-      </div>
     </div>
   );
 }
@@ -451,18 +417,4 @@ function formatDateTime(iso: string, intlLocale: string) {
     hour: "2-digit",
     minute: "2-digit",
   });
-}
-
-function btnStyle(bg: string, color: string): React.CSSProperties {
-  return {
-    padding: "9px 18px",
-    borderRadius: 8,
-    border: "none",
-    background: bg,
-    color,
-    fontSize: 13,
-    fontWeight: 600,
-    cursor: "pointer",
-    whiteSpace: "nowrap",
-  };
 }

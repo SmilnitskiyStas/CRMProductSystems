@@ -37,28 +37,29 @@ export default function RecipesPage() {
 
   return (
     <div style={{ padding: "28px 32px" }}>
-      {/* Show inactive toggle */}
-      <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 16 }}>
-        <label
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 8,
-            color: "#9CA3AF",
-            fontSize: 13,
-            cursor: "pointer",
-          }}
-        >
-          <input
-            type="checkbox"
-            checked={showInactive}
-            onChange={(e) => setShowInactive(e.target.checked)}
-            style={{ cursor: "pointer" }}
-          />
-          {tPage("showInactive")}
-        </label>
-      </div>
-      <RecipeTable showInactive={showInactive} />
+      <RecipeTable
+        showInactive={showInactive}
+        toolbarExtra={
+          <label
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              color: "#9CA3AF",
+              fontSize: 13,
+              cursor: "pointer",
+            }}
+          >
+            <input
+              type="checkbox"
+              checked={showInactive}
+              onChange={(e) => setShowInactive(e.target.checked)}
+              style={{ cursor: "pointer" }}
+            />
+            {tPage("showInactive")}
+          </label>
+        }
+      />
     </div>
   );
 }

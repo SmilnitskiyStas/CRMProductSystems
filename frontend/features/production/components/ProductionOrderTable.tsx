@@ -8,6 +8,7 @@ import { useProductionOrders } from "../hooks/useProduction";
 import { ProductionOrderForm } from "./ProductionOrderForm";
 import type { ProductionOrderListItemDto, ProductionOrderStatus } from "../types";
 import { Table, type TableColumn } from "@/components/ui/Table";
+import { Btn } from "@/components/ui/Btn";
 import { formatDateOnly } from "./ProductionRequestStatusBadge";
 
 export function ProductionOrderTable() {
@@ -30,16 +31,9 @@ export function ProductionOrderTable() {
     statusFilter || undefined
   );
 
-  if (isLoading) {
-    return (
-      <div style={{ padding: "48px 32px", color: "#6B7280", fontSize: 14 }}>
-        {t("loading")}
-      </div>
-    );
-  }
   if (isError) {
     return (
-      <div style={{ padding: "48px 32px", color: "#F87171", fontSize: 14 }}>
+      <div style={{ padding: "28px 32px", color: "#F87171", fontSize: 13 }}>
         {t("loadError")}
       </div>
     );
@@ -94,63 +88,37 @@ export function ProductionOrderTable() {
   ];
 
   return (
-    <div>
-      {/* Toolbar */}
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          marginBottom: 20,
-          gap: 16,
-          flexWrap: "wrap",
-        }}
-      >
-        <h1 style={{ color: "#E8EDF5", fontSize: 20, fontWeight: 700, margin: 0 }}>
-          {t("title")}
-        </h1>
-        <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-          {/* Status filter */}
-          <select
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-            style={{
-              padding: "7px 12px",
-              background: "#0D1117",
-              border: "1px solid #374151",
-              borderRadius: 8,
-              color: "#9CA3AF",
-              fontSize: 13,
-              cursor: "pointer",
-            }}
-          >
-            {STATUS_OPTIONS.map((opt) => (
-              <option key={opt.value} value={opt.value}>
-                {opt.label}
-              </option>
-            ))}
-          </select>
+    <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+      {/* Header */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 16, flexWrap: "wrap" }}>
+        <h1 style={{ color: "#E8EDF5", fontSize: 22, fontWeight: 700, margin: 0 }}>{t("title")}</h1>
+        <Btn icon={<Plus size={15} />} onClick={() => setCreateOpen(true)}>
+          {t("addOrder")}
+        </Btn>
+      </div>
 
-          <button
-            onClick={() => setCreateOpen(true)}
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 6,
-              padding: "8px 16px",
-              borderRadius: 8,
-              border: "none",
-              background: "#3B82F6",
-              color: "#fff",
-              fontSize: 13,
-              fontWeight: 600,
-              cursor: "pointer",
-            }}
-          >
-            <Plus size={15} />
-            {t("addOrder")}
-          </button>
-        </div>
+      {/* Filters */}
+      <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
+        <select
+          value={statusFilter}
+          onChange={(e) => setStatusFilter(e.target.value)}
+          style={{
+            background: "#111827",
+            border: "1px solid #1F2937",
+            borderRadius: 8,
+            color: "#E8EDF5",
+            fontSize: 13,
+            padding: "7px 12px",
+            outline: "none",
+            cursor: "pointer",
+          }}
+        >
+          {STATUS_OPTIONS.map((opt) => (
+            <option key={opt.value} value={opt.value}>
+              {opt.label}
+            </option>
+          ))}
+        </select>
       </div>
 
       {/* Table */}
@@ -159,7 +127,8 @@ export function ProductionOrderTable() {
         rows={orders}
         rowKey={(order) => order.id}
         onRowClick={(order) => router.push(`/production/orders/${order.id}`)}
-        emptyMessage={t("empty")}
+        isLoading={isLoading}
+        emptyMessage={isLoading ? t("loading") : t("empty")}
       />
 
       {createOpen && <ProductionOrderForm onClose={() => setCreateOpen(false)} />}
@@ -182,9 +151,9 @@ export function OrderStatusBadge({ status }: { status: ProductionOrderStatus }) 
     <span
       style={{
         display: "inline-block",
-        padding: "3px 10px",
-        borderRadius: 12,
-        fontSize: 12,
+        padding: "3px 8px",
+        borderRadius: 20,
+        fontSize: 11,
         fontWeight: 600,
         background: bg,
         color,

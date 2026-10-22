@@ -7,12 +7,16 @@ import { useRecipes, useDeactivateRecipe } from "../hooks/useProduction";
 import { RecipeForm } from "./RecipeForm";
 import type { RecipeListItemDto } from "../types";
 import { Table, type TableColumn } from "@/components/ui/Table";
+import { Btn } from "@/components/ui/Btn";
+import { ActionMenu } from "@/components/ui/ActionMenu";
 
 interface Props {
   showInactive: boolean;
+  /** Extra toolbar content (e.g. the "show inactive" toggle) rendered next to the add button. */
+  toolbarExtra?: React.ReactNode;
 }
 
-export function RecipeTable({ showInactive }: Props) {
+export function RecipeTable({ showInactive, toolbarExtra }: Props) {
   const t = useTranslations("Dashboard.production.recipeTable");
   const { data: recipes = [], isLoading, isError } = useRecipes(showInactive);
   const deactivate = useDeactivateRecipe();
@@ -49,11 +53,11 @@ export function RecipeTable({ showInactive }: Props) {
         <span
           style={{
             display: "inline-block",
-            padding: "2px 8px",
-            borderRadius: 12,
+            padding: "3px 8px",
+            borderRadius: 20,
             background: "#1F2937",
             color: "#9CA3AF",
-            fontSize: 12,
+            fontSize: 11,
           }}
         >
           {recipe.ingredientCount}
@@ -69,76 +73,45 @@ export function RecipeTable({ showInactive }: Props) {
       key: "actions",
       header: "",
       render: (recipe) => (
-        <div style={{ display: "flex", justifyContent: "center", gap: 6 }}>
-          <ActionButton
-            onClick={() => setEditRecipe(recipe)}
-            title={t("editTitle")}
-            color="#9CA3AF"
-          >
-            <Pencil size={14} />
-          </ActionButton>
-          {recipe.isActive && (
-            <ActionButton
-              onClick={() => handleDeactivate(recipe.id)}
-              title={t("deactivateTitle")}
-              color="#F87171"
-            >
-              <PowerOff size={14} />
-            </ActionButton>
-          )}
-        </div>
+        <ActionMenu
+          items={[
+            { label: t("editTitle"), icon: <Pencil size={13} />, onClick: () => setEditRecipe(recipe) },
+            ...(recipe.isActive
+              ? [
+                  { separator: true },
+                  {
+                    label: t("deactivateTitle"),
+                    icon: <PowerOff size={13} />,
+                    variant: "danger" as const,
+                    onClick: () => handleDeactivate(recipe.id),
+                  },
+                ]
+              : []),
+          ]}
+        />
       ),
     },
   ];
 
-  if (isLoading) {
-    return (
-      <div style={{ padding: "48px 32px", color: "#6B7280", fontSize: 14 }}>
-        {t("loading")}
-      </div>
-    );
-  }
   if (isError) {
     return (
-      <div style={{ padding: "48px 32px", color: "#F87171", fontSize: 14 }}>
+      <div style={{ padding: "28px 32px", color: "#F87171", fontSize: 13 }}>
         {t("loadError")}
       </div>
     );
   }
 
   return (
-    <div>
-      {/* Toolbar */}
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          marginBottom: 20,
-        }}
-      >
-        <h1 style={{ color: "#E8EDF5", fontSize: 20, fontWeight: 700, margin: 0 }}>
-          {t("title")}
-        </h1>
-        <button
-          onClick={() => setCreateOpen(true)}
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 6,
-            padding: "8px 16px",
-            borderRadius: 8,
-            border: "none",
-            background: "#3B82F6",
-            color: "#fff",
-            fontSize: 13,
-            fontWeight: 600,
-            cursor: "pointer",
-          }}
-        >
-          <Plus size={15} />
-          {t("addRecipe")}
-        </button>
+    <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+      {/* Header */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 16, flexWrap: "wrap" }}>
+        <h1 style={{ color: "#E8EDF5", fontSize: 22, fontWeight: 700, margin: 0 }}>{t("title")}</h1>
+        <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+          {toolbarExtra}
+          <Btn icon={<Plus size={15} />} onClick={() => setCreateOpen(true)}>
+            {t("addRecipe")}
+          </Btn>
+        </div>
       </div>
 
       {/* Table */}
@@ -146,7 +119,8 @@ export function RecipeTable({ showInactive }: Props) {
         columns={columns}
         rows={recipes}
         rowKey={(recipe) => recipe.id}
-        emptyMessage={t("empty")}
+        isLoading={isLoading}
+        emptyMessage={isLoading ? t("loading") : t("empty")}
       />
 
       {/* Create modal */}
@@ -171,9 +145,9 @@ function StatusBadge({ active }: { active: boolean }) {
     <span
       style={{
         display: "inline-block",
-        padding: "3px 10px",
-        borderRadius: 12,
-        fontSize: 12,
+        padding: "3px 8px",
+        borderRadius: 20,
+        fontSize: 11,
         fontWeight: 600,
         background: active ? "#064E3B" : "#1F2937",
         color: active ? "#34D399" : "#6B7280",
@@ -181,36 +155,5 @@ function StatusBadge({ active }: { active: boolean }) {
     >
       {active ? t("statusActive") : t("statusInactive")}
     </span>
-  );
-}
-
-function ActionButton({
-  onClick,
-  title,
-  color,
-  children,
-}: {
-  onClick: () => void;
-  title: string;
-  color: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      title={title}
-      style={{
-        background: "transparent",
-        border: "1px solid #1F2937",
-        borderRadius: 6,
-        color,
-        cursor: "pointer",
-        padding: "5px 8px",
-        display: "flex",
-        alignItems: "center",
-      }}
-    >
-      {children}
-    </button>
   );
 }

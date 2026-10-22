@@ -7,6 +7,7 @@ import { useTranslations, useLocale } from "next-intl";
 import { toast } from "sonner";
 import { ChevronDown, ChevronRight, RefreshCw } from "lucide-react";
 import { Btn } from "@/components/ui/Btn";
+import { Table, type TableColumn } from "@/components/ui/Table";
 import { useMe } from "@/features/auth/hooks/useAuth";
 import { useAutoDrafts, useAutoDraftActions } from "../hooks/useAutoDrafts";
 import type { ReceiptDto, ReceiptItemDto } from "@/features/receipts/types";
@@ -19,8 +20,6 @@ const card: React.CSSProperties = {
   borderRadius: 10,
   padding: "12px 16px",
 };
-const th: React.CSSProperties = { textAlign: "left", color: "#6B7280", fontSize: 11, textTransform: "uppercase", padding: "6px 8px" };
-const td: React.CSSProperties = { color: "#E8EDF5", fontSize: 13, padding: "6px 8px", borderTop: "1px solid #1F2937" };
 
 function QtyInput({
   item, disabled, onSave,
@@ -36,8 +35,8 @@ function QtyInput({
       type="number" min={0} step="any" value={value} disabled={disabled}
       onChange={(e) => setValue(e.target.value)} onBlur={commit}
       style={{
-        width: 90, background: "#0A0F1A", border: "1px solid #1F2937", borderRadius: 6,
-        color: "#E8EDF5", padding: "4px 8px", fontSize: 13, opacity: disabled ? 0.5 : 1,
+        width: 90, background: "#111827", border: "1px solid #1F2937", borderRadius: 8,
+        color: "#E8EDF5", padding: "4px 10px", fontSize: 13, outline: "none", opacity: disabled ? 0.5 : 1,
       }}
     />
   );
@@ -61,6 +60,37 @@ function DraftCard({ draft, meId, meRole }: { draft: ReceiptDto; meId?: string; 
     ? t("takenByOther", { name: draft.takenByName ?? "—" })
     : !draft.takenByUserId ? t("takeToEdit") : null;
 
+  const lineColumns: TableColumn<ReceiptItemDto>[] = [
+    { key: "item", header: t("colItem"), cellStyle: { color: "#E8EDF5", fontWeight: 500 }, render: (i) => i.productName },
+    {
+      key: "qty",
+      header: t("colQty"),
+      render: (i) => (
+        <QtyInput
+          key={`${i.id}-${i.quantityOrdered}`} item={i}
+          disabled={!canEdit || saveQuantity.isPending}
+          onSave={(qty) => saveQuantity.mutate(
+            { receiptId: draft.id, item: { itemId: i.id, quantityOrdered: qty, quantityReceived: i.quantityReceived } },
+            { onSuccess: () => toast.success(t("toastSaved")), onError: fail },
+          )}
+        />
+      ),
+    },
+    {
+      key: "price",
+      header: t("colPrice"),
+      render: (i) => (i.pricePurchase != null ? i.pricePurchase.toLocaleString(intl, { maximumFractionDigits: 2 }) : "—"),
+    },
+    {
+      key: "amount",
+      header: t("colAmount"),
+      render: (i) =>
+        i.pricePurchase != null
+          ? (i.quantityOrdered * i.pricePurchase).toLocaleString(intl, { maximumFractionDigits: 0 })
+          : "—",
+    },
+  ];
+
   return (
     <div style={card}>
       <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
@@ -77,7 +107,7 @@ function DraftCard({ draft, meId, meRole }: { draft: ReceiptDto; meId?: string; 
           {total.toLocaleString(intl, { maximumFractionDigits: 0 })} ₴
         </span>
         <span style={{
-          fontSize: 11, padding: "2px 8px", borderRadius: 999,
+          fontSize: 11, fontWeight: 600, padding: "3px 8px", borderRadius: 20,
           background: draft.takenByUserId ? "#1C2A3A" : "#111827",
           color: draft.takenByUserId ? "#60A5FA" : "#9CA3AF",
         }}>
@@ -116,37 +146,7 @@ function DraftCard({ draft, meId, meRole }: { draft: ReceiptDto; meId?: string; 
       {open && (
         <div style={{ marginTop: 10 }}>
           {hint && <div style={{ color: "#F59E0B", fontSize: 12, marginBottom: 8 }}>{hint}</div>}
-          <table style={{ width: "100%", borderCollapse: "collapse" }}>
-            <thead>
-              <tr>
-                <th style={th}>{t("colItem")}</th><th style={th}>{t("colQty")}</th>
-                <th style={th}>{t("colPrice")}</th><th style={th}>{t("colAmount")}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {draft.items.map((i) => (
-                <tr key={i.id}>
-                  <td style={td}>{i.productName}</td>
-                  <td style={td}>
-                    <QtyInput
-                      key={`${i.id}-${i.quantityOrdered}`} item={i}
-                      disabled={!canEdit || saveQuantity.isPending}
-                      onSave={(qty) => saveQuantity.mutate(
-                        { receiptId: draft.id, item: { itemId: i.id, quantityOrdered: qty, quantityReceived: i.quantityReceived } },
-                        { onSuccess: () => toast.success(t("toastSaved")), onError: fail },
-                      )}
-                    />
-                  </td>
-                  <td style={td}>{i.pricePurchase != null ? i.pricePurchase.toLocaleString(intl, { maximumFractionDigits: 2 }) : "—"}</td>
-                  <td style={td}>
-                    {i.pricePurchase != null
-                      ? (i.quantityOrdered * i.pricePurchase).toLocaleString(intl, { maximumFractionDigits: 0 })
-                      : "—"}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <Table columns={lineColumns} rows={draft.items} rowKey={(i) => i.id} emptyMessage="—" />
         </div>
       )}
     </div>

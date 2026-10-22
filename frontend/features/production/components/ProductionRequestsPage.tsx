@@ -40,6 +40,7 @@ const ORDERABLE = new Set<string>(["accepted", "partial"]);
 
 export function ProductionRequestsPage() {
   const t = useTranslations("Dashboard.production.requests");
+  const tCommon = useTranslations("Common");
   const locale = useLocale();
   const intlLocale = locale === "en" ? "en-US" : "uk-UA";
   const { data: modulesData } = useModules();
@@ -158,14 +159,16 @@ export function ProductionRequestsPage() {
       key={key}
       onClick={() => setTab(key)}
       style={{
-        padding: "8px 16px",
+        padding: "8px 14px",
         background: "transparent",
         border: "none",
         borderBottom: tab === key ? "2px solid #3B82F6" : "2px solid transparent",
-        color: tab === key ? "#E8EDF5" : "#6B7280",
+        color: tab === key ? "#60A5FA" : "#6B7280",
         fontSize: 13,
-        fontWeight: 600,
+        fontWeight: tab === key ? 600 : 400,
         cursor: "pointer",
+        marginBottom: -1,
+        transition: "color 0.1s",
       }}
     >
       {label}
@@ -173,18 +176,17 @@ export function ProductionRequestsPage() {
   );
 
   return (
-    <div>
+    <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
       <div
         style={{
           display: "flex",
-          alignItems: "center",
+          alignItems: "flex-start",
           justifyContent: "space-between",
-          marginBottom: 16,
           gap: 16,
           flexWrap: "wrap",
         }}
       >
-        <h1 style={{ color: "#E8EDF5", fontSize: 20, fontWeight: 700, margin: 0 }}>{t("title")}</h1>
+        <h1 style={{ color: "#E8EDF5", fontSize: 22, fontWeight: 700, margin: 0 }}>{t("title")}</h1>
         <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
           <Btn variant="ghost" onClick={handleAutoGenerate} disabled={autoGen.isPending}>
             {autoGen.isPending ? t("calcRunning") : t("calcNeeds")}
@@ -196,7 +198,7 @@ export function ProductionRequestsPage() {
       </div>
 
       {canProduce && (
-        <div style={{ display: "flex", borderBottom: "1px solid #1F2937", marginBottom: 16 }}>
+        <div style={{ display: "flex", gap: 4, borderBottom: "1px solid #1F2937" }}>
           {tabBtn("requests", t("tabRequests"))}
           {tabBtn("summary", t("tabSummary"))}
         </div>
@@ -206,11 +208,11 @@ export function ProductionRequestsPage() {
         <ProductionRequestSummary />
       ) : (
         <>
-          <div style={{ display: "flex", gap: 10, marginBottom: 14, flexWrap: "wrap", alignItems: "center" }}>
+          <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
             <select
               value={status}
               onChange={(e) => setStatus(e.target.value)}
-              style={{ ...reqInputStyle, width: "auto" }}
+              style={{ ...reqInputStyle, width: "auto", padding: "7px 12px", cursor: "pointer" }}
             >
               <option value="">{t("filterAllStatuses")}</option>
               {STATUSES.map((s) => (
@@ -220,7 +222,7 @@ export function ProductionRequestsPage() {
             <select
               value={storeId}
               onChange={(e) => setStoreId(e.target.value)}
-              style={{ ...reqInputStyle, width: "auto" }}
+              style={{ ...reqInputStyle, width: "auto", padding: "7px 12px", cursor: "pointer" }}
             >
               <option value="">{t("filterAllStores")}</option>
               {locations
@@ -237,7 +239,7 @@ export function ProductionRequestsPage() {
                   value={plannedDate}
                   onChange={(e) => setPlannedDate(e.target.value)}
                   title={t("plannedDate")}
-                  style={{ ...reqInputStyle, width: "auto" }}
+                  style={{ ...reqInputStyle, width: "auto", padding: "7px 12px" }}
                 />
                 <Btn variant="success" onClick={handleCreateOrders} disabled={createOrders.isPending}>
                   {t("createOrders", { count: selected.size })}
@@ -252,7 +254,6 @@ export function ProductionRequestsPage() {
                 ...(feedback.ok
                   ? { padding: "10px 14px", background: "#064E3B", border: "1px solid #065F46", borderRadius: 8, color: "#34D399", fontSize: 13 }
                   : reqErrorStyle),
-                marginBottom: 14,
               }}
             >
               {feedback.text}
@@ -268,7 +269,7 @@ export function ProductionRequestsPage() {
               rowKey={(r) => r.id}
               isLoading={isLoading}
               onRowClick={(r) => setOpenId(r.id)}
-              emptyMessage={t("empty")}
+              emptyMessage={isLoading ? tCommon("loading") : t("empty")}
             />
           )}
         </>

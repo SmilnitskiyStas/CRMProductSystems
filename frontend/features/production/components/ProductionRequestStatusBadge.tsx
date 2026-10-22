@@ -21,9 +21,9 @@ export function RequestStatusBadge({ status }: { status: ProductionRequestStatus
     <span
       style={{
         display: "inline-block",
-        padding: "3px 10px",
-        borderRadius: 12,
-        fontSize: 12,
+        padding: "3px 8px",
+        borderRadius: 20,
+        fontSize: 11,
         fontWeight: 600,
         background: bg,
         color,
@@ -43,8 +43,8 @@ export function RequestSourceBadge({ source, showManual = false }: { source: str
     <span
       style={{
         display: "inline-block",
-        padding: "2px 8px",
-        borderRadius: 12,
+        padding: "3px 8px",
+        borderRadius: 20,
         fontSize: 11,
         fontWeight: 600,
         background: auto ? "#2E1065" : "#1F2937",

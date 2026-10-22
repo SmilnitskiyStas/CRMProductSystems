@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { ArrowLeft, Printer, Trash2 } from "lucide-react";
 import { Btn } from "@/components/ui/Btn";
 import { Modal } from "@/components/ui/Modal";
+import { Table, type TableColumn } from "@/components/ui/Table";
 import { useMe } from "@/features/auth/hooks/useAuth";
 import { useSuppliers } from "@/features/suppliers/hooks/useSuppliers";
 import { useProductSearch } from "@/features/inventory/hooks/useProducts";
@@ -19,13 +20,11 @@ const RELEASE_OVERRIDE_ROLES = new Set(["enterprise_admin", "network_manager", "
 const panel: React.CSSProperties = {
   background: "#0D1117", border: "1px solid #1F2937", borderRadius: 10, padding: "14px 16px",
 };
-const label: React.CSSProperties = { color: "#6B7280", fontSize: 11, textTransform: "uppercase", marginBottom: 4, display: "block" };
+const label: React.CSSProperties = { color: "#9CA3AF", fontSize: 12, marginBottom: 5, display: "block" };
 const input: React.CSSProperties = {
-  background: "#0A0F1A", border: "1px solid #1F2937", borderRadius: 6, color: "#E8EDF5",
-  padding: "6px 8px", fontSize: 13, boxSizing: "border-box",
+  background: "#111827", border: "1px solid #1F2937", borderRadius: 8, color: "#E8EDF5",
+  padding: "6px 10px", fontSize: 13, outline: "none", boxSizing: "border-box",
 };
-const th: React.CSSProperties = { textAlign: "left", color: "#6B7280", fontSize: 11, textTransform: "uppercase", padding: "6px 8px" };
-const td: React.CSSProperties = { color: "#E8EDF5", fontSize: 13, padding: "6px 8px", borderTop: "1px solid #1F2937" };
 
 function NumInput({
   value, disabled, onSave, allowEmpty, width = 90,
@@ -113,8 +112,51 @@ function OrderBody({ order }: { order: ReceiptDto }) {
       { onSuccess: () => toast.success(t("toastSaved")), onError: fail },
     );
 
+  const lineColumns: TableColumn<ReceiptItemDto>[] = [
+    { key: "item", header: t("colItem"), cellStyle: { color: "#E8EDF5", fontWeight: 500 }, render: (i) => i.productName },
+    {
+      key: "qty",
+      header: t("colQty"),
+      render: (i) =>
+        canEdit ? (
+          <NumInput key={`q-${i.id}-${i.quantityOrdered}`} value={i.quantityOrdered} disabled={busy}
+            onSave={(n) => n != null && saveItem(i, { quantityOrdered: n })} />
+        ) : i.quantityOrdered,
+    },
+    {
+      key: "price",
+      header: t("colPrice"),
+      render: (i) =>
+        canEdit ? (
+          <NumInput key={`p-${i.id}-${i.pricePurchase}`} value={i.pricePurchase} disabled={busy} allowEmpty width={100}
+            onSave={(n) => saveItem(i, { pricePurchase: n })} />
+        ) : i.pricePurchase != null ? money(i.pricePurchase) : "—",
+    },
+    {
+      key: "amount",
+      header: t("colAmount"),
+      render: (i) => (i.pricePurchase != null ? money(i.quantityOrdered * i.pricePurchase) : "—"),
+    },
+    ...(canEdit
+      ? [
+          {
+            key: "remove",
+            header: "",
+            width: 48,
+            render: (i: ReceiptItemDto) => (
+              <button aria-label={t("removeLine")} disabled={busy || order.items.length <= 1}
+                onClick={() => a.removeItem.mutate(i.id, { onSuccess: () => toast.success(t("toastRemoved")), onError: fail })}
+                style={{ background: "transparent", border: "none", color: "#F87171", cursor: "pointer", opacity: order.items.length <= 1 ? 0.4 : 1 }}>
+                <Trash2 size={15} />
+              </button>
+            ),
+          } as TableColumn<ReceiptItemDto>,
+        ]
+      : []),
+  ];
+
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 14, width: "100%", padding: "28px 32px" }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: 20, width: "100%", padding: "28px 32px" }}>
       <style>{PRINT_CSS}</style>
 
       <div>
@@ -125,15 +167,15 @@ function OrderBody({ order }: { order: ReceiptDto }) {
       </div>
 
       <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-        <h1 style={{ color: "#E8EDF5", fontSize: 20, fontWeight: 700, margin: 0 }}>
+        <h1 style={{ color: "#E8EDF5", fontSize: 22, fontWeight: 700, margin: 0 }}>
           {t("title", { store: order.destinationStoreName })}
         </h1>
         <ReceiptStatusBadge status={order.status} />
         {order.source === "auto_replenishment" && (
-          <span style={{ fontSize: 11, padding: "2px 8px", borderRadius: 999, background: "#1E1B2E", color: "#A78BFA" }}>{t("autoBadge")}</span>
+          <span style={{ fontSize: 11, fontWeight: 600, padding: "3px 8px", borderRadius: 20, background: "#1E1B2E", color: "#A78BFA" }}>{t("autoBadge")}</span>
         )}
         {isDraft && order.takenByUserId && (
-          <span style={{ fontSize: 11, padding: "2px 8px", borderRadius: 999, background: "#1C2A3A", color: "#60A5FA" }}>
+          <span style={{ fontSize: 11, fontWeight: 600, padding: "3px 8px", borderRadius: 20, background: "#1C2A3A", color: "#60A5FA" }}>
             {order.takenByName ? t("takenBy", { name: order.takenByName }) : t("takenUnknown")}
           </span>
         )}
@@ -199,47 +241,14 @@ function OrderBody({ order }: { order: ReceiptDto }) {
         </div>
       </div>
 
+      <Table
+        columns={lineColumns}
+        rows={order.items}
+        rowKey={(i) => i.id}
+        emptyMessage="—"
+      />
+
       <div style={panel}>
-        <div style={{ overflowX: "auto" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse" }}>
-            <thead>
-              <tr>
-                <th style={th}>{t("colItem")}</th><th style={th}>{t("colQty")}</th>
-                <th style={th}>{t("colPrice")}</th><th style={th}>{t("colAmount")}</th>
-                {canEdit && <th style={th} />}
-              </tr>
-            </thead>
-            <tbody>
-              {order.items.map((i) => (
-                <tr key={i.id}>
-                  <td style={td}>{i.productName}</td>
-                  <td style={td}>
-                    {canEdit ? (
-                      <NumInput key={`q-${i.id}-${i.quantityOrdered}`} value={i.quantityOrdered} disabled={busy}
-                        onSave={(n) => n != null && saveItem(i, { quantityOrdered: n })} />
-                    ) : i.quantityOrdered}
-                  </td>
-                  <td style={td}>
-                    {canEdit ? (
-                      <NumInput key={`p-${i.id}-${i.pricePurchase}`} value={i.pricePurchase} disabled={busy} allowEmpty width={100}
-                        onSave={(n) => saveItem(i, { pricePurchase: n })} />
-                    ) : i.pricePurchase != null ? money(i.pricePurchase) : "—"}
-                  </td>
-                  <td style={td}>{i.pricePurchase != null ? money(i.quantityOrdered * i.pricePurchase) : "—"}</td>
-                  {canEdit && (
-                    <td style={td}>
-                      <button aria-label={t("removeLine")} disabled={busy || order.items.length <= 1}
-                        onClick={() => a.removeItem.mutate(i.id, { onSuccess: () => toast.success(t("toastRemoved")), onError: fail })}
-                        style={{ background: "transparent", border: "none", color: "#F87171", cursor: "pointer", opacity: order.items.length <= 1 ? 0.4 : 1 }}>
-                        <Trash2 size={15} />
-                      </button>
-                    </td>
-                  )}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
         {canEdit && (
           <ItemSearch onPick={(p) => a.addItem.mutate(
             { productId: p.id, quantityOrdered: 1 },

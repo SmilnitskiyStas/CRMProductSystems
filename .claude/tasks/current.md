@@ -1655,3 +1655,6 @@ Worker більше не логіниться сервісним акаунто�
 - TASK-758 (frontend): order card page /orders/[id] (edit lines/supplier/notes, send to supplier, print, cancel); auto cards open/take->navigate. Awaiting TASK-757 backend.
 
 - TASK-757 (backend): draft order editing + send. PUT /receipts/{id}/header, POST/DELETE /receipts/{id}/items[/{itemId}], POST /receipts/{id}/send -> status `ordered` (OrderedAt/OrderedByUserId, migration AddReceiptOrderedFields). `ordered` counted in transit, receive/cancel OK, tracking ordered->confirmed. Tests pass. Log: logs/tasks/757_*.md. Not committed.
+
+### TASK-759 — Production block UI alignment (frontend) — review
+Production pages/forms/detail + OrderCard/AutoOrdersSection switched to shared Btn/Table/Modal/ActionMenu, pill badges, 22px headers. tsc + eslint clean. Log: .claude/logs/tasks/759_2026-10-22_production-ui-alignment_frontend-developer.md
