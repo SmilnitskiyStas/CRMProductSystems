@@ -1,6 +1,9 @@
 import { api } from "@/lib/api";
 import type { PagedResult } from "@/lib/api-types";
-import type { ReceiptDto, CreateReceiptRequest, UpdateItemPayload } from "../types";
+import type {
+  ReceiptDto, CreateReceiptRequest, UpdateItemPayload,
+  UpdateReceiptHeaderPayload, AddReceiptItemPayload,
+} from "../types";
 
 export const receiptsApi = {
   getAll: (params?: {
@@ -47,6 +50,17 @@ export const receiptsApi = {
   take: (id: string) => api.post<ReceiptDto>(`/api/receipts/${id}/take`),
 
   release: (id: string) => api.post<ReceiptDto>(`/api/receipts/${id}/release`),
+
+  updateHeader: (id: string, data: UpdateReceiptHeaderPayload) =>
+    api.put<ReceiptDto>(`/api/receipts/${id}/header`, data),
+
+  addItem: (id: string, data: AddReceiptItemPayload) =>
+    api.post<ReceiptDto>(`/api/receipts/${id}/items`, data),
+
+  removeItem: (id: string, itemId: string) =>
+    api.delete<ReceiptDto>(`/api/receipts/${id}/items/${itemId}`),
+
+  send: (id: string) => api.post<ReceiptDto>(`/api/receipts/${id}/send`),
 
   autoGenerate: (storeLocationId?: string) =>
     api.post<ReceiptDto[]>("/api/receipts/auto-generate", { storeLocationId: storeLocationId ?? null }),

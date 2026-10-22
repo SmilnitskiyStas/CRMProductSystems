@@ -157,6 +157,17 @@ public sealed class ReceiptRepository : IReceiptRepository
         await _db.Users.Where(u => userIds.Contains(u.Id))
             .ToDictionaryAsync(u => u.Id, u => u.FullName, ct);
 
+    public Task<bool> SupplierExistsAsync(Guid supplierId, CancellationToken ct = default) =>
+        _db.Suppliers.AnyAsync(s => s.Id == supplierId, ct);
+
+    public async Task<(bool Exists, decimal? PricePurchase)> GetItemPurchaseInfoAsync(
+        Guid productId, CancellationToken ct = default)
+    {
+        var row = await _db.Items.Where(i => i.Id == productId)
+            .Select(i => new { i.PricePurchase }).FirstOrDefaultAsync(ct);
+        return row is null ? (false, null) : (true, row.PricePurchase);
+    }
+
     public void UpdateItem(StockReceiptItem item) => _db.StockReceiptItems.Update(item);
 
     public Task SaveChangesAsync(CancellationToken ct = default) =>

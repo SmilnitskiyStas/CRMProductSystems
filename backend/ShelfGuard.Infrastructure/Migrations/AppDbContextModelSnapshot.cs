@@ -5625,6 +5625,12 @@ namespace ShelfGuard.Infrastructure.Migrations
                     b.Property<string>("Notes")
                         .HasColumnType("text");
 
+                    b.Property<DateTime?>("OrderedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("OrderedByUserId")
+                        .HasColumnType("uuid");
+
                     b.Property<DateOnly?>("OriginalExpectedAt")
                         .HasColumnType("date");
 

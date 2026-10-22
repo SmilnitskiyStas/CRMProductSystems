@@ -91,6 +91,62 @@ public sealed class ReceiptsController : ControllerBase
         return Ok(receipt);
     }
 
+    /// <summary>TASK-757: edit supplier / notes / expected date of a draft order.</summary>
+    [HttpPut("{id:guid}/header")]
+    [Authorize(Policy = AppPolicies.AtLeastStoreManager)]
+    [ProducesResponseType(typeof(ReceiptDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> UpdateHeader(Guid id, UpdateReceiptHeaderRequest request, CancellationToken ct)
+    {
+        var (_, userId) = GetContext();
+        if (userId is null) return Forbid();
+        return DraftResult(await _receipts.UpdateHeaderAsync(id, request, userId, ct));
+    }
+
+    /// <summary>TASK-757: add a line to a draft (same product -> quantity is increased).</summary>
+    [HttpPost("{id:guid}/items")]
+    [Authorize(Policy = AppPolicies.AtLeastStoreManager)]
+    [ProducesResponseType(typeof(ReceiptDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> AddItem(Guid id, AddReceiptItemRequest request, CancellationToken ct)
+    {
+        var (_, userId) = GetContext();
+        if (userId is null) return Forbid();
+        return DraftResult(await _receipts.AddItemAsync(id, request, userId, ct));
+    }
+
+    /// <summary>TASK-757: remove a line from a draft (the last line cannot be removed).</summary>
+    [HttpDelete("{id:guid}/items/{itemId:guid}")]
+    [Authorize(Policy = AppPolicies.AtLeastStoreManager)]
+    [ProducesResponseType(typeof(ReceiptDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> RemoveItem(Guid id, Guid itemId, CancellationToken ct)
+    {
+        var (_, userId) = GetContext();
+        if (userId is null) return Forbid();
+        return DraftResult(await _receipts.RemoveItemAsync(id, itemId, userId, ct));
+    }
+
+    /// <summary>TASK-757: confirm the draft and mark it as sent to the supplier (draft -> ordered). Status only, no delivery.</summary>
+    [HttpPost("{id:guid}/send")]
+    [Authorize(Policy = AppPolicies.AtLeastStoreManager)]
+    [ProducesResponseType(typeof(ReceiptDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> Send(Guid id, CancellationToken ct)
+    {
+        var (_, userId) = GetContext();
+        if (userId is null) return Forbid();
+        return DraftResult(await _receipts.SendAsync(id, userId.Value, ct));
+    }
+
     [HttpPut("{id:guid}/receive")]
     [Authorize(Policy = AppPolicies.CanReceiveStock)]
     [ProducesResponseType(typeof(ReceiptDto), StatusCodes.Status200OK)]
@@ -205,6 +261,15 @@ public sealed class ReceiptsController : ControllerBase
     }
 
     // ── helpers ────────────────────────────────────────────────────────────
+
+    /// <summary>404 not found, 409 taken-by-other / not a draft, 400 other validation errors.</summary>
+    private IActionResult DraftResult((ReceiptDto? Receipt, string? Error) r)
+    {
+        if (r.Error == ReceiptErrors.NotFound) return NotFound();
+        if (r.Error is ReceiptErrors.TakenByOther or ReceiptErrors.NotDraft) return Conflict(new { error = r.Error });
+        if (r.Error is not null) return BadRequest(new { error = r.Error });
+        return Ok(r.Receipt);
+    }
 
     private (Guid? TenantId, Guid? UserId) GetContext()
     {

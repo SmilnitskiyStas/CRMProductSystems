@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useTranslations, useLocale } from "next-intl";
 import { toast } from "sonner";
 import { ChevronDown, ChevronRight, RefreshCw } from "lucide-react";
@@ -45,6 +46,7 @@ function QtyInput({
 function DraftCard({ draft, meId, meRole }: { draft: ReceiptDto; meId?: string; meRole?: string }) {
   const t = useTranslations("Dashboard.orders.page.auto");
   const intl = useLocale() === "en" ? "en-US" : "uk-UA";
+  const router = useRouter();
   const [open, setOpen] = useState(false);
   const { take, release, saveQuantity } = useAutoDraftActions();
 
@@ -66,9 +68,10 @@ function DraftCard({ draft, meId, meRole }: { draft: ReceiptDto; meId?: string; 
           style={{ background: "transparent", border: "none", color: "#9CA3AF", cursor: "pointer", display: "flex" }}>
           {open ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
         </button>
-        <span style={{ color: "#E8EDF5", fontWeight: 600, fontSize: 14 }}>
+        <button onClick={() => router.push(`/orders/${draft.id}`)}
+          style={{ background: "transparent", border: "none", padding: 0, cursor: "pointer", color: "#E8EDF5", fontWeight: 600, fontSize: 14, textAlign: "left" }}>
           {draft.supplierName ?? t("noSupplier")}
-        </span>
+        </button>
         <span style={{ color: "#6B7280", fontSize: 12 }}>{t("lines", { count: draft.items.length })}</span>
         <span style={{ color: "#9CA3AF", fontSize: 12, fontFamily: "monospace" }}>
           {total.toLocaleString(intl, { maximumFractionDigits: 0 })} ₴
@@ -86,13 +89,15 @@ function DraftCard({ draft, meId, meRole }: { draft: ReceiptDto; meId?: string; 
           {!draft.takenByUserId && (
             <Btn
               onClick={() => take.mutate(draft.id, {
-                onSuccess: () => toast.success(t("toastTaken")), onError: fail,
+                onSuccess: () => { toast.success(t("toastTaken")); router.push(`/orders/${draft.id}`); },
+                onError: fail,
               })}
               disabled={take.isPending}
             >
-              {t("take")}
+              {take.isPending ? t("taking") : t("take")}
             </Btn>
           )}
+          <Btn variant="ghost" onClick={() => router.push(`/orders/${draft.id}`)}>{t("open")}</Btn>
           {canRelease && (
             <Btn
               variant="ghost"

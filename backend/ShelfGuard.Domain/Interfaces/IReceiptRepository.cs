@@ -36,5 +36,10 @@ public interface IReceiptRepository
     /// <summary>Display names of users (for TakenByName).</summary>
     Task<Dictionary<Guid, string>> GetUserNamesAsync(IReadOnlyCollection<Guid> userIds, CancellationToken ct = default);
     void UpdateItem(StockReceiptItem item);
+
+    // ── TASK-757 ─────────────────────────────────────────────────────────────────────────────────
+    Task<bool> SupplierExistsAsync(Guid supplierId, CancellationToken ct = default);
+    /// <summary>(Exists, default purchase price) of a catalog item of the current tenant.</summary>
+    Task<(bool Exists, decimal? PricePurchase)> GetItemPurchaseInfoAsync(Guid productId, CancellationToken ct = default);
     Task SaveChangesAsync(CancellationToken ct = default);
 }

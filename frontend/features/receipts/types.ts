@@ -36,6 +36,23 @@ export interface ReceiptDto {
   takenByUserId?: string | null;
   takenByName?: string | null;
   takenAt?: string | null;
+  /** TASK-757: set when the order was sent to the supplier. */
+  orderedAt?: string | null;
+  orderedByName?: string | null;
+}
+
+export interface UpdateReceiptHeaderPayload {
+  supplierId?: string | null;
+  notes?: string | null;
+  expectedAt?: string | null;
+  /** Backend cannot tell absent from null: set true to remove the expected date. */
+  clearExpectedAt?: boolean;
+}
+
+export interface AddReceiptItemPayload {
+  productId: string;
+  quantityOrdered: number;
+  pricePurchase?: number | null;
 }
 
 export interface CreateReceiptRequest {

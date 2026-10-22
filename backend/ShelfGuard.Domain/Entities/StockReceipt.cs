@@ -31,6 +31,10 @@ public sealed class StockReceipt
     public Guid? TakenByUserId { get; set; }
     public DateTime? TakenAt { get; set; }
 
+    // ── Sent to supplier (TASK-757): draft -> ordered ───────────────────────────────────────────────
+    public DateTime? OrderedAt { get; set; }
+    public Guid? OrderedByUserId { get; set; }
+
     public DateTime CreatedAt { get; init; } = DateTime.UtcNow;
 
     public ICollection<StockReceiptItem> Items { get; init; } = new List<StockReceiptItem>();

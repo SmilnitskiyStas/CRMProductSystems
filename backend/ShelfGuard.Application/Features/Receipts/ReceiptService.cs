@@ -107,7 +107,7 @@ public sealed class ReceiptService : IReceiptService
             return (null, $"Cannot update items on a '{receipt.Status}' receipt.");
 
         // TASK-755: a draft taken into work by someone else is locked for editing.
-        if (receipt.TakenByUserId is { } holder && holder != callerUserId)
+        if (LockedByOther(receipt, callerUserId))
             return (null, ReceiptErrors.TakenByOther);
 
         foreach (var payload in request.Items)
@@ -178,6 +178,124 @@ public sealed class ReceiptService : IReceiptService
         return (saved is null ? null : await MapAsync(saved, ct), null);
     }
 
+    /// <summary>Draft taken into work by another user is locked (manual drafts are never locked).</summary>
+    private static bool LockedByOther(StockReceipt r, Guid? callerUserId) =>
+        r.Status == "draft" && r.Source == ReceiptSource.AutoReplenishment
+        && r.TakenByUserId is { } holder && holder != callerUserId;
+
+    /// <summary>Common loader/guard of the draft edit endpoints: not found / not draft / taken by other.</summary>
+    private async Task<(StockReceipt? Receipt, string? Error)> LoadEditableDraftAsync(
+        Guid id, Guid? callerUserId, CancellationToken ct)
+    {
+        var receipt = await _repo.GetByIdAsync(id, ct);
+        if (receipt is null) return (null, ReceiptErrors.NotFound);
+        if (receipt.Status != "draft") return (null, ReceiptErrors.NotDraft);
+        if (LockedByOther(receipt, callerUserId)) return (null, ReceiptErrors.TakenByOther);
+        return (receipt, null);
+    }
+
+    private async Task<(ReceiptDto? Receipt, string? Error)> ReloadAsync(Guid id, CancellationToken ct)
+    {
+        var saved = await _repo.GetByIdAsync(id, ct);
+        return (saved is null ? null : await MapAsync(saved, ct), null);
+    }
+
+    public async Task<(ReceiptDto? Receipt, string? Error)> UpdateHeaderAsync(
+        Guid id, UpdateReceiptHeaderRequest request, Guid? callerUserId, CancellationToken ct = default)
+    {
+        var (receipt, error) = await LoadEditableDraftAsync(id, callerUserId, ct);
+        if (receipt is null) return (null, error);
+
+        if (request.SupplierId is { } supplierId && supplierId != receipt.SupplierId)
+        {
+            if (!await _repo.SupplierExistsAsync(supplierId, ct))
+                return (null, ReceiptErrors.SupplierNotFound);
+            receipt.SupplierId = supplierId;
+            receipt.Supplier = null; // reloaded below
+        }
+
+        if (request.Notes is not null)
+            receipt.Notes = string.IsNullOrWhiteSpace(request.Notes) ? null : request.Notes.Trim();
+        if (request.ClearExpectedAt) receipt.ExpectedAt = null;
+        else if (request.ExpectedAt is { } expected) receipt.ExpectedAt = expected;
+
+        _repo.Update(receipt);
+        await _repo.SaveChangesAsync(ct);
+        return await ReloadAsync(id, ct);
+    }
+
+    public async Task<(ReceiptDto? Receipt, string? Error)> AddItemAsync(
+        Guid id, AddReceiptItemRequest request, Guid? callerUserId, CancellationToken ct = default)
+    {
+        if (request.QuantityOrdered <= 0) return (null, ReceiptErrors.BadQuantity);
+
+        var (receipt, error) = await LoadEditableDraftAsync(id, callerUserId, ct);
+        if (receipt is null) return (null, error);
+
+        var existing = receipt.Items.FirstOrDefault(i => i.ProductId == request.ProductId);
+        if (existing is not null)
+        {
+            existing.QuantityOrdered += request.QuantityOrdered;
+            if (request.PricePurchase.HasValue) existing.PricePurchase = request.PricePurchase;
+            _repo.UpdateItem(existing);
+        }
+        else
+        {
+            var (exists, defaultPrice) = await _repo.GetItemPurchaseInfoAsync(request.ProductId, ct);
+            if (!exists) return (null, ReceiptErrors.ProductNotFound);
+
+            // Explicit Add (not via the navigation): a client-generated key would be tracked as Modified.
+            await _repo.AddItemAsync(new StockReceiptItem
+            {
+                ReceiptId = receipt.Id,
+                ProductId = request.ProductId,
+                QuantityOrdered = request.QuantityOrdered,
+                PricePurchase = request.PricePurchase ?? defaultPrice,
+            }, ct);
+        }
+
+        await _repo.SaveChangesAsync(ct);
+        return await ReloadAsync(id, ct);
+    }
+
+    public async Task<(ReceiptDto? Receipt, string? Error)> RemoveItemAsync(
+        Guid id, Guid itemId, Guid? callerUserId, CancellationToken ct = default)
+    {
+        var (receipt, error) = await LoadEditableDraftAsync(id, callerUserId, ct);
+        if (receipt is null) return (null, error);
+
+        var item = receipt.Items.FirstOrDefault(i => i.Id == itemId);
+        if (item is null) return (null, ReceiptErrors.ItemNotFound);
+        if (receipt.Items.Count <= 1) return (null, ReceiptErrors.LastLine);
+
+        _repo.RemoveItems([item]);
+        await _repo.SaveChangesAsync(ct);
+        return await ReloadAsync(id, ct);
+    }
+
+    public async Task<(ReceiptDto? Receipt, string? Error)> SendAsync(
+        Guid id, Guid userId, CancellationToken ct = default)
+    {
+        var (receipt, error) = await LoadEditableDraftAsync(id, userId, ct);
+        if (receipt is null) return (null, error);
+
+        if (receipt.SupplierId is null) return (null, ReceiptErrors.SupplierRequired);
+        if (receipt.Items.Count == 0) return (null, ReceiptErrors.NoLines);
+        if (receipt.Items.Any(i => i.QuantityOrdered <= 0)) return (null, ReceiptErrors.BadQuantity);
+
+        // Auto draft nobody holds: the sender takes it (compare-and-set; losing the race -> 409).
+        if (receipt.Source == ReceiptSource.AutoReplenishment && receipt.TakenByUserId is null
+            && !await _repo.TryTakeAsync(id, userId, DateTime.UtcNow, ct))
+            return (null, ReceiptErrors.TakenByOther);
+
+        receipt.Status = "ordered";
+        receipt.OrderedAt = DateTime.UtcNow;
+        receipt.OrderedByUserId = userId;
+        _repo.Update(receipt);
+        await _repo.SaveChangesAsync(ct);
+        return await ReloadAsync(id, ct);
+    }
+
     public async Task<(ReceiptDto? Receipt, string? Error)> ReceiveAsync(
         Guid id, Guid receivedBy, CancellationToken ct = default)
     {
@@ -190,6 +308,9 @@ public sealed class ReceiptService : IReceiptService
 
         if (receipt.Status == "cancelled")
             return (null, "Cannot receive a cancelled receipt.");
+
+        if (receipt.Status is not ("draft" or "ordered" or "in_transit"))
+            return (null, $"Cannot receive a '{receipt.Status}' receipt.");
 
         // All items must have ExpiryDate set before confirming
         var unprocessed = receipt.Items
@@ -347,6 +468,9 @@ public sealed class ReceiptService : IReceiptService
         if (receipt.Status == "cancelled")
             return (null, "Receipt is already cancelled.");
 
+        if (receipt.Status is not ("draft" or "ordered" or "in_transit"))
+            return (null, $"Cannot cancel a '{receipt.Status}' receipt.");
+
         receipt.Status = "cancelled";
         _repo.Update(receipt);
         await _repo.SaveChangesAsync(ct);
@@ -363,12 +487,18 @@ public sealed class ReceiptService : IReceiptService
     private async Task<List<ReceiptDto>> MapAsync(IReadOnlyCollection<StockReceipt> receipts, CancellationToken ct)
     {
         var dtos = receipts.Select(ToDto).ToList();
-        var ids = receipts.Where(r => r.TakenByUserId.HasValue).Select(r => r.TakenByUserId!.Value).Distinct().ToList();
+        var ids = receipts.SelectMany(r => new[] { r.TakenByUserId, r.OrderedByUserId })
+            .Where(u => u.HasValue).Select(u => u!.Value).Distinct().ToList();
         if (ids.Count == 0) return dtos;
 
         var names = await _repo.GetUserNamesAsync(ids, ct);
         if (names is null) return dtos;
-        return dtos.Select(d => d.TakenByUserId is { } u && names.TryGetValue(u, out var n) ? d with { TakenByName = n } : d).ToList();
+        string? NameOf(Guid? u) => u is { } g && names.TryGetValue(g, out var n) ? n : null;
+        return receipts.Zip(dtos, (r, d) => d with
+        {
+            TakenByName = NameOf(r.TakenByUserId),
+            OrderedByName = NameOf(r.OrderedByUserId),
+        }).ToList();
     }
 
     private static ReceiptDto ToDto(StockReceipt r) => new(
@@ -391,7 +521,9 @@ public sealed class ReceiptService : IReceiptService
         r.Source,
         r.TakenByUserId,
         null,
-        r.TakenAt
+        r.TakenAt,
+        r.OrderedAt,
+        null
     );
 
     private static ReceiptItemDto ToItemDto(StockReceiptItem i) => new(
