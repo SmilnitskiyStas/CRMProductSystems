@@ -404,6 +404,27 @@ public sealed class AnalyticsController : ControllerBase
         return Ok(result);
     }
 
+    // On-demand per-store detail (cashiers' sales, shift hours, profit). store_id is required;
+    // cost/profit only for callers who pass AnalyticsAuthorization.CanViewMargin (ADR-027).
+    [HttpGet("pos/store-detail")]
+    [RequireModule("analytics")]
+    [ProducesResponseType(typeof(PosStoreDetailDto), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetPosStoreDetail(
+        [FromQuery] Guid? store_id,
+        [FromQuery] DateOnly? from,
+        [FromQuery] DateOnly? to,
+        CancellationToken ct = default)
+    {
+        var tenantId = ResolveTenantId();
+        if (tenantId is null && !IsProvider()) return Forbid();
+        if (store_id is null) return BadRequest("store_id is required");
+
+        var (resolvedFrom, resolvedTo) = ResolveDateRange(from, to);
+        var result = await _analytics.GetPosStoreDetailAsync(
+            tenantId, store_id.Value, resolvedFrom, resolvedTo, AnalyticsAuthorization.CanViewMargin(User), ct);
+        return Ok(result);
+    }
+
     // TASK-482: single-product sales trend — row-click drill-down from pos/top-products. 404s
     // when productId doesn't resolve to a real Item in the caller's tenant scope (mirrors
     // ItemsController.GetById's nullable-DTO -> NotFound() convention).

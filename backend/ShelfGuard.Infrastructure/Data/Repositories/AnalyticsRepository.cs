@@ -869,6 +869,70 @@ public sealed class AnalyticsRepository : IAnalyticsRepository
         return new PosCashierStatsDto(Cashiers: cashiers);
     }
 
+    // On-demand per-store detail. Four grouped queries, none per-cashier (no N+1): sales per
+    // cashier, shifts in the period, cost per cashier (only when includeCost), cashier names.
+    public async Task<PosStoreDetailRaw> GetPosStoreDetailRawAsync(
+        Guid? tenantId, Guid storeId, DateOnly from, DateOnly to, bool includeCost, CancellationToken ct = default)
+    {
+        var fromDt = ToUtcStart(from);
+        var toDt   = ToUtcEnd(to);
+        var txQuery = BuildPosTransactionQuery(tenantId, storeId, fromDt, toDt)
+            .Where(t => t.CashierId.HasValue);
+
+        var salesRows = await txQuery
+            .GroupBy(t => t.CashierId!.Value)
+            .Select(g => new { CashierId = g.Key, Revenue = g.Sum(t => t.TotalAmount), Transactions = g.Count() })
+            .ToListAsync(ct);
+
+        var shiftQuery = _db.PosShifts
+            .Where(s => s.StoreId == storeId && s.OpenedAt >= fromDt && s.OpenedAt <= toDt);
+        if (tenantId.HasValue)
+            shiftQuery = shiftQuery.Where(s => s.TenantId == tenantId.Value);
+        var shifts = await shiftQuery
+            .Select(s => new PosShiftRaw(s.CashierId, s.OpenedAt, s.ClosedAt))
+            .ToListAsync(ct);
+
+        var costs = new List<PosCashierCostRaw>();
+        if (includeCost && salesRows.Count > 0)
+        {
+            var costRows = await _db.PosTransactionItems
+                .Join(txQuery, i => i.TransactionId, t => t.Id,
+                      (i, t) => new { t.CashierId, i.ProductId, i.PriceFinal, i.Quantity })
+                .Join(_db.Items, x => x.ProductId, it => it.Id,
+                      (x, it) => new { x.CashierId, x.PriceFinal, x.Quantity, it.PricePurchase })
+                .Where(x => x.PricePurchase != null)
+                .GroupBy(x => x.CashierId!.Value)
+                .Select(g => new
+                {
+                    CashierId = g.Key,
+                    Revenue = g.Sum(x => x.PriceFinal * x.Quantity),
+                    Cost = g.Sum(x => x.PricePurchase!.Value * x.Quantity)
+                })
+                .ToListAsync(ct);
+            costs = costRows.Select(c => new PosCashierCostRaw(c.CashierId, c.Revenue, c.Cost)).ToList();
+        }
+
+        var cashierIds = salesRows.Select(r => r.CashierId).ToList();
+        var names = cashierIds.Count == 0
+            ? new Dictionary<Guid, string>()
+            : await _db.Users
+                .Where(u => cashierIds.Contains(u.Id))
+                .Select(u => new { u.Id, u.FullName })
+                .ToDictionaryAsync(u => u.Id, u => u.FullName, ct);
+
+        var storeName = await _db.Locations
+            .Where(l => l.Id == storeId)
+            .Select(l => l.Name)
+            .FirstOrDefaultAsync(ct) ?? string.Empty;
+
+        return new PosStoreDetailRaw(
+            storeName,
+            salesRows.Select(r => new PosCashierSalesRaw(
+                r.CashierId, names.GetValueOrDefault(r.CashierId, "—"), r.Revenue, r.Transactions)).ToList(),
+            shifts,
+            costs);
+    }
+
     // ── TASK-482: single-product sales trend ─────────────────────────────────
 
     public async Task<ProductSalesTrendDto?> GetProductSalesTrendAsync(

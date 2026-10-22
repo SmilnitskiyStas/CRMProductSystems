@@ -22,6 +22,7 @@ import { PosTopProductsTable } from "@/features/analytics/components/PosTopProdu
 import { PromoNoSalesBanner } from "@/features/analytics/components/PromoNoSalesBanner";
 import { WorstProductsTable } from "@/features/analytics/components/WorstProductsTable";
 import { PosCashierStatsTable } from "@/features/analytics/components/PosCashierStatsTable";
+import { PosStoreDetailPanel } from "@/features/analytics/components/PosStoreDetailPanel";
 import { PosPaymentPieChart } from "@/features/analytics/components/PosPaymentPieChart";
 import { PosDayDetailPanel } from "@/features/analytics/components/PosDayDetailPanel";
 import { ProductTrendPanel } from "@/features/analytics/components/ProductTrendPanel";
@@ -292,6 +293,11 @@ export default function PosAnalyticsPage() {
             ) : null}
           </div>
         </div>
+      </section>
+
+      {/* Per-store + per-cashier detail — lazy: queried only after the user opens it */}
+      <section>
+        <PosStoreDetailPanel from={from} to={to} storeId={effectiveStoreId} />
       </section>
 
       {/* Worst-performing / dead-stock products — active, on-hand-stock items with no (or the

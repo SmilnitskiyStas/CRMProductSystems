@@ -6,6 +6,7 @@ import type {
   PosRevenueTrendCompareDto,
   PosTopProductsDto,
   PosCashierStatsDto,
+  PosStoreDetailDto,
   ProductSalesTrendDto,
   ProductSalesTrendCompareDto,
   WorstProductsDto,
@@ -130,4 +131,7 @@ export const posAnalyticsApi = {
     ),
 
   getProductSalesTrend,
+
+  getStoreDetail: (params: PosDateRangeParams) =>
+    api.get<PosStoreDetailDto>(`/api/analytics/pos/store-detail${buildQs(rangeEntries(params))}`),
 };

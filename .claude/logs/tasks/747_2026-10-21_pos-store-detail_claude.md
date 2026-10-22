@@ -1,0 +1,6 @@
+# TASK-747 — POS store/cashier detail (lazy)
+
+**Backend:** `pos/store-detail` у `AnalyticsController` (module `analytics`, Forbid/BadRequest без tenant/store_id) → `IAnalyticsService.GetPosStoreDetailAsync` → `IAnalyticsRepository.GetPosStoreDetailRawAsync` (sales GROUP BY cashier, shifts, cost GROUP BY cashier, імена/магазин) → `PosStoreDetailBuilder` (чиста логіка: години змін, відкрита зміна до now, прибуток = виручка рядків із PricePurchase − собівартість, покриття %). Cost/profit = null без `AnalyticsAuthorization.CanViewMargin` (ADR-027).
+**Frontend:** `PosStoreDetailPanel`, `usePosStoreDetail` (enabled після кліку + потрібен store_id), типи, i18n `Dashboard.analytics.pos.storeDetail` (uk/en). Існуючий `PosCashierStatsTable` лишено (швидка таблиця вантажиться як раніше).
+**Перевірка:** dotnet build OK, dotnet test 2748 passed (+5 у `PosStoreDetailTests`), tsc 0 errors, lint OK. Cost-запит перевірено через `ToQueryString` (транслюється в GROUP BY). Живий HTTP-прогін не робився (немає креденшлів dev-користувача).
+**Обмеження:** собівартість = поточна PricePurchase (ретроспективна оцінка); змини рахуються за `OpenedAt` у періоді; чеки без CashierId не потрапляють у рядки касирів.

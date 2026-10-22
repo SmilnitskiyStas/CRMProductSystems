@@ -29,6 +29,7 @@ public interface IAnalyticsRepository
     Task<PosRevenueTrendDto> GetPosRevenueTrendAsync(Guid? tenantId, Guid? storeId, DateOnly from, DateOnly to, string groupBy, CancellationToken ct = default);
     Task<PosTopProductsDto> GetPosTopProductsAsync(Guid? tenantId, Guid? storeId, DateOnly from, DateOnly to, int limit, CancellationToken ct = default);
     Task<PosCashierStatsDto> GetPosCashierStatsAsync(Guid? tenantId, Guid? storeId, DateOnly from, DateOnly to, CancellationToken ct = default);
+    Task<PosStoreDetailRaw> GetPosStoreDetailRawAsync(Guid? tenantId, Guid storeId, DateOnly from, DateOnly to, bool includeCost, CancellationToken ct = default);
 
     // ── TASK-482: single-product sales trend ─────────────────────────────────
     // Null return means productId did not resolve to a real Item in the caller's tenant scope

@@ -152,6 +152,32 @@ export interface PosCashierStatsDto {
   cashiers: PosCashierStat[];
 }
 
+// On-demand pos/store-detail. cost/profit/coverage are null when the caller lacks margin access.
+export interface PosCashierDetail extends PosCashierStat {
+  hoursWorked: number;
+  revenuePerHour: number | null;
+  cost: number | null;
+  profit: number | null;
+  costCoveragePercent: number | null;
+}
+
+export interface PosStoreDetailDto {
+  storeId: string;
+  storeName: string;
+  from: string;
+  to: string;
+  costIncluded: boolean;
+  totalRevenue: number;
+  transactionCount: number;
+  averageTicket: number;
+  shiftCount: number;
+  hoursWorked: number;
+  totalCost: number | null;
+  totalProfit: number | null;
+  costCoveragePercent: number | null;
+  cashiers: PosCashierDetail[];
+}
+
 // ── Category × product breakdown (interactive analytics + margin plan, TASK-483) ───────────
 // MarginAmount/MarginPercent are null both when the caller can't see margin (ADR-027 —
 // AnalyticsAuthorization.CanViewMargin resolved false server-side) and when the product itself
