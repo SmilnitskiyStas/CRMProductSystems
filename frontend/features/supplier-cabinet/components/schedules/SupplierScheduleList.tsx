@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useTranslations } from "next-intl";
 import { Plus, Pencil, Trash2 } from "lucide-react";
 import { toast } from "sonner";
+import { StatusPill } from "@/components/ui/StatusPill";
 import type {
   WorkScheduleDto,
   ScheduleStatus,
@@ -33,20 +34,9 @@ function StatusBadge({ status }: { status: ScheduleStatus }) {
   const t = useTranslations("Dashboard.schedules.list");
   const s = STATUS_STYLE[status];
   return (
-    <span
-      style={{
-        background: s.bg,
-        color: s.color,
-        border: `1px solid ${s.border}`,
-        borderRadius: 20,
-        padding: "2px 10px",
-        fontSize: 11,
-        fontWeight: 600,
-        whiteSpace: "nowrap",
-      }}
-    >
+    <StatusPill bg={s.bg} text={s.color}>
       {t(s.i18nKey)}
-    </span>
+    </StatusPill>
   );
 }
 

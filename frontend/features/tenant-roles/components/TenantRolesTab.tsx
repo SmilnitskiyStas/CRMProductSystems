@@ -14,6 +14,9 @@ import {
 import { useUsers } from "@/features/users/hooks/useUsers";
 import type { TenantRoleDto, TenantTabDto, TenantTabGroupDto } from "../types";
 import { Btn } from "@/components/ui/Btn";
+import { Modal } from "@/components/ui/Modal";
+import { StatusPill } from "@/components/ui/StatusPill";
+import { inputStyle } from "@/components/ui/fieldStyles";
 
 /**
  * Management UI for TenantRole capability templates (ADR-020, TASK-345/346).
@@ -63,12 +66,9 @@ export function TenantRolesTab() {
             {t("title")}
           </h2>
           {roles && (
-            <span style={{
-              padding: "2px 8px", borderRadius: 10,
-              background: "#1F2937", color: "#9CA3AF", fontSize: 11,
-            }}>
+            <StatusPill bg="#1F2937" text="#9CA3AF">
               {roles.length}
-            </span>
+            </StatusPill>
           )}
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
@@ -165,40 +165,24 @@ function TenantRoleCard({ role, assignedCount, onEdit, onArchive, archivePending
             {role.name}
           </span>
           {!role.isActive && (
-            <span style={{
-              fontSize: 10, padding: "2px 7px", borderRadius: 4,
-              background: "#1F2937", color: "#6B7280", border: "1px solid #374151",
-            }}>
+            <StatusPill bg="#1F2937" text="#6B7280">
               {t("archived")}
-            </span>
+            </StatusPill>
           )}
-          <span style={{
-            fontSize: 11, padding: "2px 8px", borderRadius: 4,
-            background: "#1E3A5F22", color: "#60A5FA", border: "1px solid #1D4ED855",
-          }}>
+          <StatusPill bg="#1E3A5F" text="#60A5FA">
             {t("capabilityCount", { count: role.capabilities.length })}
-          </span>
-          <span style={{
-            fontSize: 11, padding: "2px 8px", borderRadius: 4,
-            background: "#062b2922", color: "#2DD4BF", border: "1px solid #0F766E55",
-          }}>
+          </StatusPill>
+          <StatusPill bg="#062b29" text="#2DD4BF">
             {t("userCount", { count: assignedCount })}
-          </span>
+          </StatusPill>
         </div>
         <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
           {role.capabilities.length === 0 ? (
             <span style={{ color: "#374151", fontSize: 12 }}>{t("noCapabilities")}</span>
           ) : role.capabilities.map((key) => (
-            <span
-              key={key}
-              style={{
-                fontSize: 11, padding: "3px 8px", borderRadius: 5,
-                background: "#1E3A5F", color: "#93C5FD",
-                border: "1px solid #1D4ED8",
-              }}
-            >
+            <StatusPill key={key} bg="#1E3A5F" text="#93C5FD">
               {labelFor(key)}
-            </span>
+            </StatusPill>
           ))}
         </div>
       </div>
@@ -341,33 +325,7 @@ function TenantRoleFormModal({ role, onClose }: FormModalProps) {
   }
 
   return (
-    <div
-      style={{
-        position: "fixed", inset: 0, zIndex: 999,
-        background: "rgba(0,0,0,0.6)",
-        display: "flex", alignItems: "center", justifyContent: "center",
-        padding: "20px",
-      }}
-      onClick={onClose}
-    >
-      <div
-        style={{
-          background: "#111827", border: "1px solid #1F2937",
-          borderRadius: 14, padding: "28px 32px",
-          width: "100%", maxWidth: 520,
-          maxHeight: "90vh", overflowY: "auto",
-        }}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
-          <h2 style={{ color: "#E8EDF5", fontSize: 16, fontWeight: 700, margin: 0 }}>
-            {isEdit ? t("editTitle") : t("newTitle")}
-          </h2>
-          <button onClick={onClose} style={{ background: "none", border: "none", color: "#6B7280", cursor: "pointer" }}>
-            ✕
-          </button>
-        </div>
-
+    <Modal title={isEdit ? t("editTitle") : t("newTitle")} onClose={onClose} width={520}>
         <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 14 }}>
           <input
             required
@@ -439,21 +397,11 @@ function TenantRoleFormModal({ role, onClose }: FormModalProps) {
             </div>
           )}
 
-          <button
-            type="submit"
-            disabled={isPending}
-            style={{
-              padding: "11px 0", borderRadius: 9,
-              background: isPending ? "#1D3461" : "linear-gradient(135deg, #3B82F6, #6366F1)",
-              border: "none", color: "#fff", fontSize: 14, fontWeight: 600,
-              cursor: isPending ? "not-allowed" : "pointer", marginTop: 4,
-            }}
-          >
+          <Btn type="submit" fullWidth disabled={isPending} style={{ marginTop: 4 }}>
             {isPending ? t("savingButton") : (isEdit ? t("saveChangesButton") : t("createButton"))}
-          </button>
+          </Btn>
         </form>
-      </div>
-    </div>
+    </Modal>
   );
 }
 
@@ -598,15 +546,3 @@ function TabGroupSection({ group, allowedTabs, onToggleItem, onToggleGroupAll }:
     </div>
   );
 }
-
-const inputStyle: React.CSSProperties = {
-  background: "#0D1117",
-  border: "1px solid #1F2937",
-  borderRadius: 8,
-  padding: "10px 14px",
-  color: "#E8EDF5",
-  fontSize: 13,
-  outline: "none",
-  width: "100%",
-  boxSizing: "border-box",
-};

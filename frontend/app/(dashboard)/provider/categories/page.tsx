@@ -6,6 +6,8 @@ import { useTranslations } from "next-intl";
 import { FolderTree, Plus } from "lucide-react";
 import { useMe } from "@/features/auth/hooks/useAuth";
 import { Btn } from "@/components/ui/Btn";
+import { PageContainer } from "@/components/ui/PageContainer";
+import { PageHeader } from "@/components/ui/PageHeader";
 import { useProviderCategories } from "@/features/provider/hooks/useProviderCategories";
 import { CategoryTreeManager } from "@/features/provider/components/CategoryTreeManager";
 import { CategoryFormModal } from "@/features/provider/components/CategoryFormModal";
@@ -44,12 +46,11 @@ export default function ProviderCategoriesPage() {
   if (!me || !PROVIDER_ROLES.includes(me.role)) return null;
 
   return (
-    <div style={{ padding: "28px 32px" }}>
-      {/* Header */}
-      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 28 }}>
-        <div>
-          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4 }}>
-            <div
+    <PageContainer>
+      <PageHeader
+        title={
+          <span style={{ display: "inline-flex", alignItems: "center", gap: 10 }}>
+            <span
               style={{
                 width: 34,
                 height: 34,
@@ -62,16 +63,17 @@ export default function ProviderCategoriesPage() {
               }}
             >
               <FolderTree size={17} color="#fff" />
-            </div>
-            <h1 style={{ color: "#E8EDF5", fontSize: 22, fontWeight: 700, margin: 0 }}>{t("title")}</h1>
-          </div>
-          <p style={{ color: "#4B5563", fontSize: 14, margin: 0 }}>{t("subtitle")}</p>
-        </div>
-
-        <Btn icon={<Plus size={15} />} onClick={() => setModal({ kind: "create" })}>
-          {t("addButton")}
-        </Btn>
-      </div>
+            </span>
+            {t("title")}
+          </span>
+        }
+        subtitle={t("subtitle")}
+        actions={
+          <Btn icon={<Plus size={15} />} onClick={() => setModal({ kind: "create" })}>
+            {t("addButton")}
+          </Btn>
+        }
+      />
 
       {isLoading ? (
         <p style={{ color: "#4B5563", fontSize: 13 }}>{t("loading")}</p>
@@ -91,6 +93,6 @@ export default function ProviderCategoriesPage() {
           onClose={() => setModal({ kind: "closed" })}
         />
       )}
-    </div>
+    </PageContainer>
   );
 }

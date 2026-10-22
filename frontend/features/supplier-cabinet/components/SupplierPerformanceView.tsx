@@ -6,6 +6,7 @@
 
 import { useState } from "react";
 import { useTranslations, useLocale } from "next-intl";
+import { Btn } from "@/components/ui/Btn";
 import { TrendingUp, TrendingDown, Minus } from "lucide-react";
 import {
   SupplierMetricTrendChart,
@@ -123,23 +124,9 @@ export function SupplierPerformanceView() {
       {/* Days selector */}
       <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
         {DAYS_OPTIONS.map((d) => (
-          <button
-            key={d}
-            type="button"
-            onClick={() => setDays(d)}
-            style={{
-              background: days === d ? "#1D3461" : "transparent",
-              border: `1px solid ${days === d ? "#3B82F6" : "#374151"}`,
-              borderRadius: 8,
-              color: days === d ? "#93C5FD" : "#9CA3AF",
-              fontSize: 12,
-              fontWeight: 600,
-              padding: "7px 12px",
-              cursor: "pointer",
-            }}
-          >
+          <Btn key={d} variant={days === d ? "primary" : "ghost"} size="sm" onClick={() => setDays(d)}>
             {t("daysOption", { n: d })}
-          </button>
+          </Btn>
         ))}
       </div>
 

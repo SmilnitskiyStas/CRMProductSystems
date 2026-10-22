@@ -4,6 +4,8 @@ import { useEffect, useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
 import { toast } from "sonner";
 import { Btn } from "@/components/ui/Btn";
+import { Modal } from "@/components/ui/Modal";
+import { inputStyle, labelStyle, textareaStyle } from "@/components/ui/fieldStyles";
 import { Switch } from "@/components/ui/switch";
 import { useLocations } from "@/features/locations/hooks/useLocations";
 import { useCatalogProducts } from "@/features/catalog/hooks/useCatalog";
@@ -16,28 +18,6 @@ import {
   useUploadBannerImage,
 } from "../hooks/useBanners";
 import type { BannerDetailMode } from "../types";
-
-const inputStyle: React.CSSProperties = {
-  width: "100%",
-  background: "#0D1117",
-  border: "1px solid #374151",
-  borderRadius: 8,
-  padding: "9px 12px",
-  color: "#E8EDF5",
-  fontSize: 13,
-  outline: "none",
-  boxSizing: "border-box",
-};
-
-const textareaStyle: React.CSSProperties = { ...inputStyle, resize: "vertical", fontFamily: "inherit" };
-
-const labelStyle: React.CSSProperties = {
-  display: "block",
-  color: "#9CA3AF",
-  fontSize: 12,
-  fontWeight: 500,
-  marginBottom: 6,
-};
 
 const hintStyle: React.CSSProperties = { color: "#4B5563", fontSize: 11, marginTop: 4 };
 
@@ -255,58 +235,14 @@ export function BannerForm({ bannerId, onClose, presentation = "modal" }: Props)
     }
   }
 
-  return (
-    <>
-      {presentation === "modal" && (
-        <div
-          onClick={onClose}
-          style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", zIndex: 300, backdropFilter: "blur(2px)" }}
-        />
-      )}
-      <div
-        style={{
-          position: presentation === "modal" ? "fixed" : "relative",
-          top: presentation === "modal" ? "50%" : undefined,
-          left: presentation === "modal" ? "50%" : undefined,
-          transform: presentation === "modal" ? "translate(-50%, -50%)" : undefined,
-          width: presentation === "modal" ? "min(640px, 95vw)" : "100%",
-          background: "#0D1117",
-          border: "1px solid #1F2937",
-          borderRadius: 14,
-          zIndex: presentation === "modal" ? 301 : undefined,
-          display: "flex",
-          flexDirection: "column",
-          maxHeight: presentation === "modal" ? "90vh" : undefined,
-          overflow: "hidden",
-        }}
-      >
-        <div
-          style={{
-            display: "flex", alignItems: "center", justifyContent: "space-between",
-            padding: "18px 22px", borderBottom: "1px solid #1F2937", flexShrink: 0,
-          }}
-        >
-          <h2 style={{ color: "#E8EDF5", fontSize: 15, fontWeight: 700, margin: 0 }}>
-            {isEdit ? t("editTitle") : t("createTitle")}
-          </h2>
-          <button
-            onClick={onClose}
-            style={{
-              background: "transparent", border: "1px solid #1F2937", borderRadius: 8,
-              padding: "5px 9px", color: "#4B5563", fontSize: 16, cursor: "pointer",
-            }}
-          >
-            ✕
-          </button>
-        </div>
-
-        {isEdit && bannerLoading ? (
+  const content = (
+    isEdit && bannerLoading ? (
           <div style={{ padding: 22, color: "#4B5563", fontSize: 13 }}>{t("loading")}</div>
         ) : (
           <form
             onSubmit={handleSubmit}
             style={{
-              padding: presentation === "page" ? 18 : 22,
+              padding: presentation === "page" ? 18 : 0,
               overflowY: presentation === "modal" ? "auto" : "visible",
               display: presentation === "page" ? "grid" : "flex",
               gridTemplateColumns: presentation === "page"
@@ -430,13 +366,14 @@ export function BannerForm({ bannerId, onClose, presentation = "modal" }: Props)
                   />
                 </label>
                 {imagePreview && (
-                  <button
+                  <Btn
                     type="button"
+                    variant="dangerOutline"
+                    size="xs"
                     onClick={() => { setImageFile(null); setImagePreview(null); }}
-                    style={{ background: "none", border: "none", color: "#EF4444", cursor: "pointer", fontSize: 12 }}
                   >
                     {t("imageRemove")}
-                  </button>
+                  </Btn>
                 )}
               </div>
               <p style={hintStyle}>{t("imageHint")}</p>
@@ -628,8 +565,52 @@ export function BannerForm({ bannerId, onClose, presentation = "modal" }: Props)
               </Btn>
             </div>
           </form>
-        )}
-      </div>
-    </>
+        )
+  );
+
+  if (presentation === "modal") {
+    return (
+      <Modal title={isEdit ? t("editTitle") : t("createTitle")} width={640} onClose={onClose}>
+        {content}
+      </Modal>
+    );
+  }
+
+  return (
+    <div
+      style={{
+        position: "relative",
+        width: "100%",
+        background: "#0D1117",
+        border: "1px solid #1F2937",
+        borderRadius: 14,
+        display: "flex",
+        flexDirection: "column",
+        overflow: "hidden",
+      }}
+    >
+        <div
+          style={{
+            display: "flex", alignItems: "center", justifyContent: "space-between",
+            padding: "18px 22px", borderBottom: "1px solid #1F2937", flexShrink: 0,
+          }}
+        >
+          <h2 style={{ color: "#E8EDF5", fontSize: 15, fontWeight: 700, margin: 0 }}>
+            {isEdit ? t("editTitle") : t("createTitle")}
+          </h2>
+          <button
+            onClick={onClose}
+            style={{
+              background: "transparent", border: "1px solid #1F2937", borderRadius: 8,
+              padding: "5px 9px", color: "#4B5563", fontSize: 16, cursor: "pointer",
+            }}
+          >
+            ✕
+          </button>
+        </div>
+
+
+      {content}
+    </div>
   );
 }

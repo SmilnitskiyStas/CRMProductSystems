@@ -5,6 +5,9 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { Shield, Building2, CheckCircle, LayoutGrid } from "lucide-react";
+import { PageContainer } from "@/components/ui/PageContainer";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { inputStyle } from "@/components/ui/fieldStyles";
 import { useMe } from "@/features/auth/hooks/useAuth";
 import { useTenants } from "@/features/admin/hooks/useAdmin";
 import { TenantTable } from "@/features/admin/components/TenantTable";
@@ -87,52 +90,37 @@ export default function AdminPage() {
   return (
     <div style={{ display: "flex", alignItems: "flex-start", minHeight: "100vh" }}>
       {/* Main content */}
-      <div style={{ flex: 1, minWidth: 0, padding: "28px 32px" }}>
-        {/* Header */}
-        <div
-          style={{
-            display: "flex",
-            alignItems: "flex-start",
-            justifyContent: "space-between",
-            marginBottom: 28,
-          }}
-        >
-          <div>
-            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4 }}>
-              <div
+      <PageContainer style={{ flex: 1, minWidth: 0 }}>
+        <PageHeader
+          title={
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 10 }}>
+              <span
                 style={{
-                  width: 34, height: 34,
+                  width: 34,
+                  height: 34,
                   borderRadius: 9,
                   background: "linear-gradient(135deg, #7C3AED, #3B82F6)",
-                  display: "flex", alignItems: "center", justifyContent: "center",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
                   flexShrink: 0,
                 }}
               >
                 <Shield size={17} color="#fff" />
-              </div>
-              <h1 style={{ color: "#E8EDF5", fontSize: 22, fontWeight: 700, margin: 0 }}>
-                {t("title")}
-              </h1>
-            </div>
-            <p style={{ color: "#4B5563", fontSize: 14, margin: 0 }}>
-              {t("subtitle")}
-            </p>
-          </div>
-
-          <Link
-            href="/provider"
-            style={{
-              color: "#60A5FA",
-              fontSize: 13,
-              textDecoration: "none",
-            }}
-          >
-            {t("providerLink")}
-          </Link>
-        </div>
+              </span>
+              {t("title")}
+            </span>
+          }
+          subtitle={t("subtitle")}
+          actions={
+            <Link href="/provider" style={{ color: "#60A5FA", fontSize: 13, textDecoration: "none" }}>
+              {t("providerLink")}
+            </Link>
+          }
+        />
 
         {/* Stats row */}
-        <div style={{ display: "flex", gap: 12, marginBottom: 24 }}>
+        <div style={{ display: "flex", gap: 12 }}>
           {stats.map((s) => (
             <div
               key={s.label}
@@ -177,23 +165,12 @@ export default function AdminPage() {
         </div>
 
         {/* Search */}
-        <div style={{ marginBottom: 16 }}>
+        <div>
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder={t("searchPlaceholder")}
-            style={{
-              width: "100%",
-              maxWidth: 360,
-              background: "#0D1117",
-              border: "1px solid #1F2937",
-              borderRadius: 8,
-              padding: "9px 14px",
-              color: "#E8EDF5",
-              fontSize: 13,
-              outline: "none",
-              boxSizing: "border-box",
-            }}
+            style={{ ...inputStyle, maxWidth: 360 }}
           />
         </div>
 
@@ -203,7 +180,7 @@ export default function AdminPage() {
           isLoading={tenantsLoading}
           onRowClick={handleRowClick}
         />
-      </div>
+      </PageContainer>
 
       {/* Drawer */}
       {selectedId && (

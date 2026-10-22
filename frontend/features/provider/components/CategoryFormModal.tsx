@@ -5,6 +5,7 @@ import { useTranslations } from "next-intl";
 import { toast } from "sonner";
 import { Btn } from "@/components/ui/Btn";
 import { Modal } from "@/components/ui/Modal";
+import { inputStyle, labelStyle } from "@/components/ui/fieldStyles";
 import { ALL_BUSINESS_TYPES, type CategoryDefaults, type PlatformCategoryDto } from "../types";
 import { useCreateCategory, useUpdateCategory } from "../hooks/useProviderCategories";
 import { flattenPlatformTree, indentLabel, subtreeIds } from "../lib/categoryTree";
@@ -20,26 +21,6 @@ interface Props {
   allCategories: PlatformCategoryDto[];
   onClose: () => void;
 }
-
-const labelStyle: React.CSSProperties = {
-  display: "block",
-  color: "#9CA3AF",
-  fontSize: 12,
-  fontWeight: 500,
-  marginBottom: 6,
-};
-
-const inputStyle: React.CSSProperties = {
-  width: "100%",
-  background: "#111827",
-  border: "1px solid #1F2937",
-  borderRadius: 8,
-  padding: "9px 12px",
-  color: "#E8EDF5",
-  fontSize: 13,
-  outline: "none",
-  boxSizing: "border-box",
-};
 
 export function CategoryFormModal({ category, presetParentId, allCategories, onClose }: Props) {
   const t = useTranslations("Dashboard.providerCategories");

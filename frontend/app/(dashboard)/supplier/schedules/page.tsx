@@ -3,6 +3,9 @@
 import { useState } from "react";
 import { useTranslations } from "next-intl";
 import { CalendarDays } from "lucide-react";
+import { PageContainer } from "@/components/ui/PageContainer";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { Tabs } from "@/components/ui/Tabs";
 import { ModuleGate } from "@/features/modules/components/ModuleGate";
 import { SupplierScheduleList } from "@/features/supplier-cabinet/components/schedules/SupplierScheduleList";
 import { SupplierWeekGrid } from "@/features/supplier-cabinet/components/schedules/SupplierWeekGrid";
@@ -40,65 +43,32 @@ export default function SupplierSchedulesPage() {
 
   if (me && !hasRole(me.role, SUPPLIER_ONLY)) {
     return (
-      <div style={{ padding: "28px 32px", color: "#F87171", fontSize: 14 }}>
-        {tPages("supplierOnlyAccess")}
-      </div>
+      <PageContainer>
+        <div style={{ color: "#F87171", fontSize: 14 }}>{tPages("supplierOnlyAccess")}</div>
+      </PageContainer>
     );
   }
 
-  const tabStyle = (tab: Tab): React.CSSProperties => ({
-    padding: "8px 18px",
-    borderRadius: 8,
-    border: "none",
-    background: effectiveTab === tab ? "#1D3461" : "transparent",
-    color: effectiveTab === tab ? "#93C5FD" : "#6B7280",
-    fontSize: 13,
-    fontWeight: effectiveTab === tab ? 600 : 400,
-    cursor: "pointer",
-    transition: "background 0.1s, color 0.1s",
-  });
-
   return (
     <ModuleGate moduleKey="supplier_workforce">
-      <div style={{ padding: "28px 32px", minHeight: "100vh" }}>
-        <div
-          style={{
-            display: "flex",
-            alignItems: "flex-start",
-            justifyContent: "space-between",
-            marginBottom: 20,
-            gap: 16,
-            flexWrap: "wrap",
-          }}
-        >
-          <div>
-            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4 }}>
+      <PageContainer>
+        <PageHeader
+          title={
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 10 }}>
               <CalendarDays size={20} style={{ color: "#3B82F6" }} />
-              <h1 style={{ color: "#E8EDF5", fontSize: 22, fontWeight: 700, margin: 0 }}>{t("pageTitle")}</h1>
-            </div>
-            <p style={{ color: "#4B5563", fontSize: 13, margin: 0 }}>{t("pageSubtitle")}</p>
-          </div>
-
-          <div
-            style={{
-              display: "flex",
-              gap: 4,
-              background: "#111827",
-              border: "1px solid #1F2937",
-              borderRadius: 10,
-              padding: 4,
-            }}
-          >
-            {canManage && (
-              <button style={tabStyle("schedules")} onClick={() => setActiveTab("schedules")}>
-                {t("schedulesTab")}
-              </button>
-            )}
-            <button style={tabStyle("my-shifts")} onClick={() => setActiveTab("my-shifts")}>
-              {t("myShiftsTab")}
-            </button>
-          </div>
-        </div>
+              {t("pageTitle")}
+            </span>
+          }
+          subtitle={t("pageSubtitle")}
+        />
+        <Tabs
+          items={[
+            ...(canManage ? [{ key: "schedules" as Tab, label: t("schedulesTab") }] : []),
+            { key: "my-shifts" as Tab, label: t("myShiftsTab") },
+          ]}
+          value={effectiveTab}
+          onChange={setActiveTab}
+        />
 
         {effectiveTab === "my-shifts" && <SupplierMyShifts />}
 
@@ -163,7 +133,7 @@ export default function SupplierSchedulesPage() {
             </div>
           </div>
         )}
-      </div>
+      </PageContainer>
     </ModuleGate>
   );
 }

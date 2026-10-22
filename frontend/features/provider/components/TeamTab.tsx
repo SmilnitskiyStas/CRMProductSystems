@@ -8,6 +8,7 @@ import { InviteProviderMemberModal } from "./InviteProviderMemberModal";
 import { EditMemberModal } from "./EditMemberModal";
 import type { ProviderTeamMemberDto } from "../api/providerTeamApi";
 import { Btn } from "@/components/ui/Btn";
+import { StatusPill } from "@/components/ui/StatusPill";
 
 const ROLE_COLORS: Record<string, string> = {
   provider:       "#A78BFA",
@@ -40,12 +41,9 @@ export function TeamTab() {
             {t("title")}
           </h2>
           {members && (
-            <span style={{
-              padding: "2px 8px", borderRadius: 10,
-              background: "#1F2937", color: "#9CA3AF", fontSize: 11,
-            }}>
+            <StatusPill bg="#1F2937" text="#9CA3AF">
               {members.length}
-            </span>
+            </StatusPill>
           )}
         </div>
         <Btn icon={<UserPlus size={14} />} onClick={() => setShowInvite(true)}>
@@ -74,19 +72,9 @@ export function TeamTab() {
                 <span style={{ color: "#4B5563", fontSize: 12 }}>{m.email}</span>
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <span
-                  style={{
-                    padding: "2px 10px",
-                    borderRadius: 20,
-                    fontSize: 11,
-                    fontWeight: 600,
-                    background: `${ROLE_COLORS[m.role] ?? "#6B7280"}22`,
-                    border: `1px solid ${ROLE_COLORS[m.role] ?? "#6B7280"}55`,
-                    color: ROLE_COLORS[m.role] ?? "#6B7280",
-                  }}
-                >
+                <StatusPill bg={`${ROLE_COLORS[m.role] ?? "#6B7280"}22`} text={ROLE_COLORS[m.role] ?? "#6B7280"}>
                   {tRoleLabels.has(m.role) ? tRoleLabels(m.role) : m.role}
-                </span>
+                </StatusPill>
 
                 {/* Edit button — always visible for active members */}
                 {m.isActive && (
@@ -130,32 +118,19 @@ export function TeamTab() {
                 {!m.isActive && (
                   <>
                     <span style={{ color: "#4B5563", fontSize: 11 }}>{t("inactiveLabel")}</span>
-                    <button
+                    <Btn
+                      variant="ghost"
+                      size="xs"
+                      title={t("reactivateTitle")}
+                      icon={<RefreshCw size={11} />}
                       onClick={() => {
                         if (confirm(t("confirmReactivate", { name: m.fullName }))) {
                           reactivate.mutate(m.id);
                         }
                       }}
-                      title={t("reactivateTitle")}
-                      style={{
-                        background: "transparent", border: "1px solid #374151",
-                        borderRadius: 6, color: "#6B7280", cursor: "pointer",
-                        padding: "3px 8px", fontSize: 11,
-                        display: "flex", alignItems: "center", gap: 4,
-                        transition: "border-color 0.15s, color 0.15s",
-                      }}
-                      onMouseEnter={(e) => {
-                        (e.currentTarget as HTMLElement).style.borderColor = "#4ADE80";
-                        (e.currentTarget as HTMLElement).style.color = "#4ADE80";
-                      }}
-                      onMouseLeave={(e) => {
-                        (e.currentTarget as HTMLElement).style.borderColor = "#374151";
-                        (e.currentTarget as HTMLElement).style.color = "#6B7280";
-                      }}
                     >
-                      <RefreshCw size={11} />
                       {t("restoreButton")}
-                    </button>
+                    </Btn>
                   </>
                 )}
               </div>

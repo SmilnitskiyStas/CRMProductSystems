@@ -4,30 +4,13 @@ import { useMemo, useState } from "react";
 import { useTranslations, useLocale } from "next-intl";
 import { Plus } from "lucide-react";
 import { Btn } from "@/components/ui/Btn";
+import { StatusPill } from "@/components/ui/StatusPill";
+import { filterInputStyle, labelStyle } from "@/components/ui/fieldStyles";
 import { Table, type TableColumn } from "@/components/ui/Table";
 import { useSupplierWarehouses } from "../hooks/useSupplierWarehouses";
 import { useSupplierReceipts } from "../hooks/useSupplierInventory";
 import { SupplierReceiptForm } from "./SupplierReceiptForm";
 import type { SupplierStockReceipt, SupplierStockReceiptStatus } from "../types";
-
-const selectStyle: React.CSSProperties = {
-  background: "#0D1117",
-  border: "1px solid #374151",
-  borderRadius: 8,
-  padding: "8px 12px",
-  color: "#E8EDF5",
-  fontSize: 13,
-  outline: "none",
-  minWidth: 240,
-};
-
-const labelStyle: React.CSSProperties = {
-  display: "block",
-  color: "#9CA3AF",
-  fontSize: 12,
-  fontWeight: 500,
-  marginBottom: 4,
-};
 
 const STATUS_COLOR: Record<SupplierStockReceiptStatus, { bg: string; text: string }> = {
   draft: { bg: "#1E1B2E", text: "#A78BFA" },
@@ -35,24 +18,10 @@ const STATUS_COLOR: Record<SupplierStockReceiptStatus, { bg: string; text: strin
   cancelled: { bg: "#2D0F0F", text: "#F87171" },
 };
 
-function StatusPill({ status }: { status: SupplierStockReceiptStatus }) {
+function ReceiptStatusPill({ status }: { status: SupplierStockReceiptStatus }) {
   const t = useTranslations("Dashboard.supplierCabinet.receiptsList.status");
   const c = STATUS_COLOR[status] ?? STATUS_COLOR.draft;
-  return (
-    <span
-      style={{
-        padding: "3px 9px",
-        borderRadius: 20,
-        background: c.bg,
-        color: c.text,
-        fontSize: 11,
-        fontWeight: 600,
-        whiteSpace: "nowrap",
-      }}
-    >
-      {t.has(status) ? t(status) : status}
-    </span>
-  );
+  return <StatusPill bg={c.bg} text={c.text}>{t.has(status) ? t(status) : status}</StatusPill>;
 }
 
 type FormTarget =
@@ -84,7 +53,7 @@ export function SupplierReceiptsList() {
       key: "status",
       header: t("headerStatus"),
       align: "left",
-      render: (r) => <StatusPill status={r.status} />,
+      render: (r) => <ReceiptStatusPill status={r.status} />,
     },
     {
       key: "warehouse",
@@ -135,7 +104,7 @@ export function SupplierReceiptsList() {
             <select
               value={effectiveWarehouseId ?? ""}
               onChange={(e) => setWarehouseId(e.target.value || null)}
-              style={selectStyle}
+              style={{ ...filterInputStyle, minWidth: 240 }}
               disabled={warehousesLoading || activeWarehouses.length === 0}
             >
               {activeWarehouses.length === 0 && <option value="">{t("noWarehouses")}</option>}
@@ -151,7 +120,7 @@ export function SupplierReceiptsList() {
             <select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value as SupplierStockReceiptStatus | "")}
-              style={{ ...selectStyle, minWidth: 160 }}
+              style={{ ...filterInputStyle, minWidth: 160 }}
             >
               <option value="">{t("statusAll")}</option>
               <option value="draft">{t("status.draft")}</option>

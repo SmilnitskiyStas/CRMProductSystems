@@ -323,6 +323,7 @@ function OrderExpandedContent({
         intlLocale={intlLocale}
       />
       {order.status === "shipped" && <RescheduleDeliveryControl order={order} />}
+      {/* eslint-disable-next-line no-restricted-syntax -- compact table embedded in expanded order row */}
       <table style={{ width: "100%", borderCollapse: "collapse" }}>
         <thead>
           <tr>

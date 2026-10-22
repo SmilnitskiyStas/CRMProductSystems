@@ -5,6 +5,9 @@ import { useTranslations } from "next-intl";
 import { toast } from "sonner";
 import { Phone, Search } from "lucide-react";
 import { Btn } from "@/components/ui/Btn";
+import { Pagination } from "@/components/ui/Pagination";
+import { StatusPill } from "@/components/ui/StatusPill";
+import { inputStyle } from "@/components/ui/fieldStyles";
 import { useProviderLeads, useUpdateLead } from "../hooks/useProviderLeads";
 import type { LandingLeadDto, LeadStatusFilter } from "../types";
 import { LeadDetailDrawer, formatLeadDate } from "./LeadDetailDrawer";
@@ -65,19 +68,9 @@ function LeadCard({ lead, onOpen }: { lead: LandingLeadDto; onOpen: () => void }
           {lead.company && <div style={{ color: "#9CA3AF", fontSize: 13, marginTop: 2 }}>{lead.company}</div>}
         </div>
         <div style={{ textAlign: "right" }}>
-          <span
-            style={{
-              display: "inline-block",
-              padding: "2px 10px",
-              borderRadius: 999,
-              fontSize: 11,
-              fontWeight: 600,
-              background: lead.isProcessed ? "#1a3a2e" : "#1D3461",
-              color: lead.isProcessed ? "#4ADE80" : "#93C5FD",
-            }}
-          >
+          <StatusPill bg={lead.isProcessed ? "#1a3a2e" : "#1D3461"} text={lead.isProcessed ? "#4ADE80" : "#93C5FD"}>
             {lead.isProcessed ? t("statusProcessed") : t("statusNew")}
-          </span>
+          </StatusPill>
           <div style={{ ...muted, marginTop: 4 }}>{formatLeadDate(lead.createdAt)}</div>
         </div>
       </div>
@@ -178,15 +171,7 @@ export function LeadsPanel() {
             value={searchInput}
             onChange={(e) => setSearchInput(e.target.value)}
             placeholder={t("searchPlaceholder")}
-            style={{
-              width: "100%",
-              background: "#111827",
-              border: "1px solid #374151",
-              borderRadius: 8,
-              color: "#E8EDF5",
-              fontSize: 13,
-              padding: "7px 10px 7px 30px",
-            }}
+            style={{ ...inputStyle, padding: "7px 10px 7px 30px" }}
           />
         </div>
         <span style={{ color: "#6B7280", fontSize: 12 }}>{t("total", { count: total })}</span>
@@ -206,17 +191,7 @@ export function LeadsPanel() {
         </div>
       )}
 
-      {pages > 1 && (
-        <div style={{ display: "flex", alignItems: "center", gap: 12, marginTop: 20 }}>
-          <Btn size="sm" variant="ghost" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>
-            {t("prev")}
-          </Btn>
-          <span style={{ color: "#9CA3AF", fontSize: 12 }}>{t("page", { page, pages })}</span>
-          <Btn size="sm" variant="ghost" disabled={page >= pages} onClick={() => setPage((p) => p + 1)}>
-            {t("next")}
-          </Btn>
-        </div>
-      )}
+      <Pagination page={page} totalPages={pages} totalCount={total} onPageChange={setPage} />
 
       <LeadDetailDrawer key={openLead?.id ?? "none"} lead={openLead} onClose={() => setOpenId(null)} />
     </div>

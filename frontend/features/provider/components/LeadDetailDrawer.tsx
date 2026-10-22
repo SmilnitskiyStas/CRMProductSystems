@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { Phone } from "lucide-react";
 import { Btn } from "@/components/ui/Btn";
 import { DetailDrawer } from "@/components/ui/DetailDrawer";
+import { textareaStyle } from "@/components/ui/fieldStyles";
 import { useUpdateLead } from "../hooks/useProviderLeads";
 import type { LandingLeadDto } from "../types";
 
@@ -150,16 +151,7 @@ export function LeadDetailDrawer({
           maxLength={1000}
           rows={4}
           placeholder={t("notePlaceholder")}
-          style={{
-            width: "100%",
-            background: "#111827",
-            border: "1px solid #374151",
-            borderRadius: 8,
-            color: "#E8EDF5",
-            fontSize: 13,
-            padding: 8,
-            resize: "vertical",
-          }}
+          style={textareaStyle}
         />
         <div style={{ marginTop: 8 }}>
           <Btn size="sm" onClick={saveNote} disabled={update.isPending || !noteChanged}>

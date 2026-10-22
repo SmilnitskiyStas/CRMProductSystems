@@ -11,6 +11,7 @@ import { Eye, RefreshCw, Send } from "lucide-react";
 import { toast } from "sonner";
 import { Btn } from "@/components/ui/Btn";
 import { ReasonModal } from "@/components/ui/ReasonModal";
+import { Tabs } from "@/components/ui/Tabs";
 import { Table, type TableColumn } from "@/components/ui/Table";
 import { AgreementStatusBadge } from "@/features/marketplace/components/CooperationBadges";
 import type { CooperationAgreementDto, CooperationStatus } from "@/features/marketplace/types";
@@ -185,20 +186,6 @@ export function CooperationRequestsTab() {
     }
   }
 
-  const tabStyle = (tab: FilterTab): React.CSSProperties => ({
-    padding: "8px 16px",
-    background: "transparent",
-    border: "none",
-    borderBottom: filter === tab ? "2px solid #3B82F6" : "2px solid transparent",
-    color: filter === tab ? "#3B82F6" : "#6B7280",
-    fontSize: 13,
-    fontWeight: filter === tab ? 600 : 400,
-    cursor: "pointer",
-    marginBottom: -1,
-    whiteSpace: "nowrap",
-    transition: "color 0.15s",
-  });
-
   const columns: TableColumn<CooperationAgreementDto>[] = [
     {
       key: "client",
@@ -264,19 +251,8 @@ export function CooperationRequestsTab() {
 
   return (
     <div>
-      <div
-        style={{
-          borderBottom: "1px solid #1F2937",
-          marginBottom: 20,
-          display: "flex",
-          overflowX: "auto",
-        }}
-      >
-        {FILTER_TABS.map((tab) => (
-          <button key={tab.key} style={tabStyle(tab.key)} onClick={() => setFilter(tab.key)}>
-            {tab.label}
-          </button>
-        ))}
+      <div style={{ marginBottom: 20 }}>
+        <Tabs items={FILTER_TABS} value={filter} onChange={setFilter} />
       </div>
 
       <Table
