@@ -27,6 +27,7 @@ import {
   ChevronRight,
   Calculator,
   Truck,
+  Factory,
   Store,
   Wrench,
   Car,
@@ -197,6 +198,8 @@ export function buildNavGroups(t: SidebarGroupsT): NavGroup[] {
     items: [
       { href: "/orders",    label: t("procurement.orders"),   icon: <Calculator size={16} />, roles: AT_LEAST_STORE_MANAGER, exact: true },
       { href: "/orders/tracking", label: t("procurement.tracking"), icon: <Truck size={16} />, roles: AT_LEAST_STORE_MANAGER },
+      // Store -> own production requests (item-level gate: only tenants with the production module).
+      { href: "/orders/production", label: t("procurement.productionRequests"), icon: <Factory size={16} />, roles: AT_LEAST_STORE_MANAGER, moduleKey: "production" },
       { href: "/ai-orders", label: t("procurement.aiOrders"), icon: <Sparkles size={16} />,   roles: AT_LEAST_STORE_MANAGER },
     ],
   },

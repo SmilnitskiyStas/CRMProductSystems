@@ -28,12 +28,14 @@ import {
 
 interface Props {
   id: string;
+  /** "store": requesting side (edit/submit/cancel). "production": inbox side (review/reject/ship). */
+  mode: "store" | "production";
   /** Tenant has the production module: review / reject / ship actions are available. */
   canProduce: boolean;
   onClose: () => void;
 }
 
-export function ProductionRequestDetail({ id, canProduce, onClose }: Props) {
+export function ProductionRequestDetail({ id, mode, canProduce, onClose }: Props) {
   const t = useTranslations("Dashboard.production.requests.detail");
   const locale = useLocale();
   const intlLocale = locale === "en" ? "en-US" : "uk-UA";
@@ -67,6 +69,8 @@ export function ProductionRequestDetail({ id, canProduce, onClose }: Props) {
     submit.isPending || cancel.isPending || review.isPending || reject.isPending || ship.isPending;
   const act = { onError: (e: unknown) => setError(errMessage(e, t("actionError"))) };
 
+  const storeSide = mode === "store";
+  const prodSide = mode === "production" && canProduce;
   const isAuto = req.source === "auto_buffer" || req.source === "auto_promo";
   const showAutoReason = req.lines.some((l) => !!l.autoReason);
   const showAccepted = req.lines.some((l) => l.acceptedQty !== null);
@@ -116,7 +120,7 @@ export function ProductionRequestDetail({ id, canProduce, onClose }: Props) {
             </span>
           </div>
 
-          {isAuto && req.status === "draft" && (
+          {storeSide && isAuto && req.status === "draft" && (
             <div style={{ color: "#C4B5FD", fontSize: 12 }}>{t("autoDraftHint")}</div>
           )}
           {req.notes && <div style={{ color: "#9CA3AF", fontSize: 13 }}>{req.notes}</div>}
@@ -141,7 +145,7 @@ export function ProductionRequestDetail({ id, canProduce, onClose }: Props) {
           {error && <div style={reqErrorStyle}>{error}</div>}
 
           <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, flexWrap: "wrap" }}>
-            {req.status === "draft" && (
+            {storeSide && req.status === "draft" && (
               <>
                 <Btn variant="ghost" onClick={() => setEditing(true)} disabled={pending}>
                   {t("edit")}
@@ -158,7 +162,7 @@ export function ProductionRequestDetail({ id, canProduce, onClose }: Props) {
                 </Btn>
               </>
             )}
-            {(req.status === "draft" || req.status === "submitted") && (
+            {storeSide && (req.status === "draft" || req.status === "submitted") && (
               <Btn
                 variant="danger"
                 disabled={pending}
@@ -171,7 +175,7 @@ export function ProductionRequestDetail({ id, canProduce, onClose }: Props) {
                 {t("cancel")}
               </Btn>
             )}
-            {canProduce && req.status === "submitted" && (
+            {prodSide && req.status === "submitted" && (
               <>
                 <Btn variant="danger" disabled={pending} onClick={() => setRejecting(true)}>
                   {t("reject")}
@@ -181,7 +185,7 @@ export function ProductionRequestDetail({ id, canProduce, onClose }: Props) {
                 </Btn>
               </>
             )}
-            {canProduce &&
+            {prodSide &&
               (req.status === "accepted" || req.status === "partial") &&
               !req.shippedAt && (
                 <Btn

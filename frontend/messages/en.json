@@ -1263,7 +1263,8 @@
           "label": "Procurement",
           "orders": "Purchase Orders",
           "aiOrders": "AI Orders",
-          "tracking": "Order tracking"
+          "tracking": "Order tracking",
+          "productionRequests": "Orders to production"
         },
         "marketplace": {
           "label": "Marketplace",
@@ -4224,7 +4225,14 @@
         "create": "Create"
       },
       "requests": {
-        "title": "Production requests",
+        "title": "Incoming store requests",
+        "subtitle": "Store requests to production: review, change quantities or reject, create production orders and ship.",
+        "filterActive": "Active (submitted / accepted / partial)",
+        "emptyIncoming": "No incoming requests",
+        "colStoreFrom": "Requesting store",
+        "storeTitle": "Orders to production",
+        "storeSubtitle": "Order finished goods from your own production the same way as from suppliers: draft → submitted → accepted → fulfilled.",
+        "storeEmpty": "No production requests yet",
         "newRequest": "New request",
         "calcNeeds": "Calculate needs",
         "calcRunning": "Calculating…",

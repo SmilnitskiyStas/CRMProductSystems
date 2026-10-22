@@ -147,6 +147,7 @@ public static class TenantRoleTabs
     // Procurement (moduleKey "procurement")
     public const string ItemOrders = "/orders";
     public const string ItemAiOrders = "/ai-orders";
+    public const string ItemOrdersProduction = "/orders/production";
 
     // Marketplace (moduleKey "marketplace")
     public const string ItemMarketplaceSuppliers = "/marketplace";
@@ -202,7 +203,7 @@ public static class TenantRoleTabs
         ItemInventory, ItemStock, ItemReceipts, ItemTransfers, ItemWriteOffs, ItemLocations, ItemIot,
         ItemPos, ItemSales, ItemCustomers,
         ItemEvents,
-        ItemOrders, ItemAiOrders,
+        ItemOrders, ItemOrdersProduction, ItemAiOrders,
         ItemMarketplaceSuppliers, ItemMarketplaceOrders,
         ItemAutoServiceWorkOrders, ItemAutoServiceCustomers, ItemAutoServiceCatalog,
         ItemProductionRecipes, ItemProductionOrders, ItemProductionRequests,
@@ -259,6 +260,7 @@ public static class TenantRoleTabs
         new(Procurement, "Постачання",
         [
             new(ItemOrders, "Замовлення постачання"),
+            new(ItemOrdersProduction, "Замовлення у виробництво"),
             new(ItemAiOrders, "AI Постачання"),
         ]),
         new(Marketplace, "Маркетплейс",

@@ -25,7 +25,7 @@ import {
   reqErrorStyle,
 } from "./ProductionRequestStatusBadge";
 
-const STATUSES: ProductionRequestStatus[] = [
+const STORE_STATUSES: ProductionRequestStatus[] = [
   "draft",
   "submitted",
   "accepted",
@@ -34,21 +34,38 @@ const STATUSES: ProductionRequestStatus[] = [
   "fulfilled",
   "cancelled",
 ];
+// Production never sees store drafts / cancelled requests.
+const PRODUCTION_STATUSES: ProductionRequestStatus[] = [
+  "submitted",
+  "accepted",
+  "partial",
+  "rejected",
+  "fulfilled",
+];
+// Default inbox: what still needs production attention.
+const PRODUCTION_DEFAULT_STATUS = "submitted,accepted,partial";
 
 // Requests that can feed a production order.
 const ORDERABLE = new Set<string>(["accepted", "partial"]);
 
-export function ProductionRequestsPage() {
+interface PageProps {
+  /** "store": requesting side (create/calc/edit own requests). "production": inbox side. */
+  mode: "store" | "production";
+}
+
+export function ProductionRequestsPage({ mode }: PageProps) {
+  const isProd = mode === "production";
+  const STATUSES = isProd ? PRODUCTION_STATUSES : STORE_STATUSES;
   const t = useTranslations("Dashboard.production.requests");
   const tCommon = useTranslations("Common");
   const locale = useLocale();
   const intlLocale = locale === "en" ? "en-US" : "uk-UA";
   const { data: modulesData } = useModules();
   // Review / ship / summary / order creation are production-module endpoints (403 otherwise).
-  const canProduce = !!modulesData?.modules.includes("production");
+  const canProduce = isProd && !!modulesData?.modules.includes("production");
 
   const [tab, setTab] = useState<"requests" | "summary">("requests");
-  const [status, setStatus] = useState("");
+  const [status, setStatus] = useState(isProd ? PRODUCTION_DEFAULT_STATUS : "");
   const [storeId, setStoreId] = useState("");
   const [formOpen, setFormOpen] = useState(false);
   const [openId, setOpenId] = useState<string | null>(null);
@@ -58,7 +75,8 @@ export function ProductionRequestsPage() {
 
   const { data: locations = [] } = useLocations();
   const { data: rows = [], isLoading, isError } = useProductionRequests({
-    status: status || undefined,
+    // "All" for production still excludes store drafts / cancelled.
+    status: status || (isProd ? PRODUCTION_STATUSES.join(",") : undefined),
     storeLocationId: storeId || undefined,
   });
   const createOrders = useCreateOrdersFromRequests();
@@ -122,9 +140,9 @@ export function ProductionRequestsPage() {
       : []),
     {
       key: "store",
-      header: t("colStore"),
+      header: isProd ? t("colStoreFrom") : t("colStore"),
       align: "left",
-      cellStyle: { color: "#E8EDF5", fontWeight: 500 },
+      cellStyle: { color: "#E8EDF5", fontWeight: isProd ? 700 : 500, fontSize: isProd ? 14 : undefined },
       render: (r) => r.storeLocationName,
     },
     { key: "prod", header: t("colProduction"), render: (r) => r.productionLocationName },
@@ -186,14 +204,25 @@ export function ProductionRequestsPage() {
           flexWrap: "wrap",
         }}
       >
-        <h1 style={{ color: "#E8EDF5", fontSize: 22, fontWeight: 700, margin: 0 }}>{t("title")}</h1>
+        <div>
+          <h1 style={{ color: "#E8EDF5", fontSize: 22, fontWeight: 700, margin: 0 }}>
+            {isProd ? t("title") : t("storeTitle")}
+          </h1>
+          <p style={{ color: "#6B7280", fontSize: 13, margin: "6px 0 0" }}>
+            {isProd ? t("subtitle") : t("storeSubtitle")}
+          </p>
+        </div>
         <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-          <Btn variant="ghost" onClick={handleAutoGenerate} disabled={autoGen.isPending}>
-            {autoGen.isPending ? t("calcRunning") : t("calcNeeds")}
-          </Btn>
-          <Btn icon={<Plus size={15} />} onClick={() => setFormOpen(true)}>
-            {t("newRequest")}
-          </Btn>
+          {!isProd && (
+            <>
+              <Btn variant="ghost" onClick={handleAutoGenerate} disabled={autoGen.isPending}>
+                {autoGen.isPending ? t("calcRunning") : t("calcNeeds")}
+              </Btn>
+              <Btn icon={<Plus size={15} />} onClick={() => setFormOpen(true)}>
+                {t("newRequest")}
+              </Btn>
+            </>
+          )}
         </div>
       </div>
 
@@ -215,6 +244,9 @@ export function ProductionRequestsPage() {
               style={{ ...reqInputStyle, width: "auto", padding: "7px 12px", cursor: "pointer" }}
             >
               <option value="">{t("filterAllStatuses")}</option>
+              {isProd && (
+                <option value={PRODUCTION_DEFAULT_STATUS}>{t("filterActive")}</option>
+              )}
               {STATUSES.map((s) => (
                 <option key={s} value={s}>{t(`status.${s}`)}</option>
               ))}
@@ -269,15 +301,15 @@ export function ProductionRequestsPage() {
               rowKey={(r) => r.id}
               isLoading={isLoading}
               onRowClick={(r) => setOpenId(r.id)}
-              emptyMessage={isLoading ? tCommon("loading") : t("empty")}
+              emptyMessage={isLoading ? tCommon("loading") : isProd ? t("emptyIncoming") : t("storeEmpty")}
             />
           )}
         </>
       )}
 
-      {formOpen && <ProductionRequestForm onClose={() => setFormOpen(false)} />}
+      {!isProd && formOpen && <ProductionRequestForm onClose={() => setFormOpen(false)} />}
       {openId && (
-        <ProductionRequestDetail id={openId} canProduce={canProduce} onClose={() => setOpenId(null)} />
+        <ProductionRequestDetail id={openId} mode={mode} canProduce={canProduce} onClose={() => setOpenId(null)} />
       )}
     </div>
   );

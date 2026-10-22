@@ -1658,3 +1658,5 @@ Worker більше не логіниться сервісним акаунто�
 
 ### TASK-759 — Production block UI alignment (frontend) — review
 Production pages/forms/detail + OrderCard/AutoOrdersSection switched to shared Btn/Table/Modal/ActionMenu, pill badges, 22px headers. tsc + eslint clean. Log: .claude/logs/tasks/759_2026-10-22_production-ui-alignment_frontend-developer.md
+
+- TASK-760: store-side /orders/production + production-only /production/requests via `mode` prop; sidebar item + TenantRoleTabs key. See logs/tasks/760_*.
