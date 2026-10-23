@@ -45,7 +45,9 @@ try {
     $fixturePort = $Matches[1]
     $ready = $false
     for ($attempt = 0; $attempt -lt 30; $attempt++) {
-        & docker exec $containerName pg_isready -U recovery_fixture -d recovery_test 2>&1 | Out-Null
+        # The image's temporary initialization server accepts Unix-socket probes before
+        # POSTGRES_DB exists. Verify a real TCP query against the final database instead.
+        & docker exec --env ("PGPASSWORD=" + $fixturePassword) $containerName psql -h 127.0.0.1 -U recovery_fixture -d recovery_test -Atc 'SELECT 1' 2>&1 | Out-Null
         if ($LASTEXITCODE -eq 0) { $ready = $true; break }
         Start-Sleep -Milliseconds 500
     }
