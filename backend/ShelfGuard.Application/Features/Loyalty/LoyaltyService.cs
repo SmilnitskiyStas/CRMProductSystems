@@ -521,6 +521,40 @@ public sealed class LoyaltyService : ILoyaltyService
         return (result, null, null);
     }
 
+    public async Task<(PagedResult<ConsumerPurchaseDto>? Purchases, string? Error, int? StatusCode)> GetPurchasesAsync(
+        Guid consumerAccountId, Guid tenantId, Guid? storeId, int page, int pageSize, CancellationToken ct = default)
+    {
+        // Validate ownership under consumer RLS BEFORE entering the tenant read scope.
+        var membership = await _loyalty.GetMembershipByTenantConsumerAsync(tenantId, consumerAccountId, ct);
+        if (membership is null) return (null, "You are not a member of this loyalty program.", 404);
+        var clampedPage = Math.Max(1, page);
+        var clampedSize = Math.Clamp(pageSize, 1, 200);
+        var result = await _tenantScope.ExecuteAsync(tenantId, async () =>
+        {
+            var (purchases, total) = await _loyalty.GetPurchasesPagedAsync(
+                tenantId, membership.Id, storeId, clampedPage, clampedSize, ct);
+            var entries = await _loyalty.GetLedgerEntriesForTransactionsAsync(
+                tenantId, purchases.Select(p => p.Id).ToList(), ct);
+            var ownEntries = entries.Where(e => e.TenantId == tenantId && e.MembershipId == membership.Id)
+                .ToLookup(e => e.PosTransactionId);
+            return new PagedResult<ConsumerPurchaseDto>
+            {
+                Items = purchases.Select(p =>
+                {
+                    var ledger = ownEntries[p.Id].ToList();
+                    return new ConsumerPurchaseDto(p.Id, p.StoreId, p.Store?.Name ?? "Магазин",
+                        p.Store?.Address, p.ReceiptNumber, p.CreatedAt, p.TotalAmount,
+                        ledger.Where(e => e.EntryType == LoyaltyEntryType.Accrual || e.EntryType == LoyaltyEntryType.Reward)
+                            .Sum(e => e.Amount),
+                        -ledger.Where(e => e.EntryType == LoyaltyEntryType.Redemption).Sum(e => e.Amount),
+                        ledger.Count > 0);
+                }).ToList(),
+                TotalCount = total, Page = clampedPage, PageSize = clampedSize,
+            };
+        }, ct);
+        return (result, null, null);
+    }
+
     // ── Tier ladder — consumer-facing (TASK-615) ──────────────────────────────
 
     /// <summary>See <see cref="ILoyaltyService.GetTierProgressAsync"/>.</summary>

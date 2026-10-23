@@ -117,6 +117,21 @@ public sealed class LoyaltyRepository : ILoyaltyRepository
             .ToListAsync(ct);
     }
 
+    public async Task<(List<PosTransaction> Items, int Total)> GetPurchasesPagedAsync(
+        Guid tenantId, Guid membershipId, Guid? storeId, int page, int pageSize, CancellationToken ct = default)
+    {
+        var query = _db.PosTransactions.AsNoTracking().Where(t => t.TenantId == tenantId
+            && (t.Status == "completed" || t.Status == "fiscalized" || t.Status == "pending_fiscalization")
+            && (t.LoyaltyMembershipId == membershipId || _db.LoyaltyLedgerEntries.Any(e =>
+                e.TenantId == tenantId && e.MembershipId == membershipId && e.PosTransactionId == t.Id)));
+        if (storeId.HasValue) query = query.Where(t => t.StoreId == storeId.Value);
+        var total = await query.CountAsync(ct);
+        var items = await query.Include(t => t.Store)
+            .OrderByDescending(t => t.CreatedAt).ThenByDescending(t => t.Id)
+            .Skip((page - 1) * pageSize).Take(pageSize).ToListAsync(ct);
+        return (items, total);
+    }
+
     public Task AddLedgerEntryAsync(LoyaltyLedgerEntry entry, CancellationToken ct = default) =>
         _db.LoyaltyLedgerEntries.AddAsync(entry, ct).AsTask();
 

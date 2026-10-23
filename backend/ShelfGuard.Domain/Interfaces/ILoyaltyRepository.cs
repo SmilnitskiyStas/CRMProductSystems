@@ -82,6 +82,11 @@ public interface ILoyaltyRepository
     Task<List<LoyaltyLedgerEntry>> GetLedgerEntriesForTransactionsAsync(
         Guid tenantId, IReadOnlyCollection<Guid> transactionIds, CancellationToken ct = default);
 
+    /// <summary>One row per owned purchase, including zero-bonus purchases linked directly
+    /// to the membership. Legacy purchases may instead be linked through the ledger.</summary>
+    Task<(List<PosTransaction> Items, int Total)> GetPurchasesPagedAsync(
+        Guid tenantId, Guid membershipId, Guid? storeId, int page, int pageSize, CancellationToken ct = default);
+
     Task AddLedgerEntryAsync(LoyaltyLedgerEntry entry, CancellationToken ct = default);
     Task<List<LoyaltyBonusLot>> GetAvailableBonusLotsAsync(Guid tenantId, Guid membershipId, CancellationToken ct = default) =>
         Task.FromResult(new List<LoyaltyBonusLot>());
