@@ -190,6 +190,7 @@ if (app.Environment.IsDevelopment())
 }
 
 // Must run FIRST so downstream middleware (rate limiter, auth, logging) sees the real client IP.
+app.UseWorkerPeerBoundary();
 app.UseForwardedHeaders();
 
 // TASK-329: security headers for API responses (CSP not needed for a JSON API).

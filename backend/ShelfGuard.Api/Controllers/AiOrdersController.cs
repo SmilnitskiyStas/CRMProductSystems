@@ -35,6 +35,7 @@ public sealed class AiOrdersController : ControllerBase
     }
 
     [HttpPost("generate")]
+    [AllowWorkerToken]
     [Authorize(Policy = AppPolicies.AiOrdersManageOrCapability)]
     [ProducesResponseType(typeof(AiOrderDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]

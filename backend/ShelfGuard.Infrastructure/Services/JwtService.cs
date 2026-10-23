@@ -1,3 +1,4 @@
+using ShelfGuard.Application.Features.Auth;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Security.Cryptography;
@@ -8,7 +9,7 @@ using ShelfGuard.Application.Services;
 
 namespace ShelfGuard.Infrastructure.Services;
 
-public sealed class JwtService : IJwtService
+public sealed class JwtService : IJwtService, IWorkerTokenIssuer
 {
     private readonly string _secret;
     private readonly string _issuer;
@@ -163,6 +164,18 @@ public sealed class JwtService : IJwtService
             signingCredentials: credentials);
 
         return (new JwtSecurityTokenHandler().WriteToken(token), expiresAt);
+    }
+
+    public WorkerGrant GenerateWorkerToken(ShelfGuard.Domain.Entities.User user)
+    {
+        if (user.TenantId is not Guid tenant || !WorkerAuthService.AllowedRole(user.Role)) throw new InvalidOperationException("Worker identity must be tenant-bound.");
+        var expires = DateTime.UtcNow.AddMinutes(5);
+        var token = new JwtSecurityToken(issuer: _issuer, audience: _audience + ":worker", expires: expires,
+            claims: new[] { new Claim(JwtRegisteredClaimNames.Sub, user.Id.ToString()), new Claim(ClaimTypes.Role, user.Role),
+                new Claim("tenant_id", tenant.ToString()), new Claim("auth_ver", user.AuthVersion.ToString(System.Globalization.CultureInfo.InvariantCulture)),
+                new Claim("purpose", "worker-job"), new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()) },
+            signingCredentials: new SigningCredentials(new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_secret)), SecurityAlgorithms.HmacSha256));
+        return new(new JwtSecurityTokenHandler().WriteToken(token), tenant, expires);
     }
 
     public (string RawToken, string TokenHash) GenerateRefreshToken()

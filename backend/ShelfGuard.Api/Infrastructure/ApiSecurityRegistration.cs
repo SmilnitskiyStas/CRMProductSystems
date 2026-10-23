@@ -181,6 +181,7 @@ public static class ApiSecurityRegistration
                     {
                         configuration["Jwt:Audience"],
                         configuration["Jwt:Audience"] + ShelfGuard.Application.Services.JwtAudiences.RegisterSuffix,
+                        configuration["Jwt:Audience"] + ":worker",
                     },
                     IssuerSigningKey         = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSecret)),
                     ClockSkew                = TimeSpan.Zero,
@@ -195,7 +196,7 @@ public static class ApiSecurityRegistration
                 var registerAudience = configuration["Jwt:Audience"] + ShelfGuard.Application.Services.JwtAudiences.RegisterSuffix;
                 options.Events = new JwtBearerEvents
                 {
-                    OnTokenValidated = ctx => AccessSessionValidation.ValidateAsync(ctx, registerAudience),
+                    OnTokenValidated = ctx => AccessSessionValidation.ValidateAsync(ctx, registerAudience, configuration["Jwt:Audience"] + ":worker"),
                     OnMessageReceived = context =>
                     {
                         var accessToken = context.Request.Query["access_token"];

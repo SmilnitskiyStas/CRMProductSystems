@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using Microsoft.EntityFrameworkCore.Migrations;
 
 #nullable disable
@@ -46,6 +46,10 @@ namespace ShelfGuard.Infrastructure.Migrations
             // Preserve each existing staff refresh proof as its own migratable session.
             // New APIs can exchange the old cookie for a sid-bound access token.
             migrationBuilder.Sql("UPDATE refresh_tokens SET \"SessionId\" = \"Id\" WHERE \"SessionId\" = '00000000-0000-0000-0000-000000000000'::uuid;");
+
+            // During the rolling update an old API may still insert a refresh row without
+            // SessionId. Give each such row its own identity rather than sharing Guid.Empty.
+            migrationBuilder.Sql("ALTER TABLE refresh_tokens ALTER COLUMN \"SessionId\" SET DEFAULT gen_random_uuid();");
 
             migrationBuilder.CreateTable(
                 name: "consumer_refresh_tokens",

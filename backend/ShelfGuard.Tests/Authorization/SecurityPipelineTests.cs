@@ -1,3 +1,6 @@
+using ShelfGuard.Application.Features.Auth;
+using ShelfGuard.Domain.Entities;
+using ShelfGuard.Infrastructure.Authorization;
 using System.Net;
 using System.Net.Http.Headers;
 using Microsoft.AspNetCore.Builder;
@@ -20,16 +23,19 @@ public sealed class SecurityPipelineTests
     private static readonly IConfiguration Config = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?> {
         ["Jwt:Secret"] = "SYNTHETIC-HTTP-PIPELINE-KEY-000000000000000000000000",
         ["Jwt:Issuer"] = "pipeline", ["Jwt:Audience"] = "pipeline" }).Build();
-    private static async Task<WebApplication> Server()
+    private static async Task<WebApplication> Server(bool workerValid = true)
     {
         var builder = WebApplication.CreateSlimBuilder(); builder.Logging.ClearProviders();
         builder.WebHost.UseKestrel().UseUrls("http://127.0.0.1:0");
         var validator = Substitute.For<IAccessSessionValidator>();
         validator.IsValidAsync(Arg.Any<System.Security.Claims.ClaimsPrincipal>(), Arg.Any<CancellationToken>()).Returns(true);
-        builder.Services.AddSingleton(validator); builder.Services.AddApiSecurity(Config);
+        var worker = Substitute.For<IWorkerSessionValidator>();
+        worker.IsValidAsync(Arg.Any<System.Security.Claims.ClaimsPrincipal>(), Arg.Any<CancellationToken>()).Returns(workerValid);
+        builder.Services.AddSingleton(worker); builder.Services.AddSingleton(validator); builder.Services.AddApiSecurity(Config);
         var app = builder.Build(); app.UseRouting(); app.UseApiSecurity();
         app.MapPost("/critical-probe", () => "synthetic").RequireAuthorization().RequireRateLimiting("register-pin-manage");
         app.MapGet("/probe", () => "synthetic").RequireAuthorization();
+        app.MapGet("/worker-probe", () => "synthetic").RequireAuthorization().WithMetadata(new AllowWorkerTokenAttribute());
         app.MapGet(ApiSecurityRegistration.ConsumerSupportHubPath, () => "synthetic").RequireAuthorization();
         await app.StartAsync(); return app;
     }
@@ -39,6 +45,26 @@ public sealed class SecurityPipelineTests
         var client = new HttpClient { BaseAddress = new Uri(address) };
         if (token != null) client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
         return client;
+    }
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task Worker_audience_is_route_bound_and_requires_live_identity_validation(bool valid)
+    {
+        await using var app = await Server(valid);
+        var user = User.Create(Guid.NewGuid(), "worker@synthetic.example", "Worker", "hash", "network_manager");
+        using var client = Client(app, new JwtService(Config).GenerateWorkerToken(user).AccessToken);
+        Assert.Equal(valid ? HttpStatusCode.OK : HttpStatusCode.Unauthorized, (await client.GetAsync("/worker-probe")).StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await client.GetAsync("/probe")).StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await client.PostAsync("/critical-probe", null)).StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await client.GetAsync(ApiSecurityRegistration.ConsumerSupportHubPath)).StatusCode);
+    }
+    [Fact]
+    public void Only_three_existing_job_operations_accept_worker_tokens()
+    {
+        var methods=typeof(ShelfGuard.Api.Controllers.PosController).Assembly.GetTypes().SelectMany(t=>t.GetMethods())
+            .Where(m=>m.GetCustomAttributes(typeof(AllowWorkerTokenAttribute),true).Length>0).Select(m=>m.DeclaringType!.Name+"."+m.Name).Order().ToArray();
+        Assert.Equal(new[]{"AiOrdersController.Generate","PosController.FiscalizeTransaction","PosController.GetPendingFiscalization"},methods);
     }
     [Fact]
     public async Task Shared_pipeline_authenticates_before_subject_partitioned_limits()

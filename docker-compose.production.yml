@@ -11,6 +11,8 @@ x-api-env: &api-env
   ASPNETCORE_ENVIRONMENT: Production
   ConnectionStrings__DefaultConnection: ${DATABASE_URL}
   Jwt__Secret: ${JWT_SECRET}
+  WorkerAuth__Email: ${WORKER_API_EMAIL:-}
+  WorkerAuth__AllowHostBridge: 'true'
   Jwt__Issuer: ${JWT_ISSUER:-shelfguard}
   Jwt__Audience: ${JWT_AUDIENCE:-shelfguard}
   Cors__Origins: ${Cors__Origins:-http://localhost:3000}

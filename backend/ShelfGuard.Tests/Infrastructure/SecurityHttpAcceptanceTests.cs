@@ -53,14 +53,14 @@ public sealed class SecurityHttpAcceptanceTests : IAsyncLifetime
     }
     public Task DisposeAsync() => Task.CompletedTask;
 
-    private async Task<WebApplication> Server()
+    private async Task<WebApplication> Server(string? workerEmail = null)
     {
         var builder = WebApplication.CreateSlimBuilder(new WebApplicationOptions { EnvironmentName = "Staging" });
         builder.Configuration.Sources.Clear(); // Never load appsettings.Secrets, environment credentials, or providers.
         builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?> {
             ["ConnectionStrings:DefaultConnection"] = runtimeConnection, ["Jwt:Secret"] = Key,
             ["Jwt:Issuer"] = "http-acceptance", ["Jwt:Audience"] = "http-acceptance",
-            ["Frontend:BaseUrl"] = "https://synthetic.example" });
+            ["WorkerAuth:Email"] = workerEmail, ["Frontend:BaseUrl"] = "https://synthetic.example" });
         builder.Logging.ClearProviders();
         builder.WebHost.UseKestrel().UseUrls("http://127.0.0.1:0");
         builder.Services.AddControllers().AddApplicationPart(typeof(AuthController).Assembly)
@@ -71,7 +71,7 @@ public sealed class SecurityHttpAcceptanceTests : IAsyncLifetime
         builder.Services.AddApiSecurity(builder.Configuration);
         builder.Services.AddExceptionHandler<GlobalExceptionHandler>(); builder.Services.AddProblemDetails();
         var app = builder.Build();
-        app.UseExceptionHandler(); app.UseRouting(); app.UseApiSecurity(); app.MapControllers();
+        app.UseExceptionHandler(); app.UseWorkerPeerBoundary(); app.UseRouting(); app.UseApiSecurity(); app.MapControllers();
         await app.StartAsync(); return app;
     }
     private static HttpClient Client(WebApplication app)
@@ -98,7 +98,7 @@ public sealed class SecurityHttpAcceptanceTests : IAsyncLifetime
     private static string Code(string secret) => new Totp(Base32Encoding.ToBytes(secret)).ComputeTotp();
     private async Task<(Tenant Tenant, User User, Location Location, Location Hidden)> Seed(string role = "store_manager", bool mfa = false)
     {
-        var tenant = Tenant.Create("Synthetic HTTP tenant", Guid.NewGuid().ToString("N")); tenant.UpdateModules(["inventory", "production"]);
+        var tenant = Tenant.Create("Synthetic HTTP tenant", Guid.NewGuid().ToString("N")); tenant.UpdateModules(["inventory", "production", "pos"]);
         var location = new Location { TenantId = tenant.Id, Name = "Assigned" }; var hidden = new Location { TenantId = tenant.Id, Name = "Hidden" };
         var user = User.Create(tenant.Id, Guid.NewGuid().ToString("N") + "@synthetic.example", "Synthetic", BCrypt.Net.BCrypt.HashPassword(Password, 4), role);
         if (mfa) { user.SetPendingTotpSecret(new TotpService().GenerateSecret()); user.EnableTotp([new JwtService(Config()).HashToken("ABCD2345")]); }
@@ -112,7 +112,7 @@ public sealed class SecurityHttpAcceptanceTests : IAsyncLifetime
     [RecoveryPostgresFact]
     public async Task Real_migrations_enable_RLS_for_runtime_role_without_anonymous_tenant_data_access()
     {
-        var (tenant, _, _, _) = await Seed();
+        var (tenant, legacyUser, _, _) = await Seed();
         await using var runtime = TestPostgres.NewContext(runtimeConnection);
         await runtime.Database.OpenConnectionAsync();
         await using var command = runtime.Database.GetDbConnection().CreateCommand();
@@ -121,6 +121,14 @@ public sealed class SecurityHttpAcceptanceTests : IAsyncLifetime
         Assert.Empty(await runtime.Locations.Where(l => l.TenantId == tenant.Id).ToListAsync());
         await using var admin = Admin(); Assert.Empty(await admin.Database.GetPendingMigrationsAsync());
         Assert.Contains("20261023165833_EnforceAccessMatrix", await admin.Database.GetAppliedMigrationsAsync());
+        // Old binaries omit SessionId during a rolling deploy; repeated logins must not
+        // collide on the new unique (UserId,SessionId) active-session index.
+        for (var i = 0; i < 2; i++) {
+            var id = Guid.NewGuid(); var hash = Guid.NewGuid().ToString("N"); var now = DateTime.UtcNow; var expires = now.AddDays(1);
+            await admin.Database.ExecuteSqlInterpolatedAsync($"INSERT INTO refresh_tokens (\"Id\",\"UserId\",\"TokenHash\",\"CreatedAt\",\"ExpiresAt\") VALUES ({id},{legacyUser.Id},{hash},{now},{expires})");
+        }
+        var legacyIds = await admin.RefreshTokens.Where(t => t.UserId == legacyUser.Id).Select(t => t.SessionId).ToListAsync();
+        Assert.Equal(2, legacyIds.Distinct().Count()); Assert.DoesNotContain(Guid.Empty, legacyIds);
     }
 
     [RecoveryPostgresFact]
@@ -160,12 +168,27 @@ public sealed class SecurityHttpAcceptanceTests : IAsyncLifetime
         Bearer(client, Token(response)); Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/api/production/orders")).StatusCode);
     }
 
+    [RecoveryPostgresFact]
+    public async Task Worker_grant_preserves_human_MFA_and_is_route_tenant_and_live_identity_bound_under_RLS()
+    {
+        var (_, user, _, _) = await Seed(); await using var app = await Server(user.Email); using var client = Client(app);
+        var human = await Login(client, user); Assert.True(human.GetProperty("requiresMfaEnrollment").GetBoolean());
+        var issued = await Post(client, "/api/internal/worker-session", new { user.Email, password = Password });
+        var grant = await Json(issued); Assert.False(issued.Headers.Contains("Set-Cookie"));
+        Bearer(client, Token(grant));
+        Assert.Equal(HttpStatusCode.Unauthorized, (await client.GetAsync("/api/auth/me")).StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await client.GetAsync("/api/production/orders")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/api/pos/sales/pending-fiscalization")).StatusCode);
+        await using (var db = Admin()) { var current = await db.Users.SingleAsync(u => u.Id == user.Id); current.Deactivate(); await db.SaveChangesAsync(); }
+        Assert.Equal(HttpStatusCode.Unauthorized, (await client.GetAsync("/api/pos/sales/pending-fiscalization")).StatusCode);
+    }
+
     private sealed class TestControllers : IApplicationFeatureProvider<ControllerFeature>
     {
         public void PopulateFeature(IEnumerable<ApplicationPart> parts, ControllerFeature feature)
         {
             foreach (var controller in feature.Controllers.ToArray())
-                if (controller.AsType() != typeof(AuthController) && controller.AsType() != typeof(ProductionController)) feature.Controllers.Remove(controller);
+                if (controller.AsType() != typeof(AuthController) && controller.AsType() != typeof(ProductionController) && controller.AsType() != typeof(InternalWorkerAuthController) && controller.AsType() != typeof(PosController)) feature.Controllers.Remove(controller);
         }
     }
     private sealed class TestClock : TimeProvider { public override DateTimeOffset GetUtcNow() => DateTimeOffset.UtcNow; }

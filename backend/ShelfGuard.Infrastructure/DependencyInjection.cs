@@ -43,6 +43,9 @@ public static class DependencyInjection
 
         // Auth services
         services.AddSingleton<IJwtService, JwtService>();
+        services.AddSingleton<ShelfGuard.Application.Features.Auth.IWorkerTokenIssuer>(s => (ShelfGuard.Application.Features.Auth.IWorkerTokenIssuer)s.GetRequiredService<IJwtService>());
+        services.AddSingleton(new ShelfGuard.Application.Features.Auth.WorkerAuthOptions(configuration["WorkerAuth:Email"] ?? ""));
+        services.AddSingleton<ShelfGuard.Application.Features.Auth.IWorkerSessionValidator, WorkerSessionValidator>();
         services.AddSingleton<IPasswordHasher, BcryptPasswordHasher>();
         services.AddSingleton<ITotpService, TotpService>(); // 2FA TOTP (TASK-330)
         services.AddScoped<IUserRepository, UserRepository>();
