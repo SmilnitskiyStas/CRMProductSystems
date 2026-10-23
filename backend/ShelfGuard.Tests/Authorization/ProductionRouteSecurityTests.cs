@@ -27,12 +27,14 @@ namespace ShelfGuard.Tests.Authorization;
 public sealed class ProductionRouteSecurityTests
 {
     [Theory]
-    [InlineData(true, true, 0, HttpStatusCode.OK)]
-    [InlineData(false, true, 0, HttpStatusCode.Forbidden)]
-    [InlineData(true, false, 0, HttpStatusCode.Forbidden)]
-    [InlineData(true, true, 600, HttpStatusCode.Forbidden)]
+    [InlineData(true, true, 0, HttpStatusCode.OK, "store_manager")]
+    [InlineData(true, true, 0, HttpStatusCode.OK, "staff")]
+    [InlineData(false, true, 0, HttpStatusCode.Forbidden, "store_manager")]
+    [InlineData(false, true, 0, HttpStatusCode.Forbidden, "staff")]
+    [InlineData(true, false, 0, HttpStatusCode.Forbidden, "store_manager")]
+    [InlineData(true, true, 600, HttpStatusCode.Forbidden, "store_manager")]
     public async Task Request_sync_requires_live_permission_assigned_production_location_and_recent_MFA(
-        bool permitted, bool assigned, int mfaAge, HttpStatusCode expected)
+        bool permitted, bool assigned, int mfaAge, HttpStatusCode expected, string role)
     {
         var tenant = Tenant.Create("Synthetic route tenant", Guid.NewGuid().ToString("N")); tenant.UpdateModules(["production"]);
         var id = Guid.NewGuid(); var location = Guid.NewGuid(); var user = Guid.NewGuid();
@@ -41,7 +43,7 @@ public sealed class ProductionRouteSecurityTests
         var svc = Substitute.For<IProductionRequestService>(); svc.GetByIdAsync(id, Arg.Any<CancellationToken>()).Returns(detail);
         svc.SyncOrdersAsync(id, user, Arg.Any<CancellationToken>()).Returns((detail, null, null));
         var access = Substitute.For<IWorkAccessContext>();
-        access.GetAsync(Arg.Any<CancellationToken>()).Returns(new WorkAccessScope(tenant.Id, user, "store_manager", false,
+        access.GetAsync(Arg.Any<CancellationToken>()).Returns(new WorkAccessScope(tenant.Id, user, role, false,
             assigned ? [location] : [], new HashSet<string>(), new Dictionary<string, bool> { ["production.manage"] = permitted }));
         var tenants = Substitute.For<ITenantRepository>(); tenants.GetByIdAsync(tenant.Id, Arg.Any<CancellationToken>()).Returns(tenant);
         var validator = Substitute.For<IAccessSessionValidator>(); validator.IsValidAsync(Arg.Any<System.Security.Claims.ClaimsPrincipal>(), Arg.Any<CancellationToken>()).Returns(true);
@@ -56,7 +58,7 @@ public sealed class ProductionRouteSecurityTests
         await using var app = builder.Build(); app.UseRouting(); app.UseApiSecurity(); app.MapControllers(); await app.StartAsync();
         using var client = new HttpClient { BaseAddress = new Uri(app.Services.GetRequiredService<IServer>().Features.Get<IServerAddressesFeature>()!.Addresses.Single()) };
         var jwt = new JwtService(config);
-        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", jwt.GenerateAccessToken(user, "synthetic@example.test", "store_manager", tenant.Id, null,
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", jwt.GenerateAccessToken(user, "synthetic@example.test", role, tenant.Id, null,
             sessionId: Guid.NewGuid(), mfaVerifiedAt: DateTime.UtcNow.AddSeconds(-mfaAge)));
         Assert.Equal(expected, (await client.PostAsync($"/api/production-requests/{id}/sync-orders", null)).StatusCode);
         if (expected != HttpStatusCode.OK) await svc.DidNotReceive().SyncOrdersAsync(Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<CancellationToken>());

@@ -16,7 +16,7 @@ namespace ShelfGuard.Api.Controllers;
 /// </summary>
 [ApiController]
 [Route("api/production-requests")]
-[Authorize(Policy = AppPolicies.CanViewStock)]
+[Authorize]
 public sealed class ProductionRequestsController : ControllerBase
 {
     private readonly IProductionRequestService _svc;
@@ -34,6 +34,7 @@ public sealed class ProductionRequestsController : ControllerBase
 
     /// <param name="status">Comma-separated statuses (draft,submitted,accepted,partial,rejected,fulfilled,cancelled).</param>
     [HttpGet]
+    [Authorize(Policy = AppPolicies.ProductionView)]
     [ProducesResponseType(typeof(List<ProductionRequestListItemDto>), StatusCodes.Status200OK)]
     public async Task<IActionResult> List(
         [FromQuery] Guid? storeLocationId,
@@ -45,6 +46,7 @@ public sealed class ProductionRequestsController : ControllerBase
         Ok(await _svc.ListAsync(storeLocationId, productionLocationId, status, neededFrom, neededTo, ct));
 
     [HttpGet("{id:guid}")]
+    [Authorize(Policy = AppPolicies.ProductionView)]
     [ProducesResponseType(typeof(ProductionRequestDetailDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetById(Guid id, CancellationToken ct)
@@ -144,7 +146,6 @@ public sealed class ProductionRequestsController : ControllerBase
     [Authorize(Policy = AppPolicies.ProductionManage)]
     [RequireRecentMfa]
     [RequireModule("production")]
-    [Authorize(Policy = AppPolicies.CanReceiveStock)]
     [ProducesResponseType(typeof(ProductionRequestDetailDto), StatusCodes.Status200OK)]
     public async Task<IActionResult> Review(Guid id, [FromBody] ProductionRequestReviewDto dto, CancellationToken ct)
     {
@@ -160,7 +161,6 @@ public sealed class ProductionRequestsController : ControllerBase
     [Authorize(Policy = AppPolicies.ProductionManage)]
     [RequireRecentMfa]
     [RequireModule("production")]
-    [Authorize(Policy = AppPolicies.CanReceiveStock)]
     [ProducesResponseType(typeof(ProductionRequestDetailDto), StatusCodes.Status200OK)]
     public async Task<IActionResult> Reject(Guid id, [FromBody] ProductionRequestRejectDto dto, CancellationToken ct)
     {
@@ -180,7 +180,6 @@ public sealed class ProductionRequestsController : ControllerBase
     [Authorize(Policy = AppPolicies.ProductionManage)]
     [RequireRecentMfa]
     [RequireModule("production")]
-    [Authorize(Policy = AppPolicies.CanReceiveStock)]
     [ProducesResponseType(typeof(ProductionRequestDetailDto), StatusCodes.Status200OK)]
     public async Task<IActionResult> SyncOrders(Guid id, CancellationToken ct)
     {
