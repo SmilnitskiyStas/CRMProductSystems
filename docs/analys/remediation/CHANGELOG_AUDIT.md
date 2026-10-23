@@ -238,3 +238,14 @@ dotnet test backend/ShelfGuard.Tests/ShelfGuard.Tests.csproj --no-build --no-res
 Підготовлено 3 HTTP acceptance cases з усім migration chain та NOSUPERUSER/NOBYPASSRLS runtime role. Їх запуск **PENDING**, Docker engine не відповідає; вони явно пропущені без disposable env. Перша Docker-спроба перервана через зависання; власні CLI завершені, engine cleanup listing недоступний. Доданий 15-секундний readiness probe підтверджено фактичним timeout до fixture creation. Не оголошувати новий RLS flow або весь migration chain перевіреним. Новий report не перезаписує попередні 911 PASS PHASE-1-07. Web/mobile не змінювали й не перезапускали.
 
 Production/staging deployment, робочі DB migrations/DML/session revoke, Docker/WSL reset та зовнішні services не виконувалися. Фаза 1 лишається IN PROGRESS.
+
+
+## 24.10.2026 — PHASE-1-09 production release / PR #26
+
+Owner authorized server deployment and a GitHub PR. Runtime code `5917a60043e1e1acddfa37722af7632b732007d6` deployed from an isolated release directory; original local/server edits preserved. Verified backup, exact payload hashes, web/API/worker canaries, three auth/session migrations, six healthy services, nginx syntax/reload and local/public HTTPS checks. Runtime DB role is restricted; no customer fiscalize/AI-generation verification calls were made.
+
+Preflight found a working password-based network_manager worker account. Added a dedicated five-minute tenant-bound worker audience for exactly three existing job operations, live DB validation and raw-peer/private-port issuance, preserving human MFA and the existing worker's tenant scope. No global internal cron key or MFA secrets/passwords were provisioned. Rolling migration supports inserts from old binaries.
+
+Final selected checks: **983 backend + 4 actual HTTP/RLS + 25 PostgreSQL/concurrency + 51 web + 15 worker = 1,078 PASS**. Full GitHub CI run 476 passed all jobs, including the new disposable security acceptance gate. Evidence, image/backup hashes, limits and rollout details: `TASKS/PHASE-1-09-SERVER-RELEASE.md`. PR: https://github.com/SmilnitskiyStas/CRMProductSystems/pull/26
+
+Production technical health is verified; full user/device/business acceptance is not claimed. Legacy mobile refresh compatibility requires the updated client. Historical NOT DEPLOYED entries above describe their original dates and are superseded only for the deployed code by this release record. Phase 1 remains in progress for outstanding operational/privacy work.

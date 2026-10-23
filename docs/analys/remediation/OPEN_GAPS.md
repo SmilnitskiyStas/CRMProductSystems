@@ -4,7 +4,7 @@
 
 - Audit/current HEAD однаковий: `3563ce6c79596ae010f4baebc920d0685f073876`; checkout містить багато попередніх незакомічених змін. Їх не скасовано, не включено в окремий коміт і не оголошено результатом remediation.
 - SEC-001 і 12 IDs фази 1 повторно підтверджені: SEC-002/003/004/005/006/009/010/012/014, F06/F07/F09. Решта 41 findings ще не пройшли current-code revalidation.
-- Локальний fix не розгорнуто. Production/staging revision, мережеву доступність та реальні accounts не перевірено.
+- Production runtime revision `5917a600` розгорнута 24.10.2026; health/HTTPS/negative auth/private-file checks пройдені. Повний real-user/device/business acceptance ще відкритий; staging/production не прирівнюються до isolated fixtures.
 - Локальні controller/service tests не доводять HTTP middleware/RLS/ingress/client rollout. Повний ST-01/ST-02 staging сценарій NOT TESTED.
 - Раніше видані linked access/refresh tokens і MFA challenges не відкликані. Session origin metadata недостатні для надійного автоматичного відбору. Рішення та виконання revoke залишаються відкритими.
 - Захищеного explicit linking grant у поточному scope не додано. Mobile dual-session auto-link вимкнено; сумісність персонального входу збережено, обмеження shared identifiers описано в DECISIONS_REQUIRED.md.
@@ -30,3 +30,5 @@
 - Фаза 1 загалом не завершена й не прийнята для production. Жодні production session revoke/deploy/DB migrations/DML не виконувалися. Source Compose definitions змінені для нового persistent private volume; recovery використовує наявний `Frontend__BaseUrl`.
 
 PHASE-1-08: 816 PASS / 5 SKIP у вибраній регресії. Pre-auth tenant context для audit/profile виправлено за статичними RLS policies та unit guards. Нові 3 full-migration/real-controller/NOBYPASSRLS cases підготовлені, але НЕ ВИКОНАНІ через Docker timeout. Повний current migration chain і виправлений pre-auth flow під реальною PostgreSQL RLS ще PENDING. Відсутність ресурсів першого перерваного Docker fixture потребує перевірки після готовності engine; cleanup не підтверджено через недоступний listing. Подробиці: `TASKS/PHASE-1-08-HTTP-RLS-ACCEPTANCE.md`.
+
+24.10.2026: PHASE-1-09 supersedes the prior deployment/PENDING fixture status. Four full-chain/controller/MFA/worker/RLS cases and 25 PostgreSQL/concurrency cases passed; production migrations, backup, runtime labels and public health verified. Working worker fiscal retry authentication was preserved by a narrowly scoped machine-purpose flow. Full phase-3 machine-account separation, all deployed DB grants/FKs, external cache/logging evidence and mobile binary rollout remain open. Details: `TASKS/PHASE-1-09-SERVER-RELEASE.md`.

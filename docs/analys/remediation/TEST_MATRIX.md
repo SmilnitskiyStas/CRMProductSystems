@@ -84,3 +84,8 @@
 - Unit guards: persisted-user tenant для login/failure audit, capability lookup, refresh profile/replay audit; token rotation не має вкладеної tenant transaction.
 - **PENDING:** full migration chain, actual AuthController enrollment/OTP/cookie/refresh/logout, capability-only staff response під NOSUPERUSER/NOBYPASSRLS. Docker engine readiness timeout; це не PASS. Запуск: `tests/Test-PasswordRecoveryPostgres.ps1 -Suite Http`. Після нього повторити `-Suite Matrix`.
 - TLS/ingress/browser/device/deployed sessions не перевірено.
+
+
+### PHASE-1-09 — deployed release evidence (24.10.2026)
+
+983 backend + 4 full-chain/controller/MFA/worker/RLS + 25 PostgreSQL/concurrency + 51 web + 15 worker = **1,078 PASS**, with no double counting of repeated runs. Two DB cases skip the ordinary regression and pass the disposable suite. GitHub CI run 476 passes all five check jobs, including dedicated Http/Matrix acceptance. Production Linux web/API/worker canaries, exact image labels, three migrations, backup parse, nginx syntax and local/public HTTPS negative/health checks PASS. No real fiscalize/paid-AI calls or device distribution were tested. The former PHASE-1-08 Docker/PENDING status is superseded by the successful server-isolated and CI runs. Full evidence: `TASKS/PHASE-1-09-SERVER-RELEASE.md`.

@@ -2,7 +2,7 @@
 
 Date: 24.10.2026, Europe/Kyiv. Owner authorized server deployment and a GitHub PR.
 PR: https://github.com/SmilnitskiyStas/CRMProductSystems/pull/26
-Status: PREPARING; production cutover has not yet run.
+Status: **DEPLOYED; RUNTIME/HTTPS HEALTH VERIFIED; broader device/business acceptance remains open.**
 
 The release branch starts at current main 4159e520 and preserves the seven purchase-history source/migration files already deployed on the server. Unrelated local UI, mobile content and configuration work remains in the original checkout. Production images are prepared from versioned Linux API output, the production Next build and worker sources; secrets, uploads and generated reports are excluded from the source commit.
 
@@ -17,3 +17,24 @@ Validation includes local backend/worker tests, actual controller/MFA/worker tok
 Operational sequence: exact payload hashes; old runtime image tags; isolated Linux web canary; private pg_dump backup fully parsed without applying it; API canary and three additive auth migrations; read-only worker credential/route checks; named-service rolling update; nginx syntax check/reload; local and public HTTPS health/revision checks. Original server checkout and unrelated local changes are preserved. Verification does not invoke fiscalize, AI generation, paid providers or customer notification endpoints.
 
 Legacy consumer mobile clients require the updated refresh implementation; privileged users must sign in again and enroll MFA when needed. Mobile binaries are not distributed by this server release. Broader phase-3 worker identity isolation, external ingress/logging evidence and full device/production-user acceptance remain separate work.
+
+## Deployment evidence — 24.10.2026, approximately 00:46–00:49 Europe/Kyiv
+
+- Application revision: `5917a60043e1e1acddfa37722af7632b732007d6`; subsequent PR fixture/docs commits do not change runtime code.
+- Release directory: `/home/administrator/shelfguard-security-20261024-5917a600`. Compose uses its immutable source tree and original server `.env`; original checkout/source edits were preserved. `/home/administrator/shelfguard/SECURITY_RELEASE` records the active path/revision. Deploy the reviewed branch/main containing this revision; running an older main through the legacy deploy script can revert the fixes.
+- Archive SHA256: `f6aea759f064e3898d681aed49e89172ea03fa5d93e8d3fce8fd1d06779d9f49`; 5,331 payload files verified. Deployment helper canonicalizes only UTF-8 BOM/CRLF for comparison with existing seven prerequisite source files, after confirming their source hashes. All seven existing files were semantically identical; their text was preserved. The independently verified helper hash is `1c51a817971579ce42111b3454c440903287f7f681a2903772b9949f09c87337`.
+- Private backup: `database-before.dump`, 83,538,965 bytes, SHA256 `0323b5f4105d0d9a3ef38491fef1480d1d31c52722e7969d42a752f37bf41c57`. Full archive parsed with pg_restore to /dev/null; no restore/DML was executed by that check. Backup stays on the server with private directory/file permissions.
+- Applied exactly `20261023001000_AddProofBasedPasswordRecovery`, `20261023151626_AddRevocableIdentitySessions`, `20261023165833_EnforceAccessMatrix`. Runtime role `shelfguard_app` is non-superuser/non-BYPASSRLS and owns the changed auth tables. Existing credentials/MFA secrets were not reset; old refresh writers receive distinct generated session IDs.
+- API image `050cfc66888850c27c19c01fe340df8bd8ef79e03fec0136a87e158054935cee`; web `827bc762ec6277d4c07b5c2bb73419044189389e9f7a8778805cf641b9de0f68`; worker `5cfc1d8cc0476d5eba6f4038bd72e9af208bf917e1977763ffaa5cfba0647db7`. All five application containers have the expected revision label. Immutable `security-5917a600` tags and prior `rollback-security-5917a600` tags are retained.
+- Updated only web, api_core, worker, api_consumer, api_provider and gateway, with individual health gates. All six healthy. PostgreSQL, Redis, MQTT and other projects were not restarted. Shared persistent private-upload volume is declared for all API roles; legacy private files use authorized fallback, not public serving.
+- Isolated Linux web canary: `/`, `/login`, `/reset-password` → 200. API canary: live/ready → 200, anonymous me/orders → 401, private contract URL → 404. The real new worker helper authenticated through Docker host bridge, read the pending-fiscalization endpoint and was denied workspace me/orders. No fiscalize or AI generation was invoked.
+- nginx syntax test passed and soft reload completed. Local gateway/web and public HTTPS checks passed: health/pages 200, anonymous workspace 401, private contract path 404. Real user/device login and actual customer file downloads were not exercised.
+- Disposable SDK/PostgreSQL containers and their test networks were cleaned; API/web canaries removed. No real personal data was copied into test fixtures or published to GitHub.
+
+## Final validation
+
+983 targeted backend checks PASS; two disposable-only cases SKIP there and PASS in the 25-case PostgreSQL suite. Four actual controller/migration/MFA/worker/RLS cases PASS, including repeated legacy refresh inserts. 51 web and 15 worker tests PASS. Total selected checks: 1,078 PASS (separate suites, not a count of the full repository). Linux publish, production Next build, TypeScript and EF snapshot checks PASS. Build retains 11 pre-existing nullable/EF warnings; Next build retained existing next-intl environment fallback notices but completed successfully.
+
+GitHub CI run 476 (`40028412511`) passed backend, frontend, mobile, worker and the new security acceptance job (Http + Matrix). The preceding acceptance-job failure was a fixture startup race: pg_isready observed the temporary Unix-socket initialization server before POSTGRES_DB existed. Readiness now executes a TCP SELECT against the final database. The earlier migration test runner's 512 MB limit was increased for disposable full-chain migration models; no production container was OOM-killed. One automatic approval rejected broad directory staging; the same change was staged as an explicit reviewed 26-file list and successfully committed.
+
+The PR remains open for review; deployment did not merge main. Broader phase-1 operational acceptance, external cache/log sinks, immediate distributed socket revoke, outbox encryption (SEC-019), and mobile binary distribution remain open. Do not restore contact auto-link, public private uploads or insecure POS transport as rollback. Prefer a forward fix or narrow route containment; database restore/down migration was not performed.
