@@ -79,6 +79,7 @@ public sealed class UsersController : ControllerBase
 
     /// <summary>Creates a new user (invite). Store manager and above, or a "users.manage" TenantRole capability holder.</summary>
     [HttpPost("invite")]
+    [RequireRecentMfa]
     [Authorize(Policy = AppPolicies.StoreManagerOrUsersManage)]
     [ProducesResponseType(typeof(UserDto), StatusCodes.Status201Created)]
     [ProducesResponseType(typeof(object), StatusCodes.Status400BadRequest)]
@@ -105,6 +106,7 @@ public sealed class UsersController : ControllerBase
 
     /// <summary>Updates a user's profile, role, and store assignment.</summary>
     [HttpPut("{id:guid}")]
+    [RequireRecentMfa]
     [Authorize(Policy = AppPolicies.StoreManagerOrUsersManage)]
     [ProducesResponseType(typeof(UserDto), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(object), StatusCodes.Status400BadRequest)]
@@ -134,6 +136,7 @@ public sealed class UsersController : ControllerBase
     /// Send empty Overrides dict {} to clear all overrides (revert to role defaults).
     /// </summary>
     [HttpPut("{id:guid}/permissions")]
+    [RequireRecentMfa]
     [Authorize(Policy = AppPolicies.AtLeastStoreManager)]
     [ProducesResponseType(typeof(UserDto), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(object), StatusCodes.Status400BadRequest)]
@@ -163,6 +166,7 @@ public sealed class UsersController : ControllerBase
 
     /// <summary>Deactivates a user (soft delete). Store manager and above, or a "users.manage" TenantRole capability holder.</summary>
     [HttpDelete("{id:guid}")]
+    [RequireRecentMfa]
     [Authorize(Policy = AppPolicies.StoreManagerOrUsersManage)]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
@@ -185,6 +189,7 @@ public sealed class UsersController : ControllerBase
     /// expiresAt must be in the future and at most 90 days out.
     /// </summary>
     [HttpPost("{id:guid}/permission-grants")]
+    [RequireRecentMfa]
     [Authorize(Policy = AppPolicies.AtLeastStoreManager)]
     [ProducesResponseType(typeof(PermissionGrantDto), StatusCodes.Status201Created)]
     [ProducesResponseType(typeof(object), StatusCodes.Status400BadRequest)]
@@ -230,6 +235,7 @@ public sealed class UsersController : ControllerBase
     /// (revoking their own decision) or any user whose role outranks the grant recipient's.
     /// </summary>
     [HttpDelete("{id:guid}/permission-grants/{grantId:guid}")]
+    [RequireRecentMfa]
     [Authorize(Policy = AppPolicies.AtLeastStoreManager)]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(typeof(object), StatusCodes.Status400BadRequest)]
@@ -277,6 +283,7 @@ public sealed class UsersController : ControllerBase
     /// higher-privilege template (anti-escalation).
     /// </summary>
     [HttpPost("{id:guid}/tenant-role")]
+    [RequireRecentMfa]
     [Authorize(Policy = AppPolicies.AtLeastEnterpriseAdmin)]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(typeof(object), StatusCodes.Status400BadRequest)]
@@ -304,6 +311,7 @@ public sealed class UsersController : ControllerBase
     /// others.
     /// </summary>
     [HttpPut("{id:guid}/locations")]
+    [RequireRecentMfa]
     [Authorize(Policy = AppPolicies.AtLeastEnterpriseAdmin)]
     [ProducesResponseType(typeof(UserLocationsDto), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(object), StatusCodes.Status400BadRequest)]

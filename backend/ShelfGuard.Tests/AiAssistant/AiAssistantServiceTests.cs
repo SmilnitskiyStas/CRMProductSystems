@@ -59,11 +59,12 @@ public sealed class AiAssistantServiceTests
 
         Assert.Null(response);
         Assert.NotNull(error);
-        Assert.Contains("AI сервіс недоступний", error);
+        Assert.Contains("AI сервіс тимчасово недоступний", error);
+        Assert.DoesNotContain("Anthropic", error);
     }
 
     [Fact]
-    public async Task AskAsync_AdvisorThrowsCreditBalanceError_ReturnsUkrainianBillingMessage()
+    public async Task AskAsync_AdvisorThrowsCreditBalanceError_DoesNotExposeProviderDetails()
     {
         _advisor.IsConfiguredAsync(Arg.Any<CancellationToken>()).Returns(true);
         _advisor.AdviseAsync(_tenantId, Arg.Any<string>(), Arg.Any<CancellationToken>())
@@ -73,7 +74,8 @@ public sealed class AiAssistantServiceTests
         var (response, error) = await _sut.AskAsync(_tenantId, new BusinessAssistantRequest("Що з залишками?"));
 
         Assert.Null(response);
-        Assert.Contains("кредитів", error);
+        Assert.Contains("AI сервіс тимчасово недоступний", error);
+        Assert.DoesNotContain("credit balance", error);
     }
 
     [Fact]

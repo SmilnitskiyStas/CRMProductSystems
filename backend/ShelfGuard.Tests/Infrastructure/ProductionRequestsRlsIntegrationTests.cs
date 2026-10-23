@@ -1,3 +1,4 @@
+using NSubstitute;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
 using ShelfGuard.Application.Features.Production;
@@ -220,7 +221,7 @@ public sealed class ProductionRequestsRlsIntegrationTests : IAsyncLifetime
                 VALUES ({stockId}, {s.TenantA}, {s.ItemA}, {s.ProdA}, 20, 20, {expiry}, 'B-1')");
 
             var requests = new ProductionRequestRepository(db);
-            var production = new ProductionRepository(db);
+            var production = new ProductionRepository(db, TestWorkAccess(s.TenantA));
             var transfers = new TransferService(new TransferRepository(db), new UserLocationRepository(db));
             var svc = new ProductionRequestService(requests, production, new NotificationRepository(db), transfers,
                 new ProductionOrderSyncService(requests, new NotificationRepository(db)));
@@ -262,10 +263,19 @@ public sealed class ProductionRequestsRlsIntegrationTests : IAsyncLifetime
         }
     }
 
-    private static (ProductionRequestService Requests, ProductionService Production) BuildServices(AppDbContext db)
+    // These existing workflow fixtures run as the DB administrator; row isolation has separate SQL cases.
+    private static ShelfGuard.Application.Services.IWorkAccessContext TestWorkAccess(Guid tenantId)
+    {
+        var access = Substitute.For<ShelfGuard.Application.Services.IWorkAccessContext>();
+        access.GetAsync(Arg.Any<CancellationToken>()).Returns(new ShelfGuard.Application.Services.WorkAccessScope(
+            tenantId, Guid.NewGuid(), "enterprise_admin", true, [], new HashSet<string>(), new Dictionary<string, bool>()));
+        return access;
+    }
+
+    private static (ProductionRequestService Requests, ProductionService Production) BuildServices(AppDbContext db, Guid tenantId)
     {
         var requests = new ProductionRequestRepository(db);
-        var production = new ProductionRepository(db);
+        var production = new ProductionRepository(db, TestWorkAccess(tenantId));
         var notifications = new NotificationRepository(db);
         var transfers = new TransferService(new TransferRepository(db), new UserLocationRepository(db));
         var sync = new ProductionOrderSyncService(requests, notifications);
@@ -286,7 +296,7 @@ public sealed class ProductionRequestsRlsIntegrationTests : IAsyncLifetime
     private async Task<Guid> SubmitAsync(Seed s, Guid storeId, decimal qty, DateOnly neededBy)
     {
         await using var db = new AppDbContext(_options!);
-        var (svc, _) = BuildServices(db);
+        var (svc, _) = BuildServices(db, s.TenantA);
         var (created, err, _) = await svc.CreateAsync(
             new ProductionRequestCreateDto(storeId, s.ProdA, neededBy, null, [new(s.ItemA, qty)], true),
             s.TenantA, s.UserStore);
@@ -313,7 +323,7 @@ public sealed class ProductionRequestsRlsIntegrationTests : IAsyncLifetime
             async Task ReviewAsync(Guid id)
             {
                 await using var db = new AppDbContext(_options!);
-                var (svc, _) = BuildServices(db);
+                var (svc, _) = BuildServices(db, s.TenantA);
                 var (_, err, _) = await svc.ReviewAsync(id, new ProductionRequestReviewDto([], null), s.UserProd);
                 Assert.Null(err);
             }
@@ -352,7 +362,7 @@ public sealed class ProductionRequestsRlsIntegrationTests : IAsyncLifetime
             Guid lineId;
             await using (var db = new AppDbContext(_options!))
             {
-                var (svc, _) = BuildServices(db);
+                var (svc, _) = BuildServices(db, s.TenantA);
                 var (reviewed, err, _) = await svc.ReviewAsync(reqId, new ProductionRequestReviewDto([], null), s.UserProd);
                 Assert.Null(err);
                 Assert.Equal("planned", reviewed!.ProductionStage);
@@ -362,7 +372,7 @@ public sealed class ProductionRequestsRlsIntegrationTests : IAsyncLifetime
 
             await using (var db = new AppDbContext(_options!))
             {
-                var (svc, _) = BuildServices(db);
+                var (svc, _) = BuildServices(db, s.TenantA);
                 var (partial, err, _) = await svc.ReviewAsync(reqId,
                     new ProductionRequestReviewDto([new(lineId, 6m, "ліміт")], null), s.UserProd);
                 Assert.Null(err);
@@ -380,14 +390,14 @@ public sealed class ProductionRequestsRlsIntegrationTests : IAsyncLifetime
 
             await using (var db = new AppDbContext(_options!))
             {
-                var (_, production) = BuildServices(db);
+                var (_, production) = BuildServices(db, s.TenantA);
                 var (_, err, _) = await production.CancelOrderAsync(orderId);
                 Assert.Null(err);
             }
 
             await using (var db = new AppDbContext(_options!))
             {
-                var (svc, _) = BuildServices(db);
+                var (svc, _) = BuildServices(db, s.TenantA);
                 var detail = await svc.GetByIdAsync(reqId);
                 Assert.Equal("awaiting_order", detail!.ProductionStage);
                 Assert.Empty(detail.Lines[0].LinkedOrders!);

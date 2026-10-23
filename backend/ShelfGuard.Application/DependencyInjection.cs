@@ -34,6 +34,8 @@ public static class DependencyInjection
     public static IServiceCollection AddApplication(this IServiceCollection services)
     {
 services.AddScoped<IAuthService, AuthService>();
+        services.AddScoped<IPasswordRecoveryService, PasswordRecoveryService>();
+        services.AddSingleton(TimeProvider.System);
         services.AddScoped<IItemService, ItemService>();
         services.AddScoped<IItemImageService, ItemImageService>();
         services.AddScoped<ICategoryService, CategoryService>();

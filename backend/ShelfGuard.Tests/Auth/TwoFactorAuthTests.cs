@@ -25,19 +25,19 @@ public sealed class TwoFactorAuthTests
     private readonly ITotpService _totp = new TotpService(); // real implementation
     private readonly IUserPermissionGrantRepository _permissionGrants = Substitute.For<IUserPermissionGrantRepository>();
     private readonly ITenantRoleRepository _tenantRoles = Substitute.For<ITenantRoleRepository>();
-    private readonly INotificationRepository _notifications = Substitute.For<INotificationRepository>();
     private readonly AuthService _sut;
 
     public TwoFactorAuthTests()
     {
         _sut = new AuthService(_users, _tokens, _hasher, _jwt, _activityLogs, _totp, _permissionGrants, _tenantRoles,
-            _notifications, NullLogger<AuthService>.Instance);
+            NullLogger<AuthService>.Instance, Substitute.For<IMfaPolicy>(), new AuthTenantScope());
         _permissionGrants.GetActiveGrantsForUserAsync(Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<CancellationToken>())
             .Returns(Array.Empty<UserPermissionGrant>());
         _jwt.GenerateRefreshToken().Returns(("raw_token", "hashed_token"));
+        _tokens.TryRotateAsync(Arg.Any<RefreshToken>(), Arg.Any<RefreshToken>(), Arg.Any<CancellationToken>()).Returns(true);
         _jwt.GenerateAccessToken(Arg.Any<Guid>(), Arg.Any<string>(), Arg.Any<string>(),
             Arg.Any<Guid?>(), Arg.Any<Guid?>(), Arg.Any<string?>(), Arg.Any<Dictionary<string, bool>?>(),
-            Arg.Any<List<string>?>(), Arg.Any<List<string>?>()).Returns("access_token");
+            Arg.Any<List<string>?>(), Arg.Any<List<string>?>(), Arg.Any<Guid?>(), Arg.Any<int>(), Arg.Any<DateTime?>()).Returns("access_token");
         // Deterministic fake hash — enough to prove hashes (not plaintext) are stored/compared.
         _jwt.HashToken(Arg.Any<string>()).Returns(ci => "sha256:" + ci.Arg<string>());
     }
@@ -68,11 +68,14 @@ public sealed class TwoFactorAuthTests
         _users.GetByIdAsync(user.Id, default).Returns(user);
         await _sut.SetupTwoFactorAsync(user.Id);
 
-        var (codes, error) = await _sut.EnableTwoFactorAsync(user.Id, CurrentCode(user));
+        var (codes, error, session) = await _sut.EnableTwoFactorAsync(user.Id, CurrentCode(user));
 
         Assert.Null(error);
         Assert.NotNull(codes);
         Assert.Equal(8, codes.Count);
+        Assert.NotNull(session);
+        Assert.Equal("access_token", session.AccessToken);
+        await _tokens.Received(1).AddAsync(Arg.Is<RefreshToken>(token => token.AuthVersion == user.AuthVersion && token.SessionId != Guid.Empty), default);
         Assert.All(codes, c => Assert.Matches("^[A-Z2-9]{4}-[A-Z2-9]{4}$", c));
         Assert.True(user.TotpEnabled);
         // Stored values are hashes, never the plaintext codes
@@ -89,7 +92,7 @@ public sealed class TwoFactorAuthTests
         _users.GetByIdAsync(user.Id, default).Returns(user);
         await _sut.SetupTwoFactorAsync(user.Id);
 
-        var (codes, error) = await _sut.EnableTwoFactorAsync(user.Id, "000000");
+        var (codes, error, _) = await _sut.EnableTwoFactorAsync(user.Id, "000000");
 
         Assert.Null(codes);
         Assert.Equal("Invalid code.", error);
@@ -99,10 +102,21 @@ public sealed class TwoFactorAuthTests
     // ── Verify (login second step) ─────────────────────────────────────────
 
     [Fact]
+    public async Task Password_change_invalidates_an_already_issued_MFA_challenge()
+    {
+        var user = await MakeEnrolledUserAsync();
+        _jwt.ValidateTwoFactorChallengeToken("old-challenge").Returns(new TwoFactorProof(user.Id, user.AuthVersion));
+        user.ChangePassword("replacement-hash");
+        var (response, error) = await _sut.VerifyTwoFactorAsync("old-challenge", CurrentCode(user));
+        Assert.Null(response); Assert.NotNull(error);
+        await _tokens.DidNotReceive().AddAsync(Arg.Any<RefreshToken>(), default);
+    }
+
+    [Fact]
     public async Task VerifyTwoFactor_happy_path_issues_tokens()
     {
         var user = await MakeEnrolledUserAsync();
-        _jwt.ValidateTwoFactorChallengeToken("challenge").Returns(user.Id);
+        _jwt.ValidateTwoFactorChallengeToken("challenge").Returns(new TwoFactorProof(user.Id, user.AuthVersion));
 
         var (response, error) = await _sut.VerifyTwoFactorAsync("challenge", CurrentCode(user));
 
@@ -118,7 +132,7 @@ public sealed class TwoFactorAuthTests
     public async Task VerifyTwoFactor_rejects_replayed_code()
     {
         var user = await MakeEnrolledUserAsync();
-        _jwt.ValidateTwoFactorChallengeToken("challenge").Returns(user.Id);
+        _jwt.ValidateTwoFactorChallengeToken("challenge").Returns(new TwoFactorProof(user.Id, user.AuthVersion));
         var code = CurrentCode(user);
 
         var (first, firstError) = await _sut.VerifyTwoFactorAsync("challenge", code);
@@ -135,7 +149,7 @@ public sealed class TwoFactorAuthTests
     [Fact]
     public async Task VerifyTwoFactor_rejects_invalid_challenge_token()
     {
-        _jwt.ValidateTwoFactorChallengeToken("garbage").Returns((Guid?)null);
+        _jwt.ValidateTwoFactorChallengeToken("garbage").Returns((TwoFactorProof?)null);
 
         var (response, error) = await _sut.VerifyTwoFactorAsync("garbage", "123456");
 
@@ -147,7 +161,7 @@ public sealed class TwoFactorAuthTests
     public async Task VerifyTwoFactor_wrong_code_counts_toward_lockout()
     {
         var user = await MakeEnrolledUserAsync();
-        _jwt.ValidateTwoFactorChallengeToken("challenge").Returns(user.Id);
+        _jwt.ValidateTwoFactorChallengeToken("challenge").Returns(new TwoFactorProof(user.Id, user.AuthVersion));
 
         for (var i = 0; i < 5; i++)
         {
@@ -168,8 +182,8 @@ public sealed class TwoFactorAuthTests
         var user = MakeUser();
         _users.GetByIdAsync(user.Id, default).Returns(user);
         await _sut.SetupTwoFactorAsync(user.Id);
-        var (codes, _) = await _sut.EnableTwoFactorAsync(user.Id, CurrentCode(user));
-        _jwt.ValidateTwoFactorChallengeToken("challenge").Returns(user.Id);
+        var (codes, _, _) = await _sut.EnableTwoFactorAsync(user.Id, CurrentCode(user));
+        _jwt.ValidateTwoFactorChallengeToken("challenge").Returns(new TwoFactorProof(user.Id, user.AuthVersion));
 
         var recoveryCode = codes![0];
         var (first, firstError) = await _sut.VerifyTwoFactorAsync("challenge", recoveryCode);
@@ -226,8 +240,9 @@ public sealed class TwoFactorAuthTests
         var user = MakeUser();
         _users.GetByIdAsync(user.Id, default).Returns(user);
         await _sut.SetupTwoFactorAsync(user.Id);
-        var (_, error) = await _sut.EnableTwoFactorAsync(user.Id, CurrentCode(user));
+        var (_, error, _) = await _sut.EnableTwoFactorAsync(user.Id, CurrentCode(user));
         Assert.Null(error);
+        _tokens.ClearReceivedCalls();
         // Clear the enrollment timestep so login-verification tests can reuse
         // the current 30s window without tripping anti-replay.
         typeof(User).GetProperty(nameof(User.TotpLastTimestep))!

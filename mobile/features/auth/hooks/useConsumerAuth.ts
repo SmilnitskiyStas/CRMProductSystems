@@ -14,6 +14,11 @@ export function useConsumerRegister() {
   return useMutation({
     mutationFn: mobileRegister,
     onSuccess: async (result, variables) => {
+      if ('requiresMfaEnrollment' in result) {
+        useAuthStore.getState().setMfaEnrollmentToken(result.enrollmentToken);
+        router.push('/(auth)/mfa-enrollment');
+        return;
+      }
       if ('requiresTwoFactor' in result) {
         // TASK-497: the person already proved their personal password before the 2FA
         // branch — unlock personal/loyalty mode immediately while the workspace 2FA step
@@ -46,7 +51,7 @@ export function useConsumerRegister() {
           fullName: result.user.fullName,
           phone: result.user.phone ?? variables.phone,
           role: 'consumer',
-        });
+        }, result.personalRefreshToken);
       }
       router.replace(resolveAuthLandingRoute({
         workspaceAccessToken: result.workspaceAccessToken,

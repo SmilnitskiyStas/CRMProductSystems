@@ -1,3 +1,4 @@
+import { requestMfaCode } from "@/features/auth/mfaPrompt";
 // Shared API client. Adds Authorization header, handles 401 → refresh → retry.
 
 export const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:5000";
@@ -41,9 +42,12 @@ let _token: string | null = null;
 // notification badge) that 401 during logout must NOT trigger the
 // "session expired" redirect — the logout flow does its own clean redirect.
 let _loggedOut = false;
+let _sessionEpoch = 0;
+export function getSessionEpoch(): number { return _sessionEpoch; }
 
 /** Call BEFORE authApi.logout()/clearToken() so racing 401s stay silent. */
 export function markLoggedOut(): void {
+  _sessionEpoch++;
   _loggedOut = true;
 }
 
@@ -55,6 +59,11 @@ export function getToken(): string | null {
 }
 
 export function setToken(token: string): void {
+  _sessionEpoch++;
+  storeToken(token);
+}
+
+function storeToken(token: string): void {
   _token = token;
   _loggedOut = false; // a fresh login/refresh clears the manual-logout flag
   if (typeof window !== "undefined") {
@@ -64,6 +73,7 @@ export function setToken(token: string): void {
 }
 
 export function clearToken(): void {
+  _sessionEpoch++;
   _token = null;
   if (typeof window !== "undefined") {
     localStorage.removeItem(TOKEN_KEY);
@@ -76,7 +86,10 @@ async function apiFetch<T>(
   path: string,
   options: RequestInit = {},
   isRetry = false,
+  responseType: "json" | "blob" = "json",
+  mfaRetried = false,
 ): Promise<T> {
+  const requestEpoch = _sessionEpoch;
   const token = getToken();
 
   // FormData bodies set their own multipart Content-Type (with boundary) —
@@ -95,15 +108,17 @@ async function apiFetch<T>(
 
   // Anonymous auth endpoints: a 401 here means bad credentials / bad 2FA code,
   // not an expired session — never trigger refresh or the login redirect.
-  const isAnonAuthPath = path === "/api/auth/login" || path === "/api/auth/2fa/verify";
+  const isAnonAuthPath = ["/api/auth/login", "/api/auth/2fa/verify", "/api/auth/mfa-enrollment/setup", "/api/auth/mfa-enrollment/enable", "/api/auth/2fa/step-up", "/api/auth/forgot-password", "/api/auth/reset-password"].includes(path);
 
   // 401 on a protected request — try refreshing once
   if (res.status === 401 && !isRetry && !isAnonAuthPath) {
+    if (requestEpoch !== _sessionEpoch) throw new ApiError(401, "Session changed.");
     // Manual logout in progress: refresh cookie is already revoked, so don't
     // attempt refresh or redirect — useLogout handles the clean navigation.
     if (_loggedOut) throw new ApiError(401, "Logged out.");
     const refreshed = await tryRefresh();
-    if (refreshed === "ok") return apiFetch<T>(path, options, true);
+    if (requestEpoch !== _sessionEpoch) throw new ApiError(401, "Session changed.");
+    if (refreshed === "ok") return apiFetch<T>(path, options, true, responseType, mfaRetried);
     if (_loggedOut) throw new ApiError(401, "Logged out.");
     // Transient refresh failure (network/5xx): keep the session, surface the error.
     if (refreshed === "error") throw new ApiError(401, "Session refresh failed, try again.");
@@ -118,12 +133,35 @@ async function apiFetch<T>(
   }
 
   if (!res.ok) {
-    const body = await res.json().catch(() => ({})) as { error?: string };
+    const body = await res.json().catch(() => ({})) as { error?: string; code?: string };
+    if (res.status === 403 && body.code === "mfa_step_up_required" && !mfaRetried && token) {
+      if (requestEpoch !== _sessionEpoch) throw new ApiError(401, "Session changed.");
+      await confirmRecentMfa();
+      if (requestEpoch !== _sessionEpoch) throw new ApiError(401, "Session changed.");
+      return apiFetch<T>(path, options, isRetry, responseType, true);
+    }
     throw new ApiError(res.status, body.error ?? `HTTP ${res.status}`, body);
   }
 
   if (res.status === 204) return undefined as T;
+  if (responseType === "blob") return await res.blob() as T;
   return res.json() as Promise<T>;
+}
+
+let mfaInFlight: Promise<void> | null = null;
+function confirmRecentMfa(): Promise<void> {
+  if (!mfaInFlight) {
+    const epoch = _sessionEpoch;
+    mfaInFlight = (async () => {
+      const code = await requestMfaCode();
+      if (!code) throw new ApiError(403, "MFA confirmation cancelled.");
+      if (epoch !== _sessionEpoch) throw new ApiError(401, "Session changed.");
+      const result = await apiFetch<{ accessToken: string }>("/api/auth/2fa/step-up", { method: "POST", body: JSON.stringify({ code }) });
+      if (epoch !== _sessionEpoch) throw new ApiError(401, "Session changed.");
+      storeToken(result.accessToken);
+    })().finally(() => { mfaInFlight = null; });
+  }
+  return mfaInFlight;
 }
 
 type RefreshResult = "ok" | "denied" | "error";
@@ -161,23 +199,34 @@ async function withCrossTabLock(fn: () => Promise<RefreshResult>): Promise<Refre
 }
 
 async function doRefresh(isRetry = false): Promise<RefreshResult> {
+  const refreshEpoch = _sessionEpoch;
   try {
     const res = await fetch(`${API_BASE}/api/auth/refresh`, {
       method: "POST",
       credentials: "include",
     });
+    if (res.status === 409) {
+      if (!isRetry && refreshEpoch === _sessionEpoch) {
+        await new Promise((r) => setTimeout(r, 400));
+        if (refreshEpoch !== _sessionEpoch) return "error";
+        return doRefresh(true);
+      }
+      return "error";
+    }
     if (res.status === 401 || res.status === 403) {
       // A concurrent refresh (other tab/device race) may have just rotated the cookie —
       // retry once with the fresh cookie before concluding the session is really gone.
       if (!isRetry) {
         await new Promise((r) => setTimeout(r, 400));
+        if (refreshEpoch !== _sessionEpoch) return "error";
         return doRefresh(true);
       }
       return "denied";
     }
     if (!res.ok) return "error"; // 5xx / 429 — transient, do not drop the session
     const data = (await res.json()) as { accessToken: string };
-    setToken(data.accessToken);
+    if (refreshEpoch !== _sessionEpoch || _loggedOut) return "error";
+    storeToken(data.accessToken);
     return "ok";
   } catch {
     return "error"; // network blip
@@ -185,6 +234,7 @@ async function doRefresh(isRetry = false): Promise<RefreshResult> {
 }
 
 export const api = {
+  getBlob: (path: string, opts?: RequestInit) => apiFetch<Blob>(path, { ...opts, method: "GET" }, false, "blob"),
   get:    <T>(path: string, opts?: RequestInit) => apiFetch<T>(path, { ...opts, method: "GET" }),
   post:   <T>(path: string, body?: unknown, opts?: RequestInit) =>
     apiFetch<T>(path, { ...opts, method: "POST", body: body != null ? JSON.stringify(body) : undefined }),

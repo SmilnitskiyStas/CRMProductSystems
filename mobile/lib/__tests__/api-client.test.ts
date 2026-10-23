@@ -1,3 +1,4 @@
+import { registerMfaPrompt } from '@/features/auth/mfaPrompt';
 import axios from 'axios';
 import MockAdapter from 'axios-mock-adapter';
 import * as SecureStore from 'expo-secure-store';
@@ -74,6 +75,28 @@ describe('apiClient authentication lifecycle', () => {
     personalApiMock.restore();
     refreshMock.restore();
     queryClient.clear();
+  });
+
+  test('confirms MFA once and retries the critical action using the verified token', async () => {
+    const unregister = registerMfaPrompt(async () => '123456');
+    try {
+      apiMock.onPost('/critical').replyOnce(403, { code: 'mfa_step_up_required' }).onPost('/critical').reply(200, { done: true });
+      apiMock.onPost('/auth/2fa/step-up').reply(200, { accessToken: 'verified' });
+      await expect(apiClient.post('/critical')).resolves.toMatchObject({ data: { done: true } });
+      expect(apiMock.history.post.filter(r => r.url === '/auth/2fa/step-up')).toHaveLength(1);
+      expect(storedWorkspaceToken).toBe('verified');
+      expect(refreshMock.history.post).toHaveLength(0);
+    } finally { unregister(); }
+  });
+
+  test('cancelled MFA does not replay a write or terminate a session', async () => {
+    const unregister = registerMfaPrompt(async () => null);
+    try {
+      apiMock.onPost('/critical').reply(403, { code: 'mfa_step_up_required' });
+      await expect(apiClient.post('/critical')).rejects.toThrow('MFA_CONFIRMATION_CANCELLED');
+      expect(apiMock.history.post).toHaveLength(1);
+      expect(storedWorkspaceToken).toBe('old-token');
+    } finally { unregister(); }
   });
 
   test('refreshes once, persists the token, and retries the original request', async () => {
@@ -298,13 +321,11 @@ describe('personalApiClient', () => {
     expect(personalApiMock.history.get[0]?.headers?.Authorization).toBe('Bearer personal-token');
   });
 
-  test('does not attempt a refresh on a personal-session 401 — there is no refresh token for a consumer session', async () => {
+  test('does not fall back to a workspace refresh when a legacy personal session has no refresh proof', async () => {
     const refreshMockLocal = new MockAdapter(axios);
     personalApiMock.onGet('/consumer/loyalty/memberships').reply(401);
 
-    await expect(personalApiClient.get('/consumer/loyalty/memberships')).rejects.toMatchObject({
-      response: { status: 401 },
-    });
+    await expect(personalApiClient.get('/consumer/loyalty/memberships')).rejects.toThrow('REFRESH_TOKEN_MISSING');
 
     expect(refreshMockLocal.history.post).toHaveLength(0);
     refreshMockLocal.restore();

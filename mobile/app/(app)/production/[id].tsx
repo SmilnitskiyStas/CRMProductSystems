@@ -11,9 +11,12 @@ import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import {
   useProductionOrderById,
+  useStartProductionOrder,
   useCompleteProductionOrder,
   useCancelProductionOrder,
 } from '@/features/production/hooks/useProduction';
+import { useAuthStore } from '@/features/auth/store';
+import { canWorkPermission } from '@/lib/workPermissions';
 import type { ProductionConsumption, ProductionStatus } from '@/features/production/types';
 
 // ── Status helpers ─────────────────────────────────────────────────────────────
@@ -75,6 +78,10 @@ function ConsumptionRow({
 export default function ProductionOrderDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
+  const user = useAuthStore(s => s.user);
+  const canComplete = canWorkPermission(user, 'production.complete');
+  const canCancel = canWorkPermission(user, 'production.cancel');
+  const start = useStartProductionOrder();
 
   const { data: order, isLoading, refetch } = useProductionOrderById(id);
   const { mutateAsync: complete, isPending: completing } = useCompleteProductionOrder();
@@ -212,12 +219,15 @@ export default function ProductionOrderDetailScreen() {
         </View>
 
         {/* Actions */}
-        {isActive && (
+        {isActive && (canComplete || canCancel) && (
           <View className="mx-4 mt-4 gap-3">
             <Text className="text-xs font-semibold text-gray-400 uppercase tracking-wider">
               Дії
             </Text>
-            <TouchableOpacity
+            {order.status === 'planned' && canComplete && <TouchableOpacity disabled={start.isPending || completing || cancelling} onPress={() => start.mutate(id, { onError: () => Alert.alert('Помилка', 'Не вдалося почати ордер. Спробуйте ще раз.') })} className="bg-primary-600 rounded-xl p-4">
+              <Text className="text-white text-center font-semibold">Почати виробництво</Text>
+            </TouchableOpacity>}
+            {order.status === 'in_progress' && canComplete && <TouchableOpacity
               onPress={handleComplete}
               disabled={completing || cancelling}
               className="bg-primary-600 rounded-xl py-3.5 flex-row items-center justify-center gap-2"
@@ -230,9 +240,9 @@ export default function ProductionOrderDetailScreen() {
                   <Text className="text-white font-semibold text-base">Завершити ордер</Text>
                 </>
               )}
-            </TouchableOpacity>
+            </TouchableOpacity>}
 
-            <TouchableOpacity
+            {canCancel && <TouchableOpacity
               onPress={handleCancel}
               disabled={completing || cancelling}
               className="border border-red-300 rounded-xl py-3.5 flex-row items-center justify-center gap-2"
@@ -245,7 +255,7 @@ export default function ProductionOrderDetailScreen() {
                   <Text className="text-red-500 font-semibold text-base">Скасувати</Text>
                 </>
               )}
-            </TouchableOpacity>
+            </TouchableOpacity>}
           </View>
         )}
 

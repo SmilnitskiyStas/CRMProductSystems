@@ -25,7 +25,7 @@ public interface IProviderService
 
     // Impersonation
     Task<(ImpersonateResponse? Response, string? Error)> ImpersonateAsync(
-        Guid providerId, string providerEmail, Guid targetTenantId, CancellationToken ct);
+        Guid providerId, string providerEmail, Guid targetTenantId, CancellationToken ct, Guid? sessionId = null, int authVersion = 0, DateTime? mfaVerifiedAt = null);
 
     // Tenant users
     Task<IReadOnlyList<TenantUserDto>> GetTenantUsersAsync(Guid tenantId, CancellationToken ct);

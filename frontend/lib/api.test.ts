@@ -96,6 +96,27 @@ describe("lib/api", () => {
   });
 
   describe("response handling", () => {
+    it("loads a private blob using header auth without exposing the token in the URL", async () => {
+      setToken("synthetic-token");
+      const blob = new Blob(["synthetic image"], { type: "image/png" });
+      fetchMock.mockResolvedValueOnce({ ok: true, status: 200, blob: async () => blob });
+      await expect(api.getBlob("/api/private-files/synthetic", { cache: "no-store" })).resolves.toBe(blob);
+      const [url, init] = fetchMock.mock.calls[0];
+      expect(url).not.toContain("synthetic-token");
+      expect(init.headers.Authorization).toBe("Bearer synthetic-token");
+      expect(init.cache).toBe("no-store");
+    });
+
+    it("preserves blob decoding through a session refresh retry", async () => {
+      setToken("old-token");
+      const blob = new Blob(["synthetic image"]);
+      fetchMock.mockResolvedValueOnce(jsonResponse({}, 401))
+        .mockResolvedValueOnce(jsonResponse({ accessToken: "refreshed-token" }))
+        .mockResolvedValueOnce({ ok: true, status: 200, blob: async () => blob });
+      await expect(api.getBlob("/api/private-files/synthetic")).resolves.toBe(blob);
+      expect(fetchMock.mock.calls[2][1].headers.Authorization).toBe("Bearer refreshed-token");
+    });
+
     it("returns undefined for a 204 No Content response", async () => {
       fetchMock.mockResolvedValueOnce(jsonResponse(undefined, 204));
       await expect(api.delete("/api/items/1")).resolves.toBeUndefined();
@@ -138,6 +159,30 @@ describe("lib/api", () => {
   });
 
   describe("401 -> refresh -> retry", () => {
+    it.each(["logout", "new login"])("a late refresh cannot overwrite credentials after %s", async (change) => {
+      setToken("old-token");
+      let complete!: (response: Response) => void;
+      let started!: () => void;
+      const refreshStarted = new Promise<void>(resolve => { started = resolve; });
+      const refreshResponse = new Promise<Response>(resolve => { complete = resolve; });
+      fetchMock.mockResolvedValueOnce(jsonResponse({}, 401)).mockImplementationOnce(() => { started(); return refreshResponse; });
+      const request = api.get("/api/private");
+      await refreshStarted;
+      markLoggedOut(); clearToken();
+      if (change === "new login") setToken("new-identity-token");
+      complete(jsonResponse({ accessToken: "late-old-token" }));
+      await expect(request).rejects.toMatchObject({ status: 401 });
+      expect(getToken()).toBe(change === "new login" ? "new-identity-token" : null);
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+    });
+
+    it("retries a rotation conflict without discarding the session", async () => {
+      setToken("old-token");
+      fetchMock.mockResolvedValueOnce(jsonResponse({}, 401)).mockResolvedValueOnce(jsonResponse({}, 409))
+        .mockResolvedValueOnce(jsonResponse({ accessToken: "current-token" })).mockResolvedValueOnce(jsonResponse({ ok: true }));
+      await expect(api.get("/api/private")).resolves.toEqual({ ok: true });
+      expect(getToken()).toBe("current-token");
+    });
     it("retries once with a new token after a successful silent refresh", async () => {
       setToken("stale-token");
       fetchMock
@@ -199,6 +244,14 @@ describe("lib/api", () => {
       });
       // Only the login call itself — no refresh attempt.
       expect(fetchMock).toHaveBeenCalledTimes(1);
+    });
+
+    it.each(["forgot-password", "reset-password"])("does not refresh or clear an existing session when anonymous %s fails", async (route) => {
+      setToken("existing-session");
+      fetchMock.mockResolvedValueOnce(jsonResponse({ error: "invalid proof" }, 401));
+      await expect(api.post(`/api/auth/${route}`, {})).rejects.toMatchObject({ status: 401 });
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      expect(getToken()).toBe("existing-session");
     });
 
     it("does not attempt refresh once markLoggedOut() has been called (racing logout)", async () => {

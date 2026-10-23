@@ -20,7 +20,7 @@ import type {
   ZoneStatusCounts,
 } from "../types";
 import { ZONE_TYPE_META, zoneTypeMeta } from "../lib/zoneTypes";
-import { resolveScanImageUrl } from "./ShelfScanPanel";
+import { PrivateImage } from "@/components/ui/PrivateImage";
 
 const ZOOM_MIN = 0.4;
 const ZOOM_MAX = 2;
@@ -165,8 +165,8 @@ export function FloorPlanCanvas({
             >
               {bg && (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={resolveScanImageUrl(bg.url)}
+                <PrivateImage
+                  src={bg.url}
                   alt=""
                   draggable={false}
                   style={{

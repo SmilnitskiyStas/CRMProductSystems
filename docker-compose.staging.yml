@@ -92,6 +92,7 @@ services:
       - '127.0.0.1:5111:5100'
     volumes:
       - shelfguard_staging_api_uploads:/app/wwwroot/uploads
+      - shelfguard_staging_api_private_uploads:/app/private-uploads
     environment:
       <<: *api-env
       API_ROLE: core
@@ -111,6 +112,7 @@ services:
         condition: service_healthy
     volumes:
       - shelfguard_staging_api_uploads:/app/wwwroot/uploads
+      - shelfguard_staging_api_private_uploads:/app/private-uploads
     environment:
       <<: *api-env
       API_ROLE: consumer
@@ -125,6 +127,7 @@ services:
         condition: service_healthy
     volumes:
       - shelfguard_staging_api_uploads:/app/wwwroot/uploads
+      - shelfguard_staging_api_private_uploads:/app/private-uploads
     environment:
       <<: *api-env
       API_ROLE: provider
@@ -203,3 +206,4 @@ volumes:
   shelfguard_staging_redis_data:
   shelfguard_staging_mosquitto_data:
   shelfguard_staging_api_uploads:
+  shelfguard_staging_api_private_uploads:

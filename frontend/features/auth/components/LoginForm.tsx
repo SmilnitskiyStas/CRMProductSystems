@@ -7,7 +7,8 @@ import { z } from "zod";
 import { useTranslations } from "next-intl";
 import Link from "next/link";
 import { useLogin, useVerifyTwoFactor } from "../hooks/useAuth";
-import { isTwoFactorChallenge } from "../types";
+import { isTwoFactorChallenge, isMfaEnrollment } from "../types";
+import { MfaEnrollmentForm } from "./MfaEnrollmentForm";
 import { ApiError } from "@/lib/api";
 
 // zod's message shape doesn't change across locales — only the strings inside
@@ -114,6 +115,7 @@ export function LoginForm() {
   const verify = useVerifyTwoFactor();
 
   // 2FA step state: challengeToken !== null → show the code step
+  const [enrollmentToken, setEnrollmentToken] = useState<string | null>(null);
   const [challengeToken, setChallengeToken] = useState<string | null>(null);
   const [code, setCode] = useState("");
   const [useRecovery, setUseRecovery] = useState(false);
@@ -139,6 +141,7 @@ export function LoginForm() {
       { email: values.email, password: values.password },
       {
         onSuccess: (data) => {
+          if (isMfaEnrollment(data)) setEnrollmentToken(data.enrollmentToken);
           if (isTwoFactorChallenge(data)) {
             verify.reset();
             setCode("");
@@ -184,6 +187,8 @@ export function LoginForm() {
     setCodeError(null);
     verify.reset();
   };
+
+  if (enrollmentToken) return <MfaEnrollmentForm token={enrollmentToken} onCancel={() => { setEnrollmentToken(null); login.reset(); }} />;
 
   // ---- Step 2: 2FA code ----
   if (challengeToken !== null) {

@@ -28,6 +28,18 @@ public sealed class GlobalExceptionHandler : IExceptionHandler
     public async ValueTask<bool> TryHandleAsync(
         HttpContext httpContext, Exception exception, CancellationToken cancellationToken)
     {
+        if (exception is ShelfGuard.Application.Services.WorkAccessDeniedException)
+        {
+            httpContext.Response.StatusCode = StatusCodes.Status403Forbidden;
+            await httpContext.Response.WriteAsJsonAsync(new { error = "Access denied." }, cancellationToken);
+            return true;
+        }
+        if (exception is Microsoft.EntityFrameworkCore.DbUpdateConcurrencyException)
+        {
+            httpContext.Response.StatusCode = StatusCodes.Status409Conflict;
+            await httpContext.Response.WriteAsJsonAsync(new { error = "The record changed. Reload and try again.", code = "concurrent_update" }, cancellationToken);
+            return true;
+        }
         // An optional dependency (AI, weather, geocoder) is down / its breaker is open: that is
         // a degraded feature, not a server bug — 503 with a stable code the UI can key off.
         if (exception is ShelfGuard.Application.Services.ExternalServiceUnavailableException unavailable)

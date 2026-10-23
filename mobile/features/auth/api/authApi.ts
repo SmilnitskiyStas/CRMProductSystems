@@ -1,4 +1,5 @@
-import { apiClient } from '@/lib/api-client';
+import { apiClient, personalApiClient } from '@/lib/api-client';
+import { useAuthStore } from '../store';
 import type {
   AuthUser,
   LoginRequest,
@@ -21,16 +22,19 @@ interface AuthUserWire {
   permissions?: Record<string, boolean> | null;
   capabilities?: string[] | null;
   tabs?: string[] | null;
+  twoFactorEnabled?: boolean;
 }
 
 interface LoginWireResponse {
   accessToken?: string;
   user?: AuthUserWire;
   requiresTwoFactor?: boolean;
+  requiresMfaEnrollment?: boolean;
+  enrollmentToken?: string;
   challengeToken?: string;
 }
 
-function mapAuthUser(wire: AuthUserWire): AuthUser {
+export function mapAuthUser(wire: AuthUserWire): AuthUser {
   return {
     id: wire.id,
     email: wire.email,
@@ -41,12 +45,17 @@ function mapAuthUser(wire: AuthUserWire): AuthUser {
     permissions: wire.permissions ?? {},
     capabilities: wire.capabilities ?? [],
     tabs: wire.tabs ?? [],
+    twoFactorEnabled: wire.twoFactorEnabled,
   };
 }
 
 export async function login(body: LoginRequest): Promise<LoginResponse> {
   const { data } = await apiClient.post<LoginWireResponse>('/auth/login', body);
 
+  if (data.requiresMfaEnrollment) {
+    if (!data.enrollmentToken) throw new Error('INVALID_MFA_ENROLLMENT');
+    return { requiresMfaEnrollment: true, enrollmentToken: data.enrollmentToken };
+  }
   if (data.requiresTwoFactor) {
     if (!data.challengeToken) throw new Error('INVALID_TWO_FACTOR_CHALLENGE');
     return { requiresTwoFactor: true, challengeToken: data.challengeToken };
@@ -68,8 +77,14 @@ export async function verifyTwoFactor(
   return { accessToken: data.accessToken, user: mapAuthUser(data.user) };
 }
 
-export async function logout(): Promise<void> {
-  await apiClient.post('/auth/logout');
+export async function logout(all = false): Promise<void> {
+  const state = useAuthStore.getState();
+  const route = all ? 'logout-all' : 'logout';
+  const calls: Promise<unknown>[] = [];
+  if (state.workspaceAccessToken) calls.push(apiClient.post(`/auth/${route}`));
+  if (state.personalAccessToken) calls.push(personalApiClient.post(`/consumer-auth/${route}`));
+  const results = await Promise.allSettled(calls);
+  if (results.some(result => result.status === 'rejected')) throw new Error('REMOTE_LOGOUT_INCOMPLETE');
 }
 
 export async function getMe(): Promise<AuthUser> {

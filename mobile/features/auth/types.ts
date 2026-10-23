@@ -8,6 +8,7 @@ export interface AuthUser {
   permissions: Record<string, boolean>;
   capabilities: string[];
   tabs: string[];
+  twoFactorEnabled?: boolean;
 }
 
 export interface LoginRequest {
@@ -32,7 +33,8 @@ export interface TwoFactorChallengeResponse {
   personalAccessToken?: string | null;
 }
 
-export type LoginResponse = LoginSuccessResponse | TwoFactorChallengeResponse;
+export interface MfaEnrollmentResponse { requiresMfaEnrollment: true; enrollmentToken: string; }
+export type LoginResponse = LoginSuccessResponse | TwoFactorChallengeResponse | MfaEnrollmentResponse;
 
 export interface VerifyTwoFactorRequest {
   challengeToken: string;
@@ -79,6 +81,7 @@ export interface MobileLoginRequest {
 // who *additionally* gets workspace access when linked to an active staff User. Both
 // identities are usable at once, backed by two separate JWTs the app holds simultaneously.
 export interface MobileLoginSuccess {
+  personalRefreshToken?: string | null;
   /** Consumer/loyalty JWT — null only in the legacy staff-only fallback (no personal
    * ConsumerAccount exists yet for this identifier at all). */
   personalAccessToken: string | null;
@@ -101,4 +104,4 @@ export interface MobileLoginSuccess {
   };
 }
 
-export type MobileLoginResponse = MobileLoginSuccess | TwoFactorChallengeResponse;
+export type MobileLoginResponse = MobileLoginSuccess | TwoFactorChallengeResponse | MfaEnrollmentResponse;

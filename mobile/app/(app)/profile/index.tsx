@@ -28,48 +28,13 @@ const ROLE_LABELS: Record<string, string> = {
   provider:         'Провайдер',
 };
 
-type Tool = {
-  icon: React.ComponentProps<typeof Ionicons>['name'];
-  label: string;
-  href: string;
-  color: string;
-};
-
-const ALL_TOOLS: Tool[] = [
-  { icon: 'cash-outline',              label: 'Каса',         href: '/(app)/pos',          color: '#16a34a' },
-  { icon: 'layers-outline',            label: 'Залишки',      href: '/(app)/stock/index',  color: '#3b82f6' },
-  { icon: 'receipt-outline',           label: 'Прийомка',     href: '/(app)/receipt/index',color: '#0891b2' },
-  { icon: 'swap-horizontal-outline',   label: 'Переміщення',  href: '/(app)/transfers',    color: '#10b981' },
-  { icon: 'trash-outline',             label: 'Списання',     href: '/(app)/write-offs',   color: '#ef4444' },
-  { icon: 'people-outline',            label: 'Клієнти',      href: '/(app)/customers',    color: '#8b5cf6' },
-  { icon: 'calendar-outline',          label: 'Розклад',      href: '/(app)/schedules',    color: '#f59e0b' },
-  { icon: 'headset-outline',           label: 'Service Desk', href: '/(app)/service-desk', color: '#6366f1' },
-];
-
-const ROLE_TOOL_KEYS: Record<string, string[]> = {
-  cashier:          ['Каса'],
-  storekeeper:      ['Залишки', 'Прийомка', 'Переміщення', 'Списання'],
-  merchandiser:     ['Залишки'],
-  store_manager:    ['Каса', 'Залишки', 'Прийомка', 'Переміщення', 'Списання', 'Клієнти', 'Розклад', 'Service Desk'],
-  network_manager:  ['Каса', 'Залишки', 'Прийомка', 'Переміщення', 'Списання', 'Клієнти', 'Розклад', 'Service Desk'],
-  enterprise_admin: ['Каса', 'Залишки', 'Прийомка', 'Переміщення', 'Списання', 'Клієнти', 'Розклад', 'Service Desk'],
-  provider:         ['Каса', 'Залишки', 'Прийомка', 'Переміщення', 'Списання', 'Клієнти', 'Розклад', 'Service Desk'],
-};
-
-function toolsForRole(role: string | undefined): Tool[] {
-  const keys = ROLE_TOOL_KEYS[role ?? ''] ?? [];
-  return ALL_TOOLS.filter((t) => keys.includes(t.label));
-}
-
 export default function ProfileScreen() {
   const router = useRouter();
   const user = useAuthStore((s) => s.user);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
 
-  const myTools = toolsForRole(user?.role);
-
-  const handleLogout = () => {
-    Alert.alert('Вийти з акаунту?', 'Потрібно буде увійти знову.', [
+  const handleLogout = (all = false) => {
+    Alert.alert(all ? 'Вийти на всіх пристроях?' : 'Вийти з акаунту?', 'Потрібно буде увійти знову.', [
       { text: 'Скасувати', style: 'cancel' },
       {
         text: 'Вийти',
@@ -77,7 +42,9 @@ export default function ProfileScreen() {
         onPress: async () => {
           setIsLoggingOut(true);
           try {
-            await logout();
+            await logout(all);
+          } catch {
+            Alert.alert('Локальний вихід', 'Не вдалося підтвердити завершення сесій на сервері.');
           } finally {
             await terminateSession();
             router.replace('/(auth)/select-role');
@@ -128,7 +95,15 @@ export default function ProfileScreen() {
   return (
     <SafeAreaView className="flex-1 bg-gray-50">
       <ScrollView showsVerticalScrollIndicator={false}>
-        <View className="px-4 pt-4 pb-2">
+        <View className="px-4 pt-4 pb-2 flex-row items-center gap-3">
+          <TouchableOpacity
+            onPress={() => router.navigate('/(app)/more')}
+            accessibilityRole="button"
+            accessibilityLabel="Назад до меню"
+            className="w-9 h-9 items-center justify-center rounded-full bg-gray-100"
+          >
+            <Ionicons name="arrow-back" size={20} color="#374151" />
+          </TouchableOpacity>
           <Text className="text-2xl font-bold text-gray-900">Профіль</Text>
         </View>
 
@@ -139,44 +114,14 @@ export default function ProfileScreen() {
               {user?.fullName?.charAt(0) ?? '?'}
             </Text>
           </View>
-          <Text className="text-lg font-semibold text-gray-900">{user?.fullName}</Text>
-          <Text className="text-sm text-gray-500">{user?.email}</Text>
-          <View className="mt-2 px-2 py-0.5 bg-gray-100 rounded-full self-start">
-            <Text className="text-xs text-gray-600 font-medium">
-              {ROLE_LABELS[user?.role ?? ''] ?? user?.role}
-            </Text>
-          </View>
+          <Text className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Дані користувача</Text>
+          <Text className="text-xs text-gray-500">Ім’я та прізвище</Text>
+          <Text selectable className="text-lg font-semibold text-gray-900">{user?.fullName || 'Не вказано'}</Text>
+          <Text className="text-xs text-gray-500 mt-4">Email</Text>
+          <Text selectable className="text-base text-gray-900">{user?.email || 'Не вказано'}</Text>
+          <Text className="text-xs text-gray-500 mt-4">Роль у підприємстві</Text>
+          <Text className="text-base text-gray-900">{(ROLE_LABELS[user?.role ?? ''] ?? user?.role) || 'Не вказано'}</Text>
         </View>
-
-        {/* My tools */}
-        {myTools.length > 0 && (
-          <View className="mx-4 mt-4">
-            <Text className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">
-              Мої інструменти
-            </Text>
-            <View className="bg-white rounded-2xl overflow-hidden">
-              {myTools.map((tool, index) => (
-                <TouchableOpacity
-                  key={tool.href}
-                  onPress={() => router.push(tool.href as Parameters<typeof router.push>[0])}
-                  activeOpacity={0.7}
-                  className={`flex-row items-center px-4 py-3.5 ${
-                    index < myTools.length - 1 ? 'border-b border-gray-50' : ''
-                  }`}
-                >
-                  <View
-                    className="w-8 h-8 rounded-lg items-center justify-center mr-3"
-                    style={{ backgroundColor: `${tool.color}1a` }}
-                  >
-                    <Ionicons name={tool.icon} size={17} color={tool.color} />
-                  </View>
-                  <Text className="text-base text-gray-700 flex-1">{tool.label}</Text>
-                  <Ionicons name="chevron-forward" size={16} color="#d1d5db" />
-                </TouchableOpacity>
-              ))}
-            </View>
-          </View>
-        )}
 
         {/* Loyalty program (plan §"Кейс 2" — staff joining their own employer's program) */}
         <LoyaltySection />
@@ -195,7 +140,7 @@ export default function ProfileScreen() {
 
         <View className="mx-4 mt-4 mb-8">
           <TouchableOpacity
-            onPress={handleLogout}
+            onPress={() => handleLogout(false)}
             disabled={isLoggingOut}
             className="bg-red-50 border border-red-100 py-4 rounded-xl items-center"
           >
@@ -204,6 +149,9 @@ export default function ProfileScreen() {
             ) : (
               <Text className="text-red-600 font-semibold">Вийти з акаунту</Text>
             )}
+          </TouchableOpacity>
+          <TouchableOpacity onPress={() => handleLogout(true)} disabled={isLoggingOut} className="mt-3 py-3 items-center">
+            <Text className="text-red-600 font-semibold">Вийти на всіх пристроях</Text>
           </TouchableOpacity>
         </View>
       </ScrollView>

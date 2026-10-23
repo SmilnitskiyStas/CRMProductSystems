@@ -4,6 +4,9 @@ public sealed class RefreshToken
 {
     public Guid Id { get; private set; }
     public Guid UserId { get; private set; }
+    public Guid SessionId { get; private set; }
+    public int AuthVersion { get; private set; }
+    public DateTime? MfaVerifiedAt { get; private set; }
     public string TokenHash { get; private set; } = string.Empty;
     public DateTime ExpiresAt { get; private set; }
     public DateTime? RevokedAt { get; private set; }
@@ -16,10 +19,13 @@ public sealed class RefreshToken
 
     private RefreshToken() { }
 
-    public static RefreshToken Create(Guid userId, string tokenHash, DateTime expiresAt) => new()
+    public static RefreshToken Create(Guid userId, string tokenHash, DateTime expiresAt, Guid? sessionId = null, int authVersion = 0, DateTime? mfaVerifiedAt = null) => new()
     {
         Id = Guid.NewGuid(),
         UserId = userId,
+        SessionId = sessionId ?? Guid.NewGuid(),
+        AuthVersion = authVersion,
+        MfaVerifiedAt = mfaVerifiedAt,
         TokenHash = tokenHash,
         ExpiresAt = expiresAt,
         CreatedAt = DateTime.UtcNow,

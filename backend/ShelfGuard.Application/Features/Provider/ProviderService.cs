@@ -230,7 +230,7 @@ public sealed class ProviderService : IProviderService
     // ── Impersonation ───────────────────────────────────────────────────────
 
     public async Task<(ImpersonateResponse? Response, string? Error)> ImpersonateAsync(
-        Guid providerId, string providerEmail, Guid targetTenantId, CancellationToken ct)
+        Guid providerId, string providerEmail, Guid targetTenantId, CancellationToken ct, Guid? sessionId = null, int authVersion = 0, DateTime? mfaVerifiedAt = null)
     {
         var tenant = await _tenants.GetByIdAsync(targetTenantId, ct);
         if (tenant is null) return (null, "Tenant not found.");
@@ -238,7 +238,7 @@ public sealed class ProviderService : IProviderService
 
         // Generate a short-lived JWT scoped to the target tenant (enterprise_admin role).
         // This token includes an "impersonated=true" claim so audit logs can detect it.
-        var token = _jwt.GenerateImpersonationToken(providerId, providerEmail, targetTenantId);
+        var token = _jwt.GenerateImpersonationToken(providerId, providerEmail, targetTenantId, sessionId, authVersion, mfaVerifiedAt);
 
         // Log the impersonation event for audit trail.
         await _logs.LogAsync(new Domain.Entities.ActivityLog

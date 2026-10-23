@@ -20,12 +20,14 @@ public sealed class BusinessAssistantAdvisor : IBusinessAssistantAdvisor
     private readonly AppDbContext _db;
     private readonly IAiClientFactory _ai;
     private readonly IAiPromptResolver _prompt;
+    private readonly IWorkAccessContext _access;
 
-    public BusinessAssistantAdvisor(AppDbContext db, IAiClientFactory ai, IAiPromptResolver prompt)
+    public BusinessAssistantAdvisor(AppDbContext db, IAiClientFactory ai, IAiPromptResolver prompt, IWorkAccessContext access)
     {
         _db = db;
         _ai = ai;
         _prompt = prompt;
+        _access = access;
     }
 
     public Task<bool> IsConfiguredAsync(CancellationToken ct = default) => _ai.IsConfiguredAsync(Slot, ct);
@@ -35,6 +37,8 @@ public sealed class BusinessAssistantAdvisor : IBusinessAssistantAdvisor
         string message,
         CancellationToken ct = default)
     {
+        var scope = await _access.GetAsync(ct);
+        if (scope == null || scope.TenantId != tenantId || !scope.Has("ai_assistant.use")) throw new WorkAccessDeniedException();
         var client = await _ai.ResolveAsync(Slot, ct)
             ?? throw new InvalidOperationException("AI-агент не налаштований. Зверніться до вашого провайдера.");
 
@@ -42,26 +46,24 @@ public sealed class BusinessAssistantAdvisor : IBusinessAssistantAdvisor
 
         // ── 1. Critical / expiring stock batches ──────────────────────────────
         var expiryThreshold = today.AddDays(7);
-        var criticalStock = await _db.ProductStocks
+        var criticalStock = scope.CanStock ? await _db.ProductStocks
             .Where(s => s.TenantId == tenantId
-                     && s.Quantity > 0
+                     && (scope.TenantWide || scope.LocationIds.Contains(s.StoreId)) && s.Quantity > 0
                      && (s.Status != "safe" || s.ExpiryDate <= expiryThreshold))
             .OrderBy(s => s.ExpiryDate)
             .Take(20)
             .Select(s => new
             {
                 ProductName = s.Product != null ? s.Product.Name : "Unknown",
-                s.BatchNumber,
                 s.Quantity,
                 s.Status,
                 s.ExpiryDate,
             })
-            .ToListAsync(ct);
+            .ToListAsync(ct) : [];
 
         var criticalLines = criticalStock.Select(s => new
         {
             s.ProductName,
-            s.BatchNumber,
             s.Quantity,
             s.Status,
             ExpiryDate       = s.ExpiryDate.ToString("yyyy-MM-dd"),
@@ -69,8 +71,8 @@ public sealed class BusinessAssistantAdvisor : IBusinessAssistantAdvisor
         }).ToList<object>();
 
         // ── 2. Pending AI order suggestions ───────────────────────────────────
-        var pendingOrders = await _db.AiOrderSuggestions
-            .Where(s => s.TenantId == tenantId && s.Status == "pending")
+        var pendingOrders = scope.Has("ai_orders.view") ? await _db.AiOrderSuggestions
+            .Where(s => s.TenantId == tenantId && s.Status == "pending" && (scope.TenantWide || scope.LocationIds.Contains(s.StoreId)))
             .OrderByDescending(s => s.GeneratedAt)
             .Take(5)
             .Select(s => new
@@ -80,29 +82,32 @@ public sealed class BusinessAssistantAdvisor : IBusinessAssistantAdvisor
                 OrderDate    = s.OrderDate.ToString("yyyy-MM-dd"),
                 ItemsCount   = s.Items.Count,
             })
-            .ToListAsync(ct);
+            .ToListAsync(ct) : [];
 
         // ── 3. Sales last 7 days — top 20 lines by volume ────────────────────
         var sevenDaysAgo = today.AddDays(-7);
-        var salesLines = await _db.DailySales
-            .Where(d => d.TenantId == tenantId && d.Date >= sevenDaysAgo && !d.IsAnomaly)
+        var salesLines = scope.Has("analytics.view") ? await _db.DailySales
+            .Where(d => d.TenantId == tenantId && d.Date >= sevenDaysAgo && d.Date <= today && !d.IsAnomaly
+                && (scope.TenantWide || scope.LocationIds.Contains(d.StoreId)))
+            .GroupBy(d => new { d.Date, ProductName = d.Product != null ? d.Product.Name : "Unknown" })
+            .Select(group => new { group.Key.Date, group.Key.ProductName, QuantitySold = group.Sum(d => d.QuantitySold) })
             .OrderByDescending(d => d.QuantitySold)
             .Take(20)
             .Select(d => new
             {
                 Date        = d.Date.ToString("yyyy-MM-dd"),
-                ProductName = d.Product != null ? d.Product.Name : "Unknown",
+                d.ProductName,
                 d.QuantitySold,
             })
-            .ToListAsync(ct);
+            .ToListAsync(ct) : [];
 
         // ── 4. Active suppliers ───────────────────────────────────────────────
-        var suppliers = await _db.Suppliers
+        var suppliers = scope.Has("suppliers.view") ? await _db.Suppliers
             .Where(s => s.TenantId == tenantId && s.IsActive)
             .OrderBy(s => s.Name)
             .Take(15)
-            .Select(s => new { s.Name, s.Phone, s.DeliveryDays })
-            .ToListAsync(ct);
+            .Select(s => new { s.Name, s.DeliveryDays })
+            .ToListAsync(ct) : [];
 
         // ── 5. Call Claude ────────────────────────────────────────────────────
         var opts = new JsonSerializerOptions { WriteIndented = false };

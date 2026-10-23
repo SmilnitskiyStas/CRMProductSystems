@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text.Json;
+using ShelfGuard.Application.Common;
 using ShelfGuard.Application.Features.LegalEntities;
 using ShelfGuard.Application.Features.Marketplace.Dtos;
 using ShelfGuard.Application.Features.Marketplace.Vchasno;
@@ -509,7 +510,7 @@ public sealed class SupplierAgreementService : ISupplierAgreementService
         if (isNew)
             return (null, ContractSettingsRequiredError);
 
-        var uploadDir = Path.Combine("wwwroot", "uploads", "contract-assets", supplierTenantId.ToString());
+        var uploadDir = Path.Combine(PrivateUploadPaths.Root, "contract-assets", supplierTenantId.ToString());
         Directory.CreateDirectory(uploadDir);
 
         var assetName = kind == ContractAssetKind.Signature ? "signature" : "stamp";
@@ -615,7 +616,7 @@ public sealed class SupplierAgreementService : ISupplierAgreementService
 
         var pdfBytes = _pdf.Generate(data);
 
-        var dir = Path.Combine("wwwroot", "uploads", "contracts", agreement.SupplierTenantId.ToString());
+        var dir = Path.Combine(PrivateUploadPaths.Root, "contracts", agreement.SupplierTenantId.ToString());
         Directory.CreateDirectory(dir);
         await File.WriteAllBytesAsync(Path.Combine(dir, $"{agreement.Id}.pdf"), pdfBytes, ct);
 
@@ -682,7 +683,7 @@ public sealed class SupplierAgreementService : ISupplierAgreementService
         return parts.Count == 0 ? null : string.Join(", ", parts);
     }
 
-    /// <summary>Loads a signature/stamp image from its wwwroot URL; null when unset or missing on disk.</summary>
+    /// <summary>Loads an internal signature/stamp image; never exposes it through static serving.</summary>
     private static byte[]? ReadImageSafe(string? url)
     {
         if (string.IsNullOrEmpty(url)) return null;
@@ -698,7 +699,7 @@ public sealed class SupplierAgreementService : ISupplierAgreementService
     }
 
     private static string ToDiskPath(string relativeUrl) =>
-        Path.Combine("wwwroot", relativeUrl.TrimStart('/').Replace('/', Path.DirectorySeparatorChar));
+        PrivateUploadPaths.GetReadPath(relativeUrl) ?? string.Empty;
 
     private static string? Norm(string? value)
     {

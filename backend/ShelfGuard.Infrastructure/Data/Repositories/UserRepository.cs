@@ -40,7 +40,13 @@ public sealed class UserRepository : IUserRepository
     public async Task AddAsync(User user, CancellationToken ct = default) =>
         await _db.Users.AddAsync(user, ct);
 
-    public void Update(User user) => _db.Users.Update(user);
+    public void Update(User user)
+    {
+        // Tracked users already retain an original snapshot. Marking their entire graph
+        // modified can overwrite permissions changed by an administrator during login/MFA.
+        // DetectChanges persists only the fields actually changed by this request.
+        if (_db.Entry(user).State == EntityState.Detached) _db.Users.Update(user);
+    }
 
     public Task SaveChangesAsync(CancellationToken ct = default) =>
         _db.SaveChangesAsync(ct);

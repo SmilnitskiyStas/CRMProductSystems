@@ -1,4 +1,5 @@
 "use client";
+import { MfaStepUpDialog } from "@/features/auth/components/MfaStepUpDialog";
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -78,6 +79,7 @@ function DashboardChrome({ children }: { children: React.ReactNode }) {
 
   return (
     <>
+      <MfaStepUpDialog />
       {impersonation && (
         <ImpersonationBanner
           tenantName={impersonation.tenantName}

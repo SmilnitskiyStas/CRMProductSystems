@@ -1,4 +1,5 @@
 import '../global.css';
+import { MfaStepUpDialog } from '@/features/auth/components/MfaStepUpDialog';
 import { useEffect } from 'react';
 import { Stack } from 'expo-router';
 import { QueryClientProvider } from '@tanstack/react-query';
@@ -20,6 +21,7 @@ export default function RootLayout() {
   return (
     <QueryClientProvider client={queryClient}>
       <SafeAreaProvider>
+        <MfaStepUpDialog />
         <Stack screenOptions={{ headerShown: false }}>
           <Stack.Screen name="(auth)" />
           <Stack.Screen name="(personal)" />

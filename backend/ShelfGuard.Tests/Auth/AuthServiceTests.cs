@@ -19,20 +19,21 @@ public sealed class AuthServiceTests
     private readonly ITotpService _totp = Substitute.For<ITotpService>();
     private readonly IUserPermissionGrantRepository _permissionGrants = Substitute.For<IUserPermissionGrantRepository>();
     private readonly ITenantRoleRepository _tenantRoles = Substitute.For<ITenantRoleRepository>();
-    private readonly INotificationRepository _notifications = Substitute.For<INotificationRepository>();
+    private readonly AuthTenantScope _scope = new();
     private readonly AuthService _sut;
 
     public AuthServiceTests()
     {
         _sut = new AuthService(_users, _tokens, _hasher, _jwt, _activityLogs, _totp, _permissionGrants, _tenantRoles,
-            _notifications, NullLogger<AuthService>.Instance);
+            NullLogger<AuthService>.Instance, Substitute.For<IMfaPolicy>(), _scope);
         _permissionGrants.GetActiveGrantsForUserAsync(Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<CancellationToken>())
             .Returns(Array.Empty<UserPermissionGrant>());
         _jwt.GenerateRefreshToken().Returns(("raw_token", "hashed_token"));
+        _tokens.TryRotateAsync(Arg.Any<RefreshToken>(), Arg.Any<RefreshToken>(), Arg.Any<CancellationToken>()).Returns(true);
         _jwt.HashToken("raw_token").Returns("hashed_token");
         _jwt.GenerateAccessToken(Arg.Any<Guid>(), Arg.Any<string>(), Arg.Any<string>(),
             Arg.Any<Guid?>(), Arg.Any<Guid?>(), Arg.Any<string?>(), Arg.Any<Dictionary<string, bool>?>(),
-            Arg.Any<List<string>?>(), Arg.Any<List<string>?>()).Returns("access_token");
+            Arg.Any<List<string>?>(), Arg.Any<List<string>?>(), Arg.Any<Guid?>(), Arg.Any<int>(), Arg.Any<DateTime?>()).Returns("access_token");
     }
 
     // ── Login ──────────────────────────────────────────────────────────────
@@ -178,7 +179,7 @@ public sealed class AuthServiceTests
         var user = MakeUserWithTotp();
         _users.GetByEmailAsync("test@example.com", default).Returns(user);
         _hasher.Verify("correct", "hash").Returns(true);
-        _jwt.GenerateTwoFactorChallengeToken(user.Id).Returns("challenge_jwt");
+        _jwt.GenerateTwoFactorChallengeToken(user.Id, user.AuthVersion).Returns("challenge_jwt");
 
         var outcome = await _sut.LoginAsync("test@example.com", "correct");
 
@@ -233,7 +234,7 @@ public sealed class AuthServiceTests
 
         Assert.Null(response);
         Assert.NotNull(error);
-        await _tokens.Received(1).RevokeAllForUserAsync(user.Id, default);
+        await _tokens.Received(1).RevokeAllSessionsAsync(user.Id, default);
         await _activityLogs.Received(1).LogAsync(
             Arg.Is<ActivityLog>(l => l.Action == "auth.refresh_reuse_detected" && l.UserId == user.Id),
             default);
@@ -253,7 +254,7 @@ public sealed class AuthServiceTests
 
         Assert.Null(response);
         Assert.NotNull(error);
-        await _tokens.DidNotReceive().RevokeAllForUserAsync(Arg.Any<Guid>(), default);
+        await _tokens.DidNotReceive().RevokeAllSessionsAsync(Arg.Any<Guid>(), default);
         await _tokens.DidNotReceive().AddAsync(Arg.Any<RefreshToken>(), default);
     }
 
@@ -268,108 +269,11 @@ public sealed class AuthServiceTests
     {
         var user = MakeUser();
         var token = RefreshToken.Create(user.Id, "hashed_token", DateTime.UtcNow.AddDays(7));
-        _tokens.GetActiveByHashAsync("hashed_token", default).Returns(token);
+        _tokens.GetByHashAsync("hashed_token", default).Returns(token);
 
         await _sut.RevokeAsync("raw_token");
 
-        _tokens.Received(1).Update(Arg.Is<RefreshToken>(t => t.RevokedAt.HasValue));
-        await _tokens.Received(1).SaveChangesAsync(default);
-    }
-
-    // ── Forgot password / temporary password (TASK-465) ──────────────────────
-
-    [Fact]
-    public async Task ForgotPasswordAsync_unknown_email_has_no_side_effects()
-    {
-        _users.GetByEmailAsync(Arg.Any<string>(), default).ReturnsNull();
-
-        await _sut.ForgotPasswordAsync("nobody@example.com");
-
-        await _users.DidNotReceive().SaveChangesAsync(default);
-        await _notifications.DidNotReceive().EnqueueAsync(Arg.Any<NotificationQueue>(), default);
-        await _tokens.DidNotReceive().RevokeAllForUserAsync(Arg.Any<Guid>(), default);
-    }
-
-    [Fact]
-    public async Task ForgotPasswordAsync_inactive_user_has_no_side_effects()
-    {
-        var user = MakeInactiveUser();
-        _users.GetByEmailAsync("test@example.com", default).Returns(user);
-
-        await _sut.ForgotPasswordAsync("test@example.com");
-
-        await _users.DidNotReceive().SaveChangesAsync(default);
-        await _notifications.DidNotReceive().EnqueueAsync(Arg.Any<NotificationQueue>(), default);
-        await _tokens.DidNotReceive().RevokeAllForUserAsync(Arg.Any<Guid>(), default);
-    }
-
-    [Fact]
-    public async Task ForgotPasswordAsync_known_active_user_sets_temp_password_and_enqueues_notification()
-    {
-        var user = MakeUser();
-        _users.GetByEmailAsync("test@example.com", default).Returns(user);
-        _hasher.Hash(Arg.Any<string>()).Returns("temp_hash");
-
-        await _sut.ForgotPasswordAsync("test@example.com", "1.2.3.4");
-
-        Assert.Equal("temp_hash", user.PasswordHash);
-        Assert.True(user.HasActiveTempPassword);
-        await _users.Received(1).SaveChangesAsync(default);
-        await _notifications.Received(1).EnqueueAsync(
-            Arg.Is<NotificationQueue>(n =>
-                n.UserId == user.Id &&
-                n.TenantId == user.TenantId &&
-                n.Channel == "system" &&
-                n.EventType == "auth.password_reset_requested" &&
-                n.Status == "pending" &&
-                n.Payload != null && n.Payload.Contains("tempPassword")),
-            default);
-        await _activityLogs.Received(1).LogAsync(
-            Arg.Is<ActivityLog>(l => l.Action == "user.password_reset_requested" && l.UserId == user.Id), default);
-        // TASK-469 MEDIUM #2: anti-hijack — a successful forgot-password must evict any
-        // existing sessions, exactly once, for this user.
-        await _tokens.Received(1).RevokeAllForUserAsync(user.Id, default);
-    }
-
-    // ── Forgot-password cooldown (TASK-469, security review TASK-467 MEDIUM #1) ──────────
-
-    [Fact]
-    public async Task ForgotPasswordAsync_within_cooldown_has_no_side_effects()
-    {
-        var user = MakeUser();
-        // A temp password "issued" effectively right now: SetTempPasswordExpiry(now + 3h)
-        // is exactly what ForgotPasswordAsync itself would have just done — derived
-        // issuedAt is ~now, well inside the 60s cooldown window.
-        user.SetTempPasswordExpiry(DateTime.UtcNow.AddHours(3));
-        _users.GetByEmailAsync("test@example.com", default).Returns(user);
-
-        await _sut.ForgotPasswordAsync("test@example.com");
-
-        // No new temp password/outbox row, and the credential from the (simulated) prior
-        // request is left untouched — still exactly "hash", never overwritten a second time.
-        Assert.Equal("hash", user.PasswordHash);
-        await _users.DidNotReceive().SaveChangesAsync(default);
-        await _notifications.DidNotReceive().EnqueueAsync(Arg.Any<NotificationQueue>(), default);
-        await _activityLogs.DidNotReceive().LogAsync(Arg.Any<ActivityLog>(), default);
-        await _tokens.DidNotReceive().RevokeAllForUserAsync(Arg.Any<Guid>(), default);
-    }
-
-    [Fact]
-    public async Task ForgotPasswordAsync_after_cooldown_elapsed_issues_new_temp_password()
-    {
-        var user = MakeUser();
-        // issuedAt derives to ~61s ago (past the 60s cooldown) — a legitimate re-request
-        // must still succeed once the cooldown has elapsed, not be blocked forever.
-        user.SetTempPasswordExpiry(DateTime.UtcNow.AddHours(3).AddSeconds(-61));
-        _users.GetByEmailAsync("test@example.com", default).Returns(user);
-        _hasher.Hash(Arg.Any<string>()).Returns("temp_hash");
-
-        await _sut.ForgotPasswordAsync("test@example.com");
-
-        Assert.Equal("temp_hash", user.PasswordHash);
-        await _users.Received(1).SaveChangesAsync(default);
-        await _notifications.Received(1).EnqueueAsync(Arg.Any<NotificationQueue>(), default);
-        await _tokens.Received(1).RevokeAllForUserAsync(user.Id, default);
+        await _tokens.Received(1).RevokeSessionAsync(user.Id, token.SessionId, default);
     }
 
     // ── Login with a temporary password (TASK-465) ────────────────────────────
@@ -421,6 +325,42 @@ public sealed class AuthServiceTests
         var outcome = await _sut.LoginAsync("test@example.com", "wrong");
 
         Assert.Equal("Invalid email or password.", outcome.Error);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task Anonymous_login_flushes_audit_in_the_persisted_users_tenant(bool validPassword)
+    {
+        var user = MakeUser(); var flushed = false;
+        _users.GetByEmailAsync(user.Email, default).Returns(user);
+        _hasher.Verify("synthetic", user.PasswordHash).Returns(validPassword);
+        Task Flush() { Assert.Equal(user.TenantId, _scope.TenantId); flushed = true; return Task.CompletedTask; }
+        _users.SaveChangesAsync(default).Returns(_ => Flush());
+        _activityLogs.SaveChangesAsync(default).Returns(_ => Flush());
+        _permissionGrants.GetActiveGrantsForUserAsync(user.TenantId!.Value, user.Id, default).Returns(_ => {
+            Assert.Equal(user.TenantId, _scope.TenantId); return Array.Empty<UserPermissionGrant>(); });
+        var outcome = await _sut.LoginAsync(user.Email, "synthetic");
+        Assert.True(flushed); Assert.Equal(validPassword, outcome.Response != null); Assert.Null(_scope.TenantId);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Anonymous_refresh_scopes_profile_or_replay_audit_without_nesting_rotation(bool replay)
+    {
+        var user = MakeUser(); var token = RefreshToken.Create(user.Id, "hashed_token", DateTime.UtcNow.AddDays(1));
+        if (replay) { token.Revoke(); BackdateRevocation(token, TimeSpan.FromMinutes(1)); }
+        _tokens.GetByHashAsync("hashed_token", default).Returns(token);
+        _users.GetByIdAsync(user.Id, default).Returns(user);
+        var observed = false;
+        _activityLogs.SaveChangesAsync(default).Returns(_ => {
+            Assert.Equal(user.TenantId, _scope.TenantId); observed = true; return Task.CompletedTask; });
+        _permissionGrants.GetActiveGrantsForUserAsync(user.TenantId!.Value, user.Id, default).Returns(_ => {
+            Assert.Equal(user.TenantId, _scope.TenantId); observed = true; return Array.Empty<UserPermissionGrant>(); });
+        _tokens.TryRotateAsync(token, Arg.Any<RefreshToken>(), default).Returns(_ => { Assert.Null(_scope.TenantId); return true; });
+        var result = await _sut.RefreshAsync("raw_token");
+        Assert.True(observed); Assert.Equal(!replay, result.Response != null); Assert.Null(_scope.TenantId);
     }
 
     // ── helpers ────────────────────────────────────────────────────────────

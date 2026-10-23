@@ -14,7 +14,7 @@ public sealed class JwtService : IJwtService
     private readonly string _issuer;
     private readonly string _audience;
     private readonly int _accessTokenMinutes;
-    private readonly int _consumerAccessTokenDays;
+    private readonly int _consumerAccessTokenMinutes;
     private readonly int _operatorTokenMinutes;
 
     public JwtService(IConfiguration config)
@@ -23,14 +23,13 @@ public sealed class JwtService : IJwtService
         _issuer   = config["Jwt:Issuer"]   ?? "shelfguard";
         _audience = config["Jwt:Audience"] ?? "shelfguard";
         _accessTokenMinutes = int.Parse(config["Jwt:AccessTokenMinutes"] ?? "15");
-        // TASK-405: ConsumerAccount has no refresh-token flow (see interface doc) — a
-        // longer-lived access token is the deliberate tradeoff instead.
-        _consumerAccessTokenDays = int.Parse(config["Jwt:ConsumerAccessTokenDays"] ?? "30");
+        _consumerAccessTokenMinutes = Math.Clamp(int.Parse(config["Jwt:ConsumerAccessTokenMinutes"] ?? "15"), 1, 15);
         _operatorTokenMinutes = int.Parse(config["Jwt:OperatorTokenMinutes"] ?? "480");
     }
 
     public string GenerateAccessToken(Guid userId, string email, string role, Guid? tenantId, Guid? storeId, string? fullName = null,
-        Dictionary<string, bool>? permissions = null, List<string>? capabilities = null, List<string>? tabs = null)
+        Dictionary<string, bool>? permissions = null, List<string>? capabilities = null, List<string>? tabs = null,
+        Guid? sessionId = null, int authVersion = 0, DateTime? mfaVerifiedAt = null)
     {
         var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_secret));
         var credentials = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
@@ -57,6 +56,7 @@ public sealed class JwtService : IJwtService
                 claims.Add(new Claim("permissions", granted));
         }
 
+        AddSessionClaims(claims, sessionId, authVersion, mfaVerifiedAt);
         // ADR-020 (TASK-346): TenantRole capabilities, same comma-joined shape as "permissions".
         if (capabilities is { Count: > 0 })
             claims.Add(new Claim("capabilities", string.Join(',', capabilities)));
@@ -76,7 +76,7 @@ public sealed class JwtService : IJwtService
     }
 
     /// <inheritdoc/>
-    public string GenerateImpersonationToken(Guid providerId, string providerEmail, Guid targetTenantId)
+    public string GenerateImpersonationToken(Guid providerId, string providerEmail, Guid targetTenantId, Guid? sessionId = null, int authVersion = 0, DateTime? mfaVerifiedAt = null)
     {
         var key         = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_secret));
         var credentials = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
@@ -91,6 +91,7 @@ public sealed class JwtService : IJwtService
             new(JwtRegisteredClaimNames.Jti,   Guid.NewGuid().ToString()),
         };
 
+        AddSessionClaims(claims, sessionId, authVersion, mfaVerifiedAt);
         var token = new JwtSecurityToken(
             issuer:             _issuer,
             audience:           _audience,
@@ -102,7 +103,7 @@ public sealed class JwtService : IJwtService
     }
 
     /// <inheritdoc/>
-    public string GenerateConsumerAccessToken(Guid consumerAccountId, string? fullName = null)
+    public string GenerateConsumerAccessToken(Guid consumerAccountId, string? fullName = null, Guid? sessionId = null, int authVersion = 0)
     {
         var key         = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_secret));
         var credentials = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
@@ -117,6 +118,7 @@ public sealed class JwtService : IJwtService
             new(JwtRegisteredClaimNames.Jti,  Guid.NewGuid().ToString()),
         };
 
+        AddSessionClaims(claims, sessionId, authVersion);
         if (!string.IsNullOrWhiteSpace(fullName))
             claims.Add(new Claim("full_name", fullName));
 
@@ -124,7 +126,7 @@ public sealed class JwtService : IJwtService
             issuer:             _issuer,
             audience:           _audience,   // same audience as staff tokens — see interface doc
             claims:             claims,
-            expires:            DateTime.UtcNow.AddDays(_consumerAccessTokenDays),
+            expires:            DateTime.UtcNow.AddMinutes(_consumerAccessTokenMinutes),
             signingCredentials: credentials);
 
         return new JwtSecurityTokenHandler().WriteToken(token);
@@ -172,10 +174,11 @@ public sealed class JwtService : IJwtService
     // ── 2FA challenge tokens (TASK-330) ─────────────────────────────────────
     // Dedicated audience: the API's JwtBearer validates ValidAudience=_audience,
     // so a challenge token can never be replayed as an access token.
-    private string TwoFactorAudience => _audience + ":2fa";
 
     /// <inheritdoc/>
-    public string GenerateTwoFactorChallengeToken(Guid userId)
+    public string GenerateTwoFactorChallengeToken(Guid userId, int authVersion = 0) => CreateProof(userId, authVersion, "2fa");
+    public string GenerateMfaEnrollmentToken(Guid userId, int authVersion) => CreateProof(userId, authVersion, "mfa-enrollment");
+    private string CreateProof(Guid userId, int authVersion, string purpose)
     {
         var key         = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_secret));
         var credentials = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
@@ -183,13 +186,14 @@ public sealed class JwtService : IJwtService
         var claims = new List<Claim>
         {
             new(JwtRegisteredClaimNames.Sub, userId.ToString()),
-            new("purpose",                   "2fa"),
+            new("purpose",                   purpose),
+            new("auth_ver", authVersion.ToString(System.Globalization.CultureInfo.InvariantCulture)),
             new(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
         };
 
         var token = new JwtSecurityToken(
             issuer:             _issuer,
-            audience:           TwoFactorAudience,
+            audience:           _audience + ":" + purpose,
             claims:             claims,
             expires:            DateTime.UtcNow.AddMinutes(5),
             signingCredentials: credentials);
@@ -198,7 +202,9 @@ public sealed class JwtService : IJwtService
     }
 
     /// <inheritdoc/>
-    public Guid? ValidateTwoFactorChallengeToken(string token)
+    public TwoFactorProof? ValidateTwoFactorChallengeToken(string token) => ValidateProof(token, "2fa");
+    public TwoFactorProof? ValidateMfaEnrollmentToken(string token) => ValidateProof(token, "mfa-enrollment");
+    private TwoFactorProof? ValidateProof(string token, string purpose)
     {
         var handler = new JwtSecurityTokenHandler();
         try
@@ -210,18 +216,20 @@ public sealed class JwtService : IJwtService
                 ValidateLifetime         = true,
                 ValidateIssuerSigningKey = true,
                 ValidIssuer              = _issuer,
-                ValidAudience            = TwoFactorAudience,
+                ValidAudience            = _audience + ":" + purpose,
                 IssuerSigningKey         = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_secret)),
                 ClockSkew                = TimeSpan.Zero,
             }, out _);
 
-            if (principal.FindFirst("purpose")?.Value != "2fa")
+            if (principal.FindFirst("purpose")?.Value != purpose)
                 return null;
 
             var sub = principal.FindFirst(ClaimTypes.NameIdentifier)?.Value
                    ?? principal.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
 
-            return Guid.TryParse(sub, out var userId) && userId != Guid.Empty ? userId : null;
+            return Guid.TryParse(sub, out var userId) && userId != Guid.Empty
+                && int.TryParse(principal.FindFirst("auth_ver")?.Value, out var version) && version >= 0
+                ? new TwoFactorProof(userId, version) : null;
         }
         catch
         {
@@ -233,5 +241,13 @@ public sealed class JwtService : IJwtService
     {
         var bytes = SHA256.HashData(Encoding.UTF8.GetBytes(token));
         return Convert.ToHexString(bytes).ToLowerInvariant();
+    }
+
+    private static void AddSessionClaims(List<Claim> claims, Guid? sessionId, int authVersion, DateTime? mfaVerifiedAt = null)
+    {
+        if (sessionId is not null) claims.Add(new Claim("sid", sessionId.Value.ToString()));
+        claims.Add(new Claim("auth_ver", authVersion.ToString(System.Globalization.CultureInfo.InvariantCulture)));
+        if (mfaVerifiedAt != null)
+            claims.Add(new Claim("mfa_at", new DateTimeOffset(DateTime.SpecifyKind(mfaVerifiedAt.Value, DateTimeKind.Utc)).ToUnixTimeSeconds().ToString(System.Globalization.CultureInfo.InvariantCulture)));
     }
 }

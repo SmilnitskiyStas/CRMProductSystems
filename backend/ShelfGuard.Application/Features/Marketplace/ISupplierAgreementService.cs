@@ -78,7 +78,7 @@ public interface ISupplierAgreementService
     Task<(SupplierContractSettingsDto? Settings, string? Error)> UpsertContractSettingsAsync(
         Guid supplierTenantId, UpsertContractSettingsDto request, CancellationToken ct = default);
 
-    /// <summary>Saves a signature/stamp image under wwwroot and stores its URL in the settings.</summary>
+    /// <summary>Saves a signature/stamp outside wwwroot and stores its logical URL in settings.</summary>
     Task<(string? Url, string? Error)> UploadContractAssetAsync(
         Guid supplierTenantId, Stream stream, string fileName, ContractAssetKind kind,
         CancellationToken ct = default);

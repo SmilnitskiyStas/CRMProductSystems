@@ -219,6 +219,8 @@ file sealed class FakeDiscountRepo : IDiscountRepository
 /// <summary>TASK-405 (Loyalty Фаза 0): fake ILoyaltyRepository backing PosService's new accrual/redemption path.</summary>
 file sealed class FakeLoyaltyRepo : ILoyaltyRepository
 {
+    public Task<PosTransaction?> GetPurchaseByIdAsync(Guid tenantId, Guid membershipId, Guid purchaseId, CancellationToken ct = default) => throw new NotSupportedException();
+    public Task<(List<PosTransaction> Items, int Total)> GetPurchasesPagedAsync(Guid tenantId, Guid membershipId, Guid? storeId, int page, int pageSize, CancellationToken ct = default) => throw new NotSupportedException();
     public List<LoyaltyMembership> Memberships { get; } = [];
     public List<LoyaltyLedgerEntry> LedgerEntries { get; } = [];
     public List<LoyaltyProgramSettings> Settings { get; } = [];

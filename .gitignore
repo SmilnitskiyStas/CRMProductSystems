@@ -56,3 +56,7 @@ cashier/release/
 
 # User-uploaded files (floor plans, scans, item photos) must not be committed
 backend/ShelfGuard.Api/wwwroot/uploads/
+private-uploads/
+
+# Generated remediation test reports are CI/local artifacts
+/docs/analys/remediation/test-results/

@@ -1,5 +1,4 @@
 using System.Security.Cryptography;
-using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using ShelfGuard.Application.Common;
 using ShelfGuard.Application.Features.Auth.Dtos;
@@ -16,26 +15,10 @@ public sealed class AuthService : IAuthService
     private static readonly TimeSpan LockoutDuration = TimeSpan.FromMinutes(15);
     private const string GenericLoginError = "Invalid email or password.";
     private const int RecoveryCodeCount = 8;
-
-    // TASK-465: temporary-password forgot-password redesign (supersedes TASK-456/460's
-    // link/token design — see User.cs TASK-464/465 doc comments). 3-hour validity per the
-    // product brief.
-    private const int TempPasswordValidHours = 3;
-    private const int TempPasswordLength = 14;
     private static readonly TimeSpan RefreshRotationGrace = TimeSpan.FromSeconds(10);
-    private const string TempPasswordExpiredError = "Temporary password has expired. Please request a new one.";
+    public const string RotationRetry = "Refresh already rotated; retry with the current proof.";
 
-    // TASK-469 (security review TASK-467, MEDIUM #1): per-user forgot-password cooldown.
-    // TASK-465 shipped without one — re-requesting simply overwrote the previous temp
-    // password/expiry in place, with only the "auth-forgot-password" per-IP rate limit as a
-    // throttle. That limit doesn't accumulate in prod (KI-014: the hosting provider's
-    // port-mapping layer doesn't preserve client IPs), so an attacker who knows/guesses a
-    // victim's email could loop this endpoint and keep overwriting PasswordHash faster than
-    // the victim could ever use a single issued temp password — a low-effort targeted
-    // lockout/DoS vector. No new column: TempPasswordExpiresAt already encodes "when was the
-    // current temp password issued" indirectly (issuedAt = TempPasswordExpiresAt -
-    // TempPasswordValidHours).
-    private const int ForgotPasswordCooldownSeconds = 60;
+    private const string TempPasswordExpiredError = "Temporary password has expired. Please request a new one.";
 
     private readonly IUserRepository _users;
     private readonly IRefreshTokenRepository _refreshTokens;
@@ -45,8 +28,9 @@ public sealed class AuthService : IAuthService
     private readonly ITotpService _totp;
     private readonly IUserPermissionGrantRepository _permissionGrants;
     private readonly ITenantRoleRepository _tenantRoles;
-    private readonly INotificationRepository _notifications;
     private readonly ILogger<AuthService> _logger;
+    private readonly IMfaPolicy _mfaPolicy;
+    private readonly ITenantSessionOverride _tenantScope;
 
     public AuthService(
         IUserRepository users,
@@ -57,8 +41,7 @@ public sealed class AuthService : IAuthService
         ITotpService totp,
         IUserPermissionGrantRepository permissionGrants,
         ITenantRoleRepository tenantRoles,
-        INotificationRepository notifications,
-        ILogger<AuthService> logger)
+        ILogger<AuthService> logger, IMfaPolicy mfaPolicy, ITenantSessionOverride tenantScope)
     {
         _users = users;
         _refreshTokens = refreshTokens;
@@ -68,8 +51,48 @@ public sealed class AuthService : IAuthService
         _totp = totp;
         _permissionGrants = permissionGrants;
         _tenantRoles = tenantRoles;
-        _notifications = notifications;
         _logger = logger;
+        _mfaPolicy = mfaPolicy;
+        _tenantScope = tenantScope;
+    }
+
+    private async Task<User?> EnrollmentUserAsync(string token, CancellationToken ct)
+    {
+        var proof = _jwt.ValidateMfaEnrollmentToken(token);
+        if (proof == null) return null;
+        var user = await _users.GetByIdAsync(proof.UserId, ct);
+        return user is { IsActive: true, TotpEnabled: false } && !user.IsLockedOut && user.AuthVersion == proof.AuthVersion ? user : null;
+    }
+
+    public async Task<(TwoFactorSetupResponse? Response, string? Error)> SetupEnrollmentAsync(string proof, CancellationToken ct = default)
+    {
+        var user = await EnrollmentUserAsync(proof, ct);
+        return user == null ? (null, "Invalid or expired enrollment proof.") : await SetupTwoFactorAsync(user.Id, ct);
+    }
+
+    public async Task<(IReadOnlyList<string>? RecoveryCodes, string? Error, LoginResponse? Session)> EnableEnrollmentAsync(string proof, string code, CancellationToken ct = default)
+    {
+        var user = await EnrollmentUserAsync(proof, ct);
+        return user == null ? (null, "Invalid or expired enrollment proof.", null) : await EnableTwoFactorAsync(user.Id, code, ct);
+    }
+
+    public async Task<(MfaStepUpResponse? Response, string? Error)> StepUpAsync(Guid userId, Guid sessionId, string code, CancellationToken ct = default)
+    {
+        var user = await _users.GetByIdAsync(userId, ct);
+        var session = await _refreshTokens.GetSessionAsync(userId, sessionId, ct);
+        if (user is not { IsActive: true, TotpEnabled: true } || user.TotpSecret == null || user.IsLockedOut
+            || session == null || session.AuthVersion != user.AuthVersion) return (null, "MFA verification unavailable. Sign in again.");
+        if (!VerifySecondFactor(user, code))
+        {
+            await RegisterFailedAttemptAsync(user, "user.mfa_step_up_failed", null, ct);
+            return (null, "Invalid code.");
+        }
+        user.ResetLockout();
+        var now = DateTime.UtcNow;
+        if (!await _refreshTokens.ConfirmMfaAsync(user, sessionId, now, ct)) return (null, "Session changed. Sign in again.");
+        var (permissions, capabilities, tabs) = await BuildEffectiveAccessAsync(user, ct);
+        return (new MfaStepUpResponse(_jwt.GenerateAccessToken(user.Id, user.Email, user.Role, user.TenantId, user.StoreId, user.FullName,
+            permissions, capabilities, tabs, sessionId, user.AuthVersion, now), ToDto(user, permissions, capabilities, tabs)), null);
     }
 
     public async Task<LoginOutcome> LoginAsync(
@@ -115,7 +138,9 @@ public sealed class AuthService : IAuthService
         // TASK-330: password ok but TOTP enabled → no tokens yet, hand out a
         // short-lived challenge for POST /api/auth/2fa/verify.
         if (user.TotpEnabled)
-            return new LoginOutcome(null, _jwt.GenerateTwoFactorChallengeToken(user.Id), null);
+            return new LoginOutcome(null, _jwt.GenerateTwoFactorChallengeToken(user.Id, user.AuthVersion), null);
+        if (await _mfaPolicy.IsRequiredAsync(user, ct))
+            return new LoginOutcome(null, null, null, _jwt.GenerateMfaEnrollmentToken(user.Id, user.AuthVersion));
 
         var response = await IssueTokensAsync(user, ipAddress, ct);
         return new LoginOutcome(response, null, null);
@@ -140,12 +165,11 @@ public sealed class AuthService : IAuthService
         if (existing.RevokedAt is not null
             && existing.ReplacedByTokenHash is not null
             && DateTime.UtcNow - existing.RevokedAt.Value < RefreshRotationGrace)
-            return (null, genericError);
+            return (null, RotationRetry);
 
         if (existing.RevokedAt is not null)
         {
-            await _refreshTokens.RevokeAllForUserAsync(existing.UserId, ct);
-            await _refreshTokens.SaveChangesAsync(ct);
+            await _refreshTokens.RevokeAllSessionsAsync(existing.UserId, ct);
 
             var owner = await _users.GetByIdAsync(existing.UserId, ct);
             await _activityLogs.LogAsync(new ActivityLog
@@ -157,7 +181,7 @@ public sealed class AuthService : IAuthService
                 EntityId   = existing.UserId,
                 Meta       = "Revoked refresh token replayed — all active sessions revoked.",
             }, ct);
-            await _activityLogs.SaveChangesAsync(ct);
+            await SaveInTenantAsync(owner?.TenantId, () => _activityLogs.SaveChangesAsync(ct), ct);
 
             _logger.LogWarning("Refresh token reuse detected for user {UserId} — all sessions revoked.",
                 existing.UserId);
@@ -168,22 +192,18 @@ public sealed class AuthService : IAuthService
             return (null, genericError);
 
         var user = await _users.GetByIdAsync(existing.UserId, ct);
-        if (user is null || !user.IsActive)
+        if (user is null || !user.IsActive || user.AuthVersion != existing.AuthVersion)
             return (null, "User not found or deactivated.");
+        if ((user.TotpEnabled || await _mfaPolicy.IsRequiredAsync(user, ct)) && (!user.TotpEnabled || existing.MfaVerifiedAt == null))
+            return (null, "MFA enrollment or verification required. Sign in again.");
 
         var (newRaw, newHash) = _jwt.GenerateRefreshToken();
-        var newToken = RefreshToken.Create(user.Id, newHash, DateTime.UtcNow.AddDays(7));
+        var newToken = RefreshToken.Create(user.Id, newHash, existing.ExpiresAt, existing.SessionId, user.AuthVersion, existing.MfaVerifiedAt);
+        if (!await _refreshTokens.TryRotateAsync(existing, newToken, ct)) return (null, RotationRetry);
 
-        existing.Revoke(newHash);
-        _refreshTokens.Update(existing);
-        await _refreshTokens.AddAsync(newToken, ct);
-        await _refreshTokens.SaveChangesAsync(ct);
-
-        var effectivePermissions = await BuildEffectivePermissionsAsync(user, ct);
-        var effectiveCapabilities = await BuildEffectiveCapabilitiesAsync(user, ct);
-        var effectiveTabs = await BuildEffectiveTabsAsync(user, ct);
+        var (effectivePermissions, effectiveCapabilities, effectiveTabs) = await BuildEffectiveAccessAsync(user, ct);
         var accessToken = _jwt.GenerateAccessToken(user.Id, user.Email, user.Role, user.TenantId, user.StoreId, user.FullName,
-            effectivePermissions, effectiveCapabilities, effectiveTabs);
+            effectivePermissions, effectiveCapabilities, effectiveTabs, existing.SessionId, user.AuthVersion, existing.MfaVerifiedAt);
 
         return (new LoginResponse(accessToken, newRaw, ToDto(user, effectivePermissions, effectiveCapabilities, effectiveTabs)), null);
     }
@@ -191,36 +211,22 @@ public sealed class AuthService : IAuthService
     public async Task RevokeAsync(string rawRefreshToken, CancellationToken ct = default)
     {
         var tokenHash = _jwt.HashToken(rawRefreshToken);
-        var existing = await _refreshTokens.GetActiveByHashAsync(tokenHash, ct);
+        var existing = await _refreshTokens.GetByHashAsync(tokenHash, ct);
         if (existing is null) return;
 
-        existing.Revoke();
-        _refreshTokens.Update(existing);
-        await _refreshTokens.SaveChangesAsync(ct);
+        await _refreshTokens.RevokeSessionAsync(existing.UserId, existing.SessionId, ct);
     }
+
+    public Task RevokeSessionAsync(Guid userId, Guid sessionId, CancellationToken ct = default) => _refreshTokens.RevokeSessionAsync(userId, sessionId, ct);
+    public Task RevokeAllSessionsAsync(Guid userId, CancellationToken ct = default) => _refreshTokens.RevokeAllSessionsAsync(userId, ct);
 
     public async Task<AuthUserDto?> GetCurrentUserAsync(Guid userId, CancellationToken ct = default)
     {
         var user = await _users.GetByIdAsync(userId, ct);
         if (user is null) return null;
 
-        var effectivePermissions = await BuildEffectivePermissionsAsync(user, ct);
-        var effectiveCapabilities = await BuildEffectiveCapabilitiesAsync(user, ct);
-        var effectiveTabs = await BuildEffectiveTabsAsync(user, ct);
+        var (effectivePermissions, effectiveCapabilities, effectiveTabs) = await BuildEffectiveAccessAsync(user, ct);
         return ToDto(user, effectivePermissions, effectiveCapabilities, effectiveTabs);
-    }
-
-    public async Task<LoginOutcome> IssueLinkedMobileSessionAsync(
-        Guid userId, string? ipAddress = null, CancellationToken ct = default)
-    {
-        var user = await _users.GetByIdAsync(userId, ct);
-        if (user is null || !user.IsActive)
-            return new LoginOutcome(null, null, GenericLoginError);
-
-        if (user.TotpEnabled)
-            return new LoginOutcome(null, _jwt.GenerateTwoFactorChallengeToken(user.Id), null);
-
-        return new LoginOutcome(await IssueTokensAsync(user, ipAddress, ct), null, null);
     }
 
     // ── 2FA TOTP (TASK-330) ────────────────────────────────────────────────
@@ -228,12 +234,12 @@ public sealed class AuthService : IAuthService
     public async Task<(LoginResponse? Response, string? Error)> VerifyTwoFactorAsync(
         string challengeToken, string code, string? ipAddress = null, CancellationToken ct = default)
     {
-        var userId = _jwt.ValidateTwoFactorChallengeToken(challengeToken);
-        if (userId is null)
+        var proof = _jwt.ValidateTwoFactorChallengeToken(challengeToken);
+        if (proof is null)
             return (null, "Invalid or expired challenge token.");
 
-        var user = await _users.GetByIdAsync(userId.Value, ct);
-        if (user is null || !user.IsActive || !user.TotpEnabled || user.TotpSecret is null)
+        var user = await _users.GetByIdAsync(proof.UserId, ct);
+        if (user is null || !user.IsActive || user.AuthVersion != proof.AuthVersion || !user.TotpEnabled || user.TotpSecret is null)
             return (null, "Invalid code.");
 
         if (user.IsLockedOut)
@@ -247,7 +253,7 @@ public sealed class AuthService : IAuthService
 
         // Persist anti-replay timestep / consumed recovery code before issuing tokens.
         _users.Update(user);
-        var response = await IssueTokensAsync(user, ipAddress, ct);
+        var response = await IssueTokensAsync(user, ipAddress, ct, DateTime.UtcNow);
         return (response, null);
     }
 
@@ -272,22 +278,25 @@ public sealed class AuthService : IAuthService
         return (new TwoFactorSetupResponse(secret, otpauthUri), null);
     }
 
-    public async Task<(IReadOnlyList<string>? RecoveryCodes, string? Error)> EnableTwoFactorAsync(
+    public async Task<(IReadOnlyList<string>? RecoveryCodes, string? Error, LoginResponse? Session)> EnableTwoFactorAsync(
         Guid userId, string code, CancellationToken ct = default)
     {
         var user = await _users.GetByIdAsync(userId, ct);
         if (user is null || !user.IsActive)
-            return (null, "User not found.");
+            return (null, "User not found.", null);
 
         if (user.TotpEnabled)
-            return (null, "Two-factor authentication is already enabled.");
+            return (null, "Two-factor authentication is already enabled.", null);
 
         if (string.IsNullOrEmpty(user.TotpSecret))
-            return (null, "No pending two-factor setup. Call setup first.");
+            return (null, "No pending two-factor setup. Call setup first.", null);
 
         var timestep = _totp.VerifyCode(user.TotpSecret, code);
-        if (timestep is null)
-            return (null, "Invalid code.");
+        if (user.IsLockedOut) return (null, "Account is temporarily locked.", null);
+        if (timestep is null) {
+            await RegisterFailedAttemptAsync(user, "user.2fa_enrollment_failed", null, ct);
+            return (null, "Invalid code.", null);
+        }
 
         user.MarkTotpTimestepUsed(timestep.Value);
 
@@ -307,10 +316,9 @@ public sealed class AuthService : IAuthService
             EntityId   = user.Id,
             Meta       = user.Email,
         }, ct);
-        await _activityLogs.SaveChangesAsync(ct);
-        await _users.SaveChangesAsync(ct);
-
-        return (recoveryCodes, null);
+        // The verified enrollment upgrades only this client; all old-version sessions fail
+        // the live validator. Commit MFA state, codes and the new refresh session together.
+        return (recoveryCodes, null, await IssueTokensAsync(user, null, ct, DateTime.UtcNow));
     }
 
     public async Task<string?> DisableTwoFactorAsync(
@@ -322,6 +330,7 @@ public sealed class AuthService : IAuthService
 
         if (!user.TotpEnabled || user.TotpSecret is null)
             return "Two-factor authentication is not enabled.";
+        if (await _mfaPolicy.IsRequiredAsync(user, ct)) return "MFA is required for your current role or permissions.";
 
         if (!_passwordHasher.Verify(password, user.PasswordHash))
             return "Invalid password.";
@@ -347,94 +356,6 @@ public sealed class AuthService : IAuthService
         return null;
     }
 
-    // ── Forgot password / temporary password (TASK-465) ──────────────────
-
-    public async Task ForgotPasswordAsync(string email, string? ipAddress = null, CancellationToken ct = default)
-    {
-        var user = await _users.GetByEmailAsync(email.ToLowerInvariant(), ct);
-
-        if (user is null || !user.IsActive)
-        {
-            // Unknown/inactive email — no DB write, no user enumeration (same posture as
-            // LoginAsync); keep an audit trail in app logs only.
-            _logger.LogWarning("Password reset requested for unknown or inactive email {Email} from {Ip}",
-                email, ipAddress ?? "unknown");
-            return;
-        }
-
-        // TASK-469: per-user cooldown, checked AFTER the unknown/inactive-email branch above
-        // (so the timing/enumeration posture for an unknown email is unaffected) but BEFORE any
-        // write below. A temp password issued within the last ForgotPasswordCooldownSeconds
-        // means this is a repeat call — handled EXACTLY like the unknown-email branch (log +
-        // return, no side effects, no difference in the controller's response, which is always
-        // 204) so this can never become a second oracle that distinguishes "known email, in
-        // cooldown" from "unknown email" by timing or behavior.
-        if (user.TempPasswordExpiresAt.HasValue)
-        {
-            var issuedAt = user.TempPasswordExpiresAt.Value.AddHours(-TempPasswordValidHours);
-            if (DateTime.UtcNow - issuedAt < TimeSpan.FromSeconds(ForgotPasswordCooldownSeconds))
-            {
-                _logger.LogWarning("Password reset re-requested within cooldown for {Email} from {Ip}",
-                    email, ipAddress ?? "unknown");
-                return;
-            }
-        }
-
-        var tempPassword = GenerateTempPassword();
-        user.ChangePassword(_passwordHasher.Hash(tempPassword));
-        user.SetTempPasswordExpiry(DateTime.UtcNow.AddHours(TempPasswordValidHours));
-        _users.Update(user);
-
-        // TASK-469 (security review TASK-467, MEDIUM #2): anti-hijack session revocation,
-        // mirroring UserService.ChangePasswordAsync's existing call (UserService.cs:419). If an
-        // attacker already holds a live, stolen refresh token from an earlier, unrelated
-        // compromise, forgot-password is often used specifically because the legitimate user
-        // suspects exactly that ("I think someone else has access to my account") — it must
-        // evict the attacker's session as a side effect of recovery, the same way an
-        // authenticated password change already does. RevokeAllForUserAsync only stages the
-        // revocation (no internal SaveChanges — see RefreshTokenRepository); the commit happens
-        // below.
-        await _refreshTokens.RevokeAllForUserAsync(user.Id, ct);
-
-        // Committed immediately, on its own: this just replaced the account's real credential
-        // and revoked its sessions — that must be durable before anything else here runs,
-        // independent of whether the activity log / outbox notification writes below succeed.
-        // _users and _refreshTokens share the same scoped AppDbContext (see IssueTokensAsync
-        // above), so this single call flushes both the credential change and the revocation
-        // together in one round trip.
-        await _users.SaveChangesAsync(ct);
-
-        await _activityLogs.LogAsync(new ActivityLog
-        {
-            TenantId   = user.TenantId,
-            UserId     = user.Id,
-            Action     = "user.password_reset_requested",
-            EntityType = "user",
-            EntityId   = user.Id,
-            Meta       = user.Email,
-            IpAddress  = ipAddress,
-        }, ct);
-
-        // NotificationRepository.EnqueueAsync commits immediately on its own (unlike the other
-        // repositories used above) — called last so its own SaveChangesAsync flushes the
-        // activity log staged just above in the same round trip (same idiom the superseded
-        // TASK-456 design used for this method).
-        await _notifications.EnqueueAsync(new NotificationQueue
-        {
-            TenantId  = user.TenantId,
-            UserId    = user.Id,
-            Channel   = "system",
-            EventType = "auth.password_reset_requested",
-            Title     = "Тимчасовий пароль",
-            Payload   = JsonSerializer.Serialize(new
-            {
-                tempPassword,
-                expiresInMinutes = TempPasswordValidHours * 60,
-            }),
-            Status    = "pending",
-        }, ct);
-    }
-
     // ── helpers ────────────────────────────────────────────────────────────
 
     /// <summary>Checks a TOTP code (±1 timestep, anti-replay) or consumes a recovery code.</summary>
@@ -456,15 +377,33 @@ public sealed class AuthService : IAuthService
         return user.TryConsumeRecoveryCode(hash);
     }
 
+    // The tenant comes exclusively from the persisted user resolved by credential/session
+    // verification. Anonymous login/enrollment/refresh requests have no tenant claim yet.
+    // Keep overrides transaction-local; do not wrap repositories that own a rotation transaction.
+    private Task<T> InTenantAsync<T>(Guid? tenantId, Func<Task<T>> action, CancellationToken ct) =>
+        tenantId is Guid id ? _tenantScope.ExecuteAsync(id, action, ct) : action();
+
+    private Task SaveInTenantAsync(Guid? tenantId, Func<Task> action, CancellationToken ct) =>
+        InTenantAsync(tenantId, async () => { await action(); return true; }, ct);
+
+    private Task<(Dictionary<string, bool>, List<string>, List<string>)> BuildEffectiveAccessAsync(User user, CancellationToken ct) =>
+        InTenantAsync(user.TenantId, () => BuildEffectiveAccessCoreAsync(user, ct), ct);
+
+    private async Task<(Dictionary<string, bool>, List<string>, List<string>)> BuildEffectiveAccessCoreAsync(User user, CancellationToken ct) =>
+        (await BuildEffectivePermissionsAsync(user, ct), await BuildEffectiveCapabilitiesAsync(user, ct), await BuildEffectiveTabsAsync(user, ct));
+
     /// <summary>Resets lockout, rotates in a refresh token, logs and returns the response.</summary>
-    private async Task<LoginResponse> IssueTokensAsync(User user, string? ipAddress, CancellationToken ct)
+    private Task<LoginResponse> IssueTokensAsync(User user, string? ipAddress, CancellationToken ct, DateTime? mfaVerifiedAt = null) =>
+        InTenantAsync(user.TenantId, () => IssueTokensCoreAsync(user, ipAddress, ct, mfaVerifiedAt), ct);
+
+    private async Task<LoginResponse> IssueTokensCoreAsync(User user, string? ipAddress, CancellationToken ct, DateTime? mfaVerifiedAt)
     {
         user.ResetLockout();
         user.UpdateLastActive();
         _users.Update(user);
 
         var (rawToken, tokenHash) = _jwt.GenerateRefreshToken();
-        var refreshToken = RefreshToken.Create(user.Id, tokenHash, DateTime.UtcNow.AddDays(7));
+        var refreshToken = RefreshToken.Create(user.Id, tokenHash, DateTime.UtcNow.AddDays(7), authVersion: user.AuthVersion, mfaVerifiedAt: mfaVerifiedAt);
         await _refreshTokens.AddAsync(refreshToken, ct);
 
         await _activityLogs.LogAsync(new ActivityLog
@@ -488,11 +427,9 @@ public sealed class AuthService : IAuthService
         // flushes all three — using _users' here is arbitrary, not load-bearing.
         await _users.SaveChangesAsync(ct);
 
-        var effectivePermissions = await BuildEffectivePermissionsAsync(user, ct);
-        var effectiveCapabilities = await BuildEffectiveCapabilitiesAsync(user, ct);
-        var effectiveTabs = await BuildEffectiveTabsAsync(user, ct);
+        var (effectivePermissions, effectiveCapabilities, effectiveTabs) = await BuildEffectiveAccessCoreAsync(user, ct);
         var accessToken = _jwt.GenerateAccessToken(user.Id, user.Email, user.Role, user.TenantId, user.StoreId, user.FullName,
-            effectivePermissions, effectiveCapabilities, effectiveTabs);
+            effectivePermissions, effectiveCapabilities, effectiveTabs, refreshToken.SessionId, user.AuthVersion, mfaVerifiedAt);
 
         return new LoginResponse(accessToken, rawToken, ToDto(user, effectivePermissions, effectiveCapabilities, effectiveTabs));
     }
@@ -569,8 +506,10 @@ public sealed class AuthService : IAuthService
     }
 
     /// <summary>Increments the shared failure counter, persists, and audits the attempt.</summary>
-    private async Task RegisterFailedAttemptAsync(
-        User user, string action, string? ipAddress, CancellationToken ct)
+    private Task RegisterFailedAttemptAsync(User user, string action, string? ipAddress, CancellationToken ct) =>
+        SaveInTenantAsync(user.TenantId, () => RegisterFailedAttemptCoreAsync(user, action, ipAddress, ct), ct);
+
+    private async Task RegisterFailedAttemptCoreAsync(User user, string action, string? ipAddress, CancellationToken ct)
     {
         var lockedOut = user.RegisterFailedLogin(MaxFailedAttempts, LockoutDuration);
         _users.Update(user);
@@ -627,41 +566,6 @@ public sealed class AuthService : IAuthService
     /// <summary>Uppercases and strips separators so "ab2c-3def" == "AB2C3DEF".</summary>
     private static string NormalizeRecoveryCode(string code) =>
         new(code.Where(char.IsLetterOrDigit).Select(char.ToUpperInvariant).ToArray());
-
-    // Letters: A-Z minus I/O, a-z minus i/l/o. Digits: 2-9 minus 0/1. All visually ambiguous
-    // (0/O, 1/I/l) — excluded to ease manual entry of a temp password read off a notification.
-    private const string TempPasswordLetters = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz";
-    private const string TempPasswordDigits = "23456789";
-
-    /// <summary>
-    /// Cryptographically random, human-typeable temporary password (TASK-465) — replaces the
-    /// superseded design's raw URL-safe reset token. Letter and digit character classes are
-    /// guaranteed by construction (fixed into two positions before an unbiased Fisher–Yates
-    /// shuffle), not left to the draw: a purely random pick from a mixed alphabet could in
-    /// principle land on an all-letters or all-digits result and fail
-    /// <see cref="PasswordValidator.Validate"/>, which would break forgot-password on a
-    /// genuinely rare, hard-to-reproduce edge case.
-    /// </summary>
-    private static string GenerateTempPassword()
-    {
-        const string all = TempPasswordLetters + TempPasswordDigits;
-
-        var chars = new char[TempPasswordLength];
-        chars[0] = TempPasswordLetters[RandomNumberGenerator.GetInt32(TempPasswordLetters.Length)];
-        chars[1] = TempPasswordDigits[RandomNumberGenerator.GetInt32(TempPasswordDigits.Length)];
-        for (var i = 2; i < chars.Length; i++)
-            chars[i] = all[RandomNumberGenerator.GetInt32(all.Length)];
-
-        // Unbiased shuffle (Fisher–Yates) — without it the guaranteed letter/digit would always
-        // sit in positions 0/1, a small but needless positional predictability in a password.
-        for (var i = chars.Length - 1; i > 0; i--)
-        {
-            var j = RandomNumberGenerator.GetInt32(i + 1);
-            (chars[i], chars[j]) = (chars[j], chars[i]);
-        }
-
-        return new string(chars);
-    }
 
     private static AuthUserDto ToDto(
         User u,

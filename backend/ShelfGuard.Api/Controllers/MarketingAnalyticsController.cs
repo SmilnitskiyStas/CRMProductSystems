@@ -218,6 +218,7 @@ public sealed class MarketingAnalyticsController : ControllerBase
     }
 
     [HttpPost("exports/store-migration")]
+    [RequireRecentMfa]
     [ProducesResponseType(typeof(FileContentResult), StatusCodes.Status200OK)]
     public async Task<IActionResult> ExportStoreMigration([FromBody] ExportStoreMigrationRequest request, CancellationToken ct)
     {
@@ -233,6 +234,7 @@ public sealed class MarketingAnalyticsController : ControllerBase
     // ── Exports ──────────────────────────────────────────────────────────────
 
     [HttpPost("exports/segment")]
+    [RequireRecentMfa]
     [ProducesResponseType(typeof(FileContentResult), StatusCodes.Status200OK)]
     public async Task<IActionResult> ExportSegment([FromBody] ExportRfmFilterRequest request, CancellationToken ct)
     {
@@ -246,6 +248,7 @@ public sealed class MarketingAnalyticsController : ControllerBase
     }
 
     [HttpPost("exports/product-buyers")]
+    [RequireRecentMfa]
     [ProducesResponseType(typeof(FileContentResult), StatusCodes.Status200OK)]
     public async Task<IActionResult> ExportProductBuyers([FromBody] ExportRfmProductRequest request, CancellationToken ct)
     {
@@ -259,6 +262,7 @@ public sealed class MarketingAnalyticsController : ControllerBase
     }
 
     [HttpPost("exports/product-pair-buyers")]
+    [RequireRecentMfa]
     [ProducesResponseType(typeof(FileContentResult), StatusCodes.Status200OK)]
     public async Task<IActionResult> ExportProductPairBuyers([FromBody] ExportRfmProductPairRequest request, CancellationToken ct)
     {

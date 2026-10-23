@@ -227,7 +227,8 @@ describe('useAuthStore', () => {
 
     await expect(useAuthStore.getState().clearAuth()).resolves.toBeUndefined();
 
-    expect(mockDelete).toHaveBeenCalledTimes(4);
+    expect(mockDelete).toHaveBeenCalledTimes(5);
+    expect(mockDelete).toHaveBeenCalledWith('personal_refresh_token');
     expect(useAuthStore.getState()).toMatchObject({
       personalAccessToken: null,
       workspaceAccessToken: null,

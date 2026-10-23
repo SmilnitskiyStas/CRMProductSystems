@@ -26,19 +26,19 @@ public sealed class AuthServiceTabsTests
     private readonly ITotpService _totp = Substitute.For<ITotpService>();
     private readonly IUserPermissionGrantRepository _permissionGrants = Substitute.For<IUserPermissionGrantRepository>();
     private readonly ITenantRoleRepository _tenantRoles = Substitute.For<ITenantRoleRepository>();
-    private readonly INotificationRepository _notifications = Substitute.For<INotificationRepository>();
     private readonly AuthService _sut;
 
     public AuthServiceTabsTests()
     {
         _sut = new AuthService(_users, _tokens, _hasher, _jwt, _activityLogs, _totp, _permissionGrants, _tenantRoles,
-            _notifications, NullLogger<AuthService>.Instance);
+            NullLogger<AuthService>.Instance, Substitute.For<IMfaPolicy>(), new AuthTenantScope());
         _permissionGrants.GetActiveGrantsForUserAsync(Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<CancellationToken>())
             .Returns(Array.Empty<UserPermissionGrant>());
         _jwt.GenerateRefreshToken().Returns(("raw_token", "hashed_token"));
+        _tokens.TryRotateAsync(Arg.Any<RefreshToken>(), Arg.Any<RefreshToken>(), Arg.Any<CancellationToken>()).Returns(true);
         _jwt.HashToken("raw_token").Returns("hashed_token");
         _jwt.GenerateAccessToken(Arg.Any<Guid>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<Guid?>(), Arg.Any<Guid?>(),
-            Arg.Any<string?>(), Arg.Any<Dictionary<string, bool>?>(), Arg.Any<List<string>?>(), Arg.Any<List<string>?>())
+            Arg.Any<string?>(), Arg.Any<Dictionary<string, bool>?>(), Arg.Any<List<string>?>(), Arg.Any<List<string>?>(), Arg.Any<Guid?>(), Arg.Any<int>(), Arg.Any<DateTime?>())
             .Returns("access_token");
     }
 
@@ -58,7 +58,7 @@ public sealed class AuthServiceTabsTests
         List<string>? capturedTabs = null;
         _jwt.GenerateAccessToken(Arg.Any<Guid>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<Guid?>(), Arg.Any<Guid?>(),
                 Arg.Any<string?>(), Arg.Any<Dictionary<string, bool>?>(), Arg.Any<List<string>?>(),
-                Arg.Do<List<string>?>(t => capturedTabs = t))
+                Arg.Do<List<string>?>(t => capturedTabs = t), Arg.Any<Guid?>(), Arg.Any<int>(), Arg.Any<DateTime?>())
             .Returns("access_token");
 
         var outcome = await _sut.LoginAsync("hr@example.com", "password123");

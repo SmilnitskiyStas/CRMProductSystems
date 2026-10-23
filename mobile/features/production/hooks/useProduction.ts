@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   cancelProductionOrder,
+  startProductionOrder,
   completeProductionOrder,
   createProductionOrder,
   getProductionOrderById,
@@ -49,6 +50,14 @@ export function useCreateProductionOrder() {
       void qc.invalidateQueries({ queryKey: ['production-orders'] });
     },
   });
+}
+
+export function useStartProductionOrder() {
+  const qc = useQueryClient();
+  return useMutation({ mutationFn: startProductionOrder, onSuccess: (_data, id) => {
+    void qc.invalidateQueries({ queryKey: ['production-orders'] });
+    void qc.invalidateQueries({ queryKey: ['production-order', id] });
+  } });
 }
 
 export function useCompleteProductionOrder() {

@@ -31,6 +31,11 @@ public sealed record TenantRoleCapabilityGroup(string Specialty, IReadOnlyList<T
 /// </summary>
 public static class TenantRoleCapabilities
 {
+    public const string ProductionView = "production.view";
+    public const string ProductionManage = "production.manage";
+    public const string ProductionComplete = "production.complete";
+    public const string ProductionCancel = "production.cancel";
+    public const string AiAssistantUse = "ai_assistant.use";
     // ── HR ────────────────────────────────────────────────────────────────
 
     /// <summary>Invite/update/deactivate users on UsersController. Deliberately excludes
@@ -150,6 +155,7 @@ public static class TenantRoleCapabilities
     /// </summary>
     public static readonly HashSet<string> All =
     [
+        ProductionView, ProductionManage, ProductionComplete, ProductionCancel, AiAssistantUse,
         UsersManage, SchedulesManage,
         AnalyticsView, AnalyticsViewMargin, IntegrationsView, IntegrationsManage,
         TenantUserPermissions.LegalEntitiesManage,
@@ -166,6 +172,12 @@ public static class TenantRoleCapabilities
     /// </summary>
     public static readonly IReadOnlyList<TenantRoleCapabilityGroup> Groups =
     [
+        new("Виробництво та AI",
+        [new(ProductionView, "Перегляд рецептів і виробничих замовлень"),
+         new(ProductionManage, "Керування рецептами та запланованими замовленнями"),
+         new(ProductionComplete, "Початок і проведення виробництва"),
+         new(ProductionCancel, "Скасування непроведених замовлень"),
+         new(AiAssistantUse, "Виклик AI-помічника в межах наявних прав на дані")]),
         new("HR",
         [
             new(UsersManage, "Керування користувачами (запросити / редагувати / деактивувати)"),

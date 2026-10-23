@@ -6,6 +6,7 @@ export interface HttpResponse<T> {
   /** True when no HTTP response was received at all (DNS, refused, timeout). */
   networkError: boolean;
   errorMessage?: string;
+  transportError?: boolean;
 }
 
 export interface RequestOptions {
@@ -24,12 +25,27 @@ export function setNetworkErrorListener(fn: (() => void) | null): void {
 }
 
 const DEFAULT_TIMEOUT_MS = 15_000;
+export const SERVER_URL_ERROR = 'Потрібна HTTPS-адреса сервера. HTTP дозволено лише для локальної розробки з явним дозволом.';
+
+let allowLoopbackHttp = false;
+
+/** Main process enables this only for an unpackaged, explicitly opted-in dev session. */
+export function configureHttpTransport(options: { allowLoopbackHttp: boolean }): void {
+  allowLoopbackHttp = options.allowLoopbackHttp;
+}
+
+function isAllowedServer(u: URL): boolean {
+  if (u.username || u.password || u.search || u.hash) return false;
+  if (u.protocol === 'https:') return true;
+  return allowLoopbackHttp && u.protocol === 'http:' &&
+    ['localhost', '127.0.0.1', '[::1]'].includes(u.hostname);
+}
 
 export function normalizeServerUrl(raw: string): string | null {
   const trimmed = raw.trim().replace(/\/+$/, '');
   try {
     const u = new URL(trimmed);
-    if (u.protocol !== 'http:' && u.protocol !== 'https:') return null;
+    if (!isAllowedServer(u)) return null;
     return u.origin + (u.pathname === '/' ? '' : u.pathname.replace(/\/+$/, ''));
   } catch {
     return null;
@@ -41,10 +57,21 @@ export async function httpRequest<T>(
   path: string,
   opts: RequestOptions = {},
 ): Promise<HttpResponse<T>> {
+  // Enforce at the transport too: saved configurations bypass the activation form.
+  const normalizedBase = normalizeServerUrl(baseUrl);
+  if (!normalizedBase || !path.startsWith('/') || path.startsWith('//') || path.includes('\\')) {
+    return { status: 0, body: null, networkError: true, transportError: true, errorMessage: SERVER_URL_ERROR };
+  }
+  const target = new URL(normalizedBase + path);
+  if (target.origin !== new URL(normalizedBase).origin) {
+    return { status: 0, body: null, networkError: true, transportError: true, errorMessage: SERVER_URL_ERROR };
+  }
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), opts.timeoutMs ?? DEFAULT_TIMEOUT_MS);
   try {
-    const res = await fetch(baseUrl + path, {
+    const res = await fetch(target, {
+      // Do not forward credentials or financial payloads to redirect destinations.
+      redirect: 'error',
       method: opts.method ?? 'GET',
       headers: {
         Accept: 'application/json',
@@ -82,6 +109,7 @@ export function kindForStatus(status: number): ErrorKind {
 
 /** Server errors are `{ error: "..." }` (controllers) or ProblemDetails (`title`). */
 export function toApiError<T>(res: HttpResponse<T>): ApiError {
+  if (res.transportError) return { kind: 'validation', message: SERVER_URL_ERROR };
   if (res.networkError) {
     return { kind: 'network', message: 'Немає зв’язку з сервером. Перевірте мережу та адресу сервера.' };
   }

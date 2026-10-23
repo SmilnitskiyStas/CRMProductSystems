@@ -3,9 +3,17 @@ import { useAuthStore } from './store';
 import { clearActiveOfflineReadCache } from '@/features/offline-read-cache/lifecycle';
 import { clearOfflineCacheOwner, readOfflineCacheOwner } from '@/features/offline-read-cache/owner-pointer';
 import { clearOfflineSessionSnapshot } from './offlineSnapshot';
+import { withSessionPersistence } from './persistence';
+export { withSessionPersistence } from './persistence';
 
 let sessionEpoch = 0;
 let terminationPromise: Promise<void> | null = null;
+
+export async function terminatePersonalSession(): Promise<void> {
+  sessionEpoch += 1;
+  await withSessionPersistence(() => useAuthStore.getState().clearPersonalAuth());
+  queryClient.clear();
+}
 
 /**
  * A monotonically increasing session generation. Refresh requests capture this
@@ -16,8 +24,7 @@ export function getSessionEpoch(): number {
   return sessionEpoch;
 }
 
-/** Used by apiClient's (workspace-scoped) refresh-and-retry flow only — the personal
- * client has no refresh mechanism (see mobile/lib/api-client.ts). */
+/** Updates the workspace identity after its own refresh only. */
 export function updateInMemoryWorkspaceAccessToken(accessToken: string): void {
   useAuthStore.setState({ workspaceAccessToken: accessToken });
 }
@@ -35,7 +42,7 @@ export function terminateSession(): Promise<void> {
   const cacheOwner = currentUser
     ? { tenantId: currentUser.tenantId ?? 'provider', userId: currentUser.id }
     : null;
-  terminationPromise = (async () => {
+  terminationPromise = withSessionPersistence(async () => {
     try {
       const owner = cacheOwner ?? await readOfflineCacheOwner().catch(() => null);
       await Promise.allSettled([
@@ -47,7 +54,7 @@ export function terminateSession(): Promise<void> {
     } finally {
       queryClient.clear();
     }
-  })().finally(() => {
+  }).finally(() => {
     terminationPromise = null;
   });
 
