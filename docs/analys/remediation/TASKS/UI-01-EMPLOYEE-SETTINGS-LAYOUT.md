@@ -12,3 +12,5 @@ Production build (105 routes), type checks and lint PASS. GitHub CI run 485 pass
 
 
 Deployment — 24.10.2026, approximately 13:15 Europe/Kyiv: frontend revision `a66f5e94a0bb8cf8a63c72d31159dfd03f67453d` deployed after Linux canary validation. Public settings JS/CSS hashes and login API-origin chunks match the checked build. Web service is healthy; public pages and credentialed CORS/negative login checks pass. API and worker images remain unchanged on the previous verified application release. No database migrations or user-setting writes were performed. Temporary synthetic preview and canary services were stopped/removed. PR #26 remains open and unmerged.
+
+24.10.2026 follow-up: owner requested removal of the three quick-navigation controls. Removed the shortcut row and its unused CSS/label, retaining the full-width groups, password/MFA anchors and a normal 24px gap below the profile header.

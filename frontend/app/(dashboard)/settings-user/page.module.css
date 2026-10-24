@@ -36,12 +36,8 @@
 .role { padding: 3px 10px; border: 1px solid #26334c; border-radius: 20px; background: #1a2235; color: #8bb9fc; font-size: 11px; font-weight: 600; }
 .personalLabel { color: #8a94a8; font-size: 10px; font-weight: 600; letter-spacing: .08em; }
 
-.navigation { display: flex; flex-wrap: wrap; gap: 8px; margin: 20px 0; }
-.navigation a { display: inline-flex; align-items: center; gap: 8px; padding: 9px 12px; border: 1px solid #253047; border-radius: 8px; color: #b6c2d5; font-size: 12px; text-decoration: none; transition: background .15s, border-color .15s; }
-.navigation a:hover { background: #172236; border-color: #3b82f6; color: #e8edf5; }
-.navigation a:focus-visible { outline: 2px solid #3b82f6; outline-offset: 3px; }
 
-.groups { display: grid; grid-template-columns: minmax(0, 1fr); grid-template-areas: "profile" "security" "notifications"; gap: 24px; align-items: start; }
+.groups { margin-top: 24px; display: grid; grid-template-columns: minmax(0, 1fr); grid-template-areas: "profile" "security" "notifications"; gap: 24px; align-items: start; }
 .profile { grid-area: profile; }
 .security { grid-area: security; }
 .notifications { grid-area: notifications; }

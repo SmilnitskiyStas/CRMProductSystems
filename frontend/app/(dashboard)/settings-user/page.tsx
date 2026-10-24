@@ -19,12 +19,6 @@ export default function UserSettingsPage() {
     <PageContainer style={{ width: "100%", minWidth: 0, maxWidth: "none", padding: "24px clamp(16px, 2vw, 32px)" }}>
       <div className={styles.container}>
         <ProfileCard />
-        <nav className={styles.navigation} aria-label={t("navigationLabel")}>
-          <a href="#profile"><User size={15} aria-hidden="true" />{t("profileLabel")}</a>
-          <a href="#account-security"><ShieldCheck size={15} aria-hidden="true" />{t("accountSecurityLabel")}</a>
-          <a href="#telegram"><Bell size={15} aria-hidden="true" />{t("notificationsLabel")}</a>
-        </nav>
-
         <div className={styles.groups}>
           <SettingsCard id="profile" title={t("profileLabel")} subtitle={t("profileSubtitle")} icon={<User size={18} />} className={styles.profile}>
             <ProfileInfoForm />
