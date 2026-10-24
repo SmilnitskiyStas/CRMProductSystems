@@ -6,6 +6,7 @@ import { useMe } from "@/features/auth/hooks/useAuth";
 import { useUpdateProfile } from "../hooks/useProfile";
 import { getRoleLabel } from "../types";
 import { Btn } from "@/components/ui/Btn";
+import styles from "./ProfileInfoForm.module.css";
 
 const inputStyle: React.CSSProperties = {
   width: "100%",
@@ -63,31 +64,7 @@ export function ProfileInfoForm() {
 
   return (
     <form onSubmit={handleSubmit}>
-      {/* Avatar placeholder */}
-      <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 24 }}>
-        <div
-          style={{
-            width: 64, height: 64, borderRadius: "50%",
-            background: "linear-gradient(135deg, #3B82F6, #6366F1)",
-            display: "flex", alignItems: "center", justifyContent: "center",
-            color: "#fff", fontSize: 22, fontWeight: 700, flexShrink: 0,
-          }}
-        >
-          {me?.fullName
-            ? me.fullName.split(" ").slice(0, 2).map((n) => n[0]).join("").toUpperCase()
-            : "?"}
-        </div>
-        <div>
-          <div style={{ color: "#E8EDF5", fontSize: 15, fontWeight: 600 }}>
-            {me?.fullName ?? "—"}
-          </div>
-          <div style={{ color: "#4B5563", fontSize: 12, marginTop: 3 }}>
-            {getRoleLabel(tRoles, me?.role)}
-          </div>
-        </div>
-      </div>
-
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 16 }}>
+      <div className={styles.fields}>
         {/* Full name */}
         <div style={{ gridColumn: "1 / -1" }}>
           <label style={labelStyle}>

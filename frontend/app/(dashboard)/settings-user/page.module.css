@@ -1,0 +1,73 @@
+.container {
+  width: 100%;
+  min-width: 0;
+  container-type: inline-size;
+}
+
+.profileHeader {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 16px;
+  padding: 24px;
+  background: #0d1117;
+  border: 1px solid #1f2937;
+  border-radius: 12px;
+}
+
+.avatar {
+  width: 56px;
+  height: 56px;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #3b82f6, #6366f1);
+  box-shadow: 0 0 0 3px rgb(59 130 246 / 15%);
+  color: #fff;
+  font-size: 20px;
+  font-weight: 700;
+}
+
+.identity { flex: 1 1 220px; min-width: 0; }
+.identity h1 { margin: 0 0 8px; color: #e8edf5; font-size: 22px; font-weight: 700; overflow-wrap: anywhere; }
+.identityDetails { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 12px; }
+.email { color: #9ca3af; font-size: 13px; overflow-wrap: anywhere; }
+.role { padding: 3px 10px; border: 1px solid #26334c; border-radius: 20px; background: #1a2235; color: #8bb9fc; font-size: 11px; font-weight: 600; }
+.personalLabel { color: #8a94a8; font-size: 10px; font-weight: 600; letter-spacing: .08em; }
+
+.navigation { display: flex; flex-wrap: wrap; gap: 8px; margin: 20px 0; }
+.navigation a { display: inline-flex; align-items: center; gap: 8px; padding: 9px 12px; border: 1px solid #253047; border-radius: 8px; color: #b6c2d5; font-size: 12px; text-decoration: none; transition: background .15s, border-color .15s; }
+.navigation a:hover { background: #172236; border-color: #3b82f6; color: #e8edf5; }
+.navigation a:focus-visible { outline: 2px solid #3b82f6; outline-offset: 3px; }
+
+.groups { display: grid; grid-template-columns: minmax(0, 1fr); grid-template-areas: "profile" "security" "notifications"; gap: 24px; align-items: start; }
+.profile { grid-area: profile; }
+.security { grid-area: security; }
+.notifications { grid-area: notifications; }
+.card { min-width: 0; background: #0d1117; border: 1px solid #1f2937; border-radius: 12px; overflow: hidden; scroll-margin-top: 16px; }
+.cardHeading { display: flex; align-items: flex-start; gap: 12px; padding: 20px 24px; background: #0a1020; border-bottom: 1px solid #1f2937; }
+.headingIcon { display: inline-flex; flex-shrink: 0; color: #6da7f5; }
+.cardHeading h2 { margin: 0; color: #e8edf5; font-size: 15px; font-weight: 600; }
+.cardHeading p, .subsectionHeading p { margin: 5px 0 0; color: #8a94a8; font-size: 12px; line-height: 1.5; }
+.cardBody { padding: 24px; min-width: 0; }
+.securitySections { display: grid; min-width: 0; }
+.subsection { min-width: 0; scroll-margin-top: 16px; }
+.subsection + .subsection { margin-top: 24px; padding-top: 24px; border-top: 1px solid #253047; }
+.subsectionHeading { display: flex; gap: 10px; align-items: flex-start; margin-bottom: 20px; }
+.subsectionHeading h3 { margin: 0; color: #c9d5e8; font-size: 13px; font-weight: 600; }
+
+@container (min-width: 1000px) {
+  .groups { grid-template-columns: minmax(0, .95fr) minmax(0, 1.05fr); grid-template-areas: "profile security" "notifications security"; }
+}
+
+@container (min-width: 1600px) {
+  .securitySections { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 24px; }
+  .subsection + .subsection { margin-top: 0; padding-top: 0; border-top: 0; border-left: 1px solid #253047; padding-left: 24px; }
+}
+
+@container (max-width: 480px) {
+  .profileHeader, .cardBody { padding: 18px; }
+  .cardHeading { padding: 18px; }
+  .identity h1 { font-size: 20px; }
+}

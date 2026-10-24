@@ -6734,6 +6734,11 @@
         "footerNote": "Modules are activated or deactivated by the platform provider. Contact support if you need to change your tenant's module set."
       },
       "userSettingsPage": {
+        "accountSecurityLabel": "Account security",
+        "accountSecuritySubtitle": "Password and two-factor authentication",
+        "notificationsLabel": "Notifications",
+        "notificationsSubtitle": "Channels for personal notifications",
+        "navigationLabel": "Profile settings sections",
         "personalLabel": "PERSONAL SETTINGS",
         "profileLabel": "Personal information",
         "profileSubtitle": "Your name and contact information",
