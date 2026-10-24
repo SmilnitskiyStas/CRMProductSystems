@@ -123,6 +123,14 @@ jobs:
         run: npm ci
         working-directory: frontend
 
+      - name: Reject unsafe production API origins
+        working-directory: frontend
+        run: node --test build/api-config.test.cjs
+
+      - name: Browser login API origin regression
+        working-directory: frontend
+        run: npx vitest run lib/apiOrigin.test.ts --maxWorkers=2 --minWorkers=1
+
       - name: Typecheck
         run: npx tsc --noEmit
         working-directory: frontend
