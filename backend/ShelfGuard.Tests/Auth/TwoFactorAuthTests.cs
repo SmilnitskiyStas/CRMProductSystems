@@ -206,9 +206,10 @@ public sealed class TwoFactorAuthTests
         var user = await MakeEnrolledUserAsync();
         _hasher.Verify("correct_password", "hash").Returns(true);
 
-        var error = await _sut.DisableTwoFactorAsync(user.Id, "correct_password", CurrentCode(user));
+        var (response, error) = await _sut.DisableTwoFactorAsync(user.Id, "correct_password", CurrentCode(user));
 
-        Assert.Null(error);
+        Assert.Null(error); Assert.NotNull(response); Assert.False(response.User.TwoFactorEnabled);
+        await _tokens.Received(1).AddAsync(Arg.Is<RefreshToken>(token => token.AuthVersion == user.AuthVersion && token.MfaVerifiedAt == null), default);
         Assert.False(user.TotpEnabled);
         Assert.Null(user.TotpSecret);
         Assert.Null(user.TotpRecoveryCodes);
@@ -223,9 +224,9 @@ public sealed class TwoFactorAuthTests
         var user = await MakeEnrolledUserAsync();
         _hasher.Verify("wrong_password", "hash").Returns(false);
 
-        var error = await _sut.DisableTwoFactorAsync(user.Id, "wrong_password", CurrentCode(user));
+        var (response, error) = await _sut.DisableTwoFactorAsync(user.Id, "wrong_password", CurrentCode(user));
 
-        Assert.Equal("Invalid password.", error);
+        Assert.Equal("Invalid password.", error); Assert.Null(response);
         Assert.True(user.TotpEnabled);
     }
 

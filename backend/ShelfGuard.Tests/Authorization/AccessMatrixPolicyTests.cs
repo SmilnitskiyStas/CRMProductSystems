@@ -26,7 +26,7 @@ public sealed class AccessMatrixPolicyTests
     [InlineData("network_manager")]
     [InlineData("store_manager")]
     [InlineData("supplier_admin")]
-    public async Task Privileged_default_roles_retain_the_existing_MFA_disable_restriction(string role)
+    public async Task Legacy_MFA_catalog_identifies_privileged_default_roles(string role)
     {
         await using var db = new AppDbContext(new DbContextOptionsBuilder<AppDbContext>().UseNpgsql("Host=127.0.0.1;Port=1;Database=synthetic;Username=synthetic;Password=synthetic").Options);
         var policy = new LiveMfaPolicy(db, Substitute.For<ITenantSessionOverride>());

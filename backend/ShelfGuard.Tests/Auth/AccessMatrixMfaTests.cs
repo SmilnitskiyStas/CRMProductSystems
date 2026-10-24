@@ -96,12 +96,47 @@ public sealed class AccessMatrixMfaTests
         Assert.Contains(new JwtSecurityTokenHandler().ReadJwtToken(result.Session.AccessToken).Claims, c => c.Type == "mfa_at");
         Assert.NotNull((await sut.EnableEnrollmentAsync(proof, "123456")).Error);
     }
-    [Fact]
-    public async Task Required_MFA_cannot_be_disabled_even_with_valid_password_and_second_factor()
+    [Theory]
+    [InlineData("provider")]
+    [InlineData("provider_admin")]
+    [InlineData("provider_agent")]
+    [InlineData("enterprise_admin")]
+    [InlineData("network_manager")]
+    [InlineData("store_manager")]
+    [InlineData("supplier_admin")]
+    [InlineData("staff")]
+    public async Task Every_role_can_disable_MFA_with_password_and_unused_code_and_receives_new_unverified_session(string role)
     {
-        user.SetPendingTotpSecret("SYNTHETICSECRET"); user.EnableTotp([jwt.HashToken("ABCD2345")]);
-        Assert.NotNull(await sut.DisableTwoFactorAsync(user.Id, "password", "123456"));
-        Assert.True(user.TotpEnabled); Assert.Single(user.TotpRecoveryCodes!);
+        user.SetRole(role); user.SetPendingTotpSecret("SYNTHETICSECRET"); user.EnableTotp([jwt.HashToken("ABCD2345")]);
+        var oldVersion = user.AuthVersion;
+        var result = await sut.DisableTwoFactorAsync(user.Id, "password", "123456");
+        Assert.Null(result.Error); Assert.NotNull(result.Response); Assert.False(user.TotpEnabled);
+        Assert.Null(user.TotpSecret); Assert.Null(user.TotpRecoveryCodes); Assert.Equal(oldVersion + 1, user.AuthVersion);
+        Assert.False(result.Response.User.TwoFactorEnabled);
+        Assert.DoesNotContain(new JwtSecurityTokenHandler().ReadJwtToken(result.Response.AccessToken).Claims, c => c.Type == "mfa_at");
+        await sessions.Received(1).AddAsync(Arg.Is<RefreshToken>(t => t.AuthVersion == user.AuthVersion && t.MfaVerifiedAt == null), Arg.Any<CancellationToken>());
+    }
+    [Fact]
+    public async Task Disable_rejects_reused_OTP_and_locks_after_five_invalid_codes_without_changing_MFA()
+    {
+        user.SetPendingTotpSecret("SYNTHETICSECRET"); user.EnableTotp([]); user.MarkTotpTimestepUsed(100L);
+        for (var i = 0; i < 5; i++) {
+            var result = await sut.DisableTwoFactorAsync(user.Id, "password", "123456");
+            Assert.Equal("Invalid code.", result.Error); Assert.Null(result.Response);
+        }
+        Assert.True(user.IsLockedOut); Assert.True(user.TotpEnabled);
+        var locked = await sut.DisableTwoFactorAsync(user.Id, "password", "123456");
+        Assert.Equal("Too many attempts. Try again later.", locked.Error);
+        await sessions.DidNotReceive().AddAsync(Arg.Any<RefreshToken>(), Arg.Any<CancellationToken>());
+    }
+    [Fact]
+    public async Task Wrong_disable_password_does_not_consume_recovery_code_or_change_security_version()
+    {
+        user.SetPendingTotpSecret("SYNTHETICSECRET"); user.EnableTotp([jwt.HashToken("ABCD2345")]); var version = user.AuthVersion;
+        var result = await sut.DisableTwoFactorAsync(user.Id, "wrong", "ABCD-2345");
+        Assert.Equal("Invalid password.", result.Error); Assert.True(user.TotpEnabled);
+        Assert.Equal(version, user.AuthVersion); Assert.Single(user.TotpRecoveryCodes!);
+        await sessions.DidNotReceive().AddAsync(Arg.Any<RefreshToken>(), Arg.Any<CancellationToken>());
     }
     [Fact]
     public async Task Unverified_existing_session_cannot_upgrade_by_refresh()

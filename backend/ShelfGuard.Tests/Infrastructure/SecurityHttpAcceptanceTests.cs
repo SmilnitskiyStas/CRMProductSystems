@@ -156,7 +156,7 @@ public sealed class SecurityHttpAcceptanceTests : IAsyncLifetime
         var enabled = await Json(enabledResponse); var cookie = Cookie(enabledResponse); Assert.Equal(8, enabled.GetProperty("recoveryCodes").GetArrayLength());
         Assert.Contains("no-store", string.Join(',', enabledResponse.Headers.CacheControl?.ToString() ?? ""));
         var access = Token(enabled); Bearer(client, access); Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/api/auth/me")).StatusCode);
-        Assert.Equal(HttpStatusCode.BadRequest, (await Post(client, "/api/auth/2fa/disable", new { password = Password, code = enabled.GetProperty("recoveryCodes")[0].GetString() })).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await Post(client, "/api/auth/2fa/disable", new { password = "wrong-password", code = enabled.GetProperty("recoveryCodes")[0].GetString() })).StatusCode);
         Bearer(client, initialAccess); Assert.Equal(HttpStatusCode.Unauthorized, (await client.GetAsync("/api/auth/me")).StatusCode);
         Bearer(client, access);
         var nextLogin = await Login(client, user); Assert.True(nextLogin.GetProperty("requiresTwoFactor").GetBoolean());
@@ -195,6 +195,40 @@ public sealed class SecurityHttpAcceptanceTests : IAsyncLifetime
         Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/api/pos/sales/pending-fiscalization")).StatusCode);
         await using (var db = Admin()) { var current = await db.Users.SingleAsync(u => u.Id == user.Id); current.Deactivate(); await db.SaveChangesAsync(); }
         Assert.Equal(HttpStatusCode.Unauthorized, (await client.GetAsync("/api/pos/sales/pending-fiscalization")).StatusCode);
+    }
+
+    [RecoveryPostgresFact]
+    public async Task Privileged_self_service_disable_requires_both_proofs_replaces_session_and_invalidates_old_tokens_under_RLS()
+    {
+        var (_, user, _, _) = await Seed(mfa: true);
+        await using var app = await Server(); using var client = Client(app);
+        var challenge = await Login(client, user); var usedCode = Code(user.TotpSecret!);
+        var verifiedResponse = await Post(client, "/api/auth/2fa/verify", new { challengeToken = challenge.GetProperty("challengeToken").GetString(), code = usedCode });
+        var verified = await Json(verifiedResponse); var oldCookie = Cookie(verifiedResponse); var oldAccess = Token(verified);
+        Bearer(client, oldAccess);
+        var replay = await Json(await Post(client, "/api/auth/2fa/disable", new { password = Password, code = usedCode }), HttpStatusCode.BadRequest);
+        Assert.Equal("Invalid code.", replay.GetProperty("error").GetString());
+        var wrong = await Json(await Post(client, "/api/auth/2fa/disable", new { password = "wrong", code = "ABCD-2345" }), HttpStatusCode.BadRequest);
+        Assert.Equal("Invalid password.", wrong.GetProperty("error").GetString());
+        Assert.True((await Json(await client.GetAsync("/api/auth/me"))).GetProperty("twoFactorEnabled").GetBoolean());
+        var disabledResponse = await Post(client, "/api/auth/2fa/disable", new { password = Password, code = "ABCD-2345" });
+        var disabled = await Json(disabledResponse); var newCookie = Cookie(disabledResponse); Assert.NotEqual(oldCookie, newCookie);
+        Assert.False(disabled.GetProperty("user").GetProperty("twoFactorEnabled").GetBoolean());
+        Assert.DoesNotContain(new System.IdentityModel.Tokens.Jwt.JwtSecurityTokenHandler().ReadJwtToken(Token(disabled)).Claims, c => c.Type == "mfa_at");
+        Bearer(client, oldAccess); Assert.Equal(HttpStatusCode.Unauthorized, (await client.GetAsync("/api/auth/me")).StatusCode);
+        client.DefaultRequestHeaders.Add("Cookie", oldCookie);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await client.PostAsync("/api/auth/refresh", null)).StatusCode);
+        client.DefaultRequestHeaders.Remove("Cookie"); client.DefaultRequestHeaders.Add("Cookie", newCookie);
+        Bearer(client, Token(disabled)); Assert.False((await Json(await client.GetAsync("/api/auth/me"))).GetProperty("twoFactorEnabled").GetBoolean());
+        var refreshed = await Json(await client.PostAsync("/api/auth/refresh", null));
+        Bearer(client, Token(refreshed));
+        var critical = await Json(await client.PostAsync($"/api/production/orders/{Guid.NewGuid()}/complete", null), HttpStatusCode.Forbidden);
+        Assert.Equal("mfa_step_up_required", critical.GetProperty("code").GetString());
+        var nextLogin = await Login(client, user); Assert.False(nextLogin.TryGetProperty("requiresTwoFactor", out _));
+        Assert.False(nextLogin.GetProperty("user").GetProperty("twoFactorEnabled").GetBoolean());
+        await using var db = Admin(); var current = await db.Users.SingleAsync(u => u.Id == user.Id);
+        Assert.False(current.TotpEnabled); Assert.Null(current.TotpSecret); Assert.Null(current.TotpRecoveryCodes);
+        Assert.Contains(await db.ActivityLogs.Where(a => a.UserId == user.Id).ToListAsync(), a => a.Action == "user.2fa_disabled");
     }
 
     private sealed class TestControllers : IApplicationFeatureProvider<ControllerFeature>

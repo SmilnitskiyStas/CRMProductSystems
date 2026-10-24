@@ -321,22 +321,30 @@ public sealed class AuthService : IAuthService
         return (recoveryCodes, null, await IssueTokensAsync(user, null, ct, DateTime.UtcNow));
     }
 
-    public async Task<string?> DisableTwoFactorAsync(
+    public async Task<(LoginResponse? Response, string? Error)> DisableTwoFactorAsync(
         Guid userId, string password, string code, CancellationToken ct = default)
     {
         var user = await _users.GetByIdAsync(userId, ct);
         if (user is null || !user.IsActive)
-            return "User not found.";
+            return (null, "User not found.");
 
         if (!user.TotpEnabled || user.TotpSecret is null)
-            return "Two-factor authentication is not enabled.";
-        if (await _mfaPolicy.IsRequiredAsync(user, ct)) return "MFA is required for your current role or permissions.";
+            return (null, "Two-factor authentication is not enabled.");
+        // Every role may disable its own MFA after proving both factors.
+        // Failed attempts share the account lockout with sign-in.
+        if (user.IsLockedOut) return (null, "Too many attempts. Try again later.");
 
         if (!_passwordHasher.Verify(password, user.PasswordHash))
-            return "Invalid password.";
+        {
+            await RegisterFailedAttemptAsync(user, "user.2fa_disable_failed", null, ct);
+            return (null, "Invalid password.");
+        }
 
         if (!VerifySecondFactor(user, code))
-            return "Invalid code.";
+        {
+            await RegisterFailedAttemptAsync(user, "user.2fa_disable_failed", null, ct);
+            return (null, "Invalid code.");
+        }
 
         user.DisableTotp();
         _users.Update(user);
@@ -350,10 +358,10 @@ public sealed class AuthService : IAuthService
             EntityId   = user.Id,
             Meta       = user.Email,
         }, ct);
-        await _activityLogs.SaveChangesAsync(ct);
-        await _users.SaveChangesAsync(ct);
-
-        return null;
+        // IssueTokens saves the security-version change, audit and new session
+        // together. Previous sessions fail version checks; this verified client
+        // receives an unverified session without an mfa_at claim.
+        return (await IssueTokensAsync(user, null, ct), null);
     }
 
     // ── helpers ────────────────────────────────────────────────────────────

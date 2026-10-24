@@ -43,7 +43,7 @@ public interface IAuthService
         Guid userId, string code, CancellationToken ct = default);
 
     /// <summary>Disables 2FA after verifying both the password and a valid code.</summary>
-    Task<string?> DisableTwoFactorAsync(
+    Task<(LoginResponse? Response, string? Error)> DisableTwoFactorAsync(
         Guid userId, string password, string code, CancellationToken ct = default);
 
 }

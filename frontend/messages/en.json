@@ -1583,6 +1583,8 @@
         "passwordLabel": "Password",
         "disableCodeLabel": "2FA code or recovery code",
         "disableCodePlaceholder": "123456 or XXXX-XXXX",
+        "tooManyAttemptsError": "Too many failed attempts. Try again in 15 minutes.",
+        "disableCodeHint": "A code already used to sign in or confirm an action cannot be reused. Wait for a new authenticator code or enter an unused recovery code.",
         "passwordRequiredError": "Enter your password",
         "codeRequiredError": "Enter the code from the app or a recovery code",
         "invalidPasswordError": "Invalid password",

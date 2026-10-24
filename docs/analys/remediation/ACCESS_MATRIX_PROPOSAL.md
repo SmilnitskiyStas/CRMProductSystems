@@ -72,3 +72,5 @@ Cashier/merchandiser/storekeeper/staff без явного production grant не
 ## Подальше приймання
 
 Власник дозволив реалізацію mandatory MFA, незалежних production permissions та обмежень AI-контексту. У межах цього пакета не створюється новий consumer/staff linking або SSO grant, break-glass identity чи production deployment. Перед розгортанням потрібні узгоджені API/web/mobile artifacts, rollout window і staging/device перевірки. Фактичні результати див. CHANGELOG_AUDIT.md.
+
+24.10.2026 — PHASE-1-12: власник окремо дозволив усім ролям, включно адміністраторами й менеджерами, вимикати власну вже підключену MFA після перевірки пароля та невикористаного TOTP/коду відновлення. Це уточнення скасовує попередню рольову заборону вимкнення. Anti-replay, lockout, інвалідація старих сесій та MFA для критичних дій збережено. Статус і перевірки: TASKS/PHASE-1-12-SELF-SERVICE-MFA-DISABLE.md.

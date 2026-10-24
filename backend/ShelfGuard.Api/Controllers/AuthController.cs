@@ -134,7 +134,7 @@ public sealed class AuthController : ControllerBase
     /// <summary>Disables 2FA after verifying both the password and a valid code.</summary>
     [HttpPost("2fa/disable")]
     [Authorize]
-    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(typeof(object), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(object), StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> DisableTwoFactor(
         [FromBody] TwoFactorDisableRequest request, CancellationToken ct)
@@ -142,8 +142,10 @@ public sealed class AuthController : ControllerBase
         var userId = ResolveUserId();
         if (userId is null) return Unauthorized();
 
-        var error = await _auth.DisableTwoFactorAsync(userId.Value, request.Password, request.Code, ct);
-        return error is not null ? BadRequest(new { error }) : NoContent();
+        var (response, error) = await _auth.DisableTwoFactorAsync(userId.Value, request.Password, request.Code, ct);
+        if (error is not null) return BadRequest(new { error });
+        SetRefreshTokenCookie(response!.RefreshToken);
+        return Ok(new { response.AccessToken, response.User });
     }
 
     [HttpPost("refresh")]

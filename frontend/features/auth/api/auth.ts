@@ -116,6 +116,12 @@ export const authApi = {
     return result;
   },
 
-  disableTwoFactor: (payload: TwoFactorDisableRequest): Promise<void> =>
-    api.post<void>("/api/auth/2fa/disable", payload),
+  disableTwoFactor: async (payload: TwoFactorDisableRequest): Promise<LoginSuccessResponse> => {
+    const epoch = getSessionEpoch();
+    const result = await api.post<LoginSuccessResponse>("/api/auth/2fa/disable", payload);
+    if (epoch !== getSessionEpoch()) throw new ApiError(401, "Session changed.");
+    setToken(result.accessToken);
+    setStoredUser(normalizeAuthUser(result.user));
+    return result;
+  },
 };
