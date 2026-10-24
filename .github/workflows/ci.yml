@@ -99,6 +99,9 @@ jobs:
   frontend-ci:
     name: Frontend — typecheck & lint
     runs-on: ubuntu-latest
+    env:
+      # next lint loads PHASE_PRODUCTION_BUILD too; validate the real public origin.
+      NEXT_PUBLIC_API_URL: https://api.agrusystems.pp.ua
     steps:
       - uses: actions/checkout@v4
 
