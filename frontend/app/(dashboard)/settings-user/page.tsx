@@ -1,6 +1,7 @@
 "use client";
 
-import { User, Lock, ShieldCheck, Send } from "lucide-react";
+import type { ReactNode } from "react";
+import { User, Lock, ShieldCheck, Send, Bell } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { PageContainer } from "@/components/ui/PageContainer";
 import { ProfileInfoForm } from "@/features/profile/components/ProfileInfoForm";
@@ -9,48 +10,38 @@ import { TwoFactorSection } from "@/features/profile/components/TwoFactorSection
 import { TelegramLinkSection } from "@/features/profile/components/TelegramLinkSection";
 import { useMe } from "@/features/auth/hooks/useAuth";
 import { getRoleLabel } from "@/features/profile/types";
-
-type Section = "profile" | "password" | "security" | "telegram";
+import styles from "./page.module.css";
 
 export default function UserSettingsPage() {
   const t = useTranslations("Dashboard.settings.userSettingsPage");
 
-  const SECTIONS: { id: Section; label: string; icon: React.ReactNode; subtitle: string }[] = [
-    {
-      id: "profile",
-      label: t("profileLabel"),
-      icon: <User size={15} />,
-      subtitle: t("profileSubtitle"),
-    },
-    {
-      id: "password",
-      label: t("passwordLabel"),
-      icon: <Lock size={15} />,
-      subtitle: t("passwordSubtitle"),
-    },
-    {
-      id: "security",
-      label: t("securityLabel"),
-      icon: <ShieldCheck size={15} />,
-      subtitle: t("securitySubtitle"),
-    },
-    {
-      id: "telegram",
-      label: t("telegramLabel"),
-      icon: <Send size={15} />,
-      subtitle: t("telegramSubtitle"),
-    },
-  ];
-
   return (
-    <PageContainer style={{ maxWidth: 780 }}>
-      <ProfileCard />
+    <PageContainer style={{ width: "100%", minWidth: 0, maxWidth: "none", padding: "24px clamp(16px, 2vw, 32px)" }}>
+      <div className={styles.container}>
+        <ProfileCard />
+        <div className={styles.groups}>
+          <SettingsCard id="profile" title={t("profileLabel")} subtitle={t("profileSubtitle")} icon={<User size={18} />} className={styles.profile}>
+            <ProfileInfoForm />
+          </SettingsCard>
 
-      {/* Sections */}
-      <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-        {SECTIONS.map((section) => (
-          <SectionCard key={section.id} section={section} />
-        ))}
+          <SettingsCard id="account-security" title={t("accountSecurityLabel")} subtitle={t("accountSecuritySubtitle")} icon={<ShieldCheck size={18} />} className={styles.security}>
+            <div className={styles.securitySections}>
+              <section id="password" className={styles.subsection} aria-labelledby="password-heading">
+                <SubsectionHeading id="password-heading" title={t("passwordLabel")} subtitle={t("passwordSubtitle")} icon={<Lock size={16} />} />
+                <ChangePasswordForm />
+              </section>
+              <section id="security" className={styles.subsection} aria-labelledby="mfa-heading">
+                <SubsectionHeading id="mfa-heading" title={t("securityLabel")} subtitle={t("securitySubtitle")} icon={<ShieldCheck size={16} />} />
+                <TwoFactorSection />
+              </section>
+            </div>
+          </SettingsCard>
+
+          <SettingsCard id="telegram" title={t("notificationsLabel")} subtitle={t("notificationsSubtitle")} icon={<Bell size={18} />} className={styles.notifications}>
+            <SubsectionHeading id="telegram-channel-heading" title={t("telegramLabel")} subtitle={t("telegramSubtitle")} icon={<Send size={16} />} />
+            <TelegramLinkSection />
+          </SettingsCard>
+        </div>
       </div>
     </PageContainer>
   );
@@ -60,122 +51,39 @@ function ProfileCard() {
   const t = useTranslations("Dashboard.settings.userSettingsPage");
   const tRoles = useTranslations("Dashboard.roles");
   const { data: me } = useMe();
+  const initials = me?.fullName?.split(" ").filter(Boolean).slice(0, 2).map(n => n[0]).join("").toUpperCase() || "?";
 
-  const initials = me?.fullName
-    ? me.fullName.split(" ").slice(0, 2).map((n: string) => n[0]).join("").toUpperCase()
-    : "?";
-
-  return (
-    <div
-      style={{
-        display: "flex",
-        alignItems: "center",
-        gap: 16,
-        padding: "20px 24px",
-        background: "#0D1117",
-        border: "1px solid #1F2937",
-        borderRadius: 12,
-      }}
-    >
-      {/* Avatar */}
-      <div
-        style={{
-          width: 56,
-          height: 56,
-          borderRadius: "50%",
-          background: "linear-gradient(135deg, #3B82F6, #6366F1)",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          color: "#fff",
-          fontSize: 20,
-          fontWeight: 700,
-          flexShrink: 0,
-          boxShadow: "0 0 0 3px rgba(59,130,246,0.15)",
-        }}
-      >
-        {initials}
-      </div>
-
-      {/* Info */}
-      <div style={{ flex: 1 }}>
-        <h1 style={{ color: "#E8EDF5", fontSize: 22, fontWeight: 700, margin: "0 0 4px" }}>
-          {me?.fullName ?? "…"}
-        </h1>
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <span style={{ color: "#4B5563", fontSize: 12 }}>{me?.email ?? ""}</span>
-          <span style={{ color: "#1F2937" }}>·</span>
-          <span
-            style={{
-              background: "#1A2235",
-              border: "1px solid #1F2937",
-              borderRadius: 20,
-              padding: "2px 10px",
-              color: "#3B82F6",
-              fontSize: 11,
-              fontWeight: 600,
-            }}
-          >
-            {getRoleLabel(tRoles, me?.role)}
-          </span>
-        </div>
-      </div>
-
-      {/* Label */}
-      <div style={{ textAlign: "right" }}>
-        <div style={{ color: "#4B5563", fontSize: 11, fontWeight: 500 }}>
-          {t("personalLabel")}
-        </div>
+  return <header className={styles.profileHeader}>
+    <div className={styles.avatar} aria-hidden="true">{initials}</div>
+    <div className={styles.identity}>
+      <h1>{me?.fullName ?? "…"}</h1>
+      <div className={styles.identityDetails}>
+        <span className={styles.email}>{me?.email ?? ""}</span>
+        <span className={styles.role}>{getRoleLabel(tRoles, me?.role)}</span>
       </div>
     </div>
-  );
+    <span className={styles.personalLabel}>{t("personalLabel")}</span>
+  </header>;
 }
 
-function SectionCard({
-  section,
-}: {
-  section: { id: Section; label: string; icon: React.ReactNode; subtitle: string };
+function SettingsCard({ id, title, subtitle, icon, className, children }: {
+  id: string; title: string; subtitle: string; icon: ReactNode; className: string; children: ReactNode;
 }) {
-  return (
-    <div
-      id={section.id}
-      style={{
-        background: "#0D1117",
-        border: "1px solid #1F2937",
-        borderRadius: 12,
-        overflow: "hidden",
-        scrollMarginTop: 16,
-      }}
-    >
-      {/* Section header */}
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: 10,
-          padding: "16px 24px",
-          borderBottom: "1px solid #1F2937",
-          background: "#0A1020",
-        }}
-      >
-        <span style={{ color: "#3B82F6" }}>{section.icon}</span>
-        <div>
-          <div style={{ color: "#E8EDF5", fontSize: 13, fontWeight: 600 }}>
-            {section.label}
-          </div>
-          <div style={{ color: "#4B5563", fontSize: 11, marginTop: 1 }}>
-            {section.subtitle}
-          </div>
-        </div>
-      </div>
-
-      {/* Section content */}
-      <div style={{ padding: 24 }}>
-        {section.id === "profile"  && <ProfileInfoForm />}
-        {section.id === "password" && <ChangePasswordForm />}
-        {section.id === "security" && <TwoFactorSection />}
-        {section.id === "telegram" && <TelegramLinkSection />}
+  return <section id={id} className={`${styles.card} ${className}`} aria-labelledby={`${id}-heading`}>
+    <div className={styles.cardHeading}>
+      <span className={styles.headingIcon} aria-hidden="true">{icon}</span>
+      <div>
+        <h2 id={`${id}-heading`}>{title}</h2>
+        <p>{subtitle}</p>
       </div>
     </div>
-  );
+    <div className={styles.cardBody}>{children}</div>
+  </section>;
+}
+
+function SubsectionHeading({ id, title, subtitle, icon }: { id: string; title: string; subtitle: string; icon: ReactNode }) {
+  return <div className={styles.subsectionHeading}>
+    <span className={styles.headingIcon} aria-hidden="true">{icon}</span>
+    <div><h3 id={id}>{title}</h3><p>{subtitle}</p></div>
+  </div>;
 }

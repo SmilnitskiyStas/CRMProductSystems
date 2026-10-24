@@ -60,6 +60,11 @@ namespace ShelfGuard.Infrastructure.Authorization;
 /// </summary>
 public static class AppPolicies
 {
+    public const string ProductionView = "ProductionView";
+    public const string ProductionManage = "ProductionManage";
+    public const string ProductionComplete = "ProductionComplete";
+    public const string ProductionCancel = "ProductionCancel";
+    public const string AiAssistantUse = "AiAssistantUse";
     // Policy name constants (used on [Authorize(Policy = ...)] attributes)
     public const string ProviderOnly            = "ProviderOnly";
     public const string ProviderTeamMember      = "ProviderTeamMember";
@@ -151,6 +156,11 @@ public static class AppPolicies
     /// </summary>
     public static void Configure(AuthorizationOptions options)
     {
+        foreach (var (policy, permission) in new[] {
+            (ProductionView, TenantRoleCapabilities.ProductionView), (ProductionManage, TenantRoleCapabilities.ProductionManage),
+            (ProductionComplete, TenantRoleCapabilities.ProductionComplete), (ProductionCancel, TenantRoleCapabilities.ProductionCancel),
+            (AiAssistantUse, TenantRoleCapabilities.AiAssistantUse) })
+            options.AddPolicy(policy, p => p.RequireAuthenticatedUser().AddRequirements(new WorkPermissionRequirement(permission)));
         options.AddPolicy(ProviderOnly,            p => p.RequireRole(ProviderOnlyRoles));
         options.AddPolicy(ProviderTeamMember,      p => p.RequireRole(ProviderTeamMemberRoles));
         options.AddPolicy(ProviderCanInvite,       p => p.RequireRole(ProviderCanInviteRoles));

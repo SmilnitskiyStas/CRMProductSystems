@@ -43,15 +43,13 @@ namespace ShelfGuard.Tests.Pos;
 /// database — this test's first run caught a separate, previously-undiscovered bug there
 /// (jsonb `Contains()` translation, fixed alongside this concurrency fix; see
 /// ItemRepository.cs). Skips (soft-pass) when no reachable Postgres is configured.
-/// Override via env var SHELFGUARD_TEST_DB_CONNECTION.
+/// Uses only the explicit disposable SHELFGUARD_RECOVERY_TEST_DB fixture.
 /// </summary>
+[Collection("Session database")]
 public sealed class PosConcurrencySalesIntegrationTests : IAsyncLifetime
 {
-    private const string DefaultConnectionString =
-        "Host=localhost;Port=5435;Database=crm;Username=crm;Password=crm_dev_password";
-
     private readonly ITestOutputHelper _output;
-    private string _connectionString = DefaultConnectionString;
+    private string _connectionString = string.Empty;
     private bool _dbAvailable;
 
     private Guid _tenantId;
@@ -64,7 +62,8 @@ public sealed class PosConcurrencySalesIntegrationTests : IAsyncLifetime
     public async Task InitializeAsync()
     {
         _connectionString =
-            Environment.GetEnvironmentVariable("SHELFGUARD_TEST_DB_CONNECTION") ?? DefaultConnectionString;
+            Environment.GetEnvironmentVariable("SHELFGUARD_RECOVERY_TEST_DB") ?? string.Empty;
+        if (string.IsNullOrEmpty(_connectionString)) return;
 
         try
         {
@@ -72,17 +71,16 @@ public sealed class PosConcurrencySalesIntegrationTests : IAsyncLifetime
             await probe.OpenAsync();
             _dbAvailable = true;
         }
-        catch (Exception ex)
+        catch
         {
             _dbAvailable = false;
-            _output.WriteLine(
-                $"Skipping POS concurrency integration test — no reachable Postgres at '{_connectionString}': {ex.Message}");
-            return;
+            throw new InvalidOperationException("Explicit disposable PostgreSQL fixture is unavailable.");
         }
 
         _barcode = $"CONC-{Guid.NewGuid():N}"[..16];
 
         await using var db = NewContext();
+        await db.Database.EnsureCreatedAsync();
 
         var tenant = Tenant.Create($"Concurrency Test {Guid.NewGuid():N}", $"conc-test-{Guid.NewGuid():N}");
         var store = new Location { TenantId = tenant.Id, Name = "Concurrency Test Store" };
@@ -137,7 +135,7 @@ public sealed class PosConcurrencySalesIntegrationTests : IAsyncLifetime
         await db.Database.ExecuteSqlInterpolatedAsync($"DELETE FROM tenants WHERE \"Id\" = {_tenantId}");
     }
 
-    [Fact]
+    [RecoveryPostgresFact]
     public async Task Two_concurrent_sales_of_the_last_unit_never_oversell()
     {
         if (!_dbAvailable)

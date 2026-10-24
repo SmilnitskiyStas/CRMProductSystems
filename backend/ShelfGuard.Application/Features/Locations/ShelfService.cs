@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
+using ShelfGuard.Application.Common;
 using ShelfGuard.Application.Features.Locations.Dtos;
 using ShelfGuard.Domain.Entities;
 using ShelfGuard.Domain.Interfaces;
@@ -24,7 +25,7 @@ public sealed class ShelfService : IShelfService
     public const long MaxFloorPlanBytes = 8 * 1024 * 1024;
 
     /// <summary>Root for floor-plan background images; overridable for tests.</summary>
-    public string FloorPlanRoot { get; init; } = Path.Combine("wwwroot", "uploads", "floor-plans");
+    public string FloorPlanRoot { get; init; } = Path.Combine(PrivateUploadPaths.Root, "floor-plans");
 
     private const int MaxReferenceImages = 12;
     private const int MaxImagesPerItem = 3;
@@ -35,7 +36,7 @@ public sealed class ShelfService : IShelfService
     public string ItemImagesRoot { get; init; } = Path.Combine("wwwroot", "uploads", "items");
 
     /// <summary>Root for saved photos; overridable for tests.</summary>
-    public string UploadRoot { get; init; } = Path.Combine("wwwroot", "uploads", "shelf-scans");
+    public string UploadRoot { get; init; } = Path.Combine(PrivateUploadPaths.Root, "shelf-scans");
 
     public ShelfService(
         ILocationRepository locations, IShelfRepository repo, IShelfPhotoAdvisor advisor,
@@ -279,7 +280,7 @@ public sealed class ShelfService : IShelfService
 
         var dir = Path.Combine(FloorPlanRoot, tenantId.ToString());
         Directory.CreateDirectory(dir);
-        var fileOnDisk = $"{Guid.NewGuid()}{ext}";
+        var fileOnDisk = $"{locationId}_{Guid.NewGuid()}{ext}";
         await File.WriteAllBytesAsync(Path.Combine(dir, fileOnDisk), bytes, ct);
         return ($"/uploads/floor-plans/{tenantId}/{fileOnDisk}", null, null);
     }

@@ -15,12 +15,15 @@ public sealed class ConsumerAuthServiceTests
     private readonly IConsumerAccountRepository _accounts = Substitute.For<IConsumerAccountRepository>();
     private readonly IPasswordHasher _hasher = Substitute.For<IPasswordHasher>();
     private readonly IJwtService _jwt = Substitute.For<IJwtService>();
+    private readonly IConsumerSessionStore _sessions = Substitute.For<IConsumerSessionStore>();
     private readonly ConsumerAuthService _sut;
 
     public ConsumerAuthServiceTests()
     {
-        _sut = new ConsumerAuthService(_accounts, _hasher, _jwt, NullLogger<ConsumerAuthService>.Instance);
-        _jwt.GenerateConsumerAccessToken(Arg.Any<Guid>(), Arg.Any<string?>()).Returns("consumer_access_token");
+        _sut = new ConsumerAuthService(_accounts, _hasher, _jwt, NullLogger<ConsumerAuthService>.Instance, _sessions);
+        _sessions.IssueAsync(Arg.Any<ConsumerAccount>(), Arg.Any<ConsumerRefreshToken>(), Arg.Any<CancellationToken>()).Returns(true);
+        _jwt.GenerateRefreshToken().Returns(("synthetic-refresh", "synthetic-hash"));
+        _jwt.GenerateConsumerAccessToken(Arg.Any<Guid>(), Arg.Any<string?>(), Arg.Any<Guid?>(), Arg.Any<int>()).Returns("consumer_access_token");
     }
 
     private static ConsumerAccount MakeAccount(string phone = "+380501234567", bool isActive = true) => new()

@@ -75,6 +75,12 @@ public sealed record LoyaltyCodeDto(
     string AccountNumber,
     string? CardNumber);
 
+/// <summary>Consumer-safe purchase summary. Never exposes cashier, payment or fiscal secrets.</summary>
+public sealed record ConsumerPurchaseDto(
+    Guid Id, Guid StoreId, string StoreName, string? StoreAddress, string ReceiptNumber,
+    DateTime CreatedAt, decimal AmountPaid, decimal BonusesAccrued, decimal BonusesRedeemed,
+    bool CanReview);
+
 public sealed record LoyaltyLedgerEntryDto(
     Guid Id,
     string EntryType,

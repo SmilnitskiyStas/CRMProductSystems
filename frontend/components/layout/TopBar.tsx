@@ -1,4 +1,5 @@
 "use client";
+import { canWorkPermission } from "@/lib/workPermissions";
 
 import { useState } from "react";
 import Link from "next/link";
@@ -119,7 +120,7 @@ export function TopBar({ title }: Props) {
           </button>
 
           {/* AI assistant button */}
-          <button
+          {canWorkPermission(user, "ai_assistant.use") && <button
             onClick={() => assistantActive ? setPanelOpen(false) : openPanel("assistant")}
             title={t("aiAssistant")}
             style={btnStyle(assistantActive)}
@@ -128,7 +129,7 @@ export function TopBar({ title }: Props) {
           >
             <Bot size={16} />
             <span style={{ fontSize: 13, fontWeight: 500 }}>{t("myAssistant")}</span>
-          </button>
+          </button>}
 
           {/* Notification bell */}
           <Link

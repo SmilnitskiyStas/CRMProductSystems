@@ -13,11 +13,12 @@ namespace ShelfGuard.Api.Controllers;
 
 /// <summary>
 /// Single mobile entry point over the existing staff and consumer identity systems.
-/// The client never chooses a role: the identifier resolves the existing account and the
-/// response explicitly describes whether the authenticated identity may enter workspace mode.
+/// Consumer credentials authorize personal access only. Workspace access requires the
+/// staff password and, when enabled, the staff second factor.
 /// </summary>
 [ApiController]
 [Route("api/mobile-auth")]
+[ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
 [AllowAnonymous]
 public sealed class MobileAuthController : ControllerBase
 {
@@ -53,35 +54,13 @@ public sealed class MobileAuthController : ControllerBase
                 ? Conflict(new { error })
                 : BadRequest(new { error });
 
-        var account = await _consumers.GetByIdAsync(consumer!.ConsumerAccountId, ct);
-        if (account is not null)
-        {
-            var linkedUser = await FindLinkedUserAsync(account, ct);
-            if (linkedUser is not null && linkedUser.IsActive)
-            {
-                var workspaceSession = await _staffAuth.IssueLinkedMobileSessionAsync(
-                    linkedUser.Id, ClientIp(), ct);
-                if (workspaceSession.ChallengeToken is not null)
-                    return Ok(new
-                    {
-                        requiresTwoFactor = true,
-                        challengeToken = workspaceSession.ChallengeToken,
-                        personalAccessToken = consumer.AccessToken,
-                    });
-
-                if (workspaceSession.Response is not null)
-                    return Ok(MobileLoginResponseFactory.ForLinkedStaff(
-                        consumer.AccessToken,
-                        workspaceSession.Response.AccessToken,
-                        workspaceSession.Response.User));
-            }
-        }
-
+        // SEC-001: self-declared contacts are not proof of a staff identity.
+        // Registration must never mint a workspace session or a staff MFA challenge.
         return Ok(MobileLoginResponseFactory.ForConsumer(
-            consumer.AccessToken,
+            consumer!.AccessToken,
             consumer.ConsumerAccountId,
             consumer.FullName,
-            consumer.Phone));
+            consumer.Phone, consumer.RefreshToken));
     }
 
     [HttpPost("login")]
@@ -101,31 +80,13 @@ public sealed class MobileAuthController : ControllerBase
             if (consumerError is not null)
                 return Unauthorized(new { error = "Invalid identifier or password." });
 
-            var linkedUser = await FindLinkedUserAsync(consumerAccount, ct);
-            if (linkedUser is not null && linkedUser.IsActive)
-            {
-                var workspaceSession = await _staffAuth.IssueLinkedMobileSessionAsync(
-                    linkedUser.Id, ClientIp(), ct);
-                if (workspaceSession.ChallengeToken is not null)
-                    return Ok(new
-                    {
-                        requiresTwoFactor = true,
-                        challengeToken = workspaceSession.ChallengeToken,
-                        personalAccessToken = consumer!.AccessToken,
-                    });
-
-                if (workspaceSession.Response is not null)
-                    return Ok(MobileLoginResponseFactory.ForLinkedStaff(
-                        consumer!.AccessToken,
-                        workspaceSession.Response.AccessToken,
-                        workspaceSession.Response.User));
-            }
-
+            // SEC-001: neither a matching phone nor a mutable email grants workspace
+            // access. Do not attempt staff authentication using consumer credentials.
             return Ok(MobileLoginResponseFactory.ForConsumer(
                 consumer!.AccessToken,
                 consumer.ConsumerAccountId,
                 consumer.FullName,
-                consumer.Phone));
+                consumer.Phone, consumer.RefreshToken));
         }
 
         // Backward-compatible path for invited staff who have not created their personal
@@ -140,7 +101,11 @@ public sealed class MobileAuthController : ControllerBase
 
         if (outcome.ChallengeToken is not null)
             return Ok(new { requiresTwoFactor = true, challengeToken = outcome.ChallengeToken });
+        if (outcome.EnrollmentToken != null) return Ok(new { requiresMfaEnrollment = true, enrollmentToken = outcome.EnrollmentToken });
 
+        Response.Cookies.Append("refreshToken", outcome.Response!.RefreshToken, new CookieOptions
+        { HttpOnly = true, Secure = !Request.Host.Host.Equals("localhost", StringComparison.OrdinalIgnoreCase), SameSite = SameSiteMode.Strict,
+            Expires = DateTimeOffset.UtcNow.AddDays(7) });
         return Ok(MobileLoginResponseFactory.ForStaff(
             outcome.Response!.AccessToken, outcome.Response.User));
     }
@@ -161,16 +126,6 @@ public sealed class MobileAuthController : ControllerBase
 
         var phone = PhoneNormalizer.Normalize(identifier);
         return phone is null ? null : await _users.GetByPhoneAsync(phone, ct);
-    }
-
-    private async Task<User?> FindLinkedUserAsync(ConsumerAccount consumer, CancellationToken ct)
-    {
-        var byPhone = await _users.GetByPhoneAsync(consumer.Phone, ct);
-        if (byPhone is not null) return byPhone;
-
-        return string.IsNullOrWhiteSpace(consumer.Email)
-            ? null
-            : await _users.GetByEmailAsync(consumer.Email.Trim().ToLowerInvariant(), ct);
     }
 
     private string? ClientIp() => HttpContext.Connection.RemoteIpAddress?.ToString();

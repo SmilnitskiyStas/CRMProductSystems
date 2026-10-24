@@ -20,21 +20,17 @@ public sealed record MobileUserDto(
     Guid? StoreId);
 
 /// <summary>
-/// An employee is first a loyalty-program consumer (personal identity) who may additionally
-/// hold workspace access when linked to an active staff <c>User</c> (TASK-496). The two
-/// identities are independent sessions the mobile client can hold at once, so both tokens are
-/// surfaced here rather than collapsing to a single <c>AccessToken</c>:
-/// - PersonalAccessToken  → consumer JWT for loyalty/personal APIs; null only when the caller
-///                          has no personal identity at all (legacy staff-only fallback).
-/// - WorkspaceAccessToken → staff JWT for workspace APIs; null when the caller has no linked,
-///                          active staff account (<see cref="MobileAccessDto.CanAccessWorkspace"/>
-///                          is false in that case).
+/// Personal and workspace tokens represent independent identities. Consumer login and
+/// registration return only a personal token; staff login returns only a workspace token.
+/// Both fields remain in the response for compatibility with existing mobile clients.
+/// Contact equality must never authorize a workspace token (SEC-001).
 /// </summary>
 public sealed record MobileLoginResponse(
     string? PersonalAccessToken,
     string? WorkspaceAccessToken,
     MobileUserDto User,
-    MobileAccessDto Access);
+    MobileAccessDto Access,
+    string? PersonalRefreshToken = null);
 
 public static class MobileLoginResponseFactory
 {
@@ -50,17 +46,8 @@ public static class MobileLoginResponseFactory
             user.Capabilities ?? Array.Empty<string>(),
             user.Tabs ?? Array.Empty<string>()));
 
-    /// <summary>
-    /// Consumer linked to an active staff <c>User</c>: both identities are already authenticated
-    /// in the same request, so both JWTs are returned together — the personal one is reused
-    /// as-is (already minted by ConsumerAuthService), not reissued.
-    /// </summary>
-    public static MobileLoginResponse ForLinkedStaff(
-        string personalAccessToken, string workspaceAccessToken, AuthUserDto user) =>
-        ForStaff(workspaceAccessToken, user) with { PersonalAccessToken = personalAccessToken };
-
     public static MobileLoginResponse ForConsumer(
-        string personalAccessToken, Guid id, string fullName, string phone) => new(
+        string personalAccessToken, Guid id, string fullName, string phone, string? personalRefreshToken = null) => new(
         personalAccessToken,
         null,
         new MobileUserDto(id, fullName, null, phone, null, null),
@@ -69,5 +56,5 @@ public static class MobileLoginResponseFactory
             "consumer",
             new Dictionary<string, bool>(),
             Array.Empty<string>(),
-            Array.Empty<string>()));
+            Array.Empty<string>()), personalRefreshToken);
 }

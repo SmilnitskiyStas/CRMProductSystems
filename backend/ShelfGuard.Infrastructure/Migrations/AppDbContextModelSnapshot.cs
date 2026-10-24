@@ -835,6 +835,12 @@ namespace ShelfGuard.Infrastructure.Migrations
                         .HasColumnType("bigint")
                         .HasDefaultValueSql("nextval('consumer_account_number_seq')");
 
+                    b.Property<int>("AuthVersion")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0);
+
                     b.Property<DateTimeOffset>("CreatedAt")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("timestamp with time zone")
@@ -969,6 +975,51 @@ namespace ShelfGuard.Infrastructure.Migrations
                         .IsDescending(false, true);
 
                     b.ToTable("consumer_ai_requests", (string)null);
+                });
+
+            modelBuilder.Entity("ShelfGuard.Domain.Entities.ConsumerRefreshToken", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("AuthVersion")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("ConsumerAccountId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime>("ExpiresAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("ReplacedByTokenHash")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<DateTime?>("RevokedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("SessionId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("TokenHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TokenHash")
+                        .IsUnique();
+
+                    b.HasIndex("ConsumerAccountId", "SessionId")
+                        .IsUnique()
+                        .HasFilter("\"RevokedAt\" IS NULL");
+
+                    b.ToTable("consumer_refresh_tokens", (string)null);
                 });
 
             modelBuilder.Entity("ShelfGuard.Domain.Entities.ConsumerSupportTicket", b =>
@@ -4182,6 +4233,7 @@ namespace ShelfGuard.Infrastructure.Migrations
                         .HasColumnType("uuid");
 
                     b.Property<decimal>("Quantity")
+                        .IsConcurrencyToken()
                         .HasColumnType("decimal(10,2)");
 
                     b.Property<decimal>("QuantityInitial")
@@ -4340,6 +4392,7 @@ namespace ShelfGuard.Infrastructure.Migrations
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<string>("Status")
+                        .IsConcurrencyToken()
                         .IsRequired()
                         .ValueGeneratedOnAdd()
                         .HasMaxLength(30)
@@ -5205,6 +5258,9 @@ namespace ShelfGuard.Infrastructure.Migrations
                         .HasColumnType("uuid")
                         .HasDefaultValueSql("gen_random_uuid()");
 
+                    b.Property<int>("AuthVersion")
+                        .HasColumnType("integer");
+
                     b.Property<DateTime>("CreatedAt")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("timestamp with time zone")
@@ -5213,12 +5269,18 @@ namespace ShelfGuard.Infrastructure.Migrations
                     b.Property<DateTime>("ExpiresAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<DateTime?>("MfaVerifiedAt")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<string>("ReplacedByTokenHash")
                         .HasMaxLength(64)
                         .HasColumnType("character varying(64)");
 
                     b.Property<DateTime?>("RevokedAt")
                         .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("SessionId")
+                        .HasColumnType("uuid");
 
                     b.Property<string>("TokenHash")
                         .IsRequired()
@@ -5233,7 +5295,9 @@ namespace ShelfGuard.Infrastructure.Migrations
                     b.HasIndex("TokenHash")
                         .IsUnique();
 
-                    b.HasIndex("UserId");
+                    b.HasIndex("UserId", "SessionId")
+                        .IsUnique()
+                        .HasFilter("\"RevokedAt\" IS NULL");
 
                     b.ToTable("refresh_tokens", (string)null);
                 });
@@ -7541,6 +7605,12 @@ namespace ShelfGuard.Infrastructure.Migrations
                         .HasColumnType("uuid")
                         .HasDefaultValueSql("gen_random_uuid()");
 
+                    b.Property<int>("AuthVersion")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0);
+
                     b.Property<DateTime>("CreatedAt")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("timestamp with time zone")
@@ -7583,6 +7653,16 @@ namespace ShelfGuard.Infrastructure.Migrations
                         .IsRequired()
                         .HasMaxLength(255)
                         .HasColumnType("character varying(255)");
+
+                    b.Property<DateTime?>("PasswordResetExpiresAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("PasswordResetRequestedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("PasswordResetTokenHash")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
 
                     b.Property<string>("Permissions")
                         .HasColumnType("jsonb");
@@ -7648,9 +7728,11 @@ namespace ShelfGuard.Infrastructure.Migrations
                         .HasDefaultValue(false);
 
                     b.Property<long?>("TotpLastTimestep")
+                        .IsConcurrencyToken()
                         .HasColumnType("bigint");
 
                     b.Property<string>("TotpRecoveryCodes")
+                        .IsConcurrencyToken()
                         .HasColumnType("jsonb");
 
                     b.Property<string>("TotpSecret")
@@ -8335,6 +8417,17 @@ namespace ShelfGuard.Infrastructure.Migrations
                         .HasForeignKey("TenantId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+                });
+
+            modelBuilder.Entity("ShelfGuard.Domain.Entities.ConsumerRefreshToken", b =>
+                {
+                    b.HasOne("ShelfGuard.Domain.Entities.ConsumerAccount", "ConsumerAccount")
+                        .WithMany()
+                        .HasForeignKey("ConsumerAccountId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("ConsumerAccount");
                 });
 
             modelBuilder.Entity("ShelfGuard.Domain.Entities.ConsumerSupportTicket", b =>

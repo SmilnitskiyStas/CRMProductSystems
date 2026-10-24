@@ -1,3 +1,4 @@
+import { canWorkPermission } from '@/lib/workPermissions';
 import {
   View,
   Text,
@@ -331,6 +332,8 @@ function CreateOrderModal({
 // ── Main screen ────────────────────────────────────────────────────────────────
 
 export default function ProductionOrdersScreen() {
+  const user = useAuthStore(s => s.user);
+  const canManage = canWorkPermission(user, 'production.manage');
   const router = useRouter();
   const [activeFilter, setActiveFilter] = useState<FilterStatus>('all');
   const [createVisible, setCreateVisible] = useState(false);
@@ -410,13 +413,13 @@ export default function ProductionOrdersScreen() {
       )}
 
       {/* FAB */}
-      <TouchableOpacity
+      {canManage && <TouchableOpacity
         onPress={() => setCreateVisible(true)}
         className="absolute bottom-8 right-6 bg-primary-600 w-14 h-14 rounded-full items-center justify-center shadow-lg"
         style={{ elevation: 4 }}
       >
         <Ionicons name="add" size={28} color="white" />
-      </TouchableOpacity>
+      </TouchableOpacity>}
 
       <CreateOrderModal
         visible={createVisible}

@@ -7,6 +7,7 @@ export default function AuthLayout() {
   const hydrationStatus = useAuthStore((state) => state.hydrationStatus);
   const personalAccessToken = useAuthStore((state) => state.personalAccessToken);
   const workspaceAccessToken = useAuthStore((state) => state.workspaceAccessToken);
+  const enrollment = useAuthStore(state => state.mfaEnrollmentToken);
   const twoFactorChallenge = useAuthStore((state) => state.twoFactorChallenge);
 
   if (hydrationStatus === 'pending') {
@@ -24,7 +25,7 @@ export default function AuthLayout() {
   // person can use personal/loyalty mode while finishing the workspace 2FA step — that step
   // is the two-factor screen, which itself lives inside this (auth) stack, so it must stay
   // reachable instead of being redirected away the instant the personal token lands.
-  if (!twoFactorChallenge && (personalAccessToken || workspaceAccessToken)) {
+  if (!enrollment && !twoFactorChallenge && (personalAccessToken || workspaceAccessToken)) {
     return <Redirect href="/(personal)" />;
   }
 
@@ -32,6 +33,7 @@ export default function AuthLayout() {
     <Stack initialRouteName="select-role" screenOptions={{ headerShown: false }}>
       <Stack.Screen name="select-role" />
       <Stack.Screen name="two-factor" />
+      <Stack.Screen name="mfa-enrollment" />
       <Stack.Screen name="consumer-login" />
       <Stack.Screen name="consumer-register" />
     </Stack>

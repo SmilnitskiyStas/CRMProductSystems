@@ -47,6 +47,13 @@ public sealed class ProductionService : IProductionService
     {
         if (dto.Ingredients is null || dto.Ingredients.Count == 0)
             return (null, "Recipe must have at least one ingredient.", 400);
+        if (dto.OutputQty <= 0 || dto.Ingredients.Any(i => i.Qty <= 0) || dto.Ingredients.Select(i => i.ItemId).Distinct().Count() != dto.Ingredients.Count)
+            return (null, "Recipe quantities must be positive and ingredients unique.", 400);
+        if (await _repo.GetItemByIdAsync(dto.OutputItemId, ct) is not { } output || output.TenantId != tenantId)
+            return (null, "Output item not found.", 404);
+        foreach (var ingredient in dto.Ingredients)
+            if (await _repo.GetItemByIdAsync(ingredient.ItemId, ct) is not { } item || item.TenantId != tenantId)
+                return (null, "Ingredient not found.", 404);
 
         var recipe = new Recipe
         {
@@ -104,6 +111,14 @@ public sealed class ProductionService : IProductionService
 
         var recipe = await _repo.GetRecipeByIdAsync(recipeId, ct);
         if (recipe is null) return (null, "Recipe not found.", 404);
+
+        if (ingredients.Any(i => i.Qty <= 0) || ingredients.Select(i => i.ItemId).Distinct().Count() != ingredients.Count)
+            return (null, "Ingredient quantities must be positive and items unique.", 400);
+        if (await _repo.HasActiveOrdersForRecipeAsync(recipeId, ct))
+            return (null, "Cannot replace ingredients while production orders are active.", 409);
+        foreach (var ingredient in ingredients)
+            if (await _repo.GetItemByIdAsync(ingredient.ItemId, ct) is not { } item || item.TenantId != recipe.TenantId)
+                return (null, "Ingredient not found.", 404);
 
         // Remove existing ingredients and replace with new list
         _repo.RemoveIngredients(recipe.Ingredients.ToList());
@@ -221,17 +236,8 @@ public sealed class ProductionService : IProductionService
         var order = await _repo.GetOrderByIdAsync(id, ct);
         if (order is null) return (null, "Production order not found.", 404);
 
-        // Status transitions are owned by start / complete / cancel (they enforce preconditions and
-        // FEFO write-down); a PUT must never bypass them.
-        if (dto.Status is not null)
-        {
-            if (!ProductionOrderStatusExtensions.TryParseApi(dto.Status, out var newStatus))
-                return (null, $"Invalid status value '{dto.Status}'.", 400);
-            if (newStatus != order.Status)
-                return (null,
-                    "Статус замовлення змінюється лише діями start / complete / cancel, а не через оновлення.",
-                    409);
-        }
+        if (dto.Status is not null) return (null, "Use the explicit start, complete or cancel command to change status.", 400);
+        if (order.Status != ProductionOrderStatus.Planned) return (null, "Only planned orders can be edited.", 409);
 
         if (dto.Notes is not null)
             order.Notes = dto.Notes;
@@ -272,12 +278,19 @@ public sealed class ProductionService : IProductionService
         if (order is null)
             return (null, "Production order not found.", 404, null, null);
 
-        // Allow completing from Planned or InProgress (not Done/Cancelled)
-        if (order.Status != ProductionOrderStatus.Planned && order.Status != ProductionOrderStatus.InProgress)
-            return (null, $"Cannot complete order in '{order.Status}' status. Order must be Planned or InProgress.", 409, null, null);
+        if (order.Status == ProductionOrderStatus.Done)
+        {
+            var existing = await _repo.GetOutputForOrderAsync(order.Id, ct);
+            return existing == null ? (null, "Completed order output is unavailable.", 409, null, null)
+                : (ToOrderDetail(order), null, null, null, existing.Id);
+        }
+        if (order.Status != ProductionOrderStatus.InProgress)
+            return (null, "Start the production order before completing it.", 409, null, null);
 
+        if (order.PlannedQty <= 0) return (null, "Planned quantity must be positive.", 422, null, null);
         var recipe = order.Recipe;
-        if (recipe is null || recipe.Ingredients.Count == 0)
+        if (recipe is null || recipe.Ingredients.Count == 0 || recipe.OutputQty <= 0 || recipe.Ingredients.Any(i => i.Qty <= 0)
+            || recipe.Ingredients.Select(i => i.ItemId).Distinct().Count() != recipe.Ingredients.Count)
             return (null, "Recipe has no ingredients.", 422, null, null);
 
         // Output item must have a real shelf life configured — the produced batch's

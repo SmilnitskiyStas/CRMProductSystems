@@ -31,7 +31,7 @@ public sealed class RoleControllerFeatureProvider : IApplicationFeatureProvider<
         "Marketplace", "MarketplaceChat", "MarketplaceCooperation", "SupplierProfileSettings",
     };
 
-    private static readonly HashSet<string> Shared = new(StringComparer.Ordinal) { "Auth", "Geo" };
+    private static readonly HashSet<string> Shared = new(StringComparer.Ordinal) { "Auth", "PasswordRecovery", "Geo" };
 
     private readonly string _role;
 

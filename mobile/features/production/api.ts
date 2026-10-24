@@ -26,12 +26,12 @@ export async function getProductionOrders(params?: {
   locationId?: string;
 }): Promise<ProductionOrderListItem[]> {
   const { data } = await apiClient.get('/production/orders', { params });
-  return data;
+  return (data as ProductionOrderListItem[]).map(normalizeOrder);
 }
 
 export async function getProductionOrderById(id: string): Promise<ProductionOrderDetail> {
-  const { data } = await apiClient.get(`/production/orders/${id}`);
-  return data;
+  const { data } = await apiClient.get<ProductionOrderDetail>(`/production/orders/${id}`);
+  return normalizeOrder(data);
 }
 
 export async function createProductionOrder(
@@ -44,6 +44,10 @@ export async function createProductionOrder(
   return data;
 }
 
+export async function startProductionOrder(id: string): Promise<void> {
+  await apiClient.post(`/production/orders/${id}/start`);
+}
+
 export async function completeProductionOrder(id: string): Promise<ProductionCompleteResult> {
   const { data } = await apiClient.post(`/production/orders/${id}/complete`);
   return data;
@@ -51,4 +55,9 @@ export async function completeProductionOrder(id: string): Promise<ProductionCom
 
 export async function cancelProductionOrder(id: string): Promise<void> {
   await apiClient.post(`/production/orders/${id}/cancel`);
+}
+
+function normalizeOrder<T extends { status: string }>(order: T): T {
+  const status = order.status.replace(/_/g, "").toLowerCase();
+  return { ...order, status: status === "inprogress" ? "in_progress" : status };
 }

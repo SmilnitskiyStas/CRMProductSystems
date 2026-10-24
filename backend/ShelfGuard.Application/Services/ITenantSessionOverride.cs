@@ -3,7 +3,8 @@ namespace ShelfGuard.Application.Services;
 /// <summary>
 /// Lets a narrow, already-trusted operation temporarily run its database writes/reads under a
 /// specific tenant's RLS context, for session shapes that structurally never carry an
-/// app.tenant_id claim at all (TASK-417). Today that is exactly one case: a consumer-app
+/// app.tenant_id claim at all (TASK-417). Examples include pre-auth staff operations using a
+/// persisted user's tenant and a consumer-app
 /// session (see TenantConnectionInterceptor remarks — a ConsumerAccount JWT is cross-tenant by
 /// design and never sets app.tenant_id, so it is always the null-UUID for the whole request).
 /// Most tenant-scoped tables (e.g. "customers") only carry the canonical

@@ -13,8 +13,11 @@ FROM node:22-alpine AS build
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
-ARG NEXT_PUBLIC_API_URL=http://localhost:5000
+ARG NEXT_PUBLIC_API_URL
 ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
+# Local staging builds must opt in; production rejects browser loopback endpoints.
+ARG ALLOW_LOCAL_API_BUILD=false
+ENV ALLOW_LOCAL_API_BUILD=$ALLOW_LOCAL_API_BUILD
 # GA4 measurement id for the public marketing pages (baked at build time). Empty = analytics off.
 ARG NEXT_PUBLIC_GA_ID=
 ENV NEXT_PUBLIC_GA_ID=$NEXT_PUBLIC_GA_ID

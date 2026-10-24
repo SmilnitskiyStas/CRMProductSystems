@@ -44,6 +44,7 @@ public sealed class MarketplaceCooperationController : ControllerBase
 
     /// <summary>Submits a cooperation request to a supplier. 409 when a live agreement already exists.</summary>
     [HttpPost("suppliers/{id:guid}/cooperation-requests")]
+    [RequireRecentMfa]
     [ProducesResponseType(typeof(CooperationAgreementDto), StatusCodes.Status201Created)]
     [ProducesResponseType(typeof(object), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(object), StatusCodes.Status404NotFound)]
@@ -101,6 +102,7 @@ public sealed class MarketplaceCooperationController : ControllerBase
 
     /// <summary>Client chooses how to sign the contract: "physical" (mail to supplier's address) or "vchasno" (emails the doc for e-signature).</summary>
     [HttpPost("cooperation/{id:guid}/signing-method")]
+    [RequireRecentMfa]
     [ProducesResponseType(typeof(CooperationAgreementDto), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(object), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(object), StatusCodes.Status404NotFound)]
@@ -125,6 +127,7 @@ public sealed class MarketplaceCooperationController : ControllerBase
 
     /// <summary>Places an order with a supplier. 403 without an ACTIVE cooperation agreement.</summary>
     [HttpPost("suppliers/{id:guid}/orders")]
+    [RequireRecentMfa]
     [ProducesResponseType(typeof(MarketplaceOrderDto), StatusCodes.Status201Created)]
     [ProducesResponseType(typeof(object), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(object), StatusCodes.Status403Forbidden)]
@@ -195,6 +198,7 @@ public sealed class MarketplaceCooperationController : ControllerBase
 
     /// <summary>Cancels an own order. The client may cancel any time before it ships — status "new" or "confirmed" (TASK-693).</summary>
     [HttpPost("orders/{id:guid}/cancel")]
+    [RequireRecentMfa]
     [ProducesResponseType(typeof(MarketplaceOrderDto), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(object), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(object), StatusCodes.Status404NotFound)]
@@ -235,6 +239,7 @@ public sealed class MarketplaceCooperationController : ControllerBase
     /// one already in progress. 400 if the order isn't shipped yet or has no destination store.
     /// </summary>
     [HttpPost("orders/{orderId:guid}/receipt")]
+    [RequireRecentMfa]
     [Authorize(Policy = AppPolicies.CanReceiveStock)]
     [ProducesResponseType(typeof(MarketplaceOrderReceiptDto), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(object), StatusCodes.Status400BadRequest)]
@@ -276,6 +281,7 @@ public sealed class MarketplaceCooperationController : ControllerBase
     /// ExpiryDate, BatchNumber, DiscrepancyNotes. One physical item per call (not bulk).
     /// </summary>
     [HttpPut("orders/{orderId:guid}/receipt/items/{itemId:guid}")]
+    [RequireRecentMfa]
     [Authorize(Policy = AppPolicies.CanReceiveStock)]
     [ProducesResponseType(typeof(MarketplaceOrderReceiptDto), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(object), StatusCodes.Status400BadRequest)]
@@ -304,6 +310,7 @@ public sealed class MarketplaceCooperationController : ControllerBase
     /// to Delivered — the only remaining path to that status (ADR-033 Decision 4).
     /// </summary>
     [HttpPost("orders/{orderId:guid}/receipt/finalize")]
+    [RequireRecentMfa]
     [Authorize(Policy = AppPolicies.CanReceiveStock)]
     [ProducesResponseType(typeof(MarketplaceOrderReceiptDto), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(object), StatusCodes.Status400BadRequest)]

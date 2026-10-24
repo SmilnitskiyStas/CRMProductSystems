@@ -1,4 +1,6 @@
 "use client";
+import { MfaSetupReminder } from "@/features/auth/components/MfaSetupReminder";
+import { MfaStepUpDialog } from "@/features/auth/components/MfaStepUpDialog";
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -78,6 +80,7 @@ function DashboardChrome({ children }: { children: React.ReactNode }) {
 
   return (
     <>
+      <MfaStepUpDialog />
       {impersonation && (
         <ImpersonationBanner
           tenantName={impersonation.tenantName}
@@ -98,6 +101,7 @@ function DashboardChrome({ children }: { children: React.ReactNode }) {
         <Sidebar collapsed={collapsed} onToggle={() => setCollapsed((v) => !v)} />
         <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0 }}>
           <TemporaryPasswordBanner />
+          <MfaSetupReminder />
           <TopBar />
           <main style={{ flex: 1, overflowY: "auto" }}>{children}</main>
         </div>

@@ -33,15 +33,13 @@ namespace ShelfGuard.Tests.Pos;
 /// had. After: the loser's SaveChangesAsync throws on the xmin mismatch, LoyaltyRepository
 /// translates that into ConcurrencyConflictException, and PosService.CreateSaleAsync turns it
 /// into a clean 409 instead of corrupting Balance. Skips (soft-pass) when no reachable Postgres
-/// is configured. Override via env var SHELFGUARD_TEST_DB_CONNECTION.
+/// is configured. Uses only the explicit disposable SHELFGUARD_RECOVERY_TEST_DB fixture.
 /// </summary>
+[Collection("Session database")]
 public sealed class LoyaltyConcurrencySalesIntegrationTests : IAsyncLifetime
 {
-    private const string DefaultConnectionString =
-        "Host=localhost;Port=5435;Database=crm;Username=crm;Password=crm_dev_password";
-
     private readonly ITestOutputHelper _output;
-    private string _connectionString = DefaultConnectionString;
+    private string _connectionString = string.Empty;
     private bool _dbAvailable;
 
     private Guid _tenantId;
@@ -60,7 +58,8 @@ public sealed class LoyaltyConcurrencySalesIntegrationTests : IAsyncLifetime
     public async Task InitializeAsync()
     {
         _connectionString =
-            Environment.GetEnvironmentVariable("SHELFGUARD_TEST_DB_CONNECTION") ?? DefaultConnectionString;
+            Environment.GetEnvironmentVariable("SHELFGUARD_RECOVERY_TEST_DB") ?? string.Empty;
+        if (string.IsNullOrEmpty(_connectionString)) return;
 
         try
         {
@@ -68,18 +67,17 @@ public sealed class LoyaltyConcurrencySalesIntegrationTests : IAsyncLifetime
             await probe.OpenAsync();
             _dbAvailable = true;
         }
-        catch (Exception ex)
+        catch
         {
             _dbAvailable = false;
-            _output.WriteLine(
-                $"Skipping loyalty concurrency integration test — no reachable Postgres at '{_connectionString}': {ex.Message}");
-            return;
+            throw new InvalidOperationException("Explicit disposable PostgreSQL fixture is unavailable.");
         }
 
         _barcodeA = $"CONC-LOY-A-{Guid.NewGuid():N}"[..20];
         _barcodeB = $"CONC-LOY-B-{Guid.NewGuid():N}"[..20];
 
         await using var db = NewContext();
+        await db.Database.EnsureCreatedAsync();
 
         var tenant = Tenant.Create($"Loyalty Concurrency Test {Guid.NewGuid():N}", $"loyalty-conc-test-{Guid.NewGuid():N}");
         var store = new Location { TenantId = tenant.Id, Name = "Loyalty Concurrency Test Store" };
@@ -167,7 +165,7 @@ public sealed class LoyaltyConcurrencySalesIntegrationTests : IAsyncLifetime
         await db.Database.ExecuteSqlInterpolatedAsync($"DELETE FROM tenants WHERE \"Id\" = {_tenantId}");
     }
 
-    [Fact]
+    [RecoveryPostgresFact]
     public async Task Two_concurrent_redemptions_against_the_same_membership_never_overspend_the_balance()
     {
         if (!_dbAvailable)
@@ -309,6 +307,8 @@ public sealed class LoyaltyConcurrencySalesIntegrationTests : IAsyncLifetime
             Inner.GetLedgerPagedAsync(tenantId, membershipId, page, pageSize, ct);
         public Task<List<LoyaltyLedgerEntry>> GetLedgerEntriesForTransactionsAsync(Guid tenantId, IReadOnlyCollection<Guid> transactionIds, CancellationToken ct = default) =>
             Inner.GetLedgerEntriesForTransactionsAsync(tenantId, transactionIds, ct);
+        public Task<(List<PosTransaction> Items, int Total)> GetPurchasesPagedAsync(Guid tenantId, Guid membershipId, Guid? storeId, int page, int pageSize, CancellationToken ct = default) =>
+            Inner.GetPurchasesPagedAsync(tenantId, membershipId, storeId, page, pageSize, ct);
         public Task AddLedgerEntryAsync(LoyaltyLedgerEntry entry, CancellationToken ct = default) =>
             Inner.AddLedgerEntryAsync(entry, ct);
         public Task<LoyaltyProgramSettings?> GetSettingsAsync(Guid tenantId, CancellationToken ct = default) =>

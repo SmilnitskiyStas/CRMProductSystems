@@ -1,5 +1,7 @@
 import { View, Text, Image } from 'react-native';
-import { resolveApiAssetUrl } from '@/lib/api-client';
+import { apiClient, resolveApiAssetUrl } from '@/lib/api-client';
+import { privateAssetSource } from '@/lib/private-assets';
+import { useAuthStore } from '@/features/auth/store';
 import type { ScanItemStatus, ShelfScan, ShelfScanItem } from '../types';
 
 const STATUS_STYLE: Record<ScanItemStatus, { label: string; bg: string; text: string }> = {
@@ -48,14 +50,15 @@ function ItemInsights({ item }: { item: ShelfScanItem }) {
 }
 
 export function ScanResultView({ scan, showImage = true }: { scan: ShelfScan; showImage?: boolean }) {
-  const imageUrl = resolveApiAssetUrl(scan.imageUrl);
+  const token = useAuthStore((state) => state.workspaceAccessToken);
+  const image = privateAssetSource(resolveApiAssetUrl(scan.imageUrl), token, apiClient.defaults.baseURL);
   const items = [...scan.items].sort((a, b) => ORDER[a.status] - ORDER[b.status]);
   const failed = scan.status === 'failed' || !!scan.errorMessage;
 
   return (
     <View className="gap-3">
-      {showImage && imageUrl ? (
-        <Image source={{ uri: imageUrl }} className="w-full h-48 rounded-xl bg-gray-100" resizeMode="cover" />
+      {showImage && image ? (
+        <Image source={image} className="w-full h-48 rounded-xl bg-gray-100" resizeMode="cover" />
       ) : null}
 
       <View className="flex-row gap-2">

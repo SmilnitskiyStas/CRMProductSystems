@@ -20,7 +20,7 @@ public sealed class AiAssistantService : IAiAssistantService
         BusinessAssistantRequest request,
         CancellationToken ct = default)
     {
-        if (string.IsNullOrWhiteSpace(request.Message))
+        if (string.IsNullOrWhiteSpace(request.Message) || request.Message.Length > 4000)
             return (null, "Message cannot be empty.");
 
         if (!await _advisor.IsConfiguredAsync(ct))
@@ -31,12 +31,10 @@ public sealed class AiAssistantService : IAiAssistantService
         {
             result = await _advisor.AdviseAsync(tenantId, request.Message, ct);
         }
+        catch (ShelfGuard.Application.Services.WorkAccessDeniedException) { throw; }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            var detail = ex.Message.Contains("credit balance", StringComparison.OrdinalIgnoreCase)
-                ? "Недостатньо кредитів на Anthropic акаунті. Поповніть баланс: console.anthropic.com → Plans & Billing."
-                : $"AI сервіс недоступний: {ex.Message}";
-            return (null, detail);
+            return (null, "AI сервіс тимчасово недоступний. Повторіть спробу пізніше.");
         }
 
         return (new BusinessAssistantResponse(

@@ -2,6 +2,7 @@ import { app, BrowserWindow, ipcMain, session, shell } from 'electron';
 import { join } from 'node:path';
 import type { AppPrefs, CameraPrefs, PrintSettings, SaleSubmitRequest } from '@shared/types';
 import { CashierService } from './service';
+import { configureHttpTransport } from './http';
 
 const isDev = !app.isPackaged && !!process.env['ELECTRON_RENDERER_URL'];
 
@@ -129,6 +130,9 @@ if (!app.requestSingleInstanceLock()) {
   });
 
   void app.whenReady().then(async () => {
+    configureHttpTransport({
+      allowLoopbackHttp: !app.isPackaged && process.env.CASHIER_ALLOW_LOOPBACK_HTTP === 'true',
+    });
     service = new CashierService({
       onlineChange: (s) => send('evt:online', s),
       sessionExpired: () => send('evt:sessionExpired'),

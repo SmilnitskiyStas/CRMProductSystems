@@ -55,6 +55,7 @@ public sealed class SupplierCabinetController : ControllerBase
 
     /// <summary>Patch-updates the own profile (region, categories, website, delivery coverage, working hours, payment terms).</summary>
     [HttpPut("profile")]
+    [RequireRecentMfa]
     [ProducesResponseType(typeof(SupplierProfileDto), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(object), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(object), StatusCodes.Status404NotFound)]
@@ -77,6 +78,7 @@ public sealed class SupplierCabinetController : ControllerBase
 
     /// <summary>Toggles marketplace visibility (IsPublic) of the own profile.</summary>
     [HttpPost("profile/publish")]
+    [RequireRecentMfa]
     [ProducesResponseType(typeof(SupplierProfileDto), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(object), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> TogglePublish(CancellationToken ct)
@@ -272,6 +274,7 @@ public sealed class SupplierCabinetController : ControllerBase
 
     /// <summary>Invites a new staff member into the own tenant. Always created as supplier_admin.</summary>
     [HttpPost("staff")]
+    [RequireRecentMfa]
     [ProducesResponseType(typeof(UserDto), StatusCodes.Status201Created)]
     [ProducesResponseType(typeof(object), StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> InviteStaff(
@@ -296,6 +299,7 @@ public sealed class SupplierCabinetController : ControllerBase
 
     /// <summary>Deactivates a staff member of the own tenant (soft delete).</summary>
     [HttpDelete("staff/{id:guid}")]
+    [RequireRecentMfa]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(typeof(object), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> DeactivateStaff(Guid id, CancellationToken ct)
@@ -328,6 +332,7 @@ public sealed class SupplierCabinetController : ControllerBase
 
     /// <summary>Creates a new custom staff role for the caller's own tenant.</summary>
     [HttpPost("roles")]
+    [RequireRecentMfa]
     [ProducesResponseType(typeof(SupplierRoleDto), StatusCodes.Status201Created)]
     [ProducesResponseType(typeof(object), StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> CreateRole([FromBody] CreateSupplierRoleRequest request, CancellationToken ct)
@@ -343,6 +348,7 @@ public sealed class SupplierCabinetController : ControllerBase
 
     /// <summary>Updates a custom staff role of the caller's own tenant.</summary>
     [HttpPut("roles/{id:guid}")]
+    [RequireRecentMfa]
     [ProducesResponseType(typeof(SupplierRoleDto), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(object), StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> UpdateRole(Guid id, [FromBody] UpdateSupplierRoleRequest request, CancellationToken ct)
@@ -358,6 +364,7 @@ public sealed class SupplierCabinetController : ControllerBase
 
     /// <summary>Deletes a custom staff role of the caller's own tenant.</summary>
     [HttpDelete("roles/{id:guid}")]
+    [RequireRecentMfa]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(typeof(object), StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> DeleteRole(Guid id, CancellationToken ct)

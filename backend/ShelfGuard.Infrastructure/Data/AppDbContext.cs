@@ -9,6 +9,30 @@ namespace ShelfGuard.Infrastructure.Data;
 
 public sealed class AppDbContext : DbContext
 {
+    public DbSet<ConsumerRefreshToken> ConsumerRefreshTokens => Set<ConsumerRefreshToken>();
+
+    private void PrepareConsumerAuthVersions()
+    {
+        ChangeTracker.DetectChanges();
+        foreach (var entry in ChangeTracker.Entries<ConsumerAccount>().Where(e => e.State == EntityState.Modified))
+        {
+            if (entry.Property(a => a.PasswordHash).OriginalValue != entry.Entity.PasswordHash
+                || entry.Property(a => a.IsActive).OriginalValue != entry.Entity.IsActive)
+                entry.Entity.AuthVersion = checked(entry.Property(a => a.AuthVersion).OriginalValue + 1);
+        }
+    }
+
+    public override int SaveChanges(bool acceptAllChangesOnSuccess)
+    {
+        PrepareConsumerAuthVersions();
+        return base.SaveChanges(acceptAllChangesOnSuccess);
+    }
+
+    public override Task<int> SaveChangesAsync(bool acceptAllChangesOnSuccess, CancellationToken cancellationToken = default)
+    {
+        PrepareConsumerAuthVersions();
+        return base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
+    }
     public AppDbContext(DbContextOptions<AppDbContext> options) : base(options) { }
 
     // Auth (existing)
@@ -319,14 +343,19 @@ public sealed class AppDbContext : DbContext
             e.Property(u => u.FailedLoginAttempts).HasDefaultValue(0);
             e.Property(u => u.LockoutUntil).IsRequired(false);
 
-            // Temporary password (forgot-password flow, TASK-464/465)
+            // Legacy temporary password compatibility; new recovery uses a separate proof.
             e.Property(u => u.TempPasswordExpiresAt).IsRequired(false);
+            e.Property(u => u.PasswordResetTokenHash).HasMaxLength(64);
+            e.Property(u => u.PasswordResetExpiresAt).IsRequired(false);
+            e.Property(u => u.PasswordResetRequestedAt).IsRequired(false);
+            e.Property(u => u.AuthVersion).HasDefaultValue(0).IsConcurrencyToken();
 
             // 2FA TOTP (TASK-330)
             e.Property(u => u.TotpSecret).IsRequired(false);
             e.Property(u => u.TotpEnabled).HasDefaultValue(false);
-            e.Property(u => u.TotpLastTimestep).IsRequired(false);
+            e.Property(u => u.TotpLastTimestep).IsRequired(false).IsConcurrencyToken();
             e.Property(u => u.TotpRecoveryCodes)
+             .IsConcurrencyToken()
              .HasColumnType("jsonb")
              .HasConversion(
                  v => v == null ? null : System.Text.Json.JsonSerializer.Serialize(v, (System.Text.Json.JsonSerializerOptions?)null),
@@ -346,6 +375,7 @@ public sealed class AppDbContext : DbContext
             e.HasKey(rt => rt.Id);
             e.Property(rt => rt.Id).HasDefaultValueSql("gen_random_uuid()");
             e.Property(rt => rt.TokenHash).HasMaxLength(64).IsRequired();
+            e.HasIndex(rt => new { rt.UserId, rt.SessionId }).IsUnique().HasFilter("\"RevokedAt\" IS NULL");
             e.HasIndex(rt => rt.TokenHash).IsUnique();
             e.Property(rt => rt.ExpiresAt).IsRequired();
             e.Property(rt => rt.ReplacedByTokenHash).HasMaxLength(64);
@@ -353,6 +383,18 @@ public sealed class AppDbContext : DbContext
             e.HasOne(rt => rt.User).WithMany(u => u.RefreshTokens)
              .HasForeignKey(rt => rt.UserId).OnDelete(DeleteBehavior.Cascade);
         });
+
+        builder.Entity<ConsumerRefreshToken>(e =>
+        {
+            e.ToTable("consumer_refresh_tokens");
+            e.HasKey(t => t.Id);
+            e.Property(t => t.TokenHash).HasMaxLength(64).IsRequired();
+            e.Property(t => t.ReplacedByTokenHash).HasMaxLength(64);
+            e.HasIndex(t => t.TokenHash).IsUnique();
+            e.HasIndex(t => new { t.ConsumerAccountId, t.SessionId }).IsUnique().HasFilter("\"RevokedAt\" IS NULL");
+            e.HasOne(t => t.ConsumerAccount).WithMany().HasForeignKey(t => t.ConsumerAccountId).OnDelete(DeleteBehavior.Cascade);
+        });
+        builder.Entity<ConsumerAccount>().Property(a => a.AuthVersion).HasDefaultValue(0).IsConcurrencyToken();
 
         // ── Product (POC) ───────────────────────────────────────────────────
         builder.Entity<Product>(e =>
@@ -652,7 +694,7 @@ public sealed class AppDbContext : DbContext
             e.HasKey(s => s.Id);
             e.Property(s => s.Id).HasDefaultValueSql("gen_random_uuid()");
             e.Property(s => s.BatchNumber).HasMaxLength(100);
-            e.Property(s => s.Quantity).HasColumnType("decimal(10,2)").IsRequired();
+            e.Property(s => s.Quantity).HasColumnType("decimal(10,2)").IsRequired().IsConcurrencyToken();
             e.Property(s => s.QuantityInitial).HasColumnType("decimal(10,2)").IsRequired();
             e.Property(s => s.ExpiryDate).IsRequired();
             e.Property(s => s.Status).HasMaxLength(30).HasDefaultValue("safe");
@@ -2054,6 +2096,7 @@ public sealed class AppDbContext : DbContext
         builder.Entity<ProductionOrder>(e =>
         {
             e.ToTable("production_orders");
+            e.Property(o => o.Status).IsConcurrencyToken();
             e.HasKey(o => o.Id);
             e.Property(o => o.Id).HasDefaultValueSql("gen_random_uuid()");
             e.Property(o => o.PlannedQty).HasColumnType("numeric(10,3)").IsRequired();

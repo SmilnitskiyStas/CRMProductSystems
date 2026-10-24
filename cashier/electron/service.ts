@@ -22,7 +22,7 @@ import type {
 } from '@shared/types';
 import { MemoryCatalogStore, type CatalogStore, type SyncCatalogPageWire } from './catalogStore';
 import { ConnectivityMonitor } from './connectivity';
-import { httpRequest, normalizeServerUrl, setNetworkErrorListener, toApiError, toResult } from './http';
+import { httpRequest, normalizeServerUrl, SERVER_URL_ERROR, setNetworkErrorListener, toApiError, toResult } from './http';
 import {
   closeShiftBlockReason,
   OutboxService,
@@ -247,7 +247,7 @@ export class CashierService {
   /** One-off reachability check of an arbitrary URL (activation screen, before anything is saved). */
   async checkServer(urlRaw: string): Promise<{ reachable: boolean; message: string | null }> {
     const url = normalizeServerUrl(urlRaw);
-    if (!url) return { reachable: false, message: 'Некоректна адреса сервера (потрібно http:// або https://).' };
+    if (!url) return { reachable: false, message: SERVER_URL_ERROR };
     const res = await httpRequest<unknown>(url, '/health/live', { timeoutMs: 3_000, probe: true });
     return res.networkError
       ? { reachable: false, message: 'Сервер недоступний (немає відповіді). Перевірте адресу та що API запущено.' }
@@ -268,7 +268,7 @@ export class CashierService {
   async activate(serverUrlRaw: string, activationCode: string): Promise<Result<RegisterInfo>> {
     const serverUrl = normalizeServerUrl(serverUrlRaw);
     if (!serverUrl) {
-      return { ok: false, error: { kind: 'validation', message: 'Некоректна адреса сервера (потрібно http:// або https://).' } };
+      return { ok: false, error: { kind: 'validation', message: SERVER_URL_ERROR } };
     }
     const code = activationCode.trim();
     if (!code) {

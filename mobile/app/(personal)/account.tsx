@@ -5,6 +5,7 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuthStore } from '@/features/auth/store';
 import { terminateSession } from '@/features/auth/session';
+import { logout as revokeSessions } from '@/features/auth/api/authApi';
 import { useActiveTenantStore } from '@/features/tenant/store';
 import { useRetailTheme } from '@/features/theme/RetailThemeProvider';
 import { useChangeConsumerPhone, useConsumerProfile, useConsumerProfileHistory, useUpdateConsumerProfile } from '@/features/consumer-profile/hooks';
@@ -55,7 +56,16 @@ export default function PersonalAccountScreen() {
     if (selectedTenantId) void refetchTier();
   }, [selectedTenantId, refetchTier]));
 
-  function logout() { Alert.alert('Вийти з акаунта?', 'Локальні дані сесії буде очищено.', [{ text: 'Скасувати', style: 'cancel' }, { text: 'Вийти', style: 'destructive', onPress: async () => { setIsLoggingOut(true); await resetActiveTenant(); await terminateSession(); router.replace('/(auth)/select-role'); } }]); }
+  function logout(all = false) {
+    Alert.alert(all ? 'Вийти на всіх пристроях?' : 'Вийти з акаунта?', all ? 'Потрібно буде увійти знову на кожному пристрої.' : 'Сесії на цьому пристрої буде завершено.', [
+      { text: 'Скасувати', style: 'cancel' }, { text: 'Вийти', style: 'destructive', onPress: async () => {
+        setIsLoggingOut(true);
+        try { await revokeSessions(all); }
+        catch { Alert.alert('Локальний вихід', 'Не вдалося підтвердити завершення сесій на сервері.'); }
+        finally { await resetActiveTenant(); await terminateSession(); router.replace('/(auth)/select-role'); }
+      } },
+    ]);
+  }
   function openEdit() { setFullName(profile.data?.fullName ?? displayName); setEmail(profile.data?.email ?? ''); setEditOpen(true); }
 
   return <SafeAreaView className="flex-1 bg-gray-50">
@@ -76,7 +86,8 @@ export default function PersonalAccountScreen() {
 
         {history.data?.items.length ? <Section title="Безпека профілю"><View className="p-4"><View className="flex-row items-center"><Ionicons name="shield-checkmark-outline" size={20} color="#16a34a" /><Text className="ml-2 font-semibold text-gray-900">Останні зміни</Text></View>{history.data.items.slice(0, 3).map((item, index) => <View key={`${item.changedAt}-${index}`} className="mt-3 flex-row items-center justify-between"><Text className="text-sm text-gray-600">{item.fieldName === 'full_name' ? 'Ім’я' : item.fieldName === 'phone' ? 'Телефон' : item.fieldName === 'email' ? 'Email' : item.fieldName}</Text><Text className="text-xs text-gray-400">{new Date(item.changedAt).toLocaleDateString('uk-UA')}</Text></View>)}</View></Section> : null}
 
-        <TouchableOpacity onPress={logout} disabled={isLoggingOut} className="mt-7 flex-row items-center justify-center rounded-2xl border border-red-100 bg-red-50 py-4">{isLoggingOut ? <ActivityIndicator color="#dc2626" /> : <><Ionicons name="log-out-outline" size={20} color="#dc2626" /><Text className="ml-2 font-bold text-red-600">Вийти з акаунта</Text></>}</TouchableOpacity>
+        <TouchableOpacity onPress={() => logout(false)} disabled={isLoggingOut} className="mt-7 flex-row items-center justify-center rounded-2xl border border-red-100 bg-red-50 py-4">{isLoggingOut ? <ActivityIndicator color="#dc2626" /> : <><Ionicons name="log-out-outline" size={20} color="#dc2626" /><Text className="ml-2 font-bold text-red-600">Вийти з акаунта</Text></>}</TouchableOpacity>
+        <TouchableOpacity onPress={() => logout(true)} disabled={isLoggingOut} className="mt-3 items-center py-3"><Text className="font-semibold text-red-600">Вийти на всіх пристроях</Text></TouchableOpacity>
         <Text className="mt-4 text-center text-[11px] text-gray-400">ShelfGuard · персональні дані захищено</Text>
       </View>
     </ScrollView>

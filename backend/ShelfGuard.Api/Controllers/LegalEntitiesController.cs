@@ -45,6 +45,7 @@ public sealed class LegalEntitiesController : ControllerBase
     }
 
     [HttpPost]
+    [RequireRecentMfa]
     [ProducesResponseType(typeof(LegalEntityDto), StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
@@ -64,6 +65,7 @@ public sealed class LegalEntitiesController : ControllerBase
     }
 
     [HttpPut("{id:guid}")]
+    [RequireRecentMfa]
     [ProducesResponseType(typeof(LegalEntityDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
@@ -88,6 +90,7 @@ public sealed class LegalEntitiesController : ControllerBase
     }
 
     [HttpDelete("{id:guid}")]
+    [RequireRecentMfa]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]

@@ -5,6 +5,7 @@ import { queryClient } from '@/lib/query-client';
 import { activateOfflineReadCache } from '@/features/offline-read-cache/lifecycle';
 import { persistOfflineCacheOwner } from '@/features/offline-read-cache/owner-pointer';
 import { useWorkspaceLocationStore } from '@/features/locations/store';
+import { withSessionPersistence } from './persistence';
 
 /**
  * TASK-405/407 introduced a device-holds-one-session model (`sessionKind: 'staff' |
@@ -23,6 +24,7 @@ export type SessionKind = 'staff' | 'consumer';
 export type AuthHydrationStatus = 'pending' | 'ready' | 'retryable_error' | 'offline_read_ready';
 
 const PERSONAL_ACCESS_TOKEN_KEY = 'personal_access_token';
+const PERSONAL_REFRESH_TOKEN_KEY = 'personal_refresh_token';
 const WORKSPACE_ACCESS_TOKEN_KEY = 'workspace_access_token';
 const SESSION_KIND_KEY = 'session_kind';
 const CONSUMER_USER_KEY = 'consumer_user';
@@ -34,6 +36,8 @@ interface AuthState {
   workspaceAccessToken: string | null;
   user: AuthUser | null;
   consumerUser: ConsumerUser | null;
+  mfaEnrollmentToken: string | null;
+  setMfaEnrollmentToken: (token: string | null) => void;
   twoFactorChallenge: { challengeToken: string; email: string } | null;
   offlineSnapshot: import('./offlineSnapshot').OfflineSessionSnapshot | null;
 
@@ -42,7 +46,8 @@ interface AuthState {
   setWorkspaceAuth: (token: string, user: AuthUser) => Promise<void>;
   setUser: (user: AuthUser) => void;
   /** Full personal login: token + consumer profile. */
-  setPersonalAuth: (token: string, user: ConsumerUser) => Promise<void>;
+  setPersonalAuth: (token: string, user: ConsumerUser, refreshToken?: string | null) => Promise<void>;
+  clearPersonalAuth: () => Promise<void>;
   /** Token-only personal grant, used when a 2FA challenge response carries a
    * personalAccessToken but no profile data (see TwoFactorChallengeResponse). */
   setPersonalToken: (token: string) => Promise<void>;
@@ -64,10 +69,11 @@ export const useAuthStore = create<AuthState>((set) => ({
   workspaceAccessToken: null,
   user: null,
   consumerUser: null,
+  mfaEnrollmentToken: null,
   twoFactorChallenge: null,
   offlineSnapshot: null,
 
-  setWorkspaceAuth: async (token, user) => {
+  setWorkspaceAuth: (token, user) => withSessionPersistence(async () => {
     await SecureStore.setItemAsync(WORKSPACE_ACCESS_TOKEN_KEY, token);
     await SecureStore.setItemAsync(SESSION_KIND_KEY, 'staff');
     const cacheOwner = { tenantId: user.tenantId ?? 'provider', userId: user.id };
@@ -77,29 +83,43 @@ export const useAuthStore = create<AuthState>((set) => ({
       workspaceAccessToken: token,
       user,
       sessionKind: 'staff',
+      mfaEnrollmentToken: null,
       twoFactorChallenge: null,
       offlineSnapshot: null,
     });
-  },
+  }),
 
   setUser: (user) => set({ user, offlineSnapshot: null }),
 
-  setPersonalAuth: async (token, user) => {
+  setPersonalAuth: (token, user, refreshToken) => withSessionPersistence(async () => {
+    if (useAuthStore.getState().consumerUser?.id !== user.id) queryClient.clear();
     const hasWorkspace = useAuthStore.getState().workspaceAccessToken !== null;
     await SecureStore.setItemAsync(PERSONAL_ACCESS_TOKEN_KEY, token);
+    if (refreshToken) await SecureStore.setItemAsync(PERSONAL_REFRESH_TOKEN_KEY, refreshToken);
+    else await SecureStore.deleteItemAsync(PERSONAL_REFRESH_TOKEN_KEY);
     await SecureStore.setItemAsync(CONSUMER_USER_KEY, JSON.stringify(user));
     if (!hasWorkspace) await SecureStore.setItemAsync(SESSION_KIND_KEY, 'consumer');
     set({
       personalAccessToken: token,
       consumerUser: user,
       sessionKind: hasWorkspace ? 'staff' : 'consumer',
+      mfaEnrollmentToken: null,
       twoFactorChallenge: null,
     });
-  },
+  }),
 
-  setPersonalToken: async (token) => {
+  setPersonalToken: (token) => withSessionPersistence(async () => {
     await SecureStore.setItemAsync(PERSONAL_ACCESS_TOKEN_KEY, token);
+    await SecureStore.deleteItemAsync(PERSONAL_REFRESH_TOKEN_KEY);
     set({ personalAccessToken: token });
+  }),
+
+  clearPersonalAuth: async () => {
+    await Promise.allSettled([SecureStore.deleteItemAsync(PERSONAL_ACCESS_TOKEN_KEY),
+      SecureStore.deleteItemAsync(PERSONAL_REFRESH_TOKEN_KEY), SecureStore.deleteItemAsync(CONSUMER_USER_KEY)]);
+    const workspace = useAuthStore.getState().workspaceAccessToken;
+    if (!workspace) await SecureStore.deleteItemAsync(SESSION_KIND_KEY).catch(() => undefined);
+    set({ personalAccessToken: null, consumerUser: null, sessionKind: workspace ? 'staff' : null });
   },
 
   setConsumerUser: (user) => {
@@ -107,6 +127,7 @@ export const useAuthStore = create<AuthState>((set) => ({
     void SecureStore.setItemAsync(CONSUMER_USER_KEY, JSON.stringify(user));
     set({ consumerUser: user });
   },
+  setMfaEnrollmentToken: (mfaEnrollmentToken) => set({ mfaEnrollmentToken }),
   setTwoFactorChallenge: (challengeToken, email) =>
     set({ twoFactorChallenge: { challengeToken, email } }),
   clearTwoFactorChallenge: () => set({ twoFactorChallenge: null }),
@@ -121,6 +142,7 @@ export const useAuthStore = create<AuthState>((set) => ({
     // every key prevents one failure from skipping the remaining cleanup.
     await Promise.allSettled([
       SecureStore.deleteItemAsync(PERSONAL_ACCESS_TOKEN_KEY),
+      SecureStore.deleteItemAsync(PERSONAL_REFRESH_TOKEN_KEY),
       SecureStore.deleteItemAsync(WORKSPACE_ACCESS_TOKEN_KEY),
       SecureStore.deleteItemAsync(SESSION_KIND_KEY),
       SecureStore.deleteItemAsync(CONSUMER_USER_KEY),
@@ -132,6 +154,7 @@ export const useAuthStore = create<AuthState>((set) => ({
       user: null,
       consumerUser: null,
       sessionKind: null,
+      mfaEnrollmentToken: null,
       twoFactorChallenge: null,
       offlineSnapshot: null,
     });

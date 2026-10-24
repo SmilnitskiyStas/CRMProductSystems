@@ -1,3 +1,4 @@
+import { requestMfaCode } from '@/features/auth/mfaPrompt';
 import axios, {
   type AxiosError,
   type InternalAxiosRequestConfig,
@@ -7,11 +8,15 @@ import {
   getSessionEpoch,
   terminateSession,
   updateInMemoryWorkspaceAccessToken,
+  terminatePersonalSession,
+  withSessionPersistence,
 } from '@/features/auth/session';
+import { useAuthStore } from '@/features/auth/store';
 
 const BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:5000/api';
 const WORKSPACE_ACCESS_TOKEN_KEY = 'workspace_access_token';
 const PERSONAL_ACCESS_TOKEN_KEY = 'personal_access_token';
+const PERSONAL_REFRESH_TOKEN_KEY = 'personal_refresh_token';
 export const API_TIMEOUT_MS = 15_000;
 
 export function resolveApiAssetUrl(path: string | null | undefined): string | null {
@@ -26,6 +31,7 @@ export function resolveApiAssetUrl(path: string | null | undefined): string | nu
 
 type RetryableRequestConfig = InternalAxiosRequestConfig & {
   _retry?: boolean;
+  _mfaRetry?: boolean;
 };
 
 let refreshPromise: Promise<string> | null = null;
@@ -60,9 +66,15 @@ function isPublicAuthRequest(config: RetryableRequestConfig | undefined): boolea
   return [
     '/auth/login',
     '/auth/2fa/verify',
+    '/auth/mfa-enrollment/setup',
+    '/auth/mfa-enrollment/enable',
+    '/auth/2fa/step-up',
     '/auth/refresh',
     '/consumer-auth/login',
     '/consumer-auth/register',
+    '/consumer-auth/refresh',
+    '/auth/forgot-password',
+    '/auth/reset-password',
     '/mobile-auth/login',
     '/mobile-auth/register',
   ].some((path) => url.endsWith(path));
@@ -87,6 +99,28 @@ async function requestRefreshedAccessToken(): Promise<string> {
   return refreshPromise;
 }
 
+let mfaPromise: Promise<string> | null = null;
+function confirmRecentMfa(): Promise<string> {
+  if (!mfaPromise) {
+    const epoch = getSessionEpoch();
+    const before = useAuthStore.getState().workspaceAccessToken;
+    mfaPromise = (async () => {
+      const code = await requestMfaCode();
+      if (!code) throw new Error('MFA_CONFIRMATION_CANCELLED');
+      if (epoch !== getSessionEpoch() || before !== useAuthStore.getState().workspaceAccessToken) throw new Error('SESSION_CHANGED_DURING_MFA');
+      const { data } = await apiClient.post<{ accessToken: string }>('/auth/2fa/step-up', { code });
+      await withSessionPersistence(async () => {
+        if (epoch !== getSessionEpoch() || before !== useAuthStore.getState().workspaceAccessToken) throw new Error('SESSION_CHANGED_DURING_MFA');
+        await SecureStore.setItemAsync(WORKSPACE_ACCESS_TOKEN_KEY, data.accessToken);
+        if (epoch !== getSessionEpoch()) throw new Error('SESSION_CHANGED_DURING_MFA');
+        updateInMemoryWorkspaceAccessToken(data.accessToken);
+      });
+      return data.accessToken;
+    })().finally(() => { mfaPromise = null; });
+  }
+  return mfaPromise;
+}
+
 function isTerminalRefreshFailure(error: unknown): boolean {
   if ((error as Error)?.message === 'REFRESH_TOKEN_MISSING') return true;
   const status = (error as AxiosError)?.response?.status;
@@ -97,10 +131,26 @@ apiClient.interceptors.response.use(
   (response) => response,
   async (error: AxiosError) => {
     const original = error.config as RetryableRequestConfig | undefined;
+    if (error.response?.status === 403 && (error.response.data as { code?: string })?.code === 'mfa_step_up_required'
+        && original && !original._mfaRetry && hasBearerToken(original)) {
+      original._mfaRetry = true;
+      const epoch = getSessionEpoch();
+      const before = await SecureStore.getItemAsync(WORKSPACE_ACCESS_TOKEN_KEY);
+      if (`Bearer ${before}` !== original.headers.Authorization) return Promise.reject(error);
+      try {
+        const token = await confirmRecentMfa();
+        if (epoch !== getSessionEpoch()) return Promise.reject(error);
+        original.headers.Authorization = `Bearer ${token}`;
+        return apiClient(original);
+      } catch (confirmationError) { return Promise.reject(confirmationError); }
+    }
     const isAuthenticatedUnauthorized =
       error.response?.status === 401 &&
       hasBearerToken(original) &&
       !isPublicAuthRequest(original);
+
+    if (isAuthenticatedUnauthorized && `Bearer ${await SecureStore.getItemAsync(WORKSPACE_ACCESS_TOKEN_KEY)}` !== original?.headers.Authorization)
+      return Promise.reject(error); // The response belongs to a previous login/refresh.
 
     if (isAuthenticatedUnauthorized && original?._retry) {
       await terminateSession();
@@ -123,8 +173,15 @@ apiClient.interceptors.response.use(
         throw new Error('SESSION_TERMINATED_DURING_REFRESH');
       }
 
-      await SecureStore.setItemAsync(WORKSPACE_ACCESS_TOKEN_KEY, accessToken);
-      updateInMemoryWorkspaceAccessToken(accessToken);
+      await withSessionPersistence(async () => {
+        if (requestEpoch !== getSessionEpoch()) throw new Error('SESSION_TERMINATED_DURING_REFRESH');
+        const current = await SecureStore.getItemAsync(WORKSPACE_ACCESS_TOKEN_KEY);
+        if (`Bearer ${current}` !== original.headers.Authorization && current !== accessToken)
+          throw new Error('SESSION_CHANGED_DURING_REFRESH');
+        await SecureStore.setItemAsync(WORKSPACE_ACCESS_TOKEN_KEY, accessToken);
+        if (requestEpoch !== getSessionEpoch()) throw new Error('SESSION_TERMINATED_DURING_REFRESH');
+        updateInMemoryWorkspaceAccessToken(accessToken);
+      });
       original.headers.Authorization = `Bearer ${accessToken}`;
       return apiClient(original);
     } catch (refreshError) {
@@ -144,13 +201,8 @@ apiClient.interceptors.response.use(
 
 /**
  * Personal-scoped client (TASK-497) — the consumer loyalty wallet API surface only
- * (memberships, QR/code, history, join-program). Attaches the consumer JWT. No
- * refresh-and-retry: the backend issues no refresh token for a personal/consumer session
- * (see ConsumerAuthService.cs's "no 2FA/refresh-token flow" note) — a 401 here just
- * propagates to the caller, same as any other failed request. This is what structurally
- * guarantees the consumer JWT is never used for workspace API calls and vice versa: the
- * scoping is per-module (which client a feature's api/ file imports), not a runtime flag
- * that could drift out of sync with whatever screen is currently focused.
+ * (memberships, QR/code, history, join-program). Uses only personal access/refresh
+ * proofs. Consumer refresh never falls back to a workspace cookie or staff identity.
  */
 export const personalApiClient = axios.create({
   baseURL: BASE_URL,
@@ -164,4 +216,48 @@ personalApiClient.interceptors.request.use(async (config) => {
     config.headers.Authorization = `Bearer ${token}`;
   }
   return config;
+});
+
+let personalRefreshPromise: Promise<string> | null = null;
+
+function refreshPersonalAccessToken(): Promise<string> {
+  if (personalRefreshPromise) return personalRefreshPromise;
+  const epoch = getSessionEpoch();
+  personalRefreshPromise = (async () => {
+    const proof = await SecureStore.getItemAsync(PERSONAL_REFRESH_TOKEN_KEY);
+    if (!proof) throw new Error('REFRESH_TOKEN_MISSING');
+    const { data } = await axios.post<{ accessToken?: string; refreshToken?: string }>(
+      `${BASE_URL}/consumer-auth/refresh`, { refreshToken: proof }, { timeout: API_TIMEOUT_MS, withCredentials: false });
+    if (!data.accessToken || !data.refreshToken) throw new Error('REFRESH_TOKEN_MISSING');
+    await withSessionPersistence(async () => {
+      if (epoch !== getSessionEpoch()) throw new Error('SESSION_TERMINATED_DURING_REFRESH');
+      if (await SecureStore.getItemAsync(PERSONAL_REFRESH_TOKEN_KEY) !== proof) throw new Error('SESSION_CHANGED_DURING_REFRESH');
+      await SecureStore.setItemAsync(PERSONAL_REFRESH_TOKEN_KEY, data.refreshToken!);
+      await SecureStore.setItemAsync(PERSONAL_ACCESS_TOKEN_KEY, data.accessToken!);
+      if (epoch !== getSessionEpoch()) throw new Error('SESSION_TERMINATED_DURING_REFRESH');
+      useAuthStore.setState({ personalAccessToken: data.accessToken! });
+    });
+    return data.accessToken;
+  })().finally(() => { personalRefreshPromise = null; });
+  return personalRefreshPromise;
+}
+
+personalApiClient.interceptors.response.use(response => response, async (error: AxiosError) => {
+  const original = error.config as RetryableRequestConfig | undefined;
+  if (error.response?.status !== 401 || !hasBearerToken(original) || isPublicAuthRequest(original) || !original)
+    return Promise.reject(error);
+  if (`Bearer ${await SecureStore.getItemAsync(PERSONAL_ACCESS_TOKEN_KEY)}` !== original.headers.Authorization)
+    return Promise.reject(error);
+  if (original._retry) { await terminatePersonalSession(); return Promise.reject(error); }
+  original._retry = true;
+  const epoch = getSessionEpoch();
+  try {
+    const token = await refreshPersonalAccessToken();
+    if (epoch !== getSessionEpoch()) throw new Error('SESSION_TERMINATED_DURING_REFRESH');
+    original.headers.Authorization = `Bearer ${token}`;
+    return personalApiClient(original);
+  } catch (refreshError) {
+    if (epoch === getSessionEpoch() && isTerminalRefreshFailure(refreshError)) await terminatePersonalSession();
+    return Promise.reject(refreshError);
+  }
 });

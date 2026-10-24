@@ -11,6 +11,8 @@ x-api-env: &api-env
   ASPNETCORE_ENVIRONMENT: Production
   ConnectionStrings__DefaultConnection: ${DATABASE_URL}
   Jwt__Secret: ${JWT_SECRET}
+  WorkerAuth__Email: ${WORKER_API_EMAIL:-}
+  WorkerAuth__AllowHostBridge: 'true'
   Jwt__Issuer: ${JWT_ISSUER:-shelfguard}
   Jwt__Audience: ${JWT_AUDIENCE:-shelfguard}
   Cors__Origins: ${Cors__Origins:-http://localhost:3000}
@@ -61,6 +63,7 @@ services:
     restart: unless-stopped
     volumes:
       - shelfguard_api_uploads:/app/wwwroot/uploads
+      - shelfguard_api_private_uploads:/app/private-uploads
     # TASK-754: loopback-ONLY port for worker -> api_core internal job calls (/api/internal/*,
     # blocked at the gateway). Deliberately 127.0.0.1 (unlike the gateway's public 5100): the
     # provider edge cannot reach it, only processes on this host (the network_mode:host worker).
@@ -93,6 +96,7 @@ services:
         condition: service_healthy
     volumes:
       - shelfguard_api_uploads:/app/wwwroot/uploads
+      - shelfguard_api_private_uploads:/app/private-uploads
     environment:
       <<: *api-env
       API_ROLE: consumer
@@ -111,6 +115,7 @@ services:
         condition: service_healthy
     volumes:
       - shelfguard_api_uploads:/app/wwwroot/uploads
+      - shelfguard_api_private_uploads:/app/private-uploads
     environment:
       <<: *api-env
       API_ROLE: provider
@@ -216,3 +221,4 @@ volumes:
   shelfguard_redis_data:
   shelfguard_mosquitto_data:
   shelfguard_api_uploads:
+  shelfguard_api_private_uploads:

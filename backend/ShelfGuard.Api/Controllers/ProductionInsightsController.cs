@@ -12,7 +12,7 @@ namespace ShelfGuard.Api.Controllers;
 /// </summary>
 [ApiController]
 [Route("api/production")]
-[Authorize]
+[Authorize(Policy = AppPolicies.ProductionView)]
 [RequireModule("production")]
 public sealed class ProductionInsightsController : ControllerBase
 {

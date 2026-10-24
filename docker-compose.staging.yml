@@ -19,6 +19,8 @@ x-api-env: &api-env
   ASPNETCORE_ENVIRONMENT: Staging
   ConnectionStrings__DefaultConnection: ${DATABASE_URL}
   Jwt__Secret: ${JWT_SECRET}
+  WorkerAuth__Email: ${WORKER_API_EMAIL:-}
+  WorkerAuth__AllowHostBridge: 'true'
   Jwt__Issuer: ${JWT_ISSUER:-shelfguard}
   Jwt__Audience: ${JWT_AUDIENCE:-shelfguard}
   Cors__Origins: ${Cors__Origins:-http://localhost:3101}
@@ -92,6 +94,7 @@ services:
       - '127.0.0.1:5111:5100'
     volumes:
       - shelfguard_staging_api_uploads:/app/wwwroot/uploads
+      - shelfguard_staging_api_private_uploads:/app/private-uploads
     environment:
       <<: *api-env
       API_ROLE: core
@@ -111,6 +114,7 @@ services:
         condition: service_healthy
     volumes:
       - shelfguard_staging_api_uploads:/app/wwwroot/uploads
+      - shelfguard_staging_api_private_uploads:/app/private-uploads
     environment:
       <<: *api-env
       API_ROLE: consumer
@@ -125,6 +129,7 @@ services:
         condition: service_healthy
     volumes:
       - shelfguard_staging_api_uploads:/app/wwwroot/uploads
+      - shelfguard_staging_api_private_uploads:/app/private-uploads
     environment:
       <<: *api-env
       API_ROLE: provider
@@ -136,6 +141,7 @@ services:
       dockerfile: Dockerfile
       args:
         NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:5101}
+        ALLOW_LOCAL_API_BUILD: 'true'
         NEXT_PUBLIC_GA_ID: ${NEXT_PUBLIC_GA_ID:-}
     container_name: shelfguard_staging_web
     restart: unless-stopped
@@ -203,3 +209,4 @@ volumes:
   shelfguard_staging_redis_data:
   shelfguard_staging_mosquitto_data:
   shelfguard_staging_api_uploads:
+  shelfguard_staging_api_private_uploads:

@@ -1379,6 +1379,9 @@
       "profile": "Profile",
       "settings": "Settings",
       "logout": "Log out",
+      "logoutAll": "Log out on all devices",
+      "logoutAllConfirm": "End all sessions for this account? You will need to sign in again on every device.",
+      "logoutAllFailed": "Could not confirm sign-out on all devices. Please try again.",
       "accountInfo": "Account information"
     },
     "storeSelector": {
@@ -1441,15 +1444,45 @@
       "temporaryPasswordExpiredError": "Your temporary password has expired. Please request a new one.",
       "forgotPasswordLink": "Forgot password?",
       "forgotPasswordTitle": "Reset your password",
-      "forgotPasswordDescription": "Enter the email you used to sign up and we'll send you a temporary password.",
-      "forgotPasswordSubmitButton": "Send temporary password",
+      "forgotPasswordDescription": "Enter your account email and we'll send you a one-time password reset link. Your current password will keep working until you confirm the reset.",
+      "forgotPasswordSubmitButton": "Send reset link",
+      "resetPasswordDescription": "Use at least 12 characters, including a letter and a number. Your existing MFA protection will remain enabled.",
+      "resetPasswordFailed": "Could not reset the password. Check the password requirements and try again, or request a new link if this one has expired or was already used.",
+      "resetPasswordInvalid": "This reset link is missing or invalid. Request a new link.",
+      "resetPasswordLoading": "Checking reset link…",
+      "resetPasswordMismatch": "The passwords do not match.",
+      "resetPasswordNewLabel": "New password",
+      "resetPasswordRepeatLabel": "Repeat new password",
+      "resetPasswordRequestNew": "Request a new reset link",
+      "resetPasswordSaving": "Saving…",
+      "resetPasswordSubmit": "Save new password",
+      "resetPasswordSuccess": "Your password has been changed. Sign in with your new password and complete MFA if enabled.",
+      "resetPasswordTitle": "Choose a new password",
+      "resetPasswordWeak": "Use at least 12 characters, including a letter and a number.",
       "forgotPasswordSending": "Sending…",
-      "forgotPasswordSuccessMessage": "If that email exists in our system, we've sent a temporary password to it. Sign in with it, then set a new password.",
+      "forgotPasswordSuccessMessage": "If that email belongs to an active account, a reset link has been sent. The link expires in 15 minutes. Your current password has not changed.",
       "somethingWentWrongError": "Something went wrong. Please try again later.",
       "backToSignIn": "Back to sign in",
       "temporaryPasswordBanner": {
         "message": "Your password is temporary and valid until {expiresAt}.",
         "actionLabel": "Set a new password"
+      },
+      "mfaReminder": {
+        "message": "For better protection of your data, we recommend enabling two-factor authentication in your account settings.",
+        "action": "Security settings"
+      },
+      "matrixMfa": {
+        "retryAfterSetup": "After setting up MFA, retry the action.",
+        "enrollment": "Your role requires two-factor authentication. Add this account to your authenticator app.",
+        "saveCodes": "Save these one-time recovery codes in a safe place. They will not be shown again.",
+        "saved": "Codes saved — continue",
+        "setup": "Set up authenticator",
+        "manualKey": "Or enter this key manually:",
+        "code": "6-digit authenticator code",
+        "confirm": "Confirm",
+        "back": "Cancel",
+        "stepUp": "Confirm this action with MFA",
+        "codeOrRecovery": "Authenticator or recovery code"
       }
     },
     "ui": {
@@ -1550,6 +1583,8 @@
         "passwordLabel": "Password",
         "disableCodeLabel": "2FA code or recovery code",
         "disableCodePlaceholder": "123456 or XXXX-XXXX",
+        "tooManyAttemptsError": "Too many failed attempts. Try again in 15 minutes.",
+        "disableCodeHint": "A code already used to sign in or confirm an action cannot be reused. Wait for a new authenticator code or enter an unused recovery code.",
         "passwordRequiredError": "Enter your password",
         "codeRequiredError": "Enter the code from the app or a recovery code",
         "invalidPasswordError": "Invalid password",
@@ -1854,7 +1889,7 @@
       },
       "itemImages": {
         "viewTitle": "Product photos",
-        "hint":"Add 2–3 angles — AI compares the shelf with these photos",
+        "hint": "Add 2–3 angles — AI compares the shelf with these photos",
         "empty": "No photos yet",
         "loading": "Loading photos…",
         "add": "Add photo",
@@ -2392,7 +2427,16 @@
         "validationRequired": "Name is required",
         "timeZoneLabel": "Time zone",
         "timeZoneHelp": "Defines the store's \"local time\": promotion schedules, shifts, reports.",
-        "timeZones": {"Europe_Kyiv": "Kyiv (UTC+2/+3)", "Europe_Warsaw": "Warsaw (UTC+1/+2)", "Europe_Berlin": "Berlin (UTC+1/+2)", "Europe_London": "London (UTC+0/+1)", "Europe_Chisinau": "Chisinau (UTC+2/+3)", "Europe_Vilnius": "Vilnius (UTC+2/+3)", "Asia_Tbilisi": "Tbilisi (UTC+4)", "UTC": "UTC"},
+        "timeZones": {
+          "Europe_Kyiv": "Kyiv (UTC+2/+3)",
+          "Europe_Warsaw": "Warsaw (UTC+1/+2)",
+          "Europe_Berlin": "Berlin (UTC+1/+2)",
+          "Europe_London": "London (UTC+0/+1)",
+          "Europe_Chisinau": "Chisinau (UTC+2/+3)",
+          "Europe_Vilnius": "Vilnius (UTC+2/+3)",
+          "Asia_Tbilisi": "Tbilisi (UTC+4)",
+          "UTC": "UTC"
+        },
         "regionLabel": "Region / city",
         "regionPlaceholder": "Not specified",
         "latitudeLabel": "Latitude",
@@ -6690,6 +6734,10 @@
         "footerNote": "Modules are activated or deactivated by the platform provider. Contact support if you need to change your tenant's module set."
       },
       "userSettingsPage": {
+        "accountSecurityLabel": "Account security",
+        "accountSecuritySubtitle": "Password and two-factor authentication",
+        "notificationsLabel": "Notifications",
+        "notificationsSubtitle": "Channels for personal notifications",
         "personalLabel": "PERSONAL SETTINGS",
         "profileLabel": "Personal information",
         "profileSubtitle": "Your name and contact information",

@@ -371,6 +371,7 @@ public sealed class NotificationService : INotificationService
         "access.temporary_expiring_soon",
         "access.temporary_expired",
         "auth.password_reset_requested",
+        "auth.password_reset_link_requested",
         // AI shelf-photo check found missing/low items (worker sends the alert from shelf_scans.AlertPending).
         "shelf.empty",
         // Promo item is running but does not sell while the store holds stock (worker promo-no-sales job).

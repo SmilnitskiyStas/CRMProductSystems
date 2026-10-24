@@ -1,0 +1,7 @@
+.fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 180px), 1fr));
+  gap: 16px;
+  margin-bottom: 16px;
+}
+.fields > div { min-width: 0; }

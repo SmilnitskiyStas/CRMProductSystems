@@ -125,6 +125,18 @@ public sealed class ConsumerLoyaltyController : ControllerBase
         return Ok(history);
     }
 
+    [HttpGet("{tenantId:guid}/purchases")]
+    public async Task<IActionResult> GetPurchases(
+        Guid tenantId, [FromQuery] Guid? storeId = null, [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 50, CancellationToken ct = default)
+    {
+        var consumerId = ResolveConsumerAccountId();
+        if (consumerId is null) return Forbid();
+        var (purchases, error, statusCode) = await _loyalty.GetPurchasesAsync(
+            consumerId.Value, tenantId, storeId, page, pageSize, ct);
+        return error is not null ? StatusCode(statusCode ?? 400, new { error }) : Ok(purchases);
+    }
+
     /// <summary>TASK-615: current tier, composite score, and progress toward the next rung.</summary>
     [HttpGet("{tenantId:guid}/tiers")]
     [ProducesResponseType(typeof(LoyaltyTierProgressDto), StatusCodes.Status200OK)]

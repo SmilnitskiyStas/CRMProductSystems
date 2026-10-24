@@ -1,3 +1,4 @@
+import { canWorkPermission } from '@/lib/workPermissions';
 import { AppRoles } from '@/lib/roles';
 import type { NavigationContext, NavigationDecision } from './types';
 
@@ -59,9 +60,9 @@ export const ROUTE_RULES: readonly RouteRule[] = [
   { prefix: MOBILE_ROUTES.schedules, roles: TENANT_STAFF, tab: 'schedules' },
   { prefix: MOBILE_ROUTES.marketplaceOrders, roles: [AppRoles.Storekeeper, ...MANAGERS], module: 'marketplace', tab: 'marketplace' },
   { prefix: MOBILE_ROUTES.marketplace, roles: TENANT_STAFF, module: 'marketplace', tab: 'marketplace' },
-  { prefix: MOBILE_ROUTES.production, roles: [AppRoles.Storekeeper, ...MANAGERS], module: 'production', tab: 'production', businessTypes: ['restaurant', 'production'] },
+  { prefix: MOBILE_ROUTES.production, roles: MANAGERS, capability: 'production.view', module: 'production', tab: 'production', businessTypes: ['restaurant', 'production'] },
   { prefix: MOBILE_ROUTES.autoService, roles: MANAGERS, module: 'auto_service', tab: 'auto_service', businessTypes: ['auto_service'] },
-  { prefix: MOBILE_ROUTES.aiAssistant, roles: MANAGERS, tab: 'analytics', module: 'inventory' },
+  { prefix: MOBILE_ROUTES.aiAssistant, roles: MANAGERS, capability: 'ai_assistant.use', tab: 'analytics', module: 'inventory' },
   { prefix: MOBILE_ROUTES.dashboard, roles: SHELL_ROLES },
 ] as const;
 
@@ -73,8 +74,10 @@ function matches(value: string, prefix: string) {
 export function navigationDecision(route: string, context: NavigationContext): NavigationDecision {
   const rule = ROUTE_RULES.find((candidate) => matches(route, candidate.prefix));
   if (!rule || !context.user) return { allowed: false, reason: 'access_denied' };
+  if ((rule.prefix === MOBILE_ROUTES.production && !canWorkPermission(context.user, 'production.view'))
+      || (rule.prefix === MOBILE_ROUTES.aiAssistant && !canWorkPermission(context.user, 'ai_assistant.use'))) return { allowed: false, reason: 'access_denied' };
   const roleAllowed = rule.roles?.includes(context.user.role) ?? false;
-  const capabilityAllowed = Boolean(rule.capability && context.user.capabilities.includes(rule.capability));
+  const capabilityAllowed = Boolean(rule.capability && (context.user.capabilities.includes(rule.capability) || context.user.permissions[rule.capability] === true));
   const tabAllowed = Boolean(rule.tab && context.user.tabs.includes(rule.tab));
   if (!roleAllowed && !capabilityAllowed && !tabAllowed) {
     return { allowed: false, reason: 'access_denied' };
