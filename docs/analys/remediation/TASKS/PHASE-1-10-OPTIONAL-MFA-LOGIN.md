@@ -26,3 +26,5 @@ Production Linux web/API canaries, verified backup, per-service health gates and
 No new database migrations were applied. Existing ingress configuration was identical, so it required no replacement or reload. Previous release images and the verified pre-deployment backup remain available. Disposable test/canary containers were removed. User/device end-to-end sign-in was exercised with synthetic identities in isolated HTTP/RLS tests; no real customer login was performed. Mobile source/UI checks pass, but mobile binaries were not distributed.
 
 PR stays open for review and is not merged into main.
+
+Follow-up: [PHASE-1-11](PHASE-1-11-PUBLIC-API-ORIGIN.md) corrected the frontend build API origin and supersedes this report for the current web image. API/worker and the approved optional-MFA policy remain unchanged.
