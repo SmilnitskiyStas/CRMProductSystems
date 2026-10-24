@@ -132,22 +132,36 @@ public sealed class SecurityHttpAcceptanceTests : IAsyncLifetime
     }
 
     [RecoveryPostgresFact]
-    public async Task Password_enrollment_OTP_cookie_refresh_and_logout_flow_works_under_RLS()
+    public async Task Password_login_optional_settings_enrollment_OTP_cookie_refresh_and_logout_work_under_RLS()
     {
         var (_, user, _, _) = await Seed(); await using var app = await Server(); using var client = Client(app);
         var loginResponse = await Post(client, "/api/auth/login", new { user.Email, password = Password }); var login = await Json(loginResponse);
-        Assert.True(login.GetProperty("requiresMfaEnrollment").GetBoolean()); Assert.False(loginResponse.Headers.Contains("Set-Cookie"));
-        var proof = login.GetProperty("enrollmentToken").GetString()!;
-        Bearer(client, proof); Assert.Equal(HttpStatusCode.Unauthorized, (await client.GetAsync("/api/auth/me")).StatusCode); client.DefaultRequestHeaders.Authorization = null;
-        var setup = await Json(await Post(client, "/api/auth/mfa-enrollment/setup", new { enrollmentToken = proof }));
-        var invalid = await Post(client, "/api/auth/mfa-enrollment/enable", new { enrollmentToken = proof, code = "invalid" });
-        Assert.Equal(HttpStatusCode.Unauthorized, invalid.StatusCode); Assert.False(invalid.Headers.Contains("Set-Cookie"));
-        var enabledResponse = await Post(client, "/api/auth/mfa-enrollment/enable", new { enrollmentToken = proof, code = Code(setup.GetProperty("secret").GetString()!) });
+        Assert.False(login.TryGetProperty("requiresMfaEnrollment", out _));
+        Assert.False(login.GetProperty("user").GetProperty("twoFactorEnabled").GetBoolean());
+        var initialAccess = Token(login); var initialCookie = Cookie(loginResponse);
+        Bearer(client, initialAccess); Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/api/auth/me")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/api/production/orders")).StatusCode);
+        client.DefaultRequestHeaders.Add("Cookie", initialCookie);
+        var initialRefreshResponse = await client.PostAsync("/api/auth/refresh", null);
+        var initialRefresh = await Json(initialRefreshResponse); Cookie(initialRefreshResponse);
+        Assert.DoesNotContain(new System.IdentityModel.Tokens.Jwt.JwtSecurityTokenHandler().ReadJwtToken(Token(initialRefresh)).Claims, c => c.Type == "mfa_at");
+        Bearer(client, Token(initialRefresh));
+        var critical = await client.PostAsync($"/api/production/orders/{Guid.NewGuid()}/complete", null);
+        var criticalBody = await Json(critical, HttpStatusCode.Forbidden);
+        Assert.Equal("mfa_step_up_required", criticalBody.GetProperty("code").GetString());
+        var setup = await Json(await Post(client, "/api/auth/2fa/setup", new { }));
+        var invalid = await Post(client, "/api/auth/2fa/enable", new { code = "invalid" });
+        Assert.Equal(HttpStatusCode.BadRequest, invalid.StatusCode); Assert.False(invalid.Headers.Contains("Set-Cookie"));
+        var enabledResponse = await Post(client, "/api/auth/2fa/enable", new { code = Code(setup.GetProperty("secret").GetString()!) });
         var enabled = await Json(enabledResponse); var cookie = Cookie(enabledResponse); Assert.Equal(8, enabled.GetProperty("recoveryCodes").GetArrayLength());
         Assert.Contains("no-store", string.Join(',', enabledResponse.Headers.CacheControl?.ToString() ?? ""));
         var access = Token(enabled); Bearer(client, access); Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/api/auth/me")).StatusCode);
         Assert.Equal(HttpStatusCode.BadRequest, (await Post(client, "/api/auth/2fa/disable", new { password = Password, code = enabled.GetProperty("recoveryCodes")[0].GetString() })).StatusCode);
-        client.DefaultRequestHeaders.Add("Cookie", cookie); var refreshedResponse = await client.PostAsync("/api/auth/refresh", null); var refreshed = await Json(refreshedResponse); Cookie(refreshedResponse);
+        Bearer(client, initialAccess); Assert.Equal(HttpStatusCode.Unauthorized, (await client.GetAsync("/api/auth/me")).StatusCode);
+        Bearer(client, access);
+        var nextLogin = await Login(client, user); Assert.True(nextLogin.GetProperty("requiresTwoFactor").GetBoolean());
+        Assert.False(nextLogin.TryGetProperty("accessToken", out _));
+        client.DefaultRequestHeaders.Remove("Cookie"); client.DefaultRequestHeaders.Add("Cookie", cookie); var refreshedResponse = await client.PostAsync("/api/auth/refresh", null); var refreshed = await Json(refreshedResponse); Cookie(refreshedResponse);
         Assert.Equal(new System.IdentityModel.Tokens.Jwt.JwtSecurityTokenHandler().ReadJwtToken(access).Claims.Single(c => c.Type == "mfa_at").Value,
             new System.IdentityModel.Tokens.Jwt.JwtSecurityTokenHandler().ReadJwtToken(Token(refreshed)).Claims.Single(c => c.Type == "mfa_at").Value);
         Bearer(client, Token(refreshed)); Assert.Equal(HttpStatusCode.NoContent, (await client.PostAsync("/api/auth/logout-all", null)).StatusCode);
@@ -171,8 +185,8 @@ public sealed class SecurityHttpAcceptanceTests : IAsyncLifetime
     [RecoveryPostgresFact]
     public async Task Worker_grant_preserves_human_MFA_and_is_route_tenant_and_live_identity_bound_under_RLS()
     {
-        var (_, user, _, _) = await Seed(); await using var app = await Server(user.Email); using var client = Client(app);
-        var human = await Login(client, user); Assert.True(human.GetProperty("requiresMfaEnrollment").GetBoolean());
+        var (_, user, _, _) = await Seed(mfa: true); await using var app = await Server(user.Email); using var client = Client(app);
+        var human = await Login(client, user); Assert.True(human.GetProperty("requiresTwoFactor").GetBoolean());
         var issued = await Post(client, "/api/internal/worker-session", new { user.Email, password = Password });
         var grant = await Json(issued); Assert.False(issued.Headers.Contains("Set-Cookie"));
         Bearer(client, Token(grant));

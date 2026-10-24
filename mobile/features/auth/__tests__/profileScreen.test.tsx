@@ -5,6 +5,9 @@ import { useAuthStore } from '../store';
 const mockNavigate = jest.fn();
 const mockReplace = jest.fn();
 
+jest.mock('../components/MfaSetupPanel', () => ({ MfaSetupPanel: () => {
+  const { Text } = require('react-native'); return <Text>Authenticator settings panel</Text>;
+} }));
 jest.mock('expo-router', () => ({ useRouter: () => ({ navigate: mockNavigate, replace: mockReplace }) }));
 jest.mock('@expo/vector-icons', () => ({ Ionicons: 'Ionicons' }));
 jest.mock('../store', () => ({ useAuthStore: jest.fn() }));
@@ -52,4 +55,12 @@ test('uses explicit placeholders when account details are unavailable', async ()
   setUser('', '', '');
   const screen = await render(<ProfileScreen />);
   expect(screen.getAllByText('Не вказано')).toHaveLength(3);
+});
+
+test('opens MFA setup only after choosing the account settings action', async () => {
+  setUser('network_manager');
+  const screen = await render(<ProfileScreen />);
+  expect(screen.queryByText('Authenticator settings panel')).toBeNull();
+  await fireEvent.press(screen.getByText('Підключити двофакторну автентифікацію'));
+  expect(screen.getByText('Authenticator settings panel')).toBeOnTheScreen();
 });

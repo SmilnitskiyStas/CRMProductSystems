@@ -3,7 +3,11 @@
 Дата: 23.10.2026. **Власник дозволив застосування матриці командою «продовжи над Застосувати матрицю доступу».**
 Початкові таблиці нижче є прийнятою основою локальної реалізації PHASE-1-07. Фактична реалізація та межі — [TASKS/PHASE-1-07-ACCESS-MATRIX.md](TASKS/PHASE-1-07-ACCESS-MATRIX.md). Deployment потребує окремого operational scope.
 
-## Поточна реалізація
+## Уточнення власника — 24.10.2026
+
+Власник явно підтвердив: «Так, для всіх ролей без налаштованої MFA». Початковий enrollment gate нижче скасовано для звичайного входу, refresh та доступу до workspace, включно адміністраторами й менеджерами. Користувач отримує неблокувальне нагадування з переходом у налаштування. Якщо MFA вже підключена, OTP при вході та verified session залишаються обов’язковими. MFA для критичних операцій і чинне обмеження вимкнення MFA для привілейованих акаунтів збережено. Деталі й статус: [PHASE-1-10](TASKS/PHASE-1-10-OPTIONAL-MFA-LOGIN.md).
+
+## Реалізація початкової матриці (до уточнення PHASE-1-10)
 
 - Role/capability catalog: `TenantRoleCapabilities`; mandatory MFA та sensitive grants: `AccessMatrixPolicy`.
 - `WorkAccessContext` читає live role/overrides/templates/grants/locations; production та AI policies не покладаються на старі JWT capabilities.
@@ -11,7 +15,7 @@
 - MFA enrollment proof окремий від bearer audience; повний workspace login тільки після OTP. Mandatory/TOTP legacy sessions без verified time потребують повторного входу. Step-up — 5 хвилин, refresh не оновлює цей час.
 - Home `store_id` не замінює live `user_locations`. Network/store managers обмежені assigned locations; enterprise admin має tenant-wide scope.
 
-## 1. Обов'язкова MFA
+## 1. Початкова вимога MFA (звичайний вхід змінено в PHASE-1-10)
 
 Прийнятий початковий policy — захист усіх управлінських ролей без примусової MFA для звичайного consumer/POS PIN входу.
 

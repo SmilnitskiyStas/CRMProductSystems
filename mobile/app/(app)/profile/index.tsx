@@ -1,5 +1,7 @@
+import { MfaSetupPanel } from "@/features/auth/components/MfaSetupPanel";
 import {
   View,
+  Modal,
   Text,
   TouchableOpacity,
   ActivityIndicator,
@@ -31,6 +33,7 @@ const ROLE_LABELS: Record<string, string> = {
 export default function ProfileScreen() {
   const router = useRouter();
   const user = useAuthStore((s) => s.user);
+  const [mfaSetupOpen, setMfaSetupOpen] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
 
   const handleLogout = (all = false) => {
@@ -94,6 +97,11 @@ export default function ProfileScreen() {
 
   return (
     <SafeAreaView className="flex-1 bg-gray-50">
+      <Modal visible={mfaSetupOpen} animationType="slide" onRequestClose={() => setMfaSetupOpen(false)}>
+        <SafeAreaView className="flex-1 bg-white">
+          {mfaSetupOpen && <MfaSetupPanel onClose={() => setMfaSetupOpen(false)} />}
+        </SafeAreaView>
+      </Modal>
       <ScrollView showsVerticalScrollIndicator={false}>
         <View className="px-4 pt-4 pb-2 flex-row items-center gap-3">
           <TouchableOpacity
@@ -132,6 +140,10 @@ export default function ProfileScreen() {
             Налаштування
           </Text>
           <View className="bg-white rounded-2xl overflow-hidden">
+            <MenuItem icon="shield-checkmark-outline" label={user?.twoFactorEnabled ? 'Двофакторна автентифікація підключена' : 'Підключити двофакторну автентифікацію'} onPress={() => {
+              if (user?.twoFactorEnabled) Alert.alert('Захист акаунту', 'Двофакторна автентифікація вже підключена.');
+              else setMfaSetupOpen(true);
+            }} />
             <MenuItem icon="notifications-outline"       label="Сповіщення (Telegram)" onPress={openNotifications} />
             <MenuItem icon="help-circle-outline"         label="Підтримка"              onPress={openSupport} />
             <MenuItem icon="information-circle-outline"  label="Про застосунок"         onPress={openAbout} isLast />

@@ -139,8 +139,8 @@ public sealed class AuthService : IAuthService
         // short-lived challenge for POST /api/auth/2fa/verify.
         if (user.TotpEnabled)
             return new LoginOutcome(null, _jwt.GenerateTwoFactorChallengeToken(user.Id, user.AuthVersion), null);
-        if (await _mfaPolicy.IsRequiredAsync(user, ct))
-            return new LoginOutcome(null, null, null, _jwt.GenerateMfaEnrollmentToken(user.Id, user.AuthVersion));
+        // Enrollment is voluntary for every role. Unenrolled accounts get a normal,
+        // unverified session; sensitive operations still require recent MFA.
 
         var response = await IssueTokensAsync(user, ipAddress, ct);
         return new LoginOutcome(response, null, null);
@@ -194,8 +194,8 @@ public sealed class AuthService : IAuthService
         var user = await _users.GetByIdAsync(existing.UserId, ct);
         if (user is null || !user.IsActive || user.AuthVersion != existing.AuthVersion)
             return (null, "User not found or deactivated.");
-        if ((user.TotpEnabled || await _mfaPolicy.IsRequiredAsync(user, ct)) && (!user.TotpEnabled || existing.MfaVerifiedAt == null))
-            return (null, "MFA enrollment or verification required. Sign in again.");
+        if (user.TotpEnabled && existing.MfaVerifiedAt == null)
+            return (null, "MFA verification required. Sign in again.");
 
         var (newRaw, newHash) = _jwt.GenerateRefreshToken();
         var newToken = RefreshToken.Create(user.Id, newHash, existing.ExpiresAt, existing.SessionId, user.AuthVersion, existing.MfaVerifiedAt);

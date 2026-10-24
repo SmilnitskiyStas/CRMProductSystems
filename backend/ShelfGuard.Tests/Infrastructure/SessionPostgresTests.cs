@@ -130,7 +130,7 @@ public sealed class SessionPostgresTests : IAsyncLifetime
     }
 
     [RecoveryPostgresFact]
-    public async Task Adding_privileged_permission_to_unverified_session_requires_new_MFA_login()
+    public async Task Adding_privileged_permission_does_not_force_enrollment_but_enabling_MFA_invalidates_unverified_sessions()
     {
         var tenant = Tenant.Create("Synthetic", Guid.NewGuid().ToString("N"));
         var user = User.Create(tenant.Id, Guid.NewGuid().ToString("N") + "@synthetic.example", "Synthetic", "hash", "cashier");
@@ -140,6 +140,8 @@ public sealed class SessionPostgresTests : IAsyncLifetime
         using var client = Client(app, Jwt().GenerateAccessToken(user.Id, user.Email, user.Role, tenant.Id, null, sessionId: proof.SessionId));
         Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/protected")).StatusCode);
         await using (var db = Context()) { var current = await db.Users.SingleAsync(u => u.Id == user.Id); current.SetPermissions(new() { ["production.manage"] = true }); await db.SaveChangesAsync(); }
+        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/protected")).StatusCode);
+        await using (var db = Context()) { var current = await db.Users.SingleAsync(u => u.Id == user.Id); current.SetPendingTotpSecret("SYNTHETIC"); current.EnableTotp([]); await db.SaveChangesAsync(); }
         Assert.Equal(HttpStatusCode.Unauthorized, (await client.GetAsync("/protected")).StatusCode);
     }
 

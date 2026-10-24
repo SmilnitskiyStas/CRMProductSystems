@@ -38,7 +38,8 @@ public sealed class AccessSessionValidator(IServiceScopeFactory scopes) : IAcces
         if (session == null) return false;
         if (session.MfaVerifiedAt != null && (!long.TryParse(principal.FindFirstValue("mfa_at"), out var at)
             || at != new DateTimeOffset(DateTime.SpecifyKind(session.MfaVerifiedAt.Value, DateTimeKind.Utc)).ToUnixTimeSeconds())) return false;
-        var required = session.User.TotpEnabled || await scope.ServiceProvider.GetRequiredService<IMfaPolicy>().IsRequiredAsync(session.User, ct);
-        return !required || session.User.TotpEnabled && session.MfaVerifiedAt != null;
+        // Enrollment is voluntary, including for privileged roles. Once enabled,
+        // MFA must have been verified by every session that opens the workspace.
+        return !session.User.TotpEnabled || session.MfaVerifiedAt != null;
     }
 }

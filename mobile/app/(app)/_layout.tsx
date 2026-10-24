@@ -1,3 +1,4 @@
+import { MfaSetupReminder } from "@/features/auth/components/MfaSetupReminder";
 import { Tabs, Redirect, useSegments } from 'expo-router';
 import { useEffect, useRef } from 'react';
 import { useNetInfo } from '@react-native-community/netinfo';
@@ -72,6 +73,8 @@ export default function AppLayout() {
   }
 
   return (
+    <View className="flex-1">
+    <MfaSetupReminder />
     <Tabs
       screenOptions={{
         headerShown: false,
@@ -194,5 +197,6 @@ export default function AppLayout() {
       {/* AI Assistant — hidden route (no tab) */}
       <Tabs.Screen name="ai-assistant" options={{ href: null }} />
     </Tabs>
+    </View>
   );
 }

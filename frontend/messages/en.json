@@ -1467,6 +1467,10 @@
         "message": "Your password is temporary and valid until {expiresAt}.",
         "actionLabel": "Set a new password"
       },
+      "mfaReminder": {
+        "message": "For better protection of your data, we recommend enabling two-factor authentication in your account settings.",
+        "action": "Security settings"
+      },
       "matrixMfa": {
         "retryAfterSetup": "After setting up MFA, retry the action.",
         "enrollment": "Your role requires two-factor authentication. Add this account to your authenticator app.",

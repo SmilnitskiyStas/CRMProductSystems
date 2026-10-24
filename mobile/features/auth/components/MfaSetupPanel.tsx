@@ -21,7 +21,7 @@ export function MfaSetupPanel({ onClose }: { onClose: () => void }) {
   } });
   return <ScrollView contentContainerStyle={{ gap: 16, padding: 16 }}>
     <Text className="text-xl font-bold">Налаштування MFA</Text>
-    <Text>Для цієї дії потрібна двофакторна автентифікація. Після налаштування повторіть дію.</Text>
+    <Text>Підключіть двофакторну автентифікацію для більшого захисту даних.</Text>
     {enable.data ? <>
       <Text>Збережіть одноразові коди відновлення. Повторно їх показано не буде.</Text>
       <Text selectable>{enable.data.recoveryCodes.join('\n')}</Text>

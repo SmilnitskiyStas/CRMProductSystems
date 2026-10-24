@@ -23,3 +23,5 @@ Staging/canary: лише ізольовані synthetic identities; перед �
 PHASE-1-08: shared HTTP security pipeline та pre-auth tenant context реалізовано; 816 local checks PASS. PostgreSQL/full-migration acceptance підготовлено, але PENDING через Docker engine timeout. Наступний крок — `-Suite Http`, потім `-Suite Matrix` після готовності Docker; production/staging gate не пройдено. Деталі: `TASKS/PHASE-1-08-HTTP-RLS-ACCEPTANCE.md`.
 
 24.10.2026: phase-0/phase-1 code deployed as runtime `5917a600`; 1,078 selected checks PASS, full CI acceptance gate PASS, production backup/migrations/health verified. PR #26 open for review. Phase 1 remains IN PROGRESS for device/client/business acceptance and outstanding operational/privacy scope. See `TASKS/PHASE-1-09-SERVER-RELEASE.md`.
+
+24.10.2026: Owner explicitly approved optional MFA enrollment for all roles at ordinary login. PHASE-1-10 changes login/refresh/live session checks and adds a non-blocking settings reminder; configured MFA and critical-operation step-up stay enforced. See TASKS/PHASE-1-10-OPTIONAL-MFA-LOGIN.md for validation and deployment status.
