@@ -55,6 +55,21 @@ jobs:
         with:
           dotnet-version: '8.x'
 
+      # Control-opening tests intentionally use NOWAIT table locks. Background vacuum
+      # is a competing writer, so match the dedicated local acceptance fixture.
+      # This setting affects only the disposable GitHub service, never production.
+      - name: Configure deterministic disposable PostgreSQL maintenance
+        env:
+          PGPASSWORD: crm_dev_password
+        run: |
+          psql -h localhost -p 5435 -U crm -d crm -v ON_ERROR_STOP=1 -c "ALTER SYSTEM SET autovacuum = 'off'"
+          psql -h localhost -p 5435 -U crm -d crm -v ON_ERROR_STOP=1 -c "SELECT pg_reload_conf()"
+          for attempt in $(seq 1 25); do
+            if [ "$(psql -h localhost -p 5435 -U crm -d crm -Atc 'SHOW autovacuum')" = off ]; then exit 0; fi
+            sleep 0.2
+          done
+          exit 1
+
       - name: Restore
         run: dotnet restore
         working-directory: backend
