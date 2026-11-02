@@ -1,3 +1,5 @@
+using System.ComponentModel.DataAnnotations;
+
 namespace ShelfGuard.Application.Features.Auth.Dtos;
 
 public record LoginRequest(string Email, string Password);
@@ -18,8 +20,14 @@ public record LoginResponse(
 public sealed record LoginOutcome(
     LoginResponse? Response,
     string? ChallengeToken,
-    string? Error
+    string? Error,
+    string? EnrollmentToken = null
 );
+
+public sealed record MfaEnrollmentRequest([Required, StringLength(4096)] string EnrollmentToken);
+public sealed record MfaEnrollmentEnableRequest([Required, StringLength(4096)] string EnrollmentToken, [Required, StringLength(32)] string Code);
+public sealed record MfaStepUpRequest([Required, StringLength(32)] string Code);
+public sealed record MfaStepUpResponse(string AccessToken, AuthUserDto User);
 
 public record AuthUserDto(
     Guid Id,
@@ -65,7 +73,7 @@ public record AuthUserDto(
     IReadOnlyList<string>? Tabs = null,
     /// <summary>
     /// True when the account's current password is a temporary one issued by the
-    /// forgot-password flow (TASK-465) and still within its validity window. Mirrors
+    /// legacy forgot-password flow (TASK-465) and still within its validity window. Mirrors
     /// <see cref="ShelfGuard.Domain.Entities.User.HasActiveTempPassword"/>, recomputed fresh
     /// at every mint site (login, 2FA verify, refresh) and on GetCurrentUserAsync — the client
     /// uses it to show a reminder banner prompting the user to set a permanent password via
@@ -89,6 +97,11 @@ public sealed record TwoFactorEnableRequest(string Code);
 
 public sealed record TwoFactorDisableRequest(string Password, string Code);
 
-// ── Forgot password / temporary password (TASK-465) ─────────────────────────
+// ── Proof-based password recovery ─────────────────────────────────────────
 
-public sealed record ForgotPasswordRequest(string Email);
+public sealed record ForgotPasswordRequest([Required, EmailAddress, StringLength(254)] string Email);
+
+public sealed record ResetPasswordRequest(
+    [Required, EmailAddress, StringLength(254)] string Email,
+    [Required, StringLength(43, MinimumLength = 43)] string Token,
+    [Required, StringLength(256, MinimumLength = 12)] string NewPassword);

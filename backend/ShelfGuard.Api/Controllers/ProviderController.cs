@@ -49,6 +49,7 @@ public sealed class ProviderController : ControllerBase
 
     /// <summary>Creates a new tenant with the given business type and module preset.</summary>
     [HttpPost("tenants")]
+    [RequireRecentMfa]
     [ProducesResponseType(typeof(TenantDetailDto), StatusCodes.Status201Created)]
     [ProducesResponseType(typeof(object), StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> CreateTenant(
@@ -65,6 +66,7 @@ public sealed class ProviderController : ControllerBase
 
     /// <summary>Changes the billing plan for a tenant.</summary>
     [HttpPut("tenants/{id:guid}/plan")]
+    [RequireRecentMfa]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(typeof(object), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -86,6 +88,7 @@ public sealed class ProviderController : ControllerBase
 
     /// <summary>Replaces the list of enabled modules for a tenant.</summary>
     [HttpPut("tenants/{id:guid}/modules")]
+    [RequireRecentMfa]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(typeof(object), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -110,6 +113,7 @@ public sealed class ProviderController : ControllerBase
     /// onboarded without one, or misconfigured. Body: <c>{ "category": "food" | null }</c>.
     /// </summary>
     [HttpPut("tenants/{id:guid}/supplier-category")]
+    [RequireRecentMfa]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(typeof(object), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -146,6 +150,7 @@ public sealed class ProviderController : ControllerBase
 
     /// <summary>Creates or updates one AI-agent slot. Blank apiKey keeps the stored key.</summary>
     [HttpPut("tenants/{id:guid}/ai-agents/{slot}")]
+    [RequireRecentMfa]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(typeof(object), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -158,6 +163,7 @@ public sealed class ProviderController : ControllerBase
 
     /// <summary>Connectivity probe for one AI-agent slot. Always 200 — the result carries ok/error.</summary>
     [HttpPost("tenants/{id:guid}/ai-agents/{slot}/test")]
+    [RequireRecentMfa]
     [ProducesResponseType(typeof(AiAgentTestResult), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> TestAiAgentSlot(Guid id, string slot, [FromBody] UpdateAiAgentRequest? candidate, CancellationToken ct)
@@ -165,6 +171,7 @@ public sealed class ProviderController : ControllerBase
 
     /// <summary>Removes one AI-agent slot.</summary>
     [HttpDelete("tenants/{id:guid}/ai-agents/{slot}")]
+    [RequireRecentMfa]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> DeleteAiAgentSlot(Guid id, string slot, CancellationToken ct)
@@ -185,6 +192,7 @@ public sealed class ProviderController : ControllerBase
 
     /// <summary>Legacy alias — the analyst slot.</summary>
     [HttpPut("tenants/{id:guid}/ai-agent")]
+    [RequireRecentMfa]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(typeof(object), StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> UpdateAiAgent(Guid id, [FromBody] UpdateAiAgentRequest request, CancellationToken ct)
@@ -195,12 +203,14 @@ public sealed class ProviderController : ControllerBase
 
     /// <summary>Legacy alias — the analyst slot.</summary>
     [HttpPost("tenants/{id:guid}/ai-agent/test")]
+    [RequireRecentMfa]
     [ProducesResponseType(typeof(AiAgentTestResult), StatusCodes.Status200OK)]
     public async Task<IActionResult> TestAiAgent(Guid id, [FromBody] UpdateAiAgentRequest? candidate, CancellationToken ct)
         => Ok(await _aiConfig.TestAsync(id, AiSlot.Analyst, candidate, ct));
 
     /// <summary>Legacy alias — the analyst slot.</summary>
     [HttpDelete("tenants/{id:guid}/ai-agent")]
+    [RequireRecentMfa]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     public async Task<IActionResult> DeleteAiAgent(Guid id, CancellationToken ct)
     {
@@ -210,6 +220,7 @@ public sealed class ProviderController : ControllerBase
 
     /// <summary>Activates a previously deactivated tenant.</summary>
     [HttpPost("tenants/{id:guid}/activate")]
+    [RequireRecentMfa]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> ActivateTenant(Guid id, CancellationToken ct)
@@ -220,6 +231,7 @@ public sealed class ProviderController : ControllerBase
 
     /// <summary>Deactivates a tenant (soft disable — data preserved).</summary>
     [HttpPost("tenants/{id:guid}/deactivate")]
+    [RequireRecentMfa]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> DeactivateTenant(Guid id, CancellationToken ct)
@@ -236,6 +248,7 @@ public sealed class ProviderController : ControllerBase
     /// Logs the event in activity_logs for audit trail.
     /// </summary>
     [HttpPost("tenants/{id:guid}/impersonate")]
+    [RequireRecentMfa]
     [ProducesResponseType(typeof(ImpersonateResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(object), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -247,7 +260,10 @@ public sealed class ProviderController : ControllerBase
         if (!Guid.TryParse(providerId, out var providerGuid))
             return Unauthorized();
 
-        var (response, error) = await _provider.ImpersonateAsync(providerGuid, providerEmail, id, ct);
+        if (!Guid.TryParse(User.FindFirstValue("sid"), out var sessionId)
+            || !int.TryParse(User.FindFirstValue("auth_ver"), out var version)
+            || !long.TryParse(User.FindFirstValue("mfa_at"), out var verifiedAt)) return Unauthorized();
+        var (response, error) = await _provider.ImpersonateAsync(providerGuid, providerEmail, id, ct, sessionId, version, DateTimeOffset.FromUnixTimeSeconds(verifiedAt).UtcDateTime);
         return error is null
             ? Ok(response)
             : (error.Contains("not found", StringComparison.OrdinalIgnoreCase)
@@ -275,6 +291,7 @@ public sealed class ProviderController : ControllerBase
 
     /// <summary>Creates a new enterprise_admin user for a tenant.</summary>
     [HttpPost("tenants/{id:guid}/users")]
+    [RequireRecentMfa]
     [ProducesResponseType(typeof(TenantUserDto), StatusCodes.Status201Created)]
     [ProducesResponseType(typeof(object), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]

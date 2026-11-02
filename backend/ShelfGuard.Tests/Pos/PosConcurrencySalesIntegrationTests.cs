@@ -1,7 +1,11 @@
+using Microsoft.Extensions.Configuration;
+using NSubstitute;
+using ShelfGuard.Infrastructure.Services;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
 using Npgsql;
 using ShelfGuard.Application.Features.Pos;
+using ShelfGuard.Application.Features.Pricing;
 using ShelfGuard.Application.Features.Pos.Dtos;
 using ShelfGuard.Application.Features.Pos.Fiscal;
 using ShelfGuard.Domain.Entities;
@@ -43,15 +47,13 @@ namespace ShelfGuard.Tests.Pos;
 /// database — this test's first run caught a separate, previously-undiscovered bug there
 /// (jsonb `Contains()` translation, fixed alongside this concurrency fix; see
 /// ItemRepository.cs). Skips (soft-pass) when no reachable Postgres is configured.
-/// Override via env var SHELFGUARD_TEST_DB_CONNECTION.
+/// Uses only the explicit disposable SHELFGUARD_RECOVERY_TEST_DB fixture.
 /// </summary>
+[Collection("Session database")]
 public sealed class PosConcurrencySalesIntegrationTests : IAsyncLifetime
 {
-    private const string DefaultConnectionString =
-        "Host=localhost;Port=5435;Database=crm;Username=crm;Password=crm_dev_password";
-
     private readonly ITestOutputHelper _output;
-    private string _connectionString = DefaultConnectionString;
+    private string _connectionString = string.Empty;
     private bool _dbAvailable;
 
     private Guid _tenantId;
@@ -64,7 +66,8 @@ public sealed class PosConcurrencySalesIntegrationTests : IAsyncLifetime
     public async Task InitializeAsync()
     {
         _connectionString =
-            Environment.GetEnvironmentVariable("SHELFGUARD_TEST_DB_CONNECTION") ?? DefaultConnectionString;
+            Environment.GetEnvironmentVariable("SHELFGUARD_RECOVERY_TEST_DB") ?? string.Empty;
+        if (string.IsNullOrEmpty(_connectionString)) return;
 
         try
         {
@@ -72,17 +75,16 @@ public sealed class PosConcurrencySalesIntegrationTests : IAsyncLifetime
             await probe.OpenAsync();
             _dbAvailable = true;
         }
-        catch (Exception ex)
+        catch
         {
             _dbAvailable = false;
-            _output.WriteLine(
-                $"Skipping POS concurrency integration test — no reachable Postgres at '{_connectionString}': {ex.Message}");
-            return;
+            throw new InvalidOperationException("Explicit disposable PostgreSQL fixture is unavailable.");
         }
 
         _barcode = $"CONC-{Guid.NewGuid():N}"[..16];
 
         await using var db = NewContext();
+        await db.Database.EnsureCreatedAsync();
 
         var tenant = Tenant.Create($"Concurrency Test {Guid.NewGuid():N}", $"conc-test-{Guid.NewGuid():N}");
         var store = new Location { TenantId = tenant.Id, Name = "Concurrency Test Store" };
@@ -127,17 +129,25 @@ public sealed class PosConcurrencySalesIntegrationTests : IAsyncLifetime
         if (!_dbAvailable) return;
 
         await using var db = NewContext();
+        // Accepted archives are immutable. This explicit disposable recovery database is removed by the harness.
+        if (await db.Set<ShelfGuard.Domain.Entities.Erp.PosPricingSnapshot>().AnyAsync(a => a.TenantId == _tenantId)) return;
+
+        await db.Database.ExecuteSqlInterpolatedAsync($"DELETE FROM promotion_rule_applications WHERE \"TenantId\" = {_tenantId}");
+        await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE promotion_rules SET \"CurrentVersionId\" = NULL, \"PublishedVersionId\" = NULL WHERE \"TenantId\" = {_tenantId}");
+        await db.Database.ExecuteSqlInterpolatedAsync($"DELETE FROM promotion_rule_versions WHERE \"TenantId\" = {_tenantId}");
+        await db.Database.ExecuteSqlInterpolatedAsync($"DELETE FROM promotion_rules WHERE \"TenantId\" = {_tenantId}");
         await db.Database.ExecuteSqlInterpolatedAsync($"DELETE FROM pos_transaction_items WHERE \"ProductStockId\" = {_stockId}");
         await db.Database.ExecuteSqlInterpolatedAsync($"DELETE FROM stock_events WHERE \"TenantId\" = {_tenantId}");
         await db.Database.ExecuteSqlInterpolatedAsync($"DELETE FROM pos_transactions WHERE \"TenantId\" = {_tenantId}");
         await db.Database.ExecuteSqlInterpolatedAsync($"DELETE FROM pos_shifts WHERE \"TenantId\" = {_tenantId}");
+        await db.Database.ExecuteSqlInterpolatedAsync($"DELETE FROM cash_registers WHERE \"TenantId\" = {_tenantId}");
         await db.Database.ExecuteSqlInterpolatedAsync($"DELETE FROM product_stock WHERE \"TenantId\" = {_tenantId}");
         await db.Database.ExecuteSqlInterpolatedAsync($"DELETE FROM items WHERE \"TenantId\" = {_tenantId}");
         await db.Database.ExecuteSqlInterpolatedAsync($"DELETE FROM locations WHERE \"TenantId\" = {_tenantId}");
         await db.Database.ExecuteSqlInterpolatedAsync($"DELETE FROM tenants WHERE \"Id\" = {_tenantId}");
     }
 
-    [Fact]
+    [RecoveryPostgresFact]
     public async Task Two_concurrent_sales_of_the_last_unit_never_oversell()
     {
         if (!_dbAvailable)
@@ -190,6 +200,80 @@ public sealed class PosConcurrencySalesIntegrationTests : IAsyncLifetime
         Assert.Equal(0m, finalStock.Quantity);
     }
 
+    [RecoveryPostgresFact]
+    public async Task Pricing_shadow_matches_real_Postgres_commit_and_skips_replay_after_catalog_change()
+    {
+        await using var db = NewContext();
+        var stock = await db.ProductStocks.SingleAsync(b => b.Id == _stockId);
+        var productId = stock.ProductId; var store = stock.StoreId;
+        var observer = new PricingShadow(true, new HashSet<(Guid, Guid)> { (_tenantId, store) });
+        var svc = BuildService(db, s => s, observer);
+        var request = new CreateSaleRequest(_shiftId, [new(_barcode, 1)], "Cash", 50, ClientTransactionId: Guid.NewGuid());
+        var cashier = Guid.NewGuid();
+        var first = await svc.CreateSaleAsync(_tenantId, cashier, request);
+        Assert.Null(first.Error); Assert.NotNull(first.Sale); Assert.Equal(1, observer.Counts.Matched); Assert.Equal(0, observer.Counts.Mismatch);
+        var product = await db.Items.SingleAsync(i => i.Id == productId); product.PriceRetail = 500; await db.SaveChangesAsync();
+        var replay = await svc.CreateSaleAsync(_tenantId, cashier, request);
+        Assert.Null(replay.Error); Assert.Equal(50, replay.Sale!.Subtotal); Assert.Equal(first.Sale.TransactionId, replay.Sale.TransactionId);
+        Assert.Equal(1, observer.Counts.Replays); Assert.Equal(1, observer.Counts.Matched);
+        Assert.Equal(1, await db.PosTransactions.CountAsync(t => t.TenantId == _tenantId));
+        Assert.Equal(0, (await db.ProductStocks.SingleAsync(b => b.Id == _stockId)).Quantity);
+        Assert.False(await db.Set<ShelfGuard.Domain.Entities.Erp.PriceList>().AnyAsync(p => p.TenantId == _tenantId));
+        Assert.False(await db.Set<ShelfGuard.Domain.Entities.Erp.PriceResolutionSnapshot>().AnyAsync(p => p.TenantId == _tenantId));
+    }
+
+    [RecoveryPostgresFact]
+    public async Task Offline_promotion_lease_commits_original_version_and_replays_from_a_fresh_context()
+    {
+        await using var db = NewContext();
+        var stock = await db.ProductStocks.SingleAsync(b => b.Id == _stockId);
+        var product = await db.Items.SingleAsync(i => i.Id == stock.ProductId);
+        var register = new CashRegister { TenantId = _tenantId, StoreId = stock.StoreId, Number = 1, Name = "Synthetic offline proof" };
+        db.CashRegisters.Add(register); await db.SaveChangesAsync();
+        var shift = new PosShift { TenantId = _tenantId, StoreId = stock.StoreId, RegisterId = register.Id };
+        var rule = new PromotionRule { TenantId = _tenantId, Name = "Original -10%" };
+        db.PosShifts.Add(shift); db.PromotionRules.Add(rule); await db.SaveChangesAsync();
+        var version = PromotionRuleVersion.Create(_tenantId, rule.Id, 1,
+            $$$"""{"type":"percent_off","targets":{"itemIds":["{{{product.Id}}}"]},"params":{"percent":10}}""");
+        db.PromotionRuleVersions.Add(version); await db.SaveChangesAsync();
+        rule.CurrentVersionId = version.Id; rule.PublishedVersionId = version.Id; rule.Status = PromotionRule.StatusPublished;
+        await db.SaveChangesAsync();
+        var config = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?> {
+            ["Jwt:Secret"] = "synthetic-postgres-promotions-012345678901" }).Build();
+        var proofs = new PosPromotionSnapshots(config); var prices = new PosPriceSnapshots(config);
+        var at = DateTime.UtcNow;
+        var repo = new PromotionRuleRepository(db);
+        var proof = proofs.Issue(_tenantId, stock.StoreId, register.Id, null, await repo.GetPublishedAsync(_tenantId), at)!;
+        var price = prices.Issue(new CatalogSyncRow(product.Id, product.Name, product.Barcodes.ToArray(), 50,
+            product.VatRate, product.Unit, true, at, TenantId: _tenantId), at);
+        // Both mutable sources change before the queued receipt arrives.
+        rule.Status = PromotionRule.StatusPaused; product.PriceRetail = 500; await db.SaveChangesAsync();
+        var registers = Substitute.For<ICashRegisterRepository>();
+        registers.HadSessionAtAsync(default, default, default, default, default).ReturnsForAnyArgs(true);
+        var svc = new PosService(new PosRepository(db), new StockRepository(db), new ItemRepository(db), new DiscountRepository(db),
+            new StaticFiscalServiceFactory(new NoopFiscalService()), new LoyaltyRepository(db), new CustomerRepository(db),
+            NullLogger<PosService>.Instance, registers: registers, promotions: repo, priceSnapshots: prices, promotionSnapshots: proofs);
+        var request = new CreateSaleRequest(shift.Id, [new(_barcode, 1, price.Token)], "Cash", 50,
+            ClientTransactionId: Guid.NewGuid(), OccurredAt: at, ExpectedTotal: 45, PromotionSnapshot: proof.Token,
+            ExpectedPriceSegments: [new(0, 1, 45, rule.Id, version.Id)]);
+        var cashier = Guid.NewGuid();
+        var (batch, error, _) = await svc.CreateSalesBatchAsync(_tenantId, cashier, new([request]), registerId: register.Id);
+        Assert.Null(error); var first = Assert.Single(batch!.Results); Assert.Equal("created", first.Status);
+        Assert.Equal(version.Id, (await db.PromotionRuleApplications.SingleAsync(a => a.TenantId == _tenantId)).VersionId);
+        await using var fresh = NewContext();
+        // No proof reader at all: committed replay uses the immutable stored intent hash.
+        var replayService = BuildService(fresh, s => s);
+        var (replayed, _, _) = await replayService.CreateSalesBatchAsync(_tenantId, cashier, new([request]), registerId: register.Id);
+        var replay = Assert.Single(replayed!.Results); Assert.Equal("duplicate", replay.Status);
+        Assert.Equal(45, replay.Sale!.Subtotal); Assert.Equal(first.Sale!.TransactionId, replay.Sale.TransactionId);
+        var changed = request with { ExpectedPriceSegments = [new(0, 1, 45, rule.Id, Guid.NewGuid())] };
+        var (conflict, _, _) = await replayService.CreateSalesBatchAsync(_tenantId, cashier, new([changed]), registerId: register.Id);
+        Assert.Equal(409, Assert.Single(conflict!.Results).ErrorStatusCode);
+        Assert.Equal(1, await fresh.PosTransactions.CountAsync(t => t.TenantId == _tenantId));
+        Assert.Equal(1, await fresh.PromotionRuleApplications.CountAsync(a => a.TenantId == _tenantId));
+        Assert.Equal(0, (await fresh.ProductStocks.SingleAsync(b => b.Id == _stockId)).Quantity);
+    }
+
     // ── helpers ──────────────────────────────────────────────────────────────
 
     // KI-035: this used to build (and never dispose) a brand-new NpgsqlDataSource on EVERY call —
@@ -199,7 +283,7 @@ public sealed class PosConcurrencySalesIntegrationTests : IAsyncLifetime
     // second context while the first still holds it open, so the rendezvous is unaffected.
     private AppDbContext NewContext() => TestPostgres.NewContext(_connectionString);
 
-    private static PosService BuildService(AppDbContext db, Func<IStockRepository, IStockRepository> wrapStock) =>
+    private static PosService BuildService(AppDbContext db, Func<IStockRepository, IStockRepository> wrapStock, IPricingShadow? shadow = null) =>
         new(
             new PosRepository(db),
             wrapStock(new StockRepository(db)),
@@ -208,7 +292,7 @@ public sealed class PosConcurrencySalesIntegrationTests : IAsyncLifetime
             new StaticFiscalServiceFactory(new NoopFiscalService()),
             new LoyaltyRepository(db),
             new CustomerRepository(db),
-            NullLogger<PosService>.Instance);
+            NullLogger<PosService>.Instance, pricingShadow: shadow);
 
     private sealed class StaticFiscalServiceFactory : IFiscalServiceFactory
     {

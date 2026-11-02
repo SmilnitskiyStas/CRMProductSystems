@@ -10,7 +10,6 @@ namespace ShelfGuard.Tests.Receipts;
 public sealed class ReceiptServiceTests
 {
     private readonly IReceiptRepository _repo = Substitute.For<IReceiptRepository>();
-    private readonly INotificationRepository _notifications = Substitute.For<INotificationRepository>();
     private readonly IActivityLogRepository _activityLogs = Substitute.For<IActivityLogRepository>();
     private readonly ReceiptService _sut;
     private readonly Guid _tenantId = Guid.NewGuid();
@@ -18,7 +17,62 @@ public sealed class ReceiptServiceTests
     private readonly Guid _storeId = Guid.NewGuid();
     private readonly Guid _productId = Guid.NewGuid();
 
-    public ReceiptServiceTests() => _sut = new ReceiptService(_repo, _notifications, _activityLogs);
+    public ReceiptServiceTests() => _sut = new ReceiptService(_repo, _activityLogs);
+
+    [Theory]
+    [InlineData("stale")]
+    [InlineData("invalid")]
+    [InlineData("missing_line")]
+    [InlineData("duplicate_line")]
+    public async Task Reviewed_source_rejects_stale_or_incomplete_edits_before_mutation(string kind)
+    {
+        var receipt = BuildReceipt(2, new(2027, 1, 1));
+        _repo.GetByIdAsync(receipt.Id, Arg.Any<CancellationToken>()).Returns(receipt);
+        var fingerprint = ShelfGuard.Application.Features.Erp.Posting.ReceiptPostingRules.Fingerprint(receipt);
+        var items = receipt.Items.Select(x => new UpdateItemPayload(x.Id, 2.25m, 12.50m, x.ExpiryDate, "reviewed", null)).ToList();
+        if (kind == "stale") receipt.Notes = "Changed by another operator";
+        if (kind == "invalid") fingerprint = new string('z', 64);
+        if (kind == "missing_line") items.RemoveAt(1);
+        if (kind == "duplicate_line") items[1] = items[0];
+        var (dto, error) = await _sut.UpdateItemsAsync(receipt.Id, new(items, fingerprint));
+        Assert.Null(dto); Assert.Equal(ReceiptErrors.SourceChanged, error);
+        Assert.All(receipt.Items, x => Assert.Null(x.QuantityReceived));
+        await _repo.DidNotReceive().SaveChangesAsync(Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task Reviewed_source_save_returns_the_new_fingerprint_for_posting_review()
+    {
+        var receipt = BuildReceipt(1, new(2027, 1, 1));
+        _repo.GetByIdAsync(receipt.Id, Arg.Any<CancellationToken>()).Returns(receipt);
+        var before = ShelfGuard.Application.Features.Erp.Posting.ReceiptPostingRules.Fingerprint(receipt);
+        var (dto, error) = await _sut.UpdateItemsAsync(receipt.Id,
+            new([new(receipt.Items.First().Id, 2.25m, 12.50m, new(2027,1,1), "reviewed", "Counted")], before));
+        Assert.Null(error); Assert.NotNull(dto); Assert.NotEqual(before, dto.ReceivingFingerprint);
+        Assert.Equal(2.25m, dto.Items[0].QuantityReceived);
+        Assert.Equal(ShelfGuard.Application.Features.Erp.Posting.ReceiptPostingRules.Fingerprint(receipt), dto.ReceivingFingerprint);
+        await _repo.Received(1).SaveChangesAsync(Arg.Any<CancellationToken>());
+    }
+
+    [Theory]
+    [InlineData("2.251")]
+    [InlineData("100000000")]
+    public async Task Draft_counts_are_not_silently_rounded_before_ERP_review(string raw)
+    {
+        var quantity=decimal.Parse(raw,System.Globalization.CultureInfo.InvariantCulture);
+        var (_,error)=await _sut.CreateAsync(_tenantId,_userId,new(null,_storeId,false,null,null,[new(_productId,quantity,null,new(2027,1,1),null)]));
+        Assert.NotNull(error);await _repo.DidNotReceive().SaveChangesAsync(Arg.Any<CancellationToken>());
+    }
+    [Theory]
+    [InlineData("2.251")]
+    [InlineData("100000000")]
+    public async Task Received_counts_are_not_silently_rounded_before_ERP_review(string raw)
+    {
+        var r=BuildReceipt(1,new(2027,1,1));_repo.GetByIdAsync(r.Id,Arg.Any<CancellationToken>()).Returns(r);
+        var quantity=decimal.Parse(raw,System.Globalization.CultureInfo.InvariantCulture);
+        var (_,error)=await _sut.UpdateItemsAsync(r.Id,new([new(r.Items.First().Id,quantity,null,null,null,null)]));
+        Assert.NotNull(error);await _repo.DidNotReceive().SaveChangesAsync(Arg.Any<CancellationToken>());
+    }
 
     // ── Create ─────────────────────────────────────────────────────────────
 
@@ -187,6 +241,11 @@ public sealed class ReceiptServiceTests
         await _repo.Received(2).AddMovementAsync(
             Arg.Is<StockMovement>(m => m.MovementType == "receipt"),
             Arg.Any<CancellationToken>());
+        await _repo.Received(1).AddNotificationAsync(
+            Arg.Is<NotificationQueue>(n => n.TenantId == _tenantId && n.StoreId == _storeId
+                && n.EventType == "receipt.created" && n.Channel == "system" && n.Status == "pending"),
+            Arg.Any<CancellationToken>());
+        await _repo.Received(1).SaveChangesAsync(Arg.Any<CancellationToken>());
     }
 
     // ── Cancel ─────────────────────────────────────────────────────────────

@@ -9,9 +9,12 @@ import { WRITE_OFF_REASON_VALUES } from "../types";
 import type { ReimbursementType } from "../types";
 import { useCreateWriteOff } from "../hooks/useWriteOffs";
 import { Btn } from "@/components/ui/Btn";
+import { canWriteOffBatch } from "@/features/shelf/lib/stockWriteOff";
+import type { WriteOffDto } from "../types";
 
 interface Props {
-  onSuccess: () => void;
+  onSuccess: (writeOff: WriteOffDto) => void;
+  initialBatches?: ProductStockDto[];
   onCancel: () => void;
 }
 
@@ -21,6 +24,7 @@ interface WriteOffRow {
   productName: string;
   batchNumber: string | null;
   expiryDate: string;
+  daysLeft: number;
   availableQty: number;
   quantity: string; // controlled input, parseFloat on submit
   unitPrice: string; // controlled input, auto-filled from batch.priceRetail but still editable
@@ -141,7 +145,25 @@ const errorBoxStyle: React.CSSProperties = {
   padding: "8px 12px",
 };
 
-export function CreateWriteOffForm({ onSuccess, onCancel }: Props) {
+function rowFromBatch(batch: ProductStockDto, quantity = ""): WriteOffRow {
+  return {
+    productStockId: batch.id,
+    productId: batch.productId,
+    productName: batch.productName,
+    batchNumber: batch.batchNumber,
+    expiryDate: batch.expiryDate,
+    daysLeft: batch.daysLeft,
+    availableQty: batch.quantity,
+    quantity,
+    unitPrice: batch.priceRetail != null ? String(batch.priceRetail) : "",
+    unitPricePurchase: batch.pricePurchase ?? 0,
+    isReturnedToSupplier: false,
+    reimbursementType: batch.defaultReimbursementType ?? "",
+    reimbursementValue: batch.defaultReimbursementValue != null ? String(batch.defaultReimbursementValue) : "",
+  };
+}
+
+export function CreateWriteOffForm({ onSuccess, onCancel, initialBatches = [] }: Props) {
   const t = useTranslations("Dashboard.writeOffs.createForm");
   const tReason = useTranslations("Dashboard.writeOffs.reason");
   const tCommon = useTranslations("Common");
@@ -151,29 +173,32 @@ export function CreateWriteOffForm({ onSuccess, onCancel }: Props) {
   const { data: locations = [] } = useLocations();
   const create = useCreateWriteOff();
 
-  const [storeId, setStoreId] = useState("");
-  const [reason, setReason] = useState("");
+  const [storeId, setStoreId] = useState(initialBatches[0]?.storeId ?? "");
+  const [reason, setReason] = useState(initialBatches.length ? (initialBatches.every(batch => batch.daysLeft <= 0) ? "expired" : "other") : "");
+  const [notes, setNotes] = useState("");
   const [batchFilterQuery, setBatchFilterQuery] = useState("");
   const [criticalOnly, setCriticalOnly] = useState(false);
-  const [rows, setRows] = useState<WriteOffRow[]>([]);
+  const [rows, setRows] = useState<WriteOffRow[]>(() => initialBatches
+    .filter(batch => canWriteOffBatch(batch) && batch.storeId === initialBatches[0]?.storeId)
+    .map(batch => rowFromBatch(batch, String(batch.quantity))));
   const [error, setError] = useState<string | null>(null);
 
   const { data: stockPage, isLoading: isLoadingBatches } = useStock(
     { store_id: storeId },
     !!storeId,
   );
-  const stockBatches = stockPage?.items ?? [];
+  const stockBatches = useMemo(() => stockPage?.items ?? [], [stockPage]);
 
   const addedIds = useMemo(() => new Set(rows.map((r) => r.productStockId)), [rows]);
 
   const availableBatches = useMemo(
     () =>
       [...stockBatches]
-        .filter((b) => b.quantity > 0)
+        .filter((b) => b.storeId === storeId && canWriteOffBatch(b))
         .filter((b) => !addedIds.has(b.id))
         .filter((b) => !criticalOnly || CRITICAL_STATUSES.includes(b.status))
         .sort((a, b) => a.expiryDate.localeCompare(b.expiryDate)),
-    [stockBatches, addedIds, criticalOnly],
+    [stockBatches, addedIds, criticalOnly, storeId],
   );
 
   const filteredBatches = useMemo(() => {
@@ -196,27 +221,14 @@ export function CreateWriteOffForm({ onSuccess, onCancel }: Props) {
     setRows([]);
     setBatchFilterQuery("");
     setError(null);
+    setNotes("");
   }
 
   function addRow(batch: ProductStockDto) {
     if (isRowAdded(batch.id)) return;
     setRows((prev) => [
       ...prev,
-      {
-        productStockId: batch.id,
-        productId: batch.productId,
-        productName: batch.productName,
-        batchNumber: batch.batchNumber,
-        expiryDate: batch.expiryDate,
-        availableQty: batch.quantity,
-        quantity: "",
-        unitPrice: batch.priceRetail != null ? String(batch.priceRetail) : "",
-        unitPricePurchase: batch.pricePurchase ?? 0,
-        isReturnedToSupplier: false,
-        reimbursementType: batch.defaultReimbursementType ?? "",
-        reimbursementValue:
-          batch.defaultReimbursementValue != null ? String(batch.defaultReimbursementValue) : "",
-      },
+      rowFromBatch(batch),
     ]);
   }
 
@@ -268,10 +280,18 @@ export function CreateWriteOffForm({ onSuccess, onCancel }: Props) {
       }
     }
 
+    if (!reason) { setError(t("errorNoReason")); return; }
+    const explanation = notes.trim();
+    if (reason !== "expired" && (explanation.length < 15 || explanation.length > 100)) {
+      setError(t("errorExplanationLength"));
+      return;
+    }
+
     try {
-      await create.mutateAsync({
+      const writeOff = await create.mutateAsync({
         storeId,
         reason: reason || null,
+        notes: reason === "expired" ? null : explanation,
         items: rows.map((r) => ({
           productStockId: r.productStockId,
           productId: r.productId,
@@ -283,7 +303,7 @@ export function CreateWriteOffForm({ onSuccess, onCancel }: Props) {
             r.isReturnedToSupplier && r.reimbursementValue ? parseFloat(r.reimbursementValue) : null,
         })),
       });
-      onSuccess();
+      onSuccess(writeOff);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : t("errorSaveFailed"));
     }
@@ -301,9 +321,13 @@ export function CreateWriteOffForm({ onSuccess, onCancel }: Props) {
           <select
             value={storeId}
             onChange={(e) => setStore(e.target.value)}
+            disabled={initialBatches.length > 0}
             style={inputStyle}
           >
             <option value="">{t("storePlaceholder")}</option>
+            {initialBatches[0] && !locations.some(location => location.id === storeId) && (
+              <option value={storeId}>{initialBatches[0].storeName}</option>
+            )}
             {locations.map((l) => (
               <option key={l.id} value={l.id}>
                 {l.name}
@@ -328,6 +352,21 @@ export function CreateWriteOffForm({ onSuccess, onCancel }: Props) {
           </select>
         </div>
       </div>
+
+      {reason === "expired" && rows.length > 0 && rows.every(row => row.daysLeft <= 0) && (
+        <p role="status" style={{ color: "#FBBF24", fontSize: 12, margin: 0 }}>{t("expiryDetected")}</p>
+      )}
+      {reason && reason !== "expired" && (
+        <div>
+          <label htmlFor="writeoff-explanation" style={labelStyle}>{t("explanationLabel")} *</label>
+          <textarea id="writeoff-explanation" value={notes} onChange={event => setNotes(event.target.value)}
+            required minLength={15} maxLength={100} rows={3} aria-describedby="writeoff-explanation-hint"
+            placeholder={t("explanationPlaceholder")} style={{ ...inputStyle, resize: "vertical" }} />
+          <p id="writeoff-explanation-hint" style={{ color: "#9CA3AF", fontSize: 12, margin: "6px 0 0" }}>
+            {t("explanationHint")} · {notes.trim().length}/100
+          </p>
+        </div>
+      )}
 
       {/* Batch picker */}
       <div>
@@ -576,7 +615,7 @@ export function CreateWriteOffForm({ onSuccess, onCancel }: Props) {
         )}
       </div>
 
-      {error && <div style={errorBoxStyle}>{error}</div>}
+      {error && <div role="alert" style={errorBoxStyle}>{error}</div>}
 
       <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 4 }}>
         <Btn variant="ghost" type="button" onClick={onCancel}>

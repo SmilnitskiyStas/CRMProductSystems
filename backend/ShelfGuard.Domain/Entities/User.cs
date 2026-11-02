@@ -8,6 +8,7 @@ public sealed class User
     public string? Phone { get; private set; }
     public string FullName { get; private set; } = string.Empty;
     public string PasswordHash { get; private set; } = string.Empty;
+    public int AuthVersion { get; private set; }
     public string Role { get; private set; } = string.Empty;
     public Guid? StoreId { get; private set; }
     /// <summary>Optional legal entity this user is registered under (TASK-321).</summary>
@@ -55,16 +56,28 @@ public sealed class User
         PosPinLockoutUntil = null;
     }
 
-    // ── Temporary password (forgot-password flow, TASK-464/465) ─────────────
+    // ── Legacy temporary passwords (issued before proof-based recovery) ───
     /// <summary>
     /// While set and in the future, <see cref="PasswordHash"/> holds a temporary password
-    /// issued by the forgot-password flow rather than one the user chose. Not a token/link —
+    /// issued by the retired forgot-password flow rather than one the user chose. Not a token/link —
     /// the temporary password itself becomes the user's real, immediately-usable password.
     /// Cleared once the user changes their password through the authenticated change-password
     /// flow. No background job expires it; callers check <see cref="HasActiveTempPassword"/>
     /// (e.g. at login) since a lazily-checked timestamp needs no separate cleanup process.
     /// </summary>
     public DateTime? TempPasswordExpiresAt { get; private set; }
+
+    /// <summary>Short-lived recovery proof; the raw grant is never stored on the user.</summary>
+    public string? PasswordResetTokenHash { get; private set; }
+    public DateTime? PasswordResetExpiresAt { get; private set; }
+    public DateTime? PasswordResetRequestedAt { get; private set; }
+
+    public void SetPasswordResetGrant(string hash, DateTime requestedAt, DateTime expiresAt)
+    {
+        PasswordResetTokenHash = hash;
+        PasswordResetRequestedAt = requestedAt;
+        PasswordResetExpiresAt = expiresAt;
+    }
 
     // ── 2FA TOTP (TASK-330) ────────────────────────────────────────────────
     /// <summary>Base32 TOTP secret. Non-null with TotpEnabled=false means "pending setup".</summary>
@@ -163,7 +176,13 @@ public sealed class User
         Phone    = phone;
     }
 
-    public void ChangePassword(string newHash) => PasswordHash = newHash;
+    public void ChangePassword(string newHash)
+    {
+        AuthVersion++;
+        PasswordHash = newHash;
+        PasswordResetTokenHash = null;
+        PasswordResetExpiresAt = null;
+    }
 
     public void SetPosPin(string pinHash)
     {
@@ -181,11 +200,13 @@ public sealed class User
     /// <summary>Sets the preferred UI locale ("uk"/"en"); null = browser fallback. Value is validated at the Application boundary.</summary>
     public void SetPreferredLocale(string? locale) => PreferredLocale = locale;
 
-    public void Deactivate() => IsActive = false;
+    public void Deactivate() { IsActive = false; AuthVersion++; }
+
+    public void RevokeSessions() => AuthVersion++;
 
     public void Activate() => IsActive = true;
 
-    public void SetRole(string role) => Role = role;
+    public void SetRole(string role) { if (Role != role) { Role = role; AuthVersion++; } }
 
     public void SetProviderRole(Guid? roleId) => ProviderRoleId = roleId;
 
@@ -260,6 +281,7 @@ public sealed class User
     /// <summary>Activates 2FA using the pending secret and stores recovery-code hashes.</summary>
     public void EnableTotp(List<string> recoveryCodeHashes)
     {
+        AuthVersion++;
         TotpEnabled = true;
         TotpRecoveryCodes = recoveryCodeHashes;
     }
@@ -267,6 +289,7 @@ public sealed class User
     /// <summary>Fully clears 2FA state (secret, recovery codes, replay marker).</summary>
     public void DisableTotp()
     {
+        AuthVersion++;
         TotpSecret = null;
         TotpEnabled = false;
         TotpRecoveryCodes = null;

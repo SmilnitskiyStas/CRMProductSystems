@@ -1,10 +1,12 @@
 using Microsoft.EntityFrameworkCore;
+using ShelfGuard.Application.Features.Pricing;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Npgsql;
 using ShelfGuard.Application.Features.Pos.Fiscal;
 using ShelfGuard.Application.Services;
 using ShelfGuard.Application.Features.Analytics;
+using ShelfGuard.Application.Features.Erp.Posting;
 using ShelfGuard.Domain.Interfaces;
 using ShelfGuard.Infrastructure.Data;
 using ShelfGuard.Infrastructure.Data.Repositories;
@@ -22,30 +24,108 @@ public static class DependencyInjection
         IConfiguration configuration)
     {
         services.AddHttpContextAccessor();
+        // Authority configuration is validated at startup; an empty allowlist never means all stores.
+        services.AddSingleton<IPosOnlinePricingGate>(new PosOnlinePricingGate(
+            configuration.GetValue<bool>("Pricing:PosAuthority:OnlineEnabled"),
+            configuration.GetSection("Pricing:PosAuthority:Scopes").Get<InventoryPostingScope[]>() ?? []));
+        services.AddScoped<IPosBasePriceResolver, PosBasePriceResolver>();
+        services.AddSingleton<IPosOfflinePricingGate>(new PosOfflinePricingGate(
+            configuration.GetValue<bool>("Pricing:PosAuthority:OfflineEnabled"),
+            configuration.GetSection("Pricing:PosAuthority:Scopes").Get<InventoryPostingScope[]>() ?? []));
+        services.AddSingleton<Application.Features.Pos.IPosScopedPrices, PosScopedPrices>();
+        services.AddScoped<Application.Features.Pos.IPosScopedCatalog, PosScopedCatalog>();
+        services.AddSingleton<PricingShadow>(_ =>
+        {
+            try
+            {
+                var enabled = configuration.GetValue<bool>("Pricing:Shadow:Enabled");
+                var rows = configuration.GetSection("Pricing:Shadow:Scopes").GetChildren().Take(101).ToArray();
+                if (rows.Length > 100) throw new InvalidOperationException("Too many pricing shadow scopes.");
+                var scopes = new HashSet<(Guid, Guid)>();
+                foreach (var row in rows)
+                {
+                    if (!Guid.TryParse(row["TenantId"], out var tenant) || tenant == Guid.Empty
+                        || !Guid.TryParse(row["LocationId"], out var location) || location == Guid.Empty)
+                        throw new InvalidOperationException("Invalid pricing shadow scope.");
+                    scopes.Add((tenant, location));
+                }
+                return new PricingShadow(enabled, scopes);
+            }
+            catch
+            {
+                // An optional observer's bad configuration must never prevent resolving PosService.
+                var disabled = new PricingShadow(false, new HashSet<(Guid, Guid)>());
+                disabled.ConfigurationRejected(); return disabled;
+            }
+        });
+        services.AddSingleton<IPricingShadow>(sp => sp.GetRequiredService<PricingShadow>());
+        // W4-B adjustment API requires both this application gate and the persisted database fence.
+        services.AddSingleton<IInventoryPostingGate>(new InventoryPostingGate(
+            configuration.GetValue<bool>("Erp:InventoryPosting:Enabled"),
+            configuration.GetSection("Erp:InventoryPosting:Scopes").Get<InventoryPostingScope[]>() ?? []));
+        services.AddScoped<IInventoryAdjustmentStore, InventoryAdjustmentCommandStore>();
+        services.AddScoped<IReceiptPostingStore, ReceiptPostingStore>();
+        services.AddScoped<ITransferPostingStore, TransferPostingStore>();
+        services.AddScoped<TransferPostingStore>();
+        services.AddScoped<IRequestShipment, RequestShipmentStore>();
+        services.AddScoped<IWriteOffPostingStore, WriteOffPostingStore>();
+        services.AddScoped<PosInventoryPostingBridge>();
+        services.AddScoped<IPosReturnStore, PosReturnStore>();
+        services.AddScoped<IProductionPostingPreviewReader, ProductionPostingPreviewReader>();
+        services.AddScoped<ProductionPostingPreviewReader>();
+        services.AddScoped<IProductionPostingStore, ProductionPostingStore>();
+        services.AddScoped<IProductionDesktop, ProductionDesktopStore>();
+        services.AddScoped<IRequestDesktop, RequestDesktopStore>();
+        services.AddScoped<ICatalogDesktop, CatalogDesktopStore>();
+        services.AddScoped<IPricingDesktop, PricingDesktopStore>();
+        services.AddScoped<ILabelTemplates, LabelTemplateStore>();
+        services.AddScoped<ILabelJobArchive, LabelJobArchiveStore>();
+        services.AddScoped<ILabelPrinterProfiles, LabelPrinterProfileStore>();
+        services.AddScoped<Application.Features.Pricing.IPosPricingHistory, PosPricingHistoryStore>();
+        services.AddSingleton(new ProductionPostingOptions(configuration.GetValue<bool>("Erp:InventoryPosting:ProductionEnabled")));
+        services.AddSingleton(new PosReturnOptions(configuration.GetValue<bool>("Erp:InventoryPosting:PosReturnsEnabled")));
+        services.AddSingleton(new PosInventoryPostingOptions(configuration.GetValue<bool>("Erp:InventoryPosting:PosEnabled")));
+        services.AddSingleton(new WriteOffPostingOptions(configuration.GetValue<bool>("Erp:InventoryPosting:WriteOffsEnabled")));
+        services.AddSingleton(new TransferPostingOptions(configuration.GetValue<bool>("Erp:InventoryPosting:TransfersEnabled")));
+        services.AddSingleton(new ReceiptPostingOptions(configuration.GetValue<bool>("Erp:InventoryPosting:ReceiptsEnabled")));
+        services.AddScoped<IInventoryPostingStatusReader, InventoryPostingStatusReader>();
         services.AddSingleton<TenantConnectionInterceptor>();
         // TASK-528: centralized replacement for the per-controller ResolveTenantId()/GetTenantId()
         // duplication — see ITenantContext's doc for the contract and how it differs from
         // ITenantSessionOverride below. Scoped: wraps the request-scoped HttpContext.
-        // TASK-754: concrete TenantContext is also resolvable so ProductionDemandTenantRunner can
-        // use its internal job-tenant binding; ITenantContext resolves to the SAME scoped instance.
         services.AddScoped<Services.TenantContext>();
         services.AddScoped<Application.Services.ITenantContext>(sp => sp.GetRequiredService<Services.TenantContext>());
 
-        var npgsqlDataSource = new NpgsqlDataSourceBuilder(
+        services.AddSingleton<NpgsqlDataSource>(_ => new NpgsqlDataSourceBuilder(
                 configuration.GetConnectionString("DefaultConnection"))
             .EnableDynamicJson()
-            .Build();
+            .Build());
 
         services.AddDbContext<AppDbContext>((sp, options) =>
             options
-                .UseNpgsql(npgsqlDataSource)
+                .UseNpgsql(sp.GetRequiredService<NpgsqlDataSource>())
                 .AddInterceptors(sp.GetRequiredService<TenantConnectionInterceptor>()));
 
         // Auth services
         services.AddSingleton<IJwtService, JwtService>();
+        services.AddSingleton<ShelfGuard.Application.Features.Auth.IWorkerTokenIssuer>(s => (ShelfGuard.Application.Features.Auth.IWorkerTokenIssuer)s.GetRequiredService<IJwtService>());
+        services.AddSingleton(new ShelfGuard.Application.Features.Auth.WorkerAuthOptions(configuration["WorkerAuth:Email"] ?? ""));
+        services.AddSingleton<ShelfGuard.Application.Features.Auth.IWorkerSessionValidator, WorkerSessionValidator>();
+        services.AddSingleton<Application.Features.Pos.IPosPriceSnapshots, PosPriceSnapshots>();
+        services.AddSingleton<Application.Features.Pos.IPosPromotionSnapshots, PosPromotionSnapshots>();
+        services.AddSingleton<Application.Features.Pos.IPosLoyaltySnapshots, PosLoyaltySnapshots>();
+        services.AddScoped<Application.Features.Pos.IPosLoyaltyQuoteIssuer, PosLoyaltyQuoteIssuer>();
         services.AddSingleton<IPasswordHasher, BcryptPasswordHasher>();
         services.AddSingleton<ITotpService, TotpService>(); // 2FA TOTP (TASK-330)
         services.AddScoped<IUserRepository, UserRepository>();
+        services.AddScoped<IPasswordRecoveryStore, PasswordRecoveryStore>();
+        services.AddScoped<IConsumerSessionStore, ConsumerSessionStore>();
+        services.AddScoped<IWorkAccessContext, WorkAccessContext>();
+        services.AddScoped<IMfaPolicy, LiveMfaPolicy>();
+        services.AddScoped<Microsoft.AspNetCore.Authorization.IAuthorizationHandler, ShelfGuard.Infrastructure.Authorization.WorkPermissionHandler>();
+        services.AddSingleton<IAccessSessionValidator, AccessSessionValidator>();
+        services.AddSingleton(new ShelfGuard.Application.Features.Auth.PasswordRecoveryOptions(
+            configuration["Frontend:BaseUrl"] ?? string.Empty));
         services.AddScoped<IRefreshTokenRepository, RefreshTokenRepository>();
 
         // POC repository
@@ -87,6 +167,7 @@ public static class DependencyInjection
 
         // Receipts
         services.AddScoped<IReceiptRepository, ReceiptRepository>();
+        services.AddScoped<Application.Features.Receipts.IReceiptCategoryWork, ReceiptCategoryWorkStore>();
 
         // Transfers
         services.AddScoped<ITransferRepository, TransferRepository>();
@@ -246,10 +327,8 @@ public static class DependencyInjection
             Data.Repositories.ProductionRequestRepository>();
         services.AddScoped<Domain.Interfaces.IProductionInsightsRepository,
             Data.Repositories.ProductionInsightsRepository>();
-        // TASK-754: per-tenant auto-demand run for the worker-only internal endpoint.
         services.AddScoped<Application.Features.Production.IProductionDemandTenantRunner,
             Services.ProductionDemandTenantRunner>();
-        // TASK-755: per-tenant auto supplier-order drafts run for the worker-only internal endpoint.
         services.AddScoped<Application.Features.Receipts.IAutoReplenishmentTenantRunner,
             Services.AutoReplenishmentTenantRunner>();
 

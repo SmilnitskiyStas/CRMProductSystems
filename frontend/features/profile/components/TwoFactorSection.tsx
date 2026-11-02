@@ -155,6 +155,7 @@ export function TwoFactorSection() {
           const map: Record<string, string> = {
             "Invalid password.": t("invalidPasswordError"),
             "Invalid code.": t("invalidCodeShortError"),
+            "Too many attempts. Try again later.": t("tooManyAttemptsError"),
           };
           setDisableError(map[err.message] ?? err.message);
         },
@@ -396,7 +397,9 @@ export function TwoFactorSection() {
                   autoComplete="one-time-code"
                   placeholder={t("disableCodePlaceholder")}
                   style={inputStyle}
+                  aria-describedby="disable-mfa-code-hint"
                 />
+                <p id="disable-mfa-code-hint" style={{ ...hintStyle, marginTop: 8 }}>{t("disableCodeHint")}</p>
               </div>
             </div>
 

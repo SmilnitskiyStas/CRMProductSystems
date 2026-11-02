@@ -215,11 +215,11 @@ public sealed class RlsCrossTenantIntegrationTests : IAsyncLifetime
     /// 2026-06-29 bulk NULLIF-guard fix (which matched on that literal policy name) silently
     /// skipped them. Asserts, against whatever is actually applied to the DB right now, that
     /// every table with FORCE ROW LEVEL SECURITY has a policy literally named 'tenant_isolation'
-    /// with a NULLIF guard, plus provider_bypass and worker_bypass — mirrors the manual
-    /// pg_policies audit query run for this task so the gap can't quietly reappear.
+    /// with a NULLIF guard and its approved bypass profile. ERP history, IoT inbox,
+    /// machine authorizations and planned pricing history have no provider bypass; label history has only tenant isolation and no bypass; requiring one there would weaken the tenant boundary.
     /// </summary>
     [Fact]
-    public async Task AllForceRlsTables_HaveTenantIsolationNullifGuard_ProviderBypass_AndWorkerBypass()
+    public async Task AllForceRlsTables_HaveTenantIsolationNullifGuard_AndApprovedBypassProfile()
     {
         if (!_dbAvailable) return; // soft-skip, see class remarks
 
@@ -242,8 +242,18 @@ public sealed class RlsCrossTenantIntegrationTests : IAsyncLifetime
             GROUP BY t.tablename
             HAVING NOT (
                 bool_or(p.policyname = 'tenant_isolation' AND p.qual ILIKE '%NULLIF%')
-                AND bool_or(p.policyname = 'provider_bypass')
-                AND bool_or(p.policyname = 'worker_bypass')
+                AND CASE WHEN t.tablename IN (
+                    'label_template_revisions','label_store_assignments','label_test_jobs','label_test_job_events',
+                    'label_test_job_receipts','label_test_job_uploads','label_printer_profile_revisions')
+                  THEN count(p.policyname)=1 AND NOT bool_or(p.policyname IN ('provider_bypass','worker_bypass'))
+                  ELSE (CASE WHEN t.tablename IN (
+                    'business_documents','document_lines','document_postings','document_links','document_approvals',
+                    'inventory_ledger_entries','inventory_balance_projections','inventory_reservations','inventory_reconciliations',
+                    'outbox_events','inbox_deduplication','iot_message_receipts','inventory_posting_scopes','pos_return_fiscalizations','iot_inventory_policies',
+                    'price_lists','price_list_items','price_resolution_snapshots','pos_pricing_snapshots')
+                  THEN count(p.policyname)=2 AND NOT bool_or(p.policyname='provider_bypass')
+                  ELSE bool_or(p.policyname = 'provider_bypass') END
+                AND bool_or(p.policyname = 'worker_bypass')) END
             )
             ORDER BY t.tablename;";
 
@@ -255,7 +265,7 @@ public sealed class RlsCrossTenantIntegrationTests : IAsyncLifetime
 
         Assert.True(
             offendingTables.Count == 0,
-            "FORCE RLS table(s) missing tenant_isolation(+NULLIF)/provider_bypass/worker_bypass: " +
+            "FORCE RLS table(s) missing tenant_isolation(+NULLIF) or violating their approved bypass profile: " +
             string.Join(", ", offendingTables));
     }
 

@@ -20,6 +20,8 @@ public interface IReceiptRepository
     Task AddAsync(StockReceipt receipt, CancellationToken ct = default);
     Task AddStockAsync(ProductStock stock, CancellationToken ct = default);
     Task AddMovementAsync(StockMovement movement, CancellationToken ct = default);
+    /// <summary>Stages the notification intent in the same unit of work as receipt posting; does not save.</summary>
+    Task AddNotificationAsync(NotificationQueue notification, CancellationToken ct = default);
     void Update(StockReceipt receipt);
 
     // ── TASK-755: auto replenishment drafts ──────────────────────────────────────────────────────

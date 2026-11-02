@@ -271,6 +271,61 @@ public sealed class StockServiceTests
         Assert.Equal(otherStoreId, transferAction!.TargetStoreId);
     }
 
+    [Theory]
+    [InlineData(15, 5)]
+    [InlineData(4, 6)]
+    [InlineData(0, 10)]
+    public async Task UpdateAsync_RecordsTheExactBatchDeltaAndActor(int quantity, int delta)
+    {
+        var batch = CreateBatch(10, 30);
+        _repo.GetByIdAsync(batch.Id, Arg.Any<CancellationToken>()).Returns(batch);
+
+        var (_, error) = await _sut.UpdateAsync(batch.Id, _userId,
+            new UpdateStockRequest(null, null, "counted", quantity, batch.ExpiryDate));
+
+        Assert.Null(error);
+        Assert.Equal(quantity, batch.Quantity);
+        Assert.Equal(10, batch.QuantityInitial);
+        await _repo.Received(1).AddMovementAsync(Arg.Is<StockMovement>(m =>
+            m.MovementType == "adjustment" && m.TenantId == _tenantId && m.ProductId == _productId
+            && m.ProductStockId == batch.Id && m.Quantity == delta && m.QuantityBefore == 10
+            && m.QuantityAfter == quantity && m.PerformedBy == _userId
+            && m.ReferenceId == batch.Id && m.ReferenceType == "stock_adjustment"
+            && m.FromStoreId == (quantity < 10 ? _storeId : (Guid?)null)
+            && m.ToStoreId == (quantity > 10 ? _storeId : (Guid?)null)), Arg.Any<CancellationToken>());
+        await _repo.Received(1).SaveChangesAsync(Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task UpdateAsync_MetadataOnlyDoesNotInventAQuantityMovementOrUseAnUnstoredExpiry()
+    {
+        var batch = CreateBatch(10, -1);
+        _repo.GetByIdAsync(batch.Id, Arg.Any<CancellationToken>()).Returns(batch);
+        var (_, error) = await _sut.UpdateAsync(batch.Id, _userId,
+            new UpdateStockRequest(null, 2, "metadata", 10, DateOnly.FromDateTime(DateTime.UtcNow.AddDays(30))));
+        Assert.Null(error);
+        Assert.Equal("expired", batch.Status);
+        await _repo.DidNotReceive().AddMovementAsync(Arg.Any<StockMovement>(), Arg.Any<CancellationToken>());
+        await _repo.Received(1).SaveChangesAsync(Arg.Any<CancellationToken>());
+    }
+
+    [Theory]
+    [InlineData(-1)]
+    [InlineData(1.001)]
+    public async Task UpdateAsync_InvalidQuantityDoesNotStageAnyWrites(double quantity)
+    {
+        var batch = CreateBatch(10, 30);
+        _repo.GetByIdAsync(batch.Id, Arg.Any<CancellationToken>()).Returns(batch);
+        var (result, error) = await _sut.UpdateAsync(batch.Id, _userId,
+            new UpdateStockRequest(null, null, null, (decimal)quantity, batch.ExpiryDate));
+        Assert.Null(result);
+        Assert.NotNull(error);
+        Assert.Equal(10, batch.Quantity);
+        _repo.DidNotReceive().Update(Arg.Any<ProductStock>());
+        await _repo.DidNotReceive().AddMovementAsync(Arg.Any<StockMovement>(), Arg.Any<CancellationToken>());
+        await _repo.DidNotReceive().SaveChangesAsync(Arg.Any<CancellationToken>());
+    }
+
     // ── Verify ─────────────────────────────────────────────────────────────
 
     [Fact]

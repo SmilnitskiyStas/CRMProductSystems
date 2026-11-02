@@ -16,9 +16,11 @@ export interface ReceiptItemDto {
   batchNumber: string | null;
   discrepancyNotes: string | null;
   isProcessed: boolean;
+  unit?: string | null;
 }
 
 export interface ReceiptDto {
+  receivingWork?: import('./category-contracts').ReceiptWork | null;
   id: string;
   supplierId: string | null;
   supplierName: string | null;
@@ -39,6 +41,10 @@ export interface ReceiptDto {
   /** TASK-757: set when the order was sent to the supplier. */
   orderedAt?: string | null;
   orderedByName?: string | null;
+  receivingFingerprint?: string | null;
+  erpDocumentId?: string | null;
+  erpPostingId?: string | null;
+  erpReplayed?: boolean;
 }
 
 export interface UpdateReceiptHeaderPayload {

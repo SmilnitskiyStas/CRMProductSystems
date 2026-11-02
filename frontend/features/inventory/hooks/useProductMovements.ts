@@ -11,3 +11,14 @@ export function useProductMovements(
     enabled: !!productId,
   });
 }
+
+export function useProductStockHistory(
+  productId: string,
+  params: { from: string; to: string; store_id?: string },
+) {
+  return useQuery({
+    queryKey: ["product-stock-history", productId, params],
+    queryFn: () => movementsApi.getStockHistory(productId, params),
+    enabled: !!productId,
+  });
+}

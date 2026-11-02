@@ -47,7 +47,17 @@ export interface MovementPageDto {
   pageSize: number;
 }
 
+export interface StockHistoryDto {
+  currentStock: number;
+  points: { date: string; stock: number }[];
+}
+
 export const movementsApi = {
+  getStockHistory: (productId: string, params: { from: string; to: string; store_id?: string }) => {
+    const qs = new URLSearchParams({ product_id: productId, from: params.from, to: params.to });
+    if (params.store_id) qs.set("store_id", params.store_id);
+    return api.get<StockHistoryDto>(`/api/movements/stock-history?${qs}`);
+  },
   getIncoming: (productId: string, storeId?: string) => {
     const qs = new URLSearchParams({ product_id: productId });
     if (storeId) qs.set("store_id", storeId);

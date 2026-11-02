@@ -14,6 +14,7 @@ export function UserMenu() {
   const tRoles = useTranslations("Dashboard.roles");
   const { data: user } = useMe();
   const logout = useLogout();
+  const logoutAll = useLogout({ all: true });
 
   const [open, setOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
@@ -205,6 +206,14 @@ export function UserMenu() {
             >
               <LogOut size={15} />
               {t("logout")}
+            </button>
+            <button style={{ ...menuItemStyle, color: "#EF4444" }} disabled={logoutAll.isPending}
+              onClick={() => {
+                if (!window.confirm(t("logoutAllConfirm"))) return;
+                setOpen(false);
+                logoutAll.mutate(undefined, { onError: () => window.alert(t("logoutAllFailed")) });
+              }}>
+              <LogOut size={15} />{t("logoutAll")}
             </button>
           </div>
         )}

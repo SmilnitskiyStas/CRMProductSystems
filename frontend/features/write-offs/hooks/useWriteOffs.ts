@@ -54,6 +54,10 @@ export function useApproveWriteOff() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["write-offs"] });
       qc.invalidateQueries({ queryKey: ["stock"] });
+      qc.invalidateQueries({ queryKey: ["stock-suggestions"] });
+      qc.invalidateQueries({ queryKey: ["product-movements"] });
+      qc.invalidateQueries({ queryKey: ["product-stock-history"] });
+      qc.invalidateQueries({ queryKey: ["dashboard"] });
     },
   });
 }

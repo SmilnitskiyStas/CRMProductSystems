@@ -59,6 +59,28 @@ public sealed class MovementsController : ControllerBase
         return Ok(await _movements.GetIncomingAsync(tenantId, product_id, store_id, ct));
     }
 
+    /// <summary>End-of-day product balances, including sales and all stock batches.</summary>
+    [HttpGet("stock-history")]
+    [ProducesResponseType(typeof(StockHistoryDto), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetStockHistory(
+        [FromQuery] Guid product_id,
+        [FromQuery] Guid? store_id,
+        [FromQuery] DateOnly from,
+        [FromQuery] DateOnly to,
+        CancellationToken ct = default)
+    {
+        var tenantId = GetTenantId();
+        if (tenantId == Guid.Empty) return Forbid();
+        try
+        {
+            return Ok(await _movements.GetStockHistoryAsync(tenantId, product_id, store_id, from, to, ct));
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
+    }
+
     private Guid GetTenantId()
     {
         var raw = User.FindFirstValue("tenant_id");

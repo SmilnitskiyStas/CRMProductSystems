@@ -87,6 +87,7 @@ function WriteOffDetail({ w, onViewAnalytics }: { w: WriteOffDto; onViewAnalytic
             label={t("reason")}
             value={w.reason && tReason.has(w.reason) ? tReason(w.reason) : (w.reason ?? "—")}
           />
+          {w.notes && <DrawerField label={t("explanation")} value={w.notes} />}
           <DrawerField
             label={t("lossAmount")}
             value={

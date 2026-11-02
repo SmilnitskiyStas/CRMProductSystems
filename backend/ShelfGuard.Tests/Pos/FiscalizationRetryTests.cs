@@ -201,6 +201,8 @@ file sealed class RetryFakeFiscalFactory : IFiscalServiceFactory
 /// <summary>TASK-405 (Loyalty Фаза 0): no-op — this file only exercises fiscalization retry, never loyalty.</summary>
 file sealed class RetryFakeLoyaltyRepo : ILoyaltyRepository
 {
+    public Task<PosTransaction?> GetPurchaseByIdAsync(Guid tenantId, Guid membershipId, Guid purchaseId, CancellationToken ct = default) => throw new NotSupportedException();
+    public Task<(List<PosTransaction> Items, int Total)> GetPurchasesPagedAsync(Guid tenantId, Guid membershipId, Guid? storeId, int page, int pageSize, CancellationToken ct = default) => throw new NotSupportedException();
     public Task<LoyaltyMembership?> GetMembershipByIdAsync(Guid id, Guid tenantId, CancellationToken ct = default) => Task.FromResult<LoyaltyMembership?>(null);
     public Task<LoyaltyMembership?> GetMembershipByCardNumberAsync(long cardNumber, Guid tenantId, CancellationToken ct = default) => Task.FromResult<LoyaltyMembership?>(null);
     public Task<LoyaltyMembership?> GetMembershipByTenantConsumerAsync(Guid tenantId, Guid consumerAccountId, CancellationToken ct = default) => Task.FromResult<LoyaltyMembership?>(null);

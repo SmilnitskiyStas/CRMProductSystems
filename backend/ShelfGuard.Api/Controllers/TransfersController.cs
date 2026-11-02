@@ -91,7 +91,10 @@ public sealed class TransfersController : ControllerBase
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> Cancel(Guid id, CancellationToken ct)
     {
-        var (transfer, error) = await _transfers.CancelAsync(id, ct);
+        var (_, userId) = GetContext();
+        if (userId is null) return Forbid();
+
+        var (transfer, error) = await _transfers.CancelAsync(id, userId.Value, ct);
 
         if (error == "Transfer not found.") return NotFound();
         if (error is not null) return BadRequest(new { error });

@@ -1,5 +1,6 @@
 "use client";
 
+import { canWorkPermission } from "@/lib/workPermissions";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
@@ -1039,6 +1040,7 @@ export function Sidebar({ collapsed, onToggle }: Props) {
     .map((group) => ({
       group,
       visibleItems: group.items.filter((item) => {
+        if (group.key === "production") return canWorkPermission(me, "production.view") && (!tabsSet || tabsSet.has(item.href) || tabsSet.has(group.key));
         // Legal Entities (TASK-323): role check OR the `legal_entities.manage`
         // per-user override — same OR-logic as backend LegalEntityAuthorization.CanManage.
         // Independent of tabsSet in both directions (deliberately not part of the

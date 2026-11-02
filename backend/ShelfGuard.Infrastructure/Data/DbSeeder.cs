@@ -28,6 +28,7 @@ public static class DbSeeder
 
         // ── Tenant ────────────────────────────────────────────────────────────
         var tenant = Tenant.Create("Свіжий Кут", "svizhy-kut");
+        tenant.UpdateModules(Tenant.DefaultModulesForBusinessType(tenant.BusinessType));
         db.Tenants.Add(tenant);
 
         // ── Users ─────────────────────────────────────────────────────────────

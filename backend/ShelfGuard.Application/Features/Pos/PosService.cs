@@ -1,5 +1,8 @@
 using Microsoft.Extensions.Logging;
+using ShelfGuard.Application.Features.Pricing;
 using System.Text.Json;
+using System.Security.Cryptography;
+using System.Text;
 using ShelfGuard.Application.Features.Pos.Dtos;
 using ShelfGuard.Application.Features.Pos.Fiscal;
 using ShelfGuard.Application.Features.Promotions;
@@ -38,6 +41,12 @@ public sealed class PosService : IPosService
     private readonly ICashRegisterRepository? _registers;
     private readonly IPromotionRuleRepository? _promotions;
     private readonly ILocationRepository? _locations;
+    private readonly IPosPriceSnapshots? _priceSnapshots;
+    private readonly IPricingShadow? _pricingShadow;
+    private readonly IPosPromotionSnapshots? _promotionSnapshots;
+    private readonly IPosLoyaltySnapshots? _loyaltySnapshots;
+    private readonly IPosBasePriceResolver? _basePrices;
+    private readonly IPosScopedPrices? _scopedPrices;
 
     // Offline-sale attribution window (batch sync).
     public static readonly TimeSpan MaxFutureSkew = TimeSpan.FromMinutes(5);
@@ -56,9 +65,21 @@ public sealed class PosService : IPosService
         IUserRepository? users = null,
         ICashRegisterRepository? registers = null,
         IPromotionRuleRepository? promotions = null,
-        ILocationRepository? locations = null)
+        ILocationRepository? locations = null,
+        IPosPriceSnapshots? priceSnapshots = null,
+        IPricingShadow? pricingShadow = null,
+        IPosPromotionSnapshots? promotionSnapshots = null,
+        IPosLoyaltySnapshots? loyaltySnapshots = null,
+        IPosBasePriceResolver? basePrices = null,
+        IPosScopedPrices? scopedPrices = null)
     {
+        _scopedPrices = scopedPrices;
+        _basePrices = basePrices;
         _locations = locations;
+        _priceSnapshots = priceSnapshots;
+        _pricingShadow = pricingShadow;
+        _promotionSnapshots = promotionSnapshots;
+        _loyaltySnapshots = loyaltySnapshots;
         _users = users;
         _registers = registers;
         _promotions = promotions;
@@ -364,6 +385,9 @@ public sealed class PosService : IPosService
     {
         const string conflict = "ClientTransactionId was already used for a different sale.";
 
+        if (stored.TenderedAmount is decimal tendered && tendered != request.PaymentAmount)
+            return (null, conflict, 409);
+
         if (registerId.HasValue && stored.CashRegisterId.HasValue && stored.CashRegisterId != registerId)
             return (null, conflict, 409);
 
@@ -381,16 +405,33 @@ public sealed class PosService : IPosService
             || (!storedHasPromoSubLines && request.Items.Count != stored.Items.Count))
             return (null, conflict, 409);
 
-        var wanted = new Dictionary<Guid, decimal>();
+        if (request.ExpectedTotal is decimal expectedTotal && stored.TotalAmount != expectedTotal)
+            return (null, conflict, 409);
+        var wanted = new Dictionary<(Guid ProductId, string? Hash), decimal>();
         foreach (var line in request.Items)
         {
-            var product = await _catalog.GetByBarcodeAsync(line.Barcode, ct);
-            if (product is null) return (null, conflict, 409);
-            wanted[product.Id] = wanted.GetValueOrDefault(product.Id) + line.Quantity;
+            var hash = line.PriceSnapshot is null ? null : SaleSnapshotHash(line.PriceSnapshot, request);
+            Guid productId;
+            if (hash is not null)
+            {
+                // A committed replay is independent of token expiry or later barcode/catalog edits.
+                var original = stored.Items.FirstOrDefault(i => i.PriceSnapshotHash == hash && i.BarcodeSnapshot == line.Barcode);
+                if (original is null) return (null, conflict, 409);
+                productId = original.ProductId;
+            }
+            else
+            {
+                var original = stored.Items.FirstOrDefault(i => i.BarcodeSnapshot == line.Barcode);
+                var product = original is null ? await _catalog.GetByBarcodeAsync(line.Barcode, ct) : null;
+                if (original is null && product is null) return (null, conflict, 409);
+                productId = original?.ProductId ?? product!.Id;
+            }
+            var key = (productId, hash);
+            wanted[key] = wanted.GetValueOrDefault(key) + line.Quantity;
         }
 
         var actual = stored.Items
-            .GroupBy(i => i.ProductId)
+            .GroupBy(i => (i.ProductId, i.PriceSnapshotHash))
             .ToDictionary(g => g.Key, g => g.Sum(i => i.Quantity));
         if (wanted.Count != actual.Count || wanted.Any(kv => actual.GetValueOrDefault(kv.Key) != kv.Value))
             return (null, conflict, 409);
@@ -414,8 +455,14 @@ public sealed class PosService : IPosService
         {
             var already = await _pos.GetTransactionByClientIdAsync(tenantId, clientTxId, ct);
             if (already is not null)
+            {
+                try { _pricingShadow?.ReplaySkipped(); } catch { /* Diagnostics never change replay. */ }
                 return await ResolveReplayAsync(tenantId, already, request, registerId, ct);
+            }
         }
+
+        if (request.PaymentAmount < 0 || request.PaymentAmount > 9_999_999_999.99m || decimal.Round(request.PaymentAmount, 2) != request.PaymentAmount)
+            return (null, "PaymentAmount must be a nonnegative numeric(12,2) value without rounding.", 400);
 
         // 1. Validate shift
         var shift = await _pos.GetShiftByIdAsync(request.ShiftId, ct);
@@ -430,6 +477,41 @@ public sealed class PosService : IPosService
 
         if (request.Items is null || request.Items.Count == 0)
             return (null, "Sale must contain at least one item.", 400);
+
+        var hasSnapshots = request.Items.Any(i => i.PriceSnapshot is not null);
+        var scopedLines = request.Items.Count(i => i.PriceSnapshot is string proof
+            && (proof.StartsWith("pb1.", StringComparison.Ordinal) || proof.StartsWith("lc1.pb1.", StringComparison.Ordinal)));
+        if (scopedLines != 0 && scopedLines != request.Items.Count)
+            return (null, "Scoped and legacy base contracts cannot be mixed within one receipt.", 400);
+        var pricingAt = ResolvePricingInstant(request, inlineFiscalization);
+        if (!inlineFiscalization && request.ExpectedTotal is not null && !hasSnapshots)
+            return (null, "Offline pricing snapshot is missing. Reconcile the original receipt without re-pricing.", 409);
+        if (hasSnapshots)
+        {
+            if (inlineFiscalization || registerId is null || request.ExpectedTotal is null
+                || request.OccurredAt is null || request.Items.Any(i => string.IsNullOrEmpty(i.PriceSnapshot)))
+                return (null, "Offline price snapshots require a register, sale time, total and every line snapshot.", 400);
+            var occurred = request.OccurredAt.Value.Kind == DateTimeKind.Unspecified
+                ? DateTime.SpecifyKind(request.OccurredAt.Value, DateTimeKind.Utc) : request.OccurredAt.Value.ToUniversalTime();
+            if (occurred > DateTime.UtcNow + MaxFutureSkew || occurred < DateTime.UtcNow - MaxSaleAge)
+                return (null, "Offline sale time is outside the allowed window.", 409);
+            pricingAt = occurred;
+            if (_registers is null || !await _registers.HadSessionAtAsync(registerId.Value, cashierId, occurred, SessionEndTolerance, ct))
+                return (null, "Offline sale has no matching cashier session on this register.", 403);
+        }
+        PosPromotionSnapshot? promotionSnapshot = null;
+        if (request.PromotionSnapshot is not null || request.ExpectedPriceSegments is not null)
+        {
+            if (request.PromotionSnapshot is null || request.ExpectedPriceSegments is null || !hasSnapshots
+                || request.Items.Count > 100 || request.ExpectedPriceSegments.Count is 0 or > 2000)
+                return (null, "Offline promotion proof requires a complete bounded basket and all price snapshots.", 400);
+            promotionSnapshot = _promotionSnapshots?.Read(request.PromotionSnapshot, tenantId, storeId,
+                registerId!.Value, pricingAt);
+            if (promotionSnapshot is null)
+                return (null, "Offline promotion snapshot is invalid or expired. Reconcile the original receipt.", 409);
+        }
+        if (request.ExpectedTotal is decimal expected && (expected < 0 || Math.Round(expected, 2) != expected))
+            return (null, "ExpectedTotal must be nonnegative and have at most two decimal places.", 400);
 
         if (!string.Equals(request.PaymentType, "Cash", StringComparison.OrdinalIgnoreCase) &&
             !string.Equals(request.PaymentType, "Card", StringComparison.OrdinalIgnoreCase))
@@ -452,6 +534,7 @@ public sealed class PosService : IPosService
 
         LoyaltyMembership? membership = null;
         LoyaltyProgramSettings? loyaltySettings = null;
+        var loyaltyDefaultsUsed = false;
         if (request.LoyaltyMembershipId.HasValue)
         {
             membership = await _loyalty.GetMembershipByIdAsync(request.LoyaltyMembershipId.Value, tenantId, ct);
@@ -463,13 +546,41 @@ public sealed class PosService : IPosService
             // No settings row yet -> proposed defaults (3%/50%/enabled), same fallback as
             // LoyaltyService.GetSettingsAsync, so loyalty works out of the box once the
             // "loyalty" module is on, without forcing a Settings visit first.
-            loyaltySettings = await _loyalty.GetSettingsAsync(tenantId, ct)
-                ?? new LoyaltyProgramSettings { TenantId = tenantId };
+            loyaltySettings = await _loyalty.GetSettingsAsync(tenantId, ct);
+            loyaltyDefaultsUsed = loyaltySettings is null;
+            loyaltySettings ??= new LoyaltyProgramSettings { TenantId = tenantId };
         }
         else if (request.RedeemAmount is > 0m)
         {
             return (null, "LoyaltyMembershipId is required when RedeemAmount is set.", 400);
         }
+
+        PosLoyaltySnapshot? loyaltySnapshot = null;
+        if (request.LoyaltySnapshot is not null)
+        {
+            if (promotionSnapshot is null || membership is null || registerId is null)
+                return (null, "Certified loyalty terms require a complete offline basket and membership.", 400);
+            loyaltySnapshot = _loyaltySnapshots?.Read(request.LoyaltySnapshot, tenantId, storeId, registerId.Value, membership.Id, pricingAt);
+            if (loyaltySnapshot is null || membership.CustomerId != loyaltySnapshot.CustomerId
+                || (request.CustomerId is Guid customerKey && customerKey != loyaltySnapshot.CustomerId))
+                return (null, "Offline loyalty snapshot is invalid, expired or belongs to another customer.", 409);
+            if (!await _loyalty.IsCheckoutProgramAvailableAsync(tenantId, ct))
+                return (null, "Loyalty checkout is not available for this tenant.", 403);
+            if (loyaltySnapshot.Terms.Enabled && loyaltySettings?.IsEnabled != true)
+                return (null, "Loyalty program is disabled. Reconcile the original receipt.", 409);
+            // A detached policy view. Never replace tracked settings, tier or the live balance.
+            loyaltySettings = loyaltySnapshot.Terms.Settings(tenantId);
+            loyaltyDefaultsUsed = loyaltySnapshot.Terms.DefaultsUsed;
+            if (!loyaltySettings.IsEnabled && request.RedeemAmount is > 0)
+                return (null, "A disabled loyalty quote cannot authorize redemption.", 400);
+            if (request.RedeemAmount is > 0 && (request.RedeemAmount.Value > membership.Balance
+                || membership.Balance - request.RedeemAmount.Value < loyaltySettings.MinRedemptionBalance))
+                return (null, "Live loyalty balance cannot authorize this redemption.", 400);
+        }
+        var pricingTierId = loyaltySnapshot is null ? membership?.CurrentTierId : loyaltySnapshot.Terms.TierId;
+        var pricingCashbackPercent = loyaltySnapshot?.Terms.CashbackPercent
+            ?? membership?.CurrentTier?.AccrualMultiplier ?? loyaltySettings?.AccrualRatePercent ?? 0;
+        var configuredTierDiscount = loyaltySnapshot?.Terms.TierDiscountPercent ?? membership?.CurrentTier?.DiscountPercent ?? 0;
 
         // TASK-615: tier discount percent applied per item in the loop below, gated the same
         // way as accrual/redemption (membership present + program enabled) so a disabled
@@ -477,22 +588,106 @@ public sealed class PosService : IPosService
         // A membership with no CurrentTier yet (nightly recompute job hasn't run, or the
         // feature was just enabled) behaves exactly as before this change (0% discount).
         var tierDiscountPercent = membership is not null && loyaltySettings is { IsEnabled: true }
-            ? membership.CurrentTier?.DiscountPercent ?? 0m
+            ? configuredTierDiscount
             : 0m;
 
         // 2. Resolve products + stock
         var today = DateOnly.FromDateTime(DateTime.UtcNow);
         var resolvedItems = new List<ResolvedSaleItem>();
+        var archive = new PosPricingCapture(pricingAt, inlineFiscalization ? "pos-online" :
+            promotionSnapshot is not null ? "pos-offline-pr1" : "pos-offline-legacy", hasSnapshots, promotionSnapshot is not null);
+        PricingShadowCapture? shadowCapture = null;
+        try
+        {
+            if (_pricingShadow?.IsEnabled(tenantId, storeId) == true)
+                shadowCapture = new(tenantId, storeId, new DateTimeOffset(pricingAt, TimeSpan.Zero), hasSnapshots, null);
+        }
+        catch { /* A broken observer cannot interrupt checkout. */ }
+
+        // P3-A applies only to current online checkout. Already-paid offline payloads retain
+        // their original protocol and frozen prices, including after an authority rollback.
+        Dictionary<string, Item>? onlineProducts = null;
+        IReadOnlyDictionary<Guid, PosBasePriceDecision>? baseDecisions = null;
+        if (inlineFiscalization && _basePrices?.IsEnabled(tenantId, storeId) == true)
+        {
+            if (request.Items.Count > 100) return (null, "Online pricing basket exceeds 100 lines.", 400);
+            onlineProducts = new(StringComparer.Ordinal);
+            foreach (var line in request.Items)
+            {
+                if (string.IsNullOrWhiteSpace(line.Barcode)) return (null, "Barcode is required.", 400);
+                if (onlineProducts.ContainsKey(line.Barcode)) continue;
+                var source = await _catalog.GetByBarcodeAsync(line.Barcode, ct);
+                if (source is null || source.TenantId != tenantId || !source.IsActive)
+                    return (null, "Online pricing item is not available in this tenant.", 409);
+                onlineProducts.Add(line.Barcode, source);
+            }
+            try
+            {
+                baseDecisions = await _basePrices.ResolveAsync(tenantId, storeId, pricingAt,
+                    onlineProducts.Values.DistinctBy(i => i.Id)
+                        .Select(i => new PosBasePriceItem(i.Id, i.Unit, i.PriceRetail, i.VatRate)).ToArray(), ct);
+            }
+            catch (PosPricingAuthorityException ex)
+            {
+                return (null, $"Online pricing unavailable ({ex.Code}). Refresh pricing before accepting payment.", 409);
+            }
+        }
 
         foreach (var itemReq in request.Items)
         {
-            if (itemReq.Quantity <= 0)
-                return (null, $"Quantity must be > 0 for barcode '{itemReq.Barcode}'.", 400);
+            if (itemReq.Quantity <= 0 || itemReq.Quantity > 99_999_999.99m || decimal.Round(itemReq.Quantity, 2) != itemReq.Quantity)
+                return (null, $"Quantity must be a positive numeric(10,2) value for barcode '{itemReq.Barcode}'.", 400);
 
             // Resolve product by barcode
-            var product = await _catalog.GetByBarcodeAsync(itemReq.Barcode, ct);
+            PosPriceSnapshot? snapshot = null;
+            PosBasePriceDecision? frozenBasis = null;
+            if (itemReq.PriceSnapshot is string token)
+            {
+                var baseToken = token;
+                if (loyaltySnapshot is not null)
+                {
+                    // Older API versions reject this frame instead of silently ignoring certified bonus terms.
+                    if (!token.StartsWith("lc1.", StringComparison.Ordinal))
+                        return (null, "Certified loyalty requires versioned base proofs on every line.", 400);
+                    baseToken = token[4..];
+                }
+                if (baseToken.StartsWith("pb1.", StringComparison.Ordinal))
+                {
+                    if (promotionSnapshot is null || registerId is null)
+                        return (null, "Scoped prices require a complete certified promotion basket.", 400);
+                    var scoped = _scopedPrices?.Read(baseToken, tenantId, storeId, registerId.Value, itemReq.Barcode, pricingAt);
+                    snapshot = scoped?.Price; frozenBasis = scoped?.Basis;
+                }
+                else snapshot = _priceSnapshots?.Read(baseToken, tenantId, itemReq.Barcode, pricingAt);
+                if (snapshot is null)
+                    return (null, "Offline price snapshot is invalid or expired. Reconcile the original receipt.", 409);
+            }
+            var product = onlineProducts is not null ? onlineProducts[itemReq.Barcode] : snapshot is null
+                ? await _catalog.GetByBarcodeAsync(itemReq.Barcode, ct)
+                : await _catalog.GetByIdAsync(snapshot.ItemId, ct);
             if (product is null)
                 return (null, $"Product not found for barcode '{itemReq.Barcode}'.", 400);
+            if (snapshot is not null && product.TenantId != tenantId)
+                return (null, "Product does not belong to this tenant.", 403);
+            if (snapshot is not null)
+            {
+                // A separate pricing view: never overwrite the tracked catalog entity with old data.
+                product = new Item { Id = product.Id, TenantId = tenantId, Name = snapshot.Name,
+                    Barcodes = snapshot.Barcodes.ToList(), CategoryId = snapshot.CategoryId, Unit = snapshot.Unit,
+                    PriceRetail = snapshot.Price, VatRate = snapshot.VatRate, PricePurchase = snapshot.UnitCost };
+            }
+            PosBasePriceDecision? baseDecision = frozenBasis;
+            if (baseDecisions is not null)
+            {
+                if (!baseDecisions.TryGetValue(product.Id, out baseDecision))
+                    return (null, "Online pricing result is incomplete.", 409);
+                // Keep the tracked catalog untouched; subsequent discounts and promotions use this view.
+                product = new Item { Id = product.Id, TenantId = tenantId, Name = product.Name,
+                    Barcodes = product.Barcodes.ToList(), CategoryId = product.CategoryId, Unit = product.Unit,
+                    PriceRetail = baseDecision.Price, VatRate = baseDecision.VatRate, PricePurchase = product.PricePurchase };
+            }
+            if (product.VatRate is < 0 or > 100 || product.PriceRetail is < 0)
+                return (null, "Product pricing or VAT rate is invalid.", 400);
 
             // FEFO batches for this product+store
             var batches = await _stock.GetFefoOrderedAsync(product.Id, storeId, ct);
@@ -504,7 +699,7 @@ public sealed class PosService : IPosService
                 return (null, $"Product '{product.Name}' is fully expired and cannot be sold.", 423);
 
             // Check sufficient stock (from non-expired batches)
-            var availableQty = batches.Where(b => b.ExpiryDate > today).Sum(b => b.Quantity);
+            var availableQty = batches.Where(b => StockStatus.IsUsable(b, today)).Sum(b => b.Quantity);
             if (availableQty < itemReq.Quantity)
                 return (null, $"Insufficient stock for '{product.Name}': available {availableQty}, requested {itemReq.Quantity}.", 400);
 
@@ -512,12 +707,14 @@ public sealed class PosService : IPosService
             decimal discountAmount = 0m;
             decimal priceRetail = product.PriceRetail ?? 0m;
 
+            IReadOnlyList<Discount> shadowDiscounts = [];
             // Check if any batch is critical (apply auto-discount)
             bool hasCriticalBatch = storeBatches.Any(b => b.Status == "critical" && b.Quantity > 0);
             if (hasCriticalBatch)
             {
                 // Find active auto-discount for this product
                 var activeDiscounts = await _discounts.GetAllAsync(tenantId, storeId, "active", ct);
+                shadowDiscounts = activeDiscounts.Where(d => d.ProductId == product.Id && d.AutoApplied).ToArray();
                 var productDiscount = activeDiscounts
                     .Where(d => d.ProductId == product.Id && d.AutoApplied)
                     .OrderByDescending(d => d.DiscountPercent)
@@ -531,6 +728,10 @@ public sealed class PosService : IPosService
             }
 
             var stockDiscountAmount = discountAmount;
+            var pricingLine = new BasketPricingLine(product.Id, product.CategoryId, product.PriceRetail, itemReq.Quantity,
+                product.VatRate, hasCriticalBatch, shadowDiscounts.Select(d => new BasketStockDiscount(d.Id, d.DiscountPercent, d.PriceDiscounted)).ToArray());
+            shadowCapture?.Add(pricingLine);
+            archive.Line(product.Name, product.Unit, itemReq.PriceSnapshot is null ? null : SaleSnapshotHash(itemReq.PriceSnapshot, request), pricingLine, baseDecision);
 
             // TASK-615: tier discount applied per item (not as a lump-sum reduction against
             // tx.TotalAmount) so each line's DiscountAmount/PriceFinal already reflects it and
@@ -551,25 +752,65 @@ public sealed class PosService : IPosService
                 Quantity: itemReq.Quantity,
                 PriceRetail: priceRetail,
                 DiscountAmount: discountAmount,
-                StockDiscount: stockDiscountAmount));
+                StockDiscount: stockDiscountAmount,
+                Barcode: itemReq.Barcode,
+                PriceSnapshotHash: itemReq.PriceSnapshot is null ? null : SaleSnapshotHash(itemReq.PriceSnapshot, request)));
+        }
+
+        // Different barcodes/rows can resolve to the same item. Validate their combined demand
+        // before any FEFO mutation; checking each row alone can accept more than the total stock.
+        foreach (var group in resolvedItems.GroupBy(i => i.Product.Id))
+            if (group.Sum(i => i.Quantity) > group.First().Batches.Sum(b => b.Quantity))
+                return (null, "Insufficient stock for the combined quantity of repeated sale items.", 400);
+
+        if (promotionSnapshot is not null)
+        {
+            var wholeUnits = resolvedItems.Sum(r => decimal.Floor(r.Quantity));
+            if (wholeUnits > 2000 || wholeUnits * promotionSnapshot.Rules.Count > 200000)
+                return (null, "Offline basket exceeds the promotion protocol work limit.", 400);
         }
 
         // 2b. Promotion rules (promotion-rules.md). Only lines where a rule actually priced at
         // least one unit are re-priced (and possibly split into sub-lines); every other line keeps
         // the exact legacy stock/tier discount computed above.
-        var pricingAt = ResolvePricingInstant(request, inlineFiscalization);
         var promo = await EvaluatePromotionsAsync(
             tenantId, storeId, pricingAt, resolvedItems,
             membership is not null && loyaltySettings is { IsEnabled: true }
-                ? new PromotionMembership(membership.Id, membership.CurrentTierId, tierDiscountPercent)
+                ? new PromotionMembership(membership.Id, pricingTierId, tierDiscountPercent)
                 : null,
-            ct);
+            ct, shadowCapture, promotionSnapshot, archive);
+
+        if (promotionSnapshot is not null)
+        {
+            var verified = resolvedItems.SelectMany((r, i) => promo?.Segments[i] is { } segments
+                ? segments.Select(s => new ExpectedPriceSegment(i, s.Quantity, s.UnitPrice, s.RuleId,
+                    s.RuleId is Guid id ? promo!.Rules[id].VersionId : null))
+                : new[] { new ExpectedPriceSegment(i, r.Quantity, Math.Max(0m, r.PriceRetail - r.DiscountAmount)) })
+                .ToArray();
+            if (!verified.SequenceEqual(request.ExpectedPriceSegments!))
+                return (null, "Offline receipt segments or promotion versions differ. Reconcile the original receipt.", 409);
+        }
+
+        // Check the original amount BEFORE staging stock/loyalty changes. Changed rules must not
+        // silently re-price an already-paid offline receipt, even if the customer tendered enough.
+        if (request.ExpectedTotal is decimal originalTotal)
+        {
+            var pricedTotal = resolvedItems.Select((r, i) => promo?.Segments[i] is { } segments
+                ? segments.Sum(s => RoundMoney(s.UnitPrice * s.Quantity))
+                : RoundMoney(Math.Max(0m, r.PriceRetail - r.DiscountAmount) * r.Quantity)).Sum();
+            var redemption = request.RedeemAmount is > 0
+                ? Math.Round(request.RedeemAmount.Value / (loyaltySettings?.BonusUnitsPerCurrencyUnit ?? 1m),
+                    2, MidpointRounding.AwayFromZero) : 0m;
+            if (originalTotal != pricedTotal - redemption)
+                return (null, "Offline receipt total differs from verified pricing. Reconcile the original receipt.", 409);
+        }
 
         // 3. Build transaction (all in ONE EF transaction)
         var receiptNumber = $"R-{DateTime.UtcNow:yyyyMMddHHmmss}-{Guid.NewGuid().ToString("N")[..6].ToUpper()}";
 
         var tx = new PosTransaction
         {
+            PricingArchiveRequired = true,
             TenantId = tenantId,
             StoreId = storeId,
             CashierId = cashierId,
@@ -602,6 +843,7 @@ public sealed class PosService : IPosService
             foreach (var batch in resolved.Batches)
             {
                 if (remaining <= 0) break;
+                if (!StockStatus.IsUsable(batch, today)) continue;
 
                 var consume = Math.Min(remaining, batch.Quantity);
                 primaryBatchId ??= batch.Id;
@@ -609,7 +851,7 @@ public sealed class PosService : IPosService
 
                 var before = batch.Quantity;
                 batch.Quantity -= consume;
-                batch.Status = StockStatus.Compute(batch.Quantity, batch.ExpiryDate, batch.LastCheckedAt);
+                batch.Status = StockStatus.Recalculate(batch);
                 _stock.Update(batch);
 
                 stockEvents.Add(new StockEvent
@@ -621,7 +863,9 @@ public sealed class PosService : IPosService
                     StoreId = storeId,
                     QuantityDelta = -consume,
                     Confidence = 100,
-                    Meta = $"{{\"tx_receipt\":\"{receiptNumber}\"}}",
+                    Meta = JsonSerializer.Serialize(new { tx_receipt = receiptNumber, tx_id = tx.Id,
+                        offline = !inlineFiscalization, occurred_at = !inlineFiscalization ? pricingAt : (DateTime?)null,
+                        frozen_offline = !inlineFiscalization && hasSnapshots && request.ExpectedTotal != null && request.OccurredAt != null, unit = resolved.Product.Unit }),
                     PerformedBy = cashierId,
                 });
 
@@ -659,6 +903,12 @@ public sealed class PosService : IPosService
                 PriceRetail = resolved.PriceRetail,
                 DiscountAmount = discountAmount,
                 PriceFinal = priceFinal,
+                LineTotal = RoundMoney(priceFinal * quantity),
+                VatRate = resolved.Product.VatRate,
+                UnitCost = resolved.Product.PricePurchase,
+                ProductNameSnapshot = resolved.Product.Name,
+                BarcodeSnapshot = resolved.Barcode,
+                PriceSnapshotHash = resolved.PriceSnapshotHash,
                 PromotionRuleId = ruleId,
                 PromotionLabel = label,
             });
@@ -666,11 +916,11 @@ public sealed class PosService : IPosService
             var dto = new SaleItemDto(
                 ProductId: resolved.Product.Id,
                 ProductName: resolved.Product.Name,
-                Barcode: resolved.Product.Barcodes.Count > 0 ? resolved.Product.Barcodes[0] : string.Empty,
+                Barcode: resolved.Barcode,
                 Quantity: quantity,
                 UnitPrice: resolved.PriceRetail,
                 DiscountAmount: discountAmount,
-                Total: Math.Round(priceFinal * quantity, 2),
+                Total: RoundMoney(priceFinal * quantity),
                 PromotionRuleId: ruleId,
                 PromotionLabel: label);
             txItemDtos.Add(dto);
@@ -689,6 +939,23 @@ public sealed class PosService : IPosService
             ? JsonSerializer.Deserialize<HashSet<Guid>>(loyaltySettings.ExcludedProductIdsJson) ?? [] : [];
         var excludedCategoryIds = loyaltySettings?.BonusExclusionsEnabled == true
             ? JsonSerializer.Deserialize<HashSet<Guid>>(loyaltySettings.ExcludedCategoryIdsJson) ?? [] : [];
+        BasketLoyalty? loyaltyInput = membership != null && loyaltySettings != null
+            ? new(loyaltySettings.IsEnabled, true, pricingTierId, tierDiscountPercent,
+                pricingCashbackPercent,
+                loyaltySettings.BonusUnitsPerCurrencyUnit, request.RedeemAmount ?? 0, membership.Balance,
+                loyaltySettings.MinRedemptionBalance, loyaltySettings.RedemptionCapPercent,
+                loyaltySettings.BonusExclusionsEnabled, loyaltySettings.ExcludeDiscountedItems,
+                loyaltySettings.ExclusionsApplyToRedemption, loyaltySettings.ExclusionsApplyToAccrual,
+                excludedProductIds.ToArray(), excludedCategoryIds.ToArray()) : null;
+        if (loyaltySettings is { IsEnabled: true } && loyaltyInput != null) shadowCapture?.Loyalty(loyaltyInput);
+        archive.Loyalty(loyaltyInput, loyaltySettings is null ? null : new(loyaltyDefaultsUsed,
+            loyaltySnapshot is null ? (loyaltyDefaultsUsed ? null : loyaltySettings.Id) : loyaltySnapshot.Terms.SettingsId,
+            loyaltySnapshot is null ? (loyaltyDefaultsUsed ? null : loyaltySettings.UpdatedAt) : loyaltySnapshot.Terms.SettingsUpdatedAt,
+            loyaltySettings.FirstPurchaseRewardEnabled, loyaltySettings.FirstPurchaseRewardAmount,
+            loyaltySettings.BonusLifetimeEnabled, loyaltySettings.BonusLifetimeDays,
+            configuredTierDiscount, membership?.Balance,
+            request.LoyaltySnapshot is null ? null : SnapshotHash(request.LoyaltySnapshot), loyaltySnapshot?.IssuedAt, loyaltySnapshot?.ExpiresAt));
+        archive.LoyaltyContextOrigin = loyaltySnapshot is null ? "server-acceptance" : "certified-sale-terms/live-balance";
         bool IsBonusExcluded(SaleSubLine line) => loyaltySettings?.BonusExclusionsEnabled == true &&
             (excludedProductIds.Contains(line.Product.Id) ||
              (line.Product.CategoryId is Guid categoryId && excludedCategoryIds.Contains(categoryId)) ||
@@ -709,7 +976,9 @@ public sealed class PosService : IPosService
         {
             var qualifiesForFirstPurchaseReward = loyaltySettings.FirstPurchaseRewardEnabled
                 && loyaltySettings.FirstPurchaseRewardAmount > 0m
-                && !await _loyalty.HasPurchaseAccrualAsync(tenantId, membership.Id, ct);
+                && !await _loyalty.HasPurchaseAccrualAsync(tenantId, membership.Id, ct)
+                && (loyaltySnapshot is null || !await _loyalty.HasFirstPurchaseRewardAsync(tenantId, membership.Id, ct));
+            archive.FirstPurchaseEligible = qualifiesForFirstPurchaseReward;
             if (request.RedeemAmount is > 0m)
             {
                 var redeem = request.RedeemAmount.Value;
@@ -737,8 +1006,9 @@ public sealed class PosService : IPosService
                     var consumed = Math.Min(lot.RemainingAmount, remainingToAllocate);
                     lot.RemainingAmount -= consumed;
                     remainingToAllocate -= consumed;
+                    archive.Consumed(lot, consumed);
                 }
-                await _loyalty.AddLedgerEntryAsync(new LoyaltyLedgerEntry
+                var redemptionEntry = new LoyaltyLedgerEntry
                 {
                     TenantId = tenantId,
                     MembershipId = membership.Id,
@@ -746,13 +1016,14 @@ public sealed class PosService : IPosService
                     Amount = -redeem,
                     BalanceAfter = membership.Balance,
                     PosTransactionId = tx.Id,
-                }, ct);
+                };
+                await _loyalty.AddLedgerEntryAsync(redemptionEntry, ct);
+                archive.Effect(redemptionEntry);
             }
 
             // Each configured tier owns its cashback percentage directly. The legacy global
             // rate remains only as a safe fallback until a membership receives its first tier.
-            var cashbackPercent = membership.CurrentTier?.AccrualMultiplier
-                ?? loyaltySettings.AccrualRatePercent;
+            var cashbackPercent = pricingCashbackPercent;
             var accrualBase = loyaltySettings.BonusExclusionsEnabled && loyaltySettings.ExclusionsApplyToAccrual
                 ? Math.Max(0m, eligibleBonusTotal - ((loyaltyRedeemed ?? 0m) / loyaltySettings.BonusUnitsPerCurrencyUnit))
                 : tx.TotalAmount;
@@ -774,7 +1045,7 @@ public sealed class PosService : IPosService
                     PosTransactionId = tx.Id,
                 };
                 await _loyalty.AddLedgerEntryAsync(accrualEntry, ct);
-                await _loyalty.AddBonusLotAsync(new LoyaltyBonusLot
+                var accrualLot = new LoyaltyBonusLot
                 {
                     TenantId = tenantId,
                     MembershipId = membership.Id,
@@ -784,7 +1055,9 @@ public sealed class PosService : IPosService
                     ExpiresAt = loyaltySettings.BonusLifetimeEnabled
                         ? DateTimeOffset.UtcNow.AddDays(loyaltySettings.BonusLifetimeDays)
                         : null,
-                }, ct);
+                };
+                await _loyalty.AddBonusLotAsync(accrualLot, ct);
+                archive.Effect(accrualEntry, accrualLot.ExpiresAt);
             }
 
             if (qualifiesForFirstPurchaseReward)
@@ -795,11 +1068,13 @@ public sealed class PosService : IPosService
                     EntryType = LoyaltyEntryType.Reward, Amount = reward, BalanceAfter = membership.Balance,
                     PosTransactionId = tx.Id, Note = "Винагорода за першу покупку" };
                 await _loyalty.AddLedgerEntryAsync(rewardEntry, ct);
-                await _loyalty.AddBonusLotAsync(new LoyaltyBonusLot { TenantId = tenantId,
+                var rewardLot = new LoyaltyBonusLot { TenantId = tenantId,
                     MembershipId = membership.Id, SourceLedgerEntryId = rewardEntry.Id,
                     OriginalAmount = reward, RemainingAmount = reward,
                     ExpiresAt = loyaltySettings.BonusLifetimeEnabled
-                        ? DateTimeOffset.UtcNow.AddDays(loyaltySettings.BonusLifetimeDays) : null }, ct);
+                        ? DateTimeOffset.UtcNow.AddDays(loyaltySettings.BonusLifetimeDays) : null };
+                await _loyalty.AddBonusLotAsync(rewardLot, ct);
+                archive.Effect(rewardEntry, rewardLot.ExpiresAt);
             }
 
             _loyalty.UpdateMembership(membership);
@@ -813,7 +1088,28 @@ public sealed class PosService : IPosService
             customer.TotalSpent += tx.TotalAmount;
         }
 
-        tx.TaxAmount = Math.Round(tx.TotalAmount * 0.2m / 1.2m, 2); // Standard VAT 20%
+        tx.TaxAmount = PosTaxCalculator.Apply(tx.Items, tx.TotalAmount);
+        // Observe detached monetary values only. This is a priced attempt, not a commit receipt.
+        if (shadowCapture != null)
+        {
+            try
+            {
+                var observed = tx.Items.Select(i => new BasketPriceSegment(i.ProductId, i.Quantity, i.PriceRetail,
+                    i.DiscountAmount, i.PriceFinal, i.LineTotal!.Value, i.VatRate!.Value, i.TaxableAmount!.Value,
+                    i.VatAmount!.Value, i.PromotionRuleId, i.PromotionRuleId is Guid rule ? promo!.Rules[rule].VersionId : null,
+                    i.PromotionLabel)).ToArray();
+                var gross = observed.Sum(i => i.Gross);
+                _pricingShadow!.Observe(shadowCapture.Input, new(observed, applications.Select(a => new BasketRuleApplication(
+                    a.RuleId, a.VersionId, a.Units, a.DiscountAmount)).ToArray(), gross, loyaltyRedeemed ?? 0,
+                    gross - tx.TotalAmount, tx.TotalAmount, tx.TaxAmount, loyaltyAccrued ?? 0));
+            }
+            catch { /* Resolver/telemetry failures cannot modify or reject an authoritative sale. */ }
+        }
+        tx.PricingSnapshot = archive.Complete(tx, applications, loyaltyRedeemed ?? 0, loyaltyAccrued ?? 0, membership?.Balance);
+        // Add the saved tax snapshots to the response; never expose UnitCost to the cashier.
+        txItemDtos = txItemDtos.Select((dto, index) => dto with {
+            VatRate = tx.Items.ElementAt(index).VatRate, VatAmount = tx.Items.ElementAt(index).VatAmount,
+            TaxableAmount = tx.Items.ElementAt(index).TaxableAmount }).ToList();
 
         // Persist entire sale (stock updates + events + tx + items) in one SaveChanges
         await _pos.AddTransactionAsync(tx, ct);
@@ -886,7 +1182,8 @@ public sealed class PosService : IPosService
                     Name: r.Product.Name,
                     UnitPrice: r.PriceFinal,
                     Quantity: r.Quantity,
-                    Barcode: r.Product.Barcodes.Count > 0 ? r.Product.Barcodes[0] : null)).ToList(),
+                    Barcode: r.Product.Barcodes.Count > 0 ? r.Product.Barcodes[0] : null,
+                    VatRate: r.Product.VatRate)).ToList(),
                 Payments: [new FiscalPayment(
                     string.Equals(request.PaymentType, "Card", StringComparison.OrdinalIgnoreCase)
                         ? FiscalPaymentKind.Cashless : FiscalPaymentKind.Cash,
@@ -948,12 +1245,12 @@ public sealed class PosService : IPosService
             RetryCount: t.RetryCount,
             Items: t.Items.Select(i => new SaleItemDto(
                 ProductId: i.ProductId,
-                ProductName: i.Product?.Name ?? "—",
-                Barcode: i.Product?.Barcodes.Count > 0 ? i.Product.Barcodes[0] : string.Empty,
+                ProductName: i.ProductNameSnapshot ?? i.Product?.Name ?? "—",
+                Barcode: i.BarcodeSnapshot ?? (i.Product?.Barcodes.Count > 0 ? i.Product.Barcodes[0] : string.Empty),
                 Quantity: i.Quantity,
                 UnitPrice: i.PriceRetail,
                 DiscountAmount: i.DiscountAmount,
-                Total: Math.Round(i.PriceFinal * i.Quantity, 2))).ToList(),
+                Total: (i.LineTotal ?? Math.Round(i.PriceFinal * i.Quantity, 2)))).ToList(),
             Total: t.TotalAmount)).ToList();
     }
 
@@ -982,10 +1279,11 @@ public sealed class PosService : IPosService
             var fiscalRequest = new FiscalReceiptRequest(
                 Items: tx.Items.Select(i => new FiscalReceiptItem(
                     Code: i.ProductId.ToString(),
-                    Name: i.Product?.Name ?? i.ProductId.ToString(),
+                    Name: i.ProductNameSnapshot ?? i.Product?.Name ?? i.ProductId.ToString(),
                     UnitPrice: i.PriceRetail - i.DiscountAmount,
                     Quantity: i.Quantity,
-                    Barcode: i.Product?.Barcodes.Count > 0 ? i.Product.Barcodes[0] : null)).ToList(),
+                    Barcode: i.BarcodeSnapshot ?? (i.Product?.Barcodes.Count > 0 ? i.Product.Barcodes[0] : null),
+                    VatRate: i.VatRate)).ToList(),
                 Payments: [new FiscalPayment(
                     string.Equals(tx.PaymentType, "card", StringComparison.OrdinalIgnoreCase)
                         ? FiscalPaymentKind.Cashless : FiscalPaymentKind.Cash,
@@ -1113,14 +1411,14 @@ public sealed class PosService : IPosService
             ShiftId: t.ShiftId ?? shiftId,
             Items: t.Items.Select(i => new SaleItemDto(
                 ProductId: i.ProductId,
-                ProductName: i.Product?.Name ?? "—",
-                Barcode: i.Product?.Barcodes.Count > 0 ? i.Product.Barcodes[0] : string.Empty,
+                ProductName: i.ProductNameSnapshot ?? i.Product?.Name ?? "—",
+                Barcode: i.BarcodeSnapshot ?? (i.Product?.Barcodes.Count > 0 ? i.Product.Barcodes[0] : string.Empty),
                 Quantity: i.Quantity,
                 UnitPrice: i.PriceRetail,
                 DiscountAmount: i.DiscountAmount,
-                Total: Math.Round(i.PriceFinal * i.Quantity, 2),
+                Total: (i.LineTotal ?? Math.Round(i.PriceFinal * i.Quantity, 2)),
                 PromotionRuleId: i.PromotionRuleId,
-                PromotionLabel: i.PromotionLabel)).ToList(),
+                PromotionLabel: i.PromotionLabel, VatRate: i.VatRate, VatAmount: i.VatAmount, TaxableAmount: i.TaxableAmount)).ToList(),
             Subtotal: t.TotalAmount,
             PaymentType: t.PaymentType,
             PaymentAmount: t.TenderedAmount ?? t.TotalAmount,
@@ -1190,7 +1488,24 @@ public sealed class PosService : IPosService
         decimal Quantity,
         decimal PriceRetail,
         decimal DiscountAmount,
-        decimal StockDiscount);
+        decimal StockDiscount,
+        string Barcode,
+        string? PriceSnapshotHash);
+
+    // Domain-separated binding uses existing immutable per-line proof hashes. Legacy hashes stay byte-identical.
+    // New replay also binds the original segments, membership and sale instant; it never needs a live lease.
+    private static string SaleSnapshotHash(string token, CreateSaleRequest request) => request.LoyaltySnapshot is not null
+        ? CompatibilityBasket.Fingerprint(new { Protocol = "pos.offline.loyalty.v1", Price = token,
+            request.PromotionSnapshot, request.ExpectedPriceSegments, request.LoyaltySnapshot, request.LoyaltyMembershipId,
+            request.CustomerId, request.RedeemAmount, request.OccurredAt })
+        : request.PromotionSnapshot is null
+        ? SnapshotHash(token)
+        : CompatibilityBasket.Fingerprint(new { Protocol = "pos.offline.promotions.v1", Price = token,
+            request.PromotionSnapshot, request.ExpectedPriceSegments, request.LoyaltyMembershipId,
+            request.CustomerId, request.RedeemAmount, request.OccurredAt });
+
+    private static string SnapshotHash(string token) => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(token)));
+    private static decimal RoundMoney(decimal value) => Math.Round(value, 2, MidpointRounding.AwayFromZero);
 
     /// <summary>One persisted pos_transaction_items row (a whole line, or a promo sub-line).</summary>
     private sealed record SaleSubLine(Item Product, decimal Quantity, decimal PriceFinal, decimal DiscountAmount, decimal Total);
@@ -1223,11 +1538,20 @@ public sealed class PosService : IPosService
 
     private async Task<PromotionOutcome?> EvaluatePromotionsAsync(
         Guid tenantId, Guid storeId, DateTime pricingAt, List<ResolvedSaleItem> items,
-        PromotionMembership? membership, CancellationToken ct)
+        PromotionMembership? membership, CancellationToken ct, PricingShadowCapture? shadowCapture = null,
+        PosPromotionSnapshot? snapshot = null, PosPricingCapture? archive = null)
     {
-        if (_promotions is null || items.Count == 0) return null;
+        var zone = snapshot is null ? await GetStoreTimeZoneAsync(storeId, ct) : snapshot.StoreTimeZone;
+        if (items.Count == 0 || (_promotions is null && snapshot is null))
+        {
+            archive?.Promotions([], zone);
+            return null;
+        }
 
-        var rules = PromotionRuleLoader.ToInputs(await _promotions.GetPublishedAsync(tenantId, ct));
+        var published = snapshot?.Rules ?? await _promotions!.GetPublishedAsync(tenantId, ct);
+        var rules = PromotionRuleLoader.ToInputs(published);
+        archive?.Promotions(published, zone);
+        shadowCapture?.Promotions(rules, zone, published.Count - rules.Count);
         if (rules.Count == 0) return null;
 
         var lines = items.Select(r => new PromotionLineInput(
@@ -1240,7 +1564,7 @@ public sealed class PosService : IPosService
 
         var result = PromotionEngine.Evaluate(lines, rules,
             new PromotionContext(storeId, new DateTimeOffset(pricingAt, TimeSpan.Zero),
-                0, membership, await GetStoreTimeZoneAsync(storeId, ct)));
+                0, membership, zone));
 
         var segments = result.Lines
             .Select(l => l.Segments.Any(s => s.RuleId.HasValue) ? l.Segments : null)

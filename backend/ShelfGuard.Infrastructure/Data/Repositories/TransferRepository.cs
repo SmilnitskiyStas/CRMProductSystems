@@ -113,10 +113,21 @@ public sealed class TransferRepository : ITransferRepository
     public async Task AddMovementAsync(StockMovement movement, CancellationToken ct = default) =>
         await _db.StockMovements.AddAsync(movement, ct);
 
-    public void Update(StockTransfer transfer) => _db.StockTransfers.Update(transfer);
+    public void Update(StockTransfer transfer) => _db.Entry(transfer).State = EntityState.Modified;
 
-    public void UpdateStock(ProductStock stock) => _db.ProductStocks.Update(stock);
+    public void UpdateStock(ProductStock stock) => _db.Entry(stock).State = EntityState.Modified;
 
-    public Task SaveChangesAsync(CancellationToken ct = default) =>
-        _db.SaveChangesAsync(ct);
+    public async Task SaveChangesAsync(CancellationToken ct = default)
+    {
+        try
+        {
+            await _db.SaveChangesAsync(ct);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            // No pending destination batches or source restoration may survive a losing transition.
+            _db.ChangeTracker.Clear();
+            throw;
+        }
+    }
 }

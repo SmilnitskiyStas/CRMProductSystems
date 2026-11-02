@@ -13,7 +13,7 @@ namespace ShelfGuard.Api.Controllers;
 /// </summary>
 [ApiController]
 [Route("api/ai")]
-[Authorize]
+[Authorize(Policy = AppPolicies.AiAssistantUse)]
 [RequireModule("inventory")]
 public sealed class AiAssistantController : ControllerBase
 {

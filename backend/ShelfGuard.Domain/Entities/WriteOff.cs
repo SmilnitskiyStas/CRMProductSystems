@@ -7,6 +7,7 @@ public sealed class WriteOff
     public Guid StoreId { get; init; }
     public string Status { get; set; } = "draft";
     public string? Reason { get; set; }
+    public string? Notes { get; set; }
     public decimal? TotalLossAmount { get; set; }
     public decimal? TotalLossAmountPurchase { get; set; }
     public decimal? TotalReimbursementAmount { get; set; }

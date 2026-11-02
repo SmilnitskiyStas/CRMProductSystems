@@ -166,7 +166,7 @@ public sealed class StockService : IStockService
     }
 
     public async Task<(ProductStockDto? Stock, string? Error)> UpdateAsync(
-        Guid id, UpdateStockRequest request, CancellationToken ct = default)
+        Guid id, Guid performedBy, UpdateStockRequest request, CancellationToken ct = default)
     {
         var stock = await _repo.GetByIdAsync(id, ct);
         if (stock is null)
@@ -175,13 +175,39 @@ public sealed class StockService : IStockService
         if (request.Quantity < 0)
             return (null, "Quantity cannot be negative.");
 
+        if (decimal.Round(request.Quantity, 2) != request.Quantity)
+            return (null, "Quantity must have at most 2 decimal places.");
+
+        var before = stock.Quantity;
+        var previousZoneId = stock.ZoneId;
+        var delta = request.Quantity - before;
         stock.ZoneId = request.ZoneId;
         stock.ShelfNumber = request.ShelfNumber;
         stock.BatchNumber = request.BatchNumber;
         stock.Quantity = request.Quantity;
-        stock.Status = StockStatus.Compute(request.Quantity, request.ExpiryDate, stock.LastCheckedAt);
+        stock.Status = StockStatus.Recalculate(stock);
 
         _repo.Update(stock);
+        if (delta != 0)
+        {
+            await _repo.AddMovementAsync(new StockMovement
+            {
+                TenantId = stock.TenantId,
+                MovementType = "adjustment",
+                ProductStockId = stock.Id,
+                ProductId = stock.ProductId,
+                FromStoreId = delta < 0 ? stock.StoreId : null,
+                ToStoreId = delta > 0 ? stock.StoreId : null,
+                FromZoneId = delta < 0 ? previousZoneId : null,
+                ToZoneId = delta > 0 ? stock.ZoneId : null,
+                Quantity = Math.Abs(delta),
+                QuantityBefore = before,
+                QuantityAfter = stock.Quantity,
+                ReferenceId = stock.Id,
+                ReferenceType = "stock_adjustment",
+                PerformedBy = performedBy,
+            }, ct);
+        }
         await _repo.SaveChangesAsync(ct);
 
         return (ToDto(stock), null);
@@ -195,7 +221,7 @@ public sealed class StockService : IStockService
             return (null, "Stock batch not found.");
 
         stock.LastCheckedAt = DateTime.UtcNow;
-        stock.Status = StockStatus.Compute(stock.Quantity, stock.ExpiryDate, stock.LastCheckedAt);
+        stock.Status = StockStatus.Recalculate(stock);
 
         _repo.Update(stock);
         await _repo.SaveChangesAsync(ct);
@@ -226,7 +252,7 @@ public sealed class StockService : IStockService
             var before = batch.Quantity;
 
             batch.Quantity -= take;
-            batch.Status = StockStatus.Compute(batch.Quantity, batch.ExpiryDate, batch.LastCheckedAt);
+            batch.Status = StockStatus.Recalculate(batch);
             remaining -= take;
 
             var movement = new StockMovement
@@ -345,7 +371,7 @@ public sealed class StockService : IStockService
         s.QuantityInitial,
         s.ExpiryDate,
         StockStatus.DaysLeft(s.ExpiryDate),
-        StockStatus.Compute(s.Quantity, s.ExpiryDate, s.LastCheckedAt),
+        StockStatus.Recalculate(s),
         s.SourceType,
         s.AddedAt,
         s.LastCheckedAt,
@@ -365,7 +391,7 @@ public sealed class StockService : IStockService
         s.ExpiryDate,
         StockStatus.DaysLeft(s.ExpiryDate),
         s.Quantity,
-        StockStatus.Compute(s.Quantity, s.ExpiryDate, s.LastCheckedAt),
+        StockStatus.Recalculate(s),
         actions
     );
 }

@@ -119,6 +119,8 @@ public sealed class CheckboxFiscalClient : IFiscalService
         var payload = new ReceiptSellPayload
         {
             Id = request.LocalReceiptId,
+            RelatedReceiptId = request.RelatedReceiptId,
+            TechnicalReturn = request.TechnicalReturn,
             CashierName = string.IsNullOrWhiteSpace(request.CashierName) ? null : request.CashierName,
             Goods = request.Items.Select(i => new GoodItemPayload
             {
@@ -130,6 +132,7 @@ public sealed class CheckboxFiscalClient : IFiscalService
                     Price = ToKopecks(i.UnitPrice),
                 },
                 Quantity = ToQuantity(i.Quantity),
+                IsReturn = request.IsReturn,
             }).ToList(),
             Payments = request.Payments.Select(p => new PaymentPayload
             {
@@ -411,6 +414,12 @@ public sealed class CheckboxFiscalClient : IFiscalService
 
     private sealed class ReceiptSellPayload
     {
+        [JsonPropertyName("related_receipt_id")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public string? RelatedReceiptId { get; set; }
+        [JsonPropertyName("technical_return")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+        public bool TechnicalReturn { get; set; }
         [JsonPropertyName("id")]
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public string? Id { get; set; }
@@ -425,6 +434,9 @@ public sealed class CheckboxFiscalClient : IFiscalService
 
     private sealed class GoodItemPayload
     {
+        [JsonPropertyName("is_return")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+        public bool IsReturn { get; set; }
         [JsonPropertyName("good")] public GoodPayload Good { get; set; } = new();
         [JsonPropertyName("quantity")] public long Quantity { get; set; }
     }

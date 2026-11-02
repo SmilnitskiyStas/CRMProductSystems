@@ -10,12 +10,23 @@ on:
 
 concurrency:
   group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
 
 jobs:
   backend-ci:
     name: Backend — build & test
     runs-on: ubuntu-latest
+    env:
+      ConnectionStrings__DefaultConnection: "Host=localhost;Port=5435;Database=crm;Username=crm;Password=crm_dev_password"
+      SHELFGUARD_TEST_DB_CONNECTION: "Host=localhost;Port=5435;Database=crm;Username=crm;Password=crm_dev_password"
+      SHELFGUARD_RECOVERY_TEST_DB: "Host=localhost;Port=5435;Database=erm_ci_recovery;Username=crm;Password=crm_dev_password"
+      SHELFGUARD_ERP_SCHEMA_TEST_DB: "Host=localhost;Port=5435;Database=erm_schema_test_ci;Username=crm;Password=crm_dev_password"
+      SHELFGUARD_POSTING_TEST_DB: "Host=localhost;Port=5435;Database=erm_posting_test_ci;Username=crm;Password=crm_dev_password"
+      SHELFGUARD_STOCK_HISTORY_TEST_DB: "Host=localhost;Port=5435;Database=erm_posting_test_ci_history;Username=crm;Password=crm_dev_password"
+      Migrations__RunOnStartup: 'false'
     # TASK-553: RlsCrossTenantIntegrationTests and the other Postgres-backed integration
     # tests (grep ShelfGuard.Tests for IAsyncLifetime/NpgsqlConnection) soft-skip whenever
     # no reachable Postgres is configured. Port/user/password/db mirror docker-compose.yml's
@@ -49,7 +60,7 @@ jobs:
         working-directory: backend
 
       - name: Build
-        run: dotnet build --no-restore
+        run: dotnet build -c Release --no-restore
         working-directory: backend
 
       # dotnet run/Program.cs self-migrates on API startup, but a bare `dotnet test` run
@@ -61,14 +72,35 @@ jobs:
         run: dotnet tool install --global dotnet-ef --version 8.0.11
 
       - name: Apply EF Core migrations to CI Postgres
-        run: dotnet ef database update --project ShelfGuard.Infrastructure --startup-project ShelfGuard.Api
+        run: dotnet ef database update --project ShelfGuard.Infrastructure --startup-project ShelfGuard.Api --configuration Release --no-build
         working-directory: backend
         env:
           ConnectionStrings__DefaultConnection: "Host=localhost;Port=5435;Database=crm;Username=crm;Password=crm_dev_password"
 
-      - name: Test
-        run: dotnet test --no-build --verbosity normal
-        working-directory: backend
+      - name: Create isolated ERP and recovery databases
+        env:
+          PGPASSWORD: crm_dev_password
+        run: |
+          for database in erm_schema_test_ci erm_posting_test_ci erm_posting_test_ci_history; do
+            createdb -h localhost -p 5435 -U crm "$database"
+          done
+          createdb -h localhost -p 5435 -U crm -T crm erm_ci_recovery
+
+      - name: Test all backend cases, including real ERP transactions
+        run: dotnet test backend/ShelfGuard.Tests -c Release --no-build --logger 'trx;LogFileName=backend.trx' --results-directory .ci-release/tests
+
+      - name: Publish tested API for Linux
+        run: |
+          dotnet publish backend/ShelfGuard.Api -c Release -r linux-x64 --self-contained false -o .ci-release/api
+          python3 scripts/deploy/receipts-ci-package.py backend
+
+      - name: Upload tested API
+        uses: actions/upload-artifact@v4
+        with:
+          name: receipt-api-${{ github.sha }}
+          path: .ci-release/
+          include-hidden-files: true
+          retention-days: 7
 
   frontend-ci:
     name: Frontend — typecheck & lint
@@ -104,6 +136,28 @@ jobs:
       - name: Lint
         run: npm run lint
         working-directory: frontend
+
+      - name: Receipt UI and receiving protocol tests
+        run: npx vitest run features/receipts/components/ReceiptCategoryPanel.test.tsx features/receipts/components/ReceiptReceiving.test.tsx features/receipts/api/receipt-receiving.test.ts
+        working-directory: frontend
+
+      - name: Build production Web
+        run: npm run build
+        working-directory: frontend
+        env:
+          NEXT_PUBLIC_API_URL: https://api.agrusystems.pp.ua
+          NEXT_TELEMETRY_DISABLED: '1'
+
+      - name: Stage Web artifact
+        run: python3 scripts/deploy/receipts-ci-package.py web
+
+      - name: Upload tested Web
+        uses: actions/upload-artifact@v4
+        with:
+          name: receipt-web-${{ github.sha }}
+          path: .ci-release/
+          include-hidden-files: true
+          retention-days: 7
 
   worker-ci:
     name: Worker — typecheck
@@ -153,22 +207,61 @@ jobs:
         run: npx tsc --noEmit
         working-directory: mobile
 
-  deploy:
-    name: Deploy → production
+  release-package:
+    name: Package verified release
     runs-on: ubuntu-latest
     needs: [backend-ci, frontend-ci, worker-ci, mobile-ci]
-    # Only deploy on direct push to main, not on PRs
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: receipt-api-${{ github.sha }}
+          path: .ci-release/
+      - uses: actions/download-artifact@v4
+        with:
+          name: receipt-web-${{ github.sha }}
+          path: .ci-release/
+      - name: Package immutable API and Web outputs
+        run: python3 scripts/deploy/receipts-ci-package.py package --sha "$GITHUB_SHA"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: receipt-release-${{ github.sha }}
+          path: |
+            .ci-release/payload.tar.gz
+            .ci-release/payload.sha256
+          include-hidden-files: true
+          retention-days: 7
+
+  deploy:
+    name: Deploy verified artifact → production
+    runs-on: ubuntu-latest
+    needs: release-package
+    timeout-minutes: 40
+    concurrency:
+      group: shelfguard-production
+      cancel-in-progress: false
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     steps:
-      - name: Deploy via SSH
-        uses: appleboy/ssh-action@v1.0.3
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
         with:
-          host: 93.127.143.98
-          port: 10048
-          username: administrator
-          key: ${{ secrets.AUTO_DEPLOY_DATABASEMATE }}
-          # Default is 10m; the on-server docker build (api + Next.js) takes longer on this 3.9 GB host.
-          command_timeout: 30m
-          script: |
-            cd ~/shelfguard
-            bash deploy.sh
+          name: receipt-release-${{ github.sha }}
+          path: .ci-release/
+      - name: Verify, rehearse, back up and deploy the tested artifact
+        env:
+          DEPLOY_SSH_KEY: ${{ secrets.AUTO_DEPLOY_DATABASEMATE }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          release_dir="/home/administrator/shelfguard-releases/receipts-${GITHUB_SHA:0:12}"
+          key_file="$RUNNER_TEMP/receipt-deploy-key"
+          trap 'rm -f "$key_file"' EXIT
+          printf '%s\n' "$DEPLOY_SSH_KEY" > "$key_file"
+          chmod 600 "$key_file"
+          ssh_opts=(-i "$key_file" -p 10048 -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=.github/production_known_hosts -o ServerAliveInterval=15)
+          host=administrator@93.127.143.98
+          payload_sha=$(cut -d ' ' -f 1 .ci-release/payload.sha256)
+          ssh "${ssh_opts[@]}" "$host" "SG_RELEASE_DIR='$release_dir' python3 -" < scripts/deploy/receipts-production-inventory.py
+          scp -i "$key_file" -P 10048 -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=.github/production_known_hosts .ci-release/payload.tar.gz scripts/deploy/receipts-ci-run.py "$host:$release_dir/"
+          ssh "${ssh_opts[@]}" "$host" "SG_RELEASE_DIR='$release_dir' python3 '$release_dir/receipts-ci-run.py' --sha '$GITHUB_SHA' --payload-sha '$payload_sha'"
+          echo "Production deployment verified for $GITHUB_SHA" >> "$GITHUB_STEP_SUMMARY"

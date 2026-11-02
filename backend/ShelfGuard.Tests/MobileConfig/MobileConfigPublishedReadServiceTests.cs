@@ -87,6 +87,26 @@ public sealed class MobileConfigPublishedReadServiceTests
     }
 
     [Fact]
+    public async Task Published_navigation_enables_catalog_in_served_features_without_rewriting_version()
+    {
+        var tenant = SeedTenant();
+        var original = PublishedDocumentJson.Replace("\"news\": false", "\"news\": false, \"catalog\": false")
+            .Replace("\"type\": \"profile\"", "\"type\": \"catalog\"");
+        var (config, version) = SeedPublishedConfig(tenant.Id, original);
+        _tenants.GetByIdAsync(tenant.Id, Arg.Any<CancellationToken>()).Returns(tenant);
+        _repo.GetPublishedByTenantIdAsync(tenant.Id, Arg.Any<CancellationToken>()).Returns(config);
+
+        var (json, etag, error) = await _sut.GetPublishedConfigAsync(tenant.Id);
+
+        Assert.Null(error);
+        Assert.NotNull(etag);
+        using var doc = JsonDocument.Parse(json!);
+        Assert.True(doc.RootElement.GetProperty("features").GetProperty("catalog").GetBoolean());
+        Assert.False(doc.RootElement.GetProperty("features").GetProperty("news").GetBoolean());
+        Assert.Equal(original, version.ConfigurationJson);
+    }
+
+    [Fact]
     public async Task Live_bonus_setting_overrides_legacy_flag_and_changes_etag_without_republish()
     {
         var tenant = SeedTenant();

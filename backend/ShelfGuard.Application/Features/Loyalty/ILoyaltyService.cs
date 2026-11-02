@@ -133,6 +133,12 @@ public interface ILoyaltyService
     Task<(PagedResult<LoyaltyLedgerEntryDto>? History, string? Error, int? StatusCode)> GetHistoryAsync(
         Guid consumerAccountId, Guid tenantId, int page, int pageSize, CancellationToken ct = default);
 
+    Task<(PagedResult<ConsumerPurchaseDto>? Purchases, string? Error, int? StatusCode)> GetPurchasesAsync(
+        Guid consumerAccountId, Guid tenantId, Guid? storeId, int page, int pageSize, CancellationToken ct = default);
+
+    Task<(ConsumerReceiptDto? Receipt, string? Error, int? StatusCode)> GetReceiptAsync(
+        Guid consumerAccountId, Guid tenantId, Guid purchaseId, CancellationToken ct = default);
+
     /// <summary>
     /// TASK-615: this consumer's current tier (name, multiplier, discount), composite score,
     /// and the next tier up (name + remaining score gap), for <paramref name="tenantId"/>'s

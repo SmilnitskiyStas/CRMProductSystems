@@ -1,3 +1,4 @@
+using ShelfGuard.Application.Services;
 using Microsoft.EntityFrameworkCore;
 using ShelfGuard.Domain.Entities;
 using ShelfGuard.Domain.Interfaces;
@@ -8,14 +9,18 @@ namespace ShelfGuard.Infrastructure.Data.Repositories;
 public sealed class ProductionInsightsRepository : IProductionInsightsRepository
 {
     private readonly AppDbContext _db;
+    private readonly IWorkAccessContext _access;
 
-    public ProductionInsightsRepository(AppDbContext db) => _db = db;
+    public ProductionInsightsRepository(AppDbContext db, IWorkAccessContext access) { _db = db; _access = access; }
 
-    public Task<List<Location>> GetProductionLocationsAsync(Guid? locationId, CancellationToken ct = default)
+    public async Task<List<Location>> GetProductionLocationsAsync(Guid? locationId, CancellationToken ct = default)
     {
-        var q = _db.Locations.AsNoTracking().Where(l => l.Type == "production" && l.IsActive);
+        var scope = await _access.GetAsync(ct);
+        if (scope == null || !scope.Has("production.view")) return [];
+        var q = _db.Locations.AsNoTracking().Where(l => l.TenantId == scope.TenantId && l.Type == "production" && l.IsActive
+            && (scope.TenantWide || scope.LocationIds.Contains(l.Id)));
         if (locationId.HasValue) q = q.Where(l => l.Id == locationId.Value);
-        return q.OrderBy(l => l.Name).ToListAsync(ct);
+        return await q.OrderBy(l => l.Name).ToListAsync(ct);
     }
 
     public async Task<List<ProductionRequest>> GetRequestsAsync(

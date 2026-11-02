@@ -4,6 +4,9 @@ namespace ShelfGuard.Application.Features.Auth;
 
 public interface IAuthService
 {
+    Task<(TwoFactorSetupResponse? Response, string? Error)> SetupEnrollmentAsync(string proof, CancellationToken ct = default);
+    Task<(IReadOnlyList<string>? RecoveryCodes, string? Error, LoginResponse? Session)> EnableEnrollmentAsync(string proof, string code, CancellationToken ct = default);
+    Task<(MfaStepUpResponse? Response, string? Error)> StepUpAsync(Guid userId, Guid sessionId, string code, CancellationToken ct = default);
     /// <summary>
     /// First login step. On valid credentials returns tokens, or — when the user
     /// has TOTP 2FA enabled — a short-lived challenge token instead (TASK-330).
@@ -16,14 +19,9 @@ public interface IAuthService
 
     Task<(LoginResponse? Response, string? Error)> RefreshAsync(string rawRefreshToken, CancellationToken ct = default);
     Task RevokeAsync(string rawRefreshToken, CancellationToken ct = default);
+    Task RevokeSessionAsync(Guid userId, Guid sessionId, CancellationToken ct = default);
+    Task RevokeAllSessionsAsync(Guid userId, CancellationToken ct = default);
     Task<AuthUserDto?> GetCurrentUserAsync(Guid userId, CancellationToken ct = default);
-
-    /// <summary>
-    /// Issues a staff session after a separate trusted identity flow has authenticated an
-    /// explicitly linked account. Callers must establish the contact link before invoking it.
-    /// </summary>
-    Task<LoginOutcome> IssueLinkedMobileSessionAsync(
-        Guid userId, string? ipAddress = null, CancellationToken ct = default);
 
     // ── 2FA TOTP (TASK-330) ────────────────────────────────────────────────
 
@@ -41,28 +39,11 @@ public interface IAuthService
 
     /// <summary>Verifies a code against the pending secret and activates 2FA.
     /// Returns the plaintext recovery codes — shown to the user exactly once.</summary>
-    Task<(IReadOnlyList<string>? RecoveryCodes, string? Error)> EnableTwoFactorAsync(
+    Task<(IReadOnlyList<string>? RecoveryCodes, string? Error, LoginResponse? Session)> EnableTwoFactorAsync(
         Guid userId, string code, CancellationToken ct = default);
 
     /// <summary>Disables 2FA after verifying both the password and a valid code.</summary>
-    Task<string?> DisableTwoFactorAsync(
+    Task<(LoginResponse? Response, string? Error)> DisableTwoFactorAsync(
         Guid userId, string password, string code, CancellationToken ct = default);
 
-    // ── Forgot password / temporary password (TASK-465) ─────────────────────
-
-    /// <summary>
-    /// First (and only) step of the forgot-password flow (TASK-465 — supersedes the TASK-456
-    /// link/token design, see <see cref="ShelfGuard.Domain.Entities.User"/>'s TASK-464/465 doc
-    /// comments). Never throws / never signals whether the email exists — the controller
-    /// responds identically regardless of outcome, same no-enumeration posture as
-    /// <see cref="LoginAsync"/>. Unknown or inactive email → a warning log only, no DB write.
-    /// Otherwise → generates a cryptographically random temporary password, makes it the
-    /// account's real password immediately (valid 3 hours — see
-    /// <see cref="ShelfGuard.Domain.Entities.User.HasActiveTempPassword"/>), and enqueues a
-    /// targeted outbox notification (email + Telegram) carrying it. There is no separate
-    /// "enter new password" step — the user logs in directly with the temporary password.
-    /// Setting a permanent password goes through the existing authenticated change-password
-    /// endpoint, which also clears the temporary-password marker.
-    /// </summary>
-    Task ForgotPasswordAsync(string email, string? ipAddress = null, CancellationToken ct = default);
 }

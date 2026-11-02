@@ -10,14 +10,12 @@ namespace ShelfGuard.Application.Features.Receipts;
 public sealed class ReceiptService : IReceiptService
 {
     private readonly IReceiptRepository _repo;
-    private readonly INotificationRepository _notifications;
     private readonly IActivityLogRepository _activityLogs;
 
     public ReceiptService(
-        IReceiptRepository repo, INotificationRepository notifications, IActivityLogRepository activityLogs)
+        IReceiptRepository repo, IActivityLogRepository activityLogs)
     {
         _repo = repo;
-        _notifications = notifications;
         _activityLogs = activityLogs;
     }
 
@@ -62,6 +60,8 @@ public sealed class ReceiptService : IReceiptService
         {
             if (item.QuantityOrdered <= 0)
                 return (null, $"QuantityOrdered must be greater than 0 for all items.");
+            if (!ExactStockQuantity(item.QuantityOrdered))
+                return (null, "QuantityOrdered must fit a stock count with at most two decimal places.");
         }
 
         var receipt = new StockReceipt
@@ -110,14 +110,28 @@ public sealed class ReceiptService : IReceiptService
         if (LockedByOther(receipt, callerUserId))
             return (null, ReceiptErrors.TakenByOther);
 
+        // Optional reviewed-source precondition. Existing clients keep their original contract.
+        // The receipt xmin token makes a concurrent header/update-items save roll back atomically.
+        if (request.ExpectedFingerprint is { } expected &&
+            (expected.Length != 64 || expected.Any(c => !"0123456789abcdef".Contains(c))
+             || expected != ShelfGuard.Application.Features.Erp.Posting.ReceiptPostingRules.Fingerprint(receipt)
+             || request.Items is null || request.Items.Count > ShelfGuard.Application.Features.Erp.Posting.ReceiptPostingRules.MaximumLines || request.Items.Count != receipt.Items.Count
+             || !request.Items.Select(x => x.ItemId).ToHashSet().SetEquals(receipt.Items.Select(x => x.Id))))
+            return (null, ReceiptErrors.SourceChanged);
+
+        if (receipt.ReceivingWorkJson != null) return (null, ReceiptErrors.CategoryWorkActive);
+
+        var itemsById = receipt.Items.ToDictionary(i => i.Id);
         foreach (var payload in request.Items)
         {
-            var item = receipt.Items.FirstOrDefault(i => i.Id == payload.ItemId);
+            var item = itemsById.GetValueOrDefault(payload.ItemId);
             if (item is null)
                 return (null, $"Item {payload.ItemId} not found on this receipt.");
 
             if (payload.QuantityReceived.HasValue && payload.QuantityReceived.Value < 0)
                 return (null, "QuantityReceived cannot be negative.");
+            if (payload.QuantityReceived is decimal received && !ExactStockQuantity(received))
+                return (null, "QuantityReceived must fit a stock count with at most two decimal places.");
 
             if (payload.QuantityOrdered.HasValue)
             {
@@ -125,6 +139,8 @@ public sealed class ReceiptService : IReceiptService
                     return (null, "The ordered quantity can only be changed on a draft.");
                 if (payload.QuantityOrdered.Value <= 0)
                     return (null, "QuantityOrdered must be greater than 0.");
+                if (!ExactStockQuantity(payload.QuantityOrdered.Value))
+                    return (null, "QuantityOrdered must fit a stock count with at most two decimal places.");
                 item.QuantityOrdered = payload.QuantityOrdered.Value;
             }
 
@@ -150,6 +166,7 @@ public sealed class ReceiptService : IReceiptService
         var receipt = await _repo.GetByIdAsync(id, ct);
         if (receipt is null) return (null, ReceiptErrors.NotFound);
         if (receipt.Status != "draft") return (null, "Only a draft order can be taken into work.");
+        if (receipt.ReceivingWorkJson != null) return (null, ReceiptErrors.CategoryWorkActive);
         if (receipt.TakenByUserId == userId) return (await MapAsync(receipt, ct), null); // idempotent
         if (receipt.TakenByUserId is not null) return (null, ReceiptErrors.TakenByOther);
 
@@ -190,6 +207,7 @@ public sealed class ReceiptService : IReceiptService
         var receipt = await _repo.GetByIdAsync(id, ct);
         if (receipt is null) return (null, ReceiptErrors.NotFound);
         if (receipt.Status != "draft") return (null, ReceiptErrors.NotDraft);
+        if (receipt.ReceivingWorkJson != null) return (null, ReceiptErrors.CategoryWorkActive);
         if (LockedByOther(receipt, callerUserId)) return (null, ReceiptErrors.TakenByOther);
         return (receipt, null);
     }
@@ -312,6 +330,9 @@ public sealed class ReceiptService : IReceiptService
         if (receipt.Status is not ("draft" or "ordered" or "in_transit"))
             return (null, $"Cannot receive a '{receipt.Status}' receipt.");
 
+        if (ReceiptCategoryWorkRules.Read(receipt) is { } work && !ReceiptCategoryWorkRules.Ready(receipt, work))
+            return (null, ReceiptErrors.CategoriesIncomplete);
+
         // All items must have ExpiryDate set before confirming
         var unprocessed = receipt.Items
             .Where(i => i.ExpiryDate is null)
@@ -392,7 +413,8 @@ public sealed class ReceiptService : IReceiptService
             itemCount = receipt.Items.Count,
         });
 
-        await _notifications.EnqueueAsync(new NotificationQueue
+        // Stage only: status, batches, movements and this intent commit at the single repository save.
+        await _repo.AddNotificationAsync(new NotificationQueue
         {
             TenantId  = receipt.TenantId,
             UserId    = null,
@@ -523,8 +545,12 @@ public sealed class ReceiptService : IReceiptService
         null,
         r.TakenAt,
         r.OrderedAt,
-        null
+        null,
+        ShelfGuard.Application.Features.Erp.Posting.ReceiptPostingRules.Fingerprint(r),
+        ReceivingWork: r.ReceivingWorkJson == null ? null : ReceiptCategoryWorkRules.Describe(r)
     );
+
+    private static bool ExactStockQuantity(decimal value) => value <= 99_999_999.99m && decimal.Round(value, 2) == value;
 
     private static ReceiptItemDto ToItemDto(StockReceiptItem i) => new(
         i.Id,
@@ -537,6 +563,7 @@ public sealed class ReceiptService : IReceiptService
         i.ExpiryDate,
         i.BatchNumber,
         i.DiscrepancyNotes,
-        IsProcessed: i.QuantityReceived.HasValue && i.ExpiryDate.HasValue
+        IsProcessed: i.QuantityReceived.HasValue && i.ExpiryDate.HasValue,
+        Unit: i.Product?.Unit
     );
 }

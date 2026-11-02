@@ -1,6 +1,8 @@
 using NSubstitute;
+using ShelfGuard.Application.Features.Pricing;
 using ShelfGuard.Domain.Constants;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Configuration;
 using ShelfGuard.Application.Features.Pos;
 using ShelfGuard.Application.Features.Pos.Dtos;
 using ShelfGuard.Application.Features.Pos.Fiscal;
@@ -20,12 +22,31 @@ file static class PosServiceTestsIds
     public static readonly Guid StoreId = Guid.NewGuid();
 }
 
+file sealed class CheckedPricingShadow : IPricingShadow
+{
+    public List<PricingShadowReport> Reports { get; } = [];
+    public int Replays { get; private set; }
+    public bool IsEnabled(Guid tenant, Guid store) => true;
+    public void Observe(BasketPricingInput input, BasketPricingResult actual) => Reports.Add(PricingShadow.Compare(input, actual));
+    public void ReplaySkipped() => Replays++;
+    public void AssertMatched() => Assert.All(Reports, r => Assert.True(r.Outcome == "matched",
+        $"Pricing shadow: {r.Outcome}: {string.Join(',', r.Differences)}"));
+}
+
+file sealed class ThrowPricingShadow(bool onEnable = false) : IPricingShadow
+{
+    public bool IsEnabled(Guid tenant, Guid store) => onEnable ? throw new InvalidOperationException("Synthetic observer activation failure") : true;
+    public void Observe(BasketPricingInput input, BasketPricingResult actual) => throw new InvalidOperationException("Synthetic observer failure");
+    public void ReplaySkipped() => throw new InvalidOperationException("Synthetic replay observer failure");
+}
+
 file sealed class FakePosRepo : IPosRepository
 {
     public List<PosShift> Shifts { get; } = [];
     public List<PosTransaction> Transactions { get; } = [];
     public List<StockEvent> Events { get; } = [];
     public int SaveCount { get; private set; }
+    public Action? ValidateShadow { get; set; }
 
     /// <summary>TASK-356: simulates a concurrent-write conflict (another sale raced this
     /// one on the same ProductStock row) on the Nth call to SaveChangesAsync.</summary>
@@ -94,6 +115,16 @@ file sealed class FakePosRepo : IPosRepository
 
     public Task SaveChangesAsync(CancellationToken ct = default)
     {
+        ValidateShadow?.Invoke();
+        foreach (var tx in Transactions.Where(t => t.PricingArchiveRequired))
+        {
+            Assert.NotNull(tx.PricingSnapshot);
+            Assert.Equal(tx.Id, tx.PricingSnapshot.TransactionId);
+            Assert.Equal(PosPricingCapture.Hash(tx.PricingSnapshot.Payload), tx.PricingSnapshot.ContentHash);
+            using var audit = System.Text.Json.JsonDocument.Parse(tx.PricingSnapshot.Payload);
+            Assert.Equal(tx.TotalAmount, audit.RootElement.GetProperty("result").GetProperty("paid").GetDecimal());
+            Assert.Equal(tx.TaxAmount, audit.RootElement.GetProperty("result").GetProperty("vat").GetDecimal());
+        }
         SaveCount++;
         if (ThrowConcurrencyOnSaveCall == SaveCount)
             throw new ConcurrencyConflictException("simulated concurrent write conflict");
@@ -219,9 +250,17 @@ file sealed class FakeDiscountRepo : IDiscountRepository
 /// <summary>TASK-405 (Loyalty Фаза 0): fake ILoyaltyRepository backing PosService's new accrual/redemption path.</summary>
 file sealed class FakeLoyaltyRepo : ILoyaltyRepository
 {
+    public Task<PosTransaction?> GetPurchaseByIdAsync(Guid tenantId, Guid membershipId, Guid purchaseId, CancellationToken ct = default) => throw new NotSupportedException();
+    public Task<(List<PosTransaction> Items, int Total)> GetPurchasesPagedAsync(Guid tenantId, Guid membershipId, Guid? storeId, int page, int pageSize, CancellationToken ct = default) => throw new NotSupportedException();
     public List<LoyaltyMembership> Memberships { get; } = [];
     public List<LoyaltyLedgerEntry> LedgerEntries { get; } = [];
     public List<LoyaltyProgramSettings> Settings { get; } = [];
+    public bool ProgramAvailable { get; set; } = true;
+    public Task<bool> IsCheckoutProgramAvailableAsync(Guid tenantId, CancellationToken ct = default) => Task.FromResult(ProgramAvailable);
+    public Task<bool> HasFirstPurchaseRewardAsync(Guid tenantId, Guid membershipId, CancellationToken ct = default) =>
+        Task.FromResult(LedgerEntries.Any(e => e.TenantId == tenantId && e.MembershipId == membershipId
+            && e.EntryType == LoyaltyEntryType.Reward && e.Note == "Винагорода за першу покупку"));
+
 
     public Task<LoyaltyMembership?> GetMembershipByIdAsync(Guid id, Guid tenantId, CancellationToken ct = default) =>
         Task.FromResult(Memberships.FirstOrDefault(m => m.Id == id && m.TenantId == tenantId));
@@ -432,8 +471,11 @@ public sealed class PosServiceTests
         ILoyaltyRepository? loyalty = null,
         ICustomerRepository? customers = null,
         IUserRepository? users = null,
-        ICashRegisterRepository? registers = null)
+        ICashRegisterRepository? registers = null,
+        IPosPriceSnapshots? priceSnapshots = null, IPricingShadow? pricingShadow = null)
     {
+        var checker = pricingShadow ?? new CheckedPricingShadow();
+        if (pos is FakePosRepo fake && checker is CheckedPricingShadow checkedShadow) fake.ValidateShadow = checkedShadow.AssertMatched;
         return new PosService(
             pos ?? new FakePosRepo(),
             stock ?? new FakeStockRepo(),
@@ -444,8 +486,135 @@ public sealed class PosServiceTests
             customers ?? new FakeCustomerRepo(),
             NullLogger<PosService>.Instance,
             users,
-            registers);
+            registers,
+            priceSnapshots: priceSnapshots, pricingShadow: checker);
     }
+
+    [Theory][InlineData(false)][InlineData(true)]
+    public async Task Pricing_shadow_failure_cannot_change_sale_stock_tax_or_committed_replay(bool activationFailure)
+    {
+        var t = SaleSeeder.Seed("SHADOW-FAIL");
+        var svc = BuildService(t.Pos, t.Stock, t.Catalog, pricingShadow: new ThrowPricingShadow(activationFailure));
+        var request = new CreateSaleRequest(t.Shift.Id, [new("SHADOW-FAIL", 1)], "Cash", 10, ClientTransactionId: Guid.NewGuid());
+        var first = await svc.CreateSaleAsync(TenantId, CashierId, request);
+        Assert.Null(first.Error); Assert.Equal(10, first.Sale!.Subtotal); Assert.Equal(9, t.Batch.Quantity);
+        Assert.Equal(1.67m, t.Pos.Transactions[0].TaxAmount);
+        var replay = await svc.CreateSaleAsync(TenantId, CashierId, request);
+        Assert.Null(replay.Error); Assert.Equal(first.Sale.TransactionId, replay.Sale!.TransactionId);
+        Assert.Single(t.Pos.Transactions); Assert.Equal(9, t.Batch.Quantity);
+    }
+
+    [Fact]
+    public async Task Pricing_shadow_limit_is_counted_without_blocking_a_larger_legacy_receipt()
+    {
+        var t = SaleSeeder.Seed("SHADOW-LIMIT"); t.Batch.Quantity = 200;
+        var observer = new PricingShadow(true, new HashSet<(Guid, Guid)> { (TenantId, StoreId) });
+        var svc = BuildService(t.Pos, t.Stock, t.Catalog, pricingShadow: observer);
+        var r = await svc.CreateSaleAsync(TenantId, CashierId, new(t.Shift.Id,
+            Enumerable.Repeat(new SaleItemRequest("SHADOW-LIMIT", 1), 101).ToArray(), "Cash", 2000));
+        Assert.Null(r.Error); Assert.Equal(1, observer.Counts.Limits); Assert.Equal(0, observer.Counts.Matched);
+        Assert.Equal(99, t.Batch.Quantity); Assert.Single(t.Pos.Transactions);
+    }
+
+    [Fact]
+    public async Task Pricing_shadow_matches_real_legacy_stock_tier_weight_redemption_and_accrual_without_extra_IO()
+    {
+        var t = SaleSeeder.Seed("SHADOW-MONEY"); var product = t.Catalog.Products[0]; product.PriceRetail = 10.05m; product.VatRate = 7;
+        t.Batch.Status = "critical"; var discounts = new FakeDiscountRepo();
+        var discount = Discount.Create(TenantId, product.Id, StoreId, 20, "expiry", priceOriginal: 10.05m,
+            validFrom: DateTime.UtcNow.AddDays(2), autoApplied: true); discount.Approve(CashierId); discounts.Discounts.Add(discount);
+        var tier = new LoyaltyTierDefinition { TenantId = TenantId, Name = "Synthetic tier", DiscountPercent = 10, AccrualMultiplier = 3 };
+        var member = new LoyaltyMembership { TenantId = TenantId, Balance = 1000, Status = LoyaltyMembershipStatus.Active, CurrentTier = tier, CurrentTierId = tier.Id };
+        var loyalty = new FakeLoyaltyRepo(); loyalty.Memberships.Add(member); loyalty.Settings.Add(new() { TenantId = TenantId, BonusUnitsPerCurrencyUnit = 100 });
+        var observer = new CheckedPricingShadow(); var svc = BuildService(t.Pos, t.Stock, t.Catalog, discounts: discounts, loyalty: loyalty, pricingShadow: observer);
+        var result = await svc.CreateSaleAsync(TenantId, CashierId, new(t.Shift.Id, [new("SHADOW-MONEY", .5m)], "Cash", 10,
+            LoyaltyMembershipId: member.Id, RedeemAmount: 100));
+        Assert.Null(result.Error); observer.AssertMatched(); Assert.Single(observer.Reports);
+        Assert.Equal(2.52m, result.Sale!.Subtotal); Assert.Equal(7.56m, result.Sale.LoyaltyAccrued);
+        Assert.Equal(.16m, t.Pos.Transactions.Single().TaxAmount); Assert.Equal(9.5m, t.Batch.Quantity);
+    }
+
+    [Fact]
+    public async Task Offline_snapshot_preserves_price_VAT_cost_name_and_barcode_after_catalog_edits_and_replay()
+    {
+        var register = Guid.NewGuid(); var t = SaleSeeder.Seed("ORIGINAL", registerId: register);
+        var product = t.Catalog.Products.Single();
+        product.PriceRetail = 100; product.VatRate = 7; product.PricePurchase = 45; product.Name = "Original";
+        product.Barcodes.Insert(0, "PRIMARY"); // sale used an alternate barcode, preserved in both responses
+        var snapshots = PriceSnapshots(); var quote = Quote(snapshots, product);
+        product.PriceRetail = 200; product.VatRate = 20; product.PricePurchase = 90;
+        product.Name = "Changed"; product.Barcodes = ["CHANGED"];
+        var service = BuildService(t.Pos, t.Stock, t.Catalog, registers: OfflineRegisters(), priceSnapshots: snapshots);
+        var request = new CreateSaleRequest(t.Shift.Id, [new SaleItemRequest("ORIGINAL", 1, quote)], "Cash", 150,
+            ClientTransactionId: Guid.NewGuid(), OccurredAt: DateTime.UtcNow, ExpectedTotal: 100);
+        var result = await service.CreateSalesBatchAsync(TenantId, CashierId, new([request]), registerId: register);
+        var sale = Assert.Single(result.Result!.Results);
+        Assert.Equal("created", sale.Status); Assert.Equal(100m, sale.Sale!.Subtotal);
+        Assert.Equal("ORIGINAL", Assert.Single(sale.Sale.Items).Barcode);
+        var transaction = Assert.Single(t.Pos.Transactions); var line = Assert.Single(transaction.Items);
+        Assert.Equal(100m, line.PriceRetail); Assert.Equal(100m, line.LineTotal);
+        Assert.Equal(7m, line.VatRate); Assert.Equal(6.54m, line.VatAmount); Assert.Equal(6.54m, transaction.TaxAmount);
+        Assert.Equal(45m, line.UnitCost); Assert.Equal("Original", line.ProductNameSnapshot); Assert.Equal("ORIGINAL", line.BarcodeSnapshot);
+        Assert.Equal(200m, product.PriceRetail); // tracked catalog was not overwritten with old values
+        var replay = await service.CreateSalesBatchAsync(TenantId, CashierId, new([request]), registerId: register);
+        Assert.Equal("duplicate", Assert.Single(replay.Result!.Results).Status);
+        Assert.Equal("Original", Assert.Single(replay.Result.Results[0].Sale!.Items).ProductName);
+        Assert.Equal("ORIGINAL", Assert.Single(replay.Result.Results[0].Sale!.Items).Barcode);
+        Assert.Single(t.Pos.Transactions); Assert.Equal(9m, t.Batch.Quantity);
+        var conflict = await service.CreateSalesBatchAsync(TenantId, CashierId,
+            new([request with { ExpectedTotal = 99 }]), registerId: register);
+        Assert.Equal(409, Assert.Single(conflict.Result!.Results).ErrorStatusCode);
+    }
+
+    [Theory]
+    [InlineData("total")]
+    [InlineData("token")]
+    [InlineData("missing")]
+    [InlineData("time")]
+    [InlineData("session")]
+    public async Task Offline_unverifiable_amount_or_snapshot_is_rejected_before_stock_changes(string failure)
+    {
+        var register = Guid.NewGuid(); var t = SaleSeeder.Seed("VERIFY", registerId: register);
+        var product = t.Catalog.Products.Single(); var snapshots = PriceSnapshots(); var quote = Quote(snapshots, product);
+        var service = BuildService(t.Pos, t.Stock, t.Catalog, registers: OfflineRegisters(failure != "session"), priceSnapshots: snapshots);
+        var request = new CreateSaleRequest(t.Shift.Id,
+            [new SaleItemRequest("VERIFY", 1, failure == "missing" ? null : failure == "token" ? "p1.invalid" : quote)],
+            "Cash", 100, ClientTransactionId: Guid.NewGuid(),
+            OccurredAt: DateTime.UtcNow.AddDays(failure == "time" ? -15 : 0), ExpectedTotal: failure == "total" ? 9 : 10);
+        var result = await service.CreateSalesBatchAsync(TenantId, CashierId, new([request]), registerId: register);
+        Assert.Equal(failure == "session" ? 403 : 409, Assert.Single(result.Result!.Results).ErrorStatusCode);
+        Assert.Empty(t.Pos.Transactions); Assert.Equal(10m, t.Batch.Quantity);
+    }
+
+    [Fact]
+    public async Task Weighted_offline_line_rounds_to_the_same_cent_as_the_register()
+    {
+        var register = Guid.NewGuid(); var t = SaleSeeder.Seed("WEIGHT", registerId: register);
+        var product = t.Catalog.Products.Single(); product.PriceRetail = 0.05m;
+        var snapshots = PriceSnapshots(); var service = BuildService(t.Pos, t.Stock, t.Catalog, registers: OfflineRegisters(), priceSnapshots: snapshots);
+        var request = new CreateSaleRequest(t.Shift.Id, [new SaleItemRequest("WEIGHT", 0.5m, Quote(snapshots, product))],
+            "Cash", 1, ClientTransactionId: Guid.NewGuid(), OccurredAt: DateTime.UtcNow, ExpectedTotal: 0.03m);
+        var result = await service.CreateSalesBatchAsync(TenantId, CashierId, new([request]), registerId: register);
+        Assert.Equal("created", Assert.Single(result.Result!.Results).Status);
+        Assert.Equal(0.03m, Assert.Single(t.Pos.Transactions.Single().Items).LineTotal);
+    }
+
+    private static ShelfGuard.Infrastructure.Services.PosPriceSnapshots PriceSnapshots() => new(
+        new Microsoft.Extensions.Configuration.ConfigurationBuilder().AddInMemoryCollection(
+            new Dictionary<string, string?> { ["Jwt:Secret"] = "synthetic-price-snapshot-secret-0123456789" }).Build());
+
+    private static ICashRegisterRepository OfflineRegisters(bool hadSession = true)
+    {
+        var registers = Substitute.For<ICashRegisterRepository>();
+        registers.HadSessionAtAsync(Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<DateTime>(),
+            Arg.Any<TimeSpan>(), Arg.Any<CancellationToken>()).Returns(hadSession);
+        return registers;
+    }
+
+    private static string Quote(IPosPriceSnapshots snapshots, Item product) => snapshots.Issue(
+        new CatalogSyncRow(product.Id, product.Name, product.Barcodes, product.PriceRetail, product.VatRate,
+            product.Unit, true, DateTime.UtcNow, product.CategoryId, product.TenantId, product.PricePurchase),
+        DateTime.UtcNow.AddHours(-1)).Token;
 
     private static Item MakeProduct(string barcode = "123", decimal price = 10m) =>
         new()
@@ -2149,10 +2318,14 @@ file sealed class PromoCtx
         return b;
     }
 
-    public PosService Service(bool withPromotions = true, ILocationRepository? locations = null) => new(
-        Pos, Stock, Catalog, new FakeDiscountRepo(), new FakeFiscalFactory(new NoopFiscalService()),
-        Loyalty, new FakeCustomerRepo(), NullLogger<PosService>.Instance,
-        promotions: withPromotions ? Promotions : null, locations: locations);
+    public CheckedPricingShadow Shadow { get; } = new();
+    public PosService Service(bool withPromotions = true, ILocationRepository? locations = null, IPricingShadow? observer = null)
+    {
+        Pos.ValidateShadow = observer == null ? Shadow.AssertMatched : null;
+        return new(Pos, Stock, Catalog, new FakeDiscountRepo(), new FakeFiscalFactory(new NoopFiscalService()),
+            Loyalty, new FakeCustomerRepo(), NullLogger<PosService>.Instance,
+            promotions: withPromotions ? Promotions : null, locations: locations, pricingShadow: observer ?? Shadow);
+    }
 
     public static (LoyaltyMembership Membership, PromoCtx T, Item Product) WithTier(decimal tierPercent)
     {
@@ -2188,6 +2361,18 @@ public sealed class PosServicePromotionTests
 
     private static string PercentOff(Guid itemId, decimal percent) =>
         $$$"""{"type":"percent_off","targets":{"itemIds":["{{{itemId}}}"]},"params":{"percent":{{{percent.ToString(System.Globalization.CultureInfo.InvariantCulture)}}}}}""";
+
+    [Fact]
+    public async Task Pricing_shadow_marks_malformed_published_rules_invalid_without_rejecting_the_sale()
+    {
+        var t = new PromoCtx(); var product = t.AddProduct("SHADOW-BAD-RULE", 100); t.AddBatch(product.Id, 10, days: 10);
+        t.Promotions.Add("Bad synthetic definition", "{");
+        var observer = new PricingShadow(true, new HashSet<(Guid, Guid)> { (TenantId, StoreId) });
+        var r = await t.Service(observer: observer).CreateSaleAsync(TenantId, CashierId,
+            new(t.Shift.Id, [new("SHADOW-BAD-RULE", 1)], "Cash", 100));
+        Assert.Null(r.Error); Assert.Equal(100, r.Sale!.Subtotal); Assert.Equal(1, observer.Counts.Invalid);
+        Assert.Equal(0, observer.Counts.Matched); Assert.Empty(t.Promotions.Applications);
+    }
 
     [Fact]
     public async Task Two_plus_one_splits_the_line_into_sub_lines_keeps_FEFO_logs_and_replays_idempotently()
@@ -2270,7 +2455,8 @@ public sealed class PosServicePromotionTests
             t.Promotions.Add("broken json", "{oops");
         }
 
-        var (sale, error, _) = await t.Service(withPromotions: withRules).CreateSaleAsync(TenantId, CashierId,
+        var diagnostics = new PricingShadow(true, new HashSet<(Guid, Guid)> { (TenantId, StoreId) });
+        var (sale, error, _) = await t.Service(withPromotions: withRules, observer: diagnostics).CreateSaleAsync(TenantId, CashierId,
             new CreateSaleRequest(t.Shift.Id, [new SaleItemRequest("PLAIN", 2)], "Card", 24.70m));
 
         Assert.Null(error);
@@ -2280,6 +2466,8 @@ public sealed class PosServicePromotionTests
         Assert.Null(item.PromotionLabel);
         Assert.Equal(24.70m, t.SingleTx.TotalAmount);
         Assert.Equal(4.12m, t.SingleTx.TaxAmount);
+        Assert.Equal(withRules ? 1 : 0, diagnostics.Counts.Invalid);
+        Assert.Equal(withRules ? 0 : 1, diagnostics.Counts.Matched);
         Assert.Equal(24.70m, sale!.Subtotal);
         Assert.Empty(t.Promotions.Applications);
     }
@@ -2402,5 +2590,338 @@ public sealed class PosServicePromotionTests
         Assert.Equal(["created", "created"], batch.Result!.Results.Select(r => r.Status).ToArray());
         Assert.Equal(20m, batch.Result.Results[0].Sale!.Subtotal);
         Assert.Equal(40m, batch.Result.Results[1].Sale!.Subtotal);
+    }
+}
+
+
+file sealed class OfflinePromoContext
+    {
+        public readonly Guid Register = Guid.NewGuid(), Cashier = Guid.NewGuid();
+        public readonly Seeded Seed;
+        public readonly FakePromotionRepo Rules = new();
+        public readonly ShelfGuard.Infrastructure.Services.PosPromotionSnapshots Proof = PosPromotionSnapshotTests.Service();
+        public readonly ShelfGuard.Infrastructure.Services.PosPriceSnapshots Prices = new(new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?> { ["Jwt:Secret"] = "synthetic-promotions-key-0123456789012345" }).Build());
+        public readonly PosService Service;
+        public readonly CreateSaleRequest Request;
+        public readonly PublishedPromotionRuleRow Original;
+        public OfflinePromoContext(bool empty = false, string? zone = null, string? json = null, DateTime? soldAt = null, DateTime? issuedAt = null)
+        {
+            Seed = SaleSeeder.Seed("OFFLINE-PROMO", 50, Register);
+            var product = Seed.Catalog.Products.Single(); var at = soldAt ?? DateTime.UtcNow.AddMinutes(-1);
+            Original = Rules.Add("Original -10%", json ?? $$$"""{"type":"percent_off","targets":{"itemIds":["{{{product.Id}}}"]},"params":{"percent":10}}""");
+            if (empty) Rules.Published.Clear();
+            var lease = Proof.Issue(PosServiceTestsIds.TenantId, PosServiceTestsIds.StoreId, Register, zone, Rules.Published, issuedAt ?? at)!;
+            var price = Prices.Issue(new CatalogSyncRow(product.Id, product.Name, product.Barcodes.ToArray(), 10, 0, "pcs", true,
+                at, TenantId: product.TenantId), issuedAt ?? at);
+            var registers = Substitute.For<ICashRegisterRepository>();
+            registers.HadSessionAtAsync(default, default, default, default, default).ReturnsForAnyArgs(true);
+            Service = new PosService(Seed.Pos, Seed.Stock, Seed.Catalog, new FakeDiscountRepo(),
+                new FakeFiscalFactory(new NoopFiscalService()), new FakeLoyaltyRepo(), new FakeCustomerRepo(),
+                NullLogger<PosService>.Instance, registers: registers, promotions: Rules, priceSnapshots: Prices,
+                promotionSnapshots: Proof);
+            Request = new(Seed.Shift.Id, [new("OFFLINE-PROMO", 1, price.Token)], "Cash", 20,
+                ClientTransactionId: Guid.NewGuid(), OccurredAt: at, ExpectedTotal: empty ? 10 : 9,
+                PromotionSnapshot: lease.Token, ExpectedPriceSegments: [new(0, 1, empty ? 10 : 9,
+                    empty ? null : Original.RuleId, empty ? null : Original.VersionId)]);
+        }
+        public async Task<BatchSaleItemResultDto> Flush(CreateSaleRequest? request = null)
+        {
+            var (result, error, _) = await Service.CreateSalesBatchAsync(PosServiceTestsIds.TenantId, Cashier,
+                new([request ?? Request]), registerId: Register);
+            Assert.Null(error); return Assert.Single(result!.Results);
+        }
+    }
+
+
+public sealed class PosOfflinePromotionProofTests
+{
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Lease_keeps_original_version_after_republish_or_pause_and_replay_is_bound(bool pause)
+    {
+        var t = new OfflinePromoContext();
+        t.Rules.Published.Clear();
+        if (!pause) t.Rules.Add("New -50%", "{\"type\":\"percent_off\",\"params\":{\"percent\":50}}");
+        var first = await t.Flush();
+        Assert.Equal("created", first.Status); Assert.Equal(9, first.Sale!.Subtotal);
+        Assert.Equal(t.Original.VersionId, Assert.Single(t.Rules.Applications).VersionId);
+        var duplicate = await t.Flush(); Assert.Equal("duplicate", duplicate.Status);
+        Assert.Equal(first.Sale.TransactionId, duplicate.Sale!.TransactionId);
+        Assert.Single(t.Seed.Pos.Transactions); Assert.Equal(49, t.Seed.Batch.Quantity);
+        foreach (var altered in new[] {
+            t.Request with { PromotionSnapshot = null },
+            t.Request with { ExpectedPriceSegments = [new(0, 1, 9, t.Original.RuleId, Guid.NewGuid())] },
+            t.Request with { OccurredAt = t.Request.OccurredAt!.Value.AddSeconds(1) },
+            t.Request with { LoyaltyMembershipId = Guid.NewGuid() }
+        }) Assert.Equal(409, (await t.Flush(altered)).ErrorStatusCode);
+        Assert.Equal(49, t.Seed.Batch.Quantity);
+    }
+
+    [Fact]
+    public async Task Empty_lease_stays_empty_when_an_action_is_published_later()
+    {
+        var t = new OfflinePromoContext(empty: true);
+        t.Rules.Add("New promotion", "{\"type\":\"percent_off\",\"params\":{\"percent\":50}}");
+        var result = await t.Flush(); Assert.Equal("created", result.Status); Assert.Equal(10, result.Sale!.Subtotal);
+        Assert.Empty(t.Rules.Applications);
+    }
+
+    [Theory]
+    [InlineData("version")]
+    [InlineData("quantity")]
+    [InlineData("proof")]
+    [InlineData("segments")]
+    [InlineData("line")]
+    public async Task Same_total_but_wrong_segments_or_proof_is_rejected_before_stock_changes(string kind)
+    {
+        var t = new OfflinePromoContext();
+        var altered = kind switch {
+            "version" => t.Request with { ExpectedPriceSegments = [new(0, 1, 9, t.Original.RuleId, Guid.NewGuid())] },
+            "quantity" => t.Request with { ExpectedPriceSegments = [new(0, 2, 4.5m, t.Original.RuleId, t.Original.VersionId)] },
+            "proof" => t.Request with { PromotionSnapshot = "pr1.invalid" },
+            "line" => t.Request with { ExpectedPriceSegments = [new(1, 1, 9, t.Original.RuleId, t.Original.VersionId)] },
+            _ => t.Request with { ExpectedPriceSegments = null }
+        };
+        var result = await t.Flush(altered); Assert.Equal("failed", result.Status);
+        Assert.True(result.ErrorStatusCode is 400 or 409); Assert.Empty(t.Seed.Pos.Transactions);
+        Assert.Equal(0, t.Seed.Pos.SaveCount); Assert.Equal(50, t.Seed.Batch.Quantity); Assert.Empty(t.Seed.Pos.Events);
+    }
+
+    [Fact]
+    public async Task Legacy_pending_receipt_without_new_fields_keeps_original_protocol()
+    {
+        var t = new OfflinePromoContext();
+        var legacy = t.Request with { PromotionSnapshot = null, ExpectedPriceSegments = null };
+        var created = await t.Flush(legacy); Assert.Equal("created", created.Status);
+        Assert.Equal("duplicate", (await t.Flush(legacy)).Status);
+    }
+
+    [Fact]
+    public async Task Lease_expired_at_sync_still_accepts_a_sale_made_inside_its_validity()
+    {
+        var t = new OfflinePromoContext(soldAt: DateTime.UtcNow.AddDays(-10), issuedAt: DateTime.UtcNow.AddDays(-20));
+        var result = await t.Flush(); Assert.Equal("created", result.Status);
+        Assert.Equal("duplicate", (await t.Flush()).Status); Assert.Equal(49, t.Seed.Batch.Quantity);
+    }
+
+    [Fact]
+    public async Task Signed_rule_still_has_to_satisfy_its_conditions_at_sale_time()
+    {
+        var t = new OfflinePromoContext(json: "{\"type\":\"percent_off\",\"params\":{\"percent\":10},\"scope\":{\"validFrom\":\"2100-01-01T00:00:00Z\"}}");
+        var result = await t.Flush(); Assert.Equal(409, result.ErrorStatusCode);
+        Assert.Empty(t.Seed.Pos.Transactions); Assert.Equal(50, t.Seed.Batch.Quantity);
+    }
+}
+
+
+public sealed class PosAcceptedLoyaltyArchiveTests
+{
+    [Fact]
+    public async Task Accepted_tier_bonus_settings_pre_balance_rewards_and_post_balance_survive_live_changes()
+    {
+        var (member, t, item) = PromoCtx.WithTier(25);
+        var settings = t.Loyalty.Settings.Single(); settings.FirstPurchaseRewardEnabled = true;
+        settings.FirstPurchaseRewardAmount = 5; settings.BonusLifetimeEnabled = true; settings.BonusLifetimeDays = 42;
+        var result = await t.Service().CreateSaleAsync(PosServiceTestsIds.TenantId, Guid.NewGuid(),
+            new(t.Shift.Id, [new("TIERPROMO", 1)], "Cash", 100, LoyaltyMembershipId: member.Id));
+        Assert.Null(result.Error); var snapshot = t.SingleTx.PricingSnapshot!;
+        var d = System.Text.Json.JsonSerializer.Deserialize<PricingArchivedDecision>(snapshot.Payload,
+            new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web))!;
+        Assert.Equal(25, d.Loyalty!.TierPercent); Assert.Equal(0, d.Loyalty.Balance);
+        Assert.Equal(5, d.BalanceAfter); Assert.True(d.FirstPurchaseEligible);
+        Assert.Equal(42, d.LoyaltySource!.BonusLifetimeDays); Assert.Equal(5, d.LoyaltySource.FirstPurchaseRewardAmount);
+        Assert.Equal(75, d.Result.Paid); Assert.Equal(5, d.BonusEffects.Single().Amount);
+        Assert.NotNull(d.BonusEffects.Single().ExpiresAt);
+        settings.FirstPurchaseRewardAmount = 999; member.Balance = 999; member.CurrentTier!.DiscountPercent = 0;
+        Assert.Equal(snapshot.ContentHash, PosPricingCapture.Hash(snapshot.Payload));
+        Assert.Equal(5, d.BalanceAfter); Assert.Equal(25, d.Loyalty.TierPercent);
+    }
+}
+
+
+file sealed class CertifiedLoyaltyContext
+{
+    public readonly Guid Register = Guid.NewGuid(), Cashier = Guid.NewGuid();
+    public readonly Seeded Seed;
+    public readonly FakeLoyaltyRepo Loyalty = new();
+    public readonly ShelfGuard.Infrastructure.Services.PosLoyaltySnapshots Proofs = PosLoyaltySnapshotTests.Service();
+    public readonly LoyaltyMembership Member;
+    public readonly LoyaltyProgramSettings Settings;
+    public readonly PosService Service;
+    public readonly CreateSaleRequest Request;
+    public CertifiedLoyaltyContext(bool firstReward = false)
+    {
+        Seed = SaleSeeder.Seed("CERTIFIED-LOYALTY", 50, Register);
+        var product = Seed.Catalog.Products.Single(); product.PriceRetail = 100;
+        var tier = new LoyaltyTierDefinition { TenantId = product.TenantId, DiscountPercent = 25, AccrualMultiplier = firstReward ? 0 : 10 };
+        Member = new() { TenantId = product.TenantId, CurrentTierId = tier.Id, CurrentTier = tier, Balance = 200 };
+        Settings = new() { TenantId = product.TenantId, BonusUnitsPerCurrencyUnit = 100,
+            FirstPurchaseRewardEnabled = firstReward, FirstPurchaseRewardAmount = 5 };
+        Loyalty.Memberships.Add(Member); Loyalty.Settings.Add(Settings);
+        var at = DateTime.UtcNow.AddMinutes(-1);
+        var quote = Proofs.Issue(product.TenantId, Seed.Shift.StoreId, Register, Member.Id, null,
+            PosLoyaltyTerms.From(Member, Settings, false), at)!;
+        var config = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?> {
+            ["Jwt:Secret"] = "synthetic-certified-loyalty-base-0123456789" }).Build();
+        var prices = new ShelfGuard.Infrastructure.Services.PosPriceSnapshots(config);
+        var promos = new ShelfGuard.Infrastructure.Services.PosPromotionSnapshots(config);
+        var price = prices.Issue(new CatalogSyncRow(product.Id, product.Name, product.Barcodes.ToArray(), 100, 0, "pcs", true,
+            at, TenantId: product.TenantId), at);
+        var rules = promos.Issue(product.TenantId, Seed.Shift.StoreId, Register, null, [], at)!;
+        var registers = Substitute.For<ICashRegisterRepository>();
+        registers.HadSessionAtAsync(default, default, default, default, default).ReturnsForAnyArgs(true);
+        Service = new(Seed.Pos, Seed.Stock, Seed.Catalog, new FakeDiscountRepo(), new FakeFiscalFactory(new NoopFiscalService()),
+            Loyalty, new FakeCustomerRepo(), NullLogger<PosService>.Instance, registers: registers, promotions: new FakePromotionRepo(),
+            priceSnapshots: prices, promotionSnapshots: promos, loyaltySnapshots: Proofs);
+        Request = new(Seed.Shift.Id, [new("CERTIFIED-LOYALTY", 1, "lc1." + price.Token)], "Cash", 100,
+            LoyaltyMembershipId: Member.Id, RedeemAmount: firstReward ? 0 : 100,
+            ClientTransactionId: Guid.NewGuid(), OccurredAt: at, ExpectedTotal: firstReward ? 75 : 74,
+            PromotionSnapshot: rules.Token, ExpectedPriceSegments: [new(0, 1, 75)], LoyaltySnapshot: quote.Token);
+    }
+    public async Task<BatchSaleItemResultDto> Flush(CreateSaleRequest? request = null)
+    {
+        var (result, error, _) = await Service.CreateSalesBatchAsync(Seed.Shift.TenantId, Cashier, new([request ?? Request]), registerId: Register);
+        Assert.Null(error); return Assert.Single(result!.Results);
+    }
+}
+
+public sealed class CertifiedLoyaltySaleTests
+{
+    [Fact]
+    public async Task Original_tier_rates_conversion_caps_and_exclusions_survive_live_changes_and_replay_is_exact()
+    {
+        var c = new CertifiedLoyaltyContext();
+        c.Member.CurrentTier!.DiscountPercent = 90; c.Member.CurrentTier.AccrualMultiplier = 90;
+        c.Member.CurrentTierId = Guid.NewGuid(); c.Settings.BonusUnitsPerCurrencyUnit = 1;
+        c.Settings.RedemptionCapPercent = 0; c.Settings.BonusExclusionsEnabled = true;
+        c.Settings.ExcludedProductIdsJson = System.Text.Json.JsonSerializer.Serialize(new[] { c.Seed.Catalog.Products.Single().Id });
+        var result = await c.Flush(); Assert.Equal("created", result.Status); Assert.Equal(74, result.Sale!.Subtotal);
+        Assert.Equal(740, result.Sale.LoyaltyAccrued); Assert.Equal(840, c.Member.Balance);
+        using var doc = System.Text.Json.JsonDocument.Parse(c.Seed.Pos.Transactions.Single().PricingSnapshot!.Payload);
+        Assert.Equal("certified-sale-terms/live-balance", doc.RootElement.GetProperty("loyaltyContextOrigin").GetString());
+        Assert.Equal(200, doc.RootElement.GetProperty("loyaltySource").GetProperty("balanceBefore").GetDecimal());
+        Assert.DoesNotContain(c.Request.LoyaltySnapshot!, doc.RootElement.GetRawText());
+        c.Member.Status = LoyaltyMembershipStatus.Blocked;
+        Assert.Equal("duplicate", (await c.Flush()).Status); Assert.Equal(840, c.Member.Balance); Assert.Equal(49, c.Seed.Batch.Quantity);
+        Assert.Equal(409, (await c.Flush(c.Request with { LoyaltySnapshot = null })).ErrorStatusCode);
+    }
+
+    [Theory]
+    [InlineData("balance")][InlineData("blocked")][InlineData("program")][InlineData("module")][InlineData("proof")][InlineData("member")]
+    public async Task Cached_terms_never_authorize_bad_identity_live_block_or_insufficient_balance(string reason)
+    {
+        var c = new CertifiedLoyaltyContext(); var r = c.Request;
+        if (reason == "balance") c.Member.Balance = 99;
+        if (reason == "blocked") c.Member.Status = LoyaltyMembershipStatus.Blocked;
+        if (reason == "program") c.Settings.IsEnabled = false;
+        if (reason == "module") c.Loyalty.ProgramAvailable = false;
+        if (reason == "proof") r = r with { LoyaltySnapshot = "lo1.invalid" };
+        if (reason == "member") r = r with { LoyaltyMembershipId = Guid.NewGuid() };
+        var result = await c.Flush(r); Assert.Equal("failed", result.Status);
+        Assert.Empty(c.Seed.Pos.Transactions); Assert.Empty(c.Loyalty.LedgerEntries); Assert.Equal(50, c.Seed.Batch.Quantity);
+    }
+
+    [Fact]
+    public async Task Certified_first_reward_cannot_repeat_when_cashback_is_zero()
+    {
+        var c = new CertifiedLoyaltyContext(firstReward: true);
+        Assert.Equal("created", (await c.Flush()).Status); Assert.Equal(205, c.Member.Balance);
+        Assert.Equal("created", (await c.Flush(c.Request with { ClientTransactionId = Guid.NewGuid() })).Status);
+        Assert.Equal(205, c.Member.Balance); Assert.Single(c.Loyalty.LedgerEntries);
+    }
+}
+
+file sealed class ControlledOnlineBasePrices : IPosBasePriceResolver
+{
+    public bool Enabled { get; set; } = true;
+    public string? Failure { get; set; }
+    public int Calls { get; private set; }
+    public decimal Price { get; set; } = 25;
+    public bool IsEnabled(Guid tenant, Guid store) => Enabled;
+    public Task<IReadOnlyDictionary<Guid, PosBasePriceDecision>> ResolveAsync(Guid tenant, Guid store, DateTime at,
+        IReadOnlyList<PosBasePriceItem> items, CancellationToken ct = default)
+    {
+        Calls++; if (Failure != null) throw new PosPricingAuthorityException(Failure);
+        return Task.FromResult<IReadOnlyDictionary<Guid, PosBasePriceDecision>>(items.ToDictionary(i => i.ItemId,
+            i => new PosBasePriceDecision(i.ItemId, "planned-base.v1", "planned_price_list", Price, 7,
+                Guid.NewGuid(), Guid.NewGuid(), 3, new string('a', 64), at, at.AddHours(1))));
+    }
+}
+
+public sealed class PosOnlinePricingTests
+{
+    private static PosService Service(IPosRepository pos, IStockRepository stock, IItemRepository catalog, IPosBasePriceResolver prices, IPosPriceSnapshots? proofs = null, ILoyaltyRepository? loyalty = null)
+    {
+        var registers = Substitute.For<ICashRegisterRepository>();
+        registers.HadSessionAtAsync(Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<DateTime>(), Arg.Any<TimeSpan>(), Arg.Any<CancellationToken>()).Returns(true);
+        return new(pos, stock, catalog, new FakeDiscountRepo(), new FakeFiscalFactory(new NoopFiscalService()),
+            loyalty ?? new FakeLoyaltyRepo(), new FakeCustomerRepo(), NullLogger<PosService>.Instance,
+            registers: registers, priceSnapshots: proofs, basePrices: prices);
+    }
+    [Fact] public async Task Planned_base_and_VAT_are_archived_without_editing_catalog_and_replay_survives_rollback()
+    {
+        var s = SaleSeeder.Seed("P3-ONLINE"); var prices = new ControlledOnlineBasePrices(); var service = Service(s.Pos, s.Stock, s.Catalog, prices);
+        var request = new CreateSaleRequest(s.Shift.Id, [new("P3-ONLINE", 2.5m)], "Cash", 500, ClientTransactionId: Guid.NewGuid());
+        var r = await service.CreateSaleAsync(s.Shift.TenantId, Guid.NewGuid(), request);
+        Assert.Null(r.Error); Assert.Equal(62.5m, r.Sale!.Subtotal); Assert.Equal(7.5m, s.Batch.Quantity);
+        var tx = Assert.Single(s.Pos.Transactions); Assert.Equal(4.09m, tx.TaxAmount);
+        var audit = System.Text.Json.JsonSerializer.Deserialize<PricingArchivedDecision>(tx.PricingSnapshot!.Payload,
+            new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web))!;
+        Assert.Equal(3, audit.Lines[0].BaseResolution!.Version); Assert.Equal(25, audit.Lines[0].Input.RetailPrice);
+        Assert.Equal("matched", PricingShadow.Compare(new(s.Shift.TenantId, s.Shift.StoreId, new(audit.EvaluatedAt, TimeSpan.Zero),
+            null, false, audit.Lines.Select(l => l.Input).ToArray(), [], null), audit.Result).Outcome);
+        Assert.Equal(10, s.Catalog.Products.Single().PriceRetail); Assert.Equal(20, s.Catalog.Products.Single().VatRate);
+        prices.Enabled = false; prices.Price = 99;
+        var replay = await service.CreateSaleAsync(s.Shift.TenantId, Guid.NewGuid(), request);
+        Assert.Null(replay.Error); Assert.Equal(tx.Id, replay.Sale!.TransactionId); Assert.Equal(1, prices.Calls);
+        var legacy = await service.CreateSaleAsync(s.Shift.TenantId, Guid.NewGuid(), request with {
+            ClientTransactionId = Guid.NewGuid(), Items = [new("P3-ONLINE", 1)] });
+        Assert.Null(legacy.Error); Assert.Equal(10, legacy.Sale!.Subtotal); Assert.Equal(1, prices.Calls);
+        Assert.DoesNotContain("baseResolution", s.Pos.Transactions.Last().PricingSnapshot!.Payload);
+    }
+    [Theory] [InlineData("pricing_inventory_not_ready")] [InlineData("pricing_missing_price")]
+    [InlineData("pricing_source_incompatible")]
+    public async Task Authority_error_cannot_fall_back_or_change_stock(string code)
+    {
+        var s = SaleSeeder.Seed("P3-ERROR"); var prices = new ControlledOnlineBasePrices { Failure = code };
+        var r = await Service(s.Pos, s.Stock, s.Catalog, prices).CreateSaleAsync(s.Shift.TenantId, Guid.NewGuid(), new(s.Shift.Id, [new("P3-ERROR", 1)], "Cash", 500));
+        Assert.Equal(409, r.StatusCode); Assert.Contains(code, r.Error!); Assert.Equal(10, s.Batch.Quantity);
+        Assert.Empty(s.Pos.Transactions); Assert.Empty(s.Pos.Events); Assert.Equal(0, s.Pos.SaveCount);
+    }
+    [Fact] public async Task Changed_expected_total_is_rejected_before_stock_changes()
+    {
+        var s = SaleSeeder.Seed("P3-TOTAL"); var r = await Service(s.Pos, s.Stock, s.Catalog, new ControlledOnlineBasePrices())
+            .CreateSaleAsync(s.Shift.TenantId, Guid.NewGuid(), new(s.Shift.Id, [new("P3-TOTAL", 1)], "Cash", 500, ExpectedTotal: 10));
+        Assert.Equal(409, r.StatusCode); Assert.Equal(10, s.Batch.Quantity); Assert.Empty(s.Pos.Transactions);
+    }
+    [Fact] public async Task Existing_member_discount_uses_planned_base_and_its_VAT()
+    {
+        var s = SaleSeeder.Seed("P3-TIER"); var loyalty = new FakeLoyaltyRepo();
+        var tier = new LoyaltyTierDefinition { TenantId = s.Shift.TenantId, Name = "P3 tier", DiscountPercent = 20 };
+        var member = new LoyaltyMembership { TenantId = s.Shift.TenantId, Status = LoyaltyMembershipStatus.Active,
+            CurrentTierId = tier.Id, CurrentTier = tier };
+        loyalty.Memberships.Add(member); loyalty.Settings.Add(new() { TenantId = s.Shift.TenantId });
+        var r = await Service(s.Pos, s.Stock, s.Catalog, new ControlledOnlineBasePrices(), loyalty: loyalty)
+            .CreateSaleAsync(s.Shift.TenantId, Guid.NewGuid(), new(s.Shift.Id, [new("P3-TIER", 1)], "Cash", 500, LoyaltyMembershipId: member.Id));
+        Assert.Null(r.Error); Assert.Equal(20, r.Sale!.Subtotal);
+        var line = Assert.Single(s.Pos.Transactions.Single().Items);
+        Assert.Equal(25, line.PriceRetail); Assert.Equal(5, line.DiscountAmount); Assert.Equal(7, line.VatRate);
+    }
+    [Fact] public async Task Paid_offline_p1_receipt_keeps_original_price_when_online_authority_is_enabled()
+    {
+        var register = Guid.NewGuid(); var s = SaleSeeder.Seed("P3-PAID", registerId: register);
+        var item = s.Catalog.Products.Single(); var at = DateTime.UtcNow;
+        var proofs = new ShelfGuard.Infrastructure.Services.PosPriceSnapshots(new ConfigurationBuilder().AddInMemoryCollection(
+            new Dictionary<string, string?> { ["Jwt:Secret"] = "synthetic-p3-offline-proof-0123456789" }).Build());
+        var proof = proofs.Issue(new(item.Id, item.Name, item.Barcodes, 10, 20, item.Unit, true, at,
+            item.CategoryId, item.TenantId, item.PricePurchase), at.AddMinutes(-1));
+        var prices = new ControlledOnlineBasePrices { Failure = "must_not_resolve_paid_receipts" };
+        var request = new CreateSaleRequest(s.Shift.Id, [new("P3-PAID", 1, proof.Token)], "Cash", 10,
+            ClientTransactionId: Guid.NewGuid(), OccurredAt: at, ExpectedTotal: 10);
+        var r = await Service(s.Pos, s.Stock, s.Catalog, prices, proofs).CreateSalesBatchAsync(s.Shift.TenantId, Guid.NewGuid(), new([request]), registerId: register);
+        var result = Assert.Single(r.Result!.Results); Assert.Equal("created", result.Status); Assert.Equal(10, result.Sale!.Subtotal);
+        Assert.Equal(0, prices.Calls); Assert.DoesNotContain("baseResolution", s.Pos.Transactions.Single().PricingSnapshot!.Payload);
     }
 }

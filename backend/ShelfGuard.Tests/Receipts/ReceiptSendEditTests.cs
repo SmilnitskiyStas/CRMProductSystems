@@ -16,7 +16,7 @@ public sealed class ReceiptSendEditTests
     private readonly Guid _other = Guid.NewGuid();
 
     public ReceiptSendEditTests() => _sut = new ReceiptService(
-        _repo, Substitute.For<INotificationRepository>(), Substitute.For<IActivityLogRepository>());
+        _repo, Substitute.For<IActivityLogRepository>());
 
     private StockReceipt Make(string status = "draft", string source = ReceiptSource.AutoReplenishment,
         Guid? takenBy = null, Guid? supplier = null, int lines = 2)

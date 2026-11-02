@@ -61,10 +61,17 @@ public sealed class WriteOffService : IWriteOffService
         if (request.Reason is not null && !ValidReasons.Contains(request.Reason))
             return (null, $"Invalid reason '{request.Reason}'. Valid: {string.Join(", ", ValidReasons)}.");
 
+        var reason = request.Reason ?? "other";
+        var notes = request.Notes?.Trim();
+        if ((reason != "expired" && (string.IsNullOrEmpty(notes) || notes.Length < 15)) || notes?.Length > 100)
+            return (null, "Write-off explanation must contain between 15 and 100 characters.");
+
         foreach (var item in request.Items)
         {
-            if (item.Quantity <= 0)
-                return (null, "All item quantities must be greater than 0.");
+            if (item.Quantity <= 0 || item.Quantity > 99_999_999.99m || decimal.Round(item.Quantity, 2) != item.Quantity)
+                return (null, "All item quantities must be positive numeric(10,2) values without rounding.");
+            if (item.UnitPrice is decimal price && (price < 0 || price > 9_999_999_999.99m || decimal.Round(price, 2) != price))
+                return (null, "Unit price must be a nonnegative numeric(12,2) value without rounding.");
         }
 
         foreach (var itemReq in request.Items)
@@ -96,7 +103,8 @@ public sealed class WriteOffService : IWriteOffService
         {
             TenantId = tenantId,
             StoreId = request.StoreId,
-            Reason = request.Reason,
+            Reason = reason,
+            Notes = string.IsNullOrEmpty(notes) ? null : notes,
             Status = "pending_approval",
             CreatedBy = createdBy,
         };
@@ -145,6 +153,11 @@ public sealed class WriteOffService : IWriteOffService
                 }
             }
 
+            // Match each persisted numeric(12,2) child before summing header totals. Keep the raw
+            // reimbursement calculation above, preserving the existing percentage basis.
+            var storedLoss = Money(lossAmount); var storedPurchaseLoss = Money(lossAmountPurchase); var storedReimbursement = Money(reimbAmount);
+            if (new[] { storedLoss, storedPurchaseLoss, storedReimbursement }.Any(v => v.HasValue && Math.Abs(v.Value) > 9_999_999_999.99m))
+                return (null, "Write-off amount exceeds numeric(12,2).");
             writeOff.Items.Add(new WriteOffItem
             {
                 WriteOffId = writeOff.Id,
@@ -152,13 +165,13 @@ public sealed class WriteOffService : IWriteOffService
                 ProductId = itemReq.ProductId,
                 Quantity = itemReq.Quantity,
                 UnitPrice = unitPrice,
-                LossAmount = lossAmount,
+                LossAmount = storedLoss,
                 UnitPricePurchase = unitPricePurchase,
-                LossAmountPurchase = lossAmountPurchase,
+                LossAmountPurchase = storedPurchaseLoss,
                 IsReturnedToSupplier = itemReq.IsReturnedToSupplier,
                 ReimbursementType = reimbType,
                 ReimbursementValue = reimbValue,
-                ReimbursementAmount = reimbAmount,
+                ReimbursementAmount = storedReimbursement,
             });
         }
 
@@ -172,6 +185,8 @@ public sealed class WriteOffService : IWriteOffService
             .Where(i => i.ReimbursementAmount.HasValue)
             .Sum(i => i.ReimbursementAmount!.Value);
 
+        if (new[] { writeOff.TotalLossAmount, writeOff.TotalLossAmountPurchase, writeOff.TotalReimbursementAmount }.Any(v => v.HasValue && Math.Abs(v.Value) > 9_999_999_999.99m))
+            return (null, "Write-off total exceeds numeric(12,2).");
         await _repo.AddAsync(writeOff, ct);
         await _repo.SaveChangesAsync(ct);
 
@@ -315,7 +330,7 @@ public sealed class WriteOffService : IWriteOffService
 
                 var before = stock.Quantity;
                 stock.Quantity -= item.Quantity;
-                stock.Status = StockStatus.Compute(stock.Quantity, stock.ExpiryDate, stock.LastCheckedAt);
+                stock.Status = StockStatus.Recalculate(stock);
                 _repo.UpdateStock(stock);
 
                 await _repo.AddMovementAsync(new StockMovement
@@ -334,6 +349,7 @@ public sealed class WriteOffService : IWriteOffService
                     ReferenceId = writeOff.Id,
                     ReferenceType = "write_off",
                     PerformedBy = approvedBy,
+                    Notes = writeOff.Notes,
                 }, ct);
             }
             else
@@ -351,7 +367,7 @@ public sealed class WriteOffService : IWriteOffService
                     var before = batch.Quantity;
 
                     batch.Quantity -= take;
-                    batch.Status = StockStatus.Compute(batch.Quantity, batch.ExpiryDate, batch.LastCheckedAt);
+                    batch.Status = StockStatus.Recalculate(batch);
                     remaining -= take;
                     _repo.UpdateStock(batch);
 
@@ -371,6 +387,7 @@ public sealed class WriteOffService : IWriteOffService
                         ReferenceId = writeOff.Id,
                         ReferenceType = "write_off",
                         PerformedBy = approvedBy,
+                        Notes = writeOff.Notes,
                     }, ct);
                 }
 
@@ -411,6 +428,7 @@ public sealed class WriteOffService : IWriteOffService
         return (saved is null ? null : ToDto(saved), null);
     }
 
+    private static decimal? Money(decimal? value) => value.HasValue ? decimal.Round(value.Value, 2, MidpointRounding.AwayFromZero) : null;
     // ── mapping ────────────────────────────────────────────────────────────
 
     private static WriteOffDto ToDto(WriteOff w) => new(
@@ -444,6 +462,7 @@ public sealed class WriteOffService : IWriteOffService
             i.ReimbursementType,
             i.ReimbursementValue,
             i.ReimbursementAmount
-        )).ToList()
+        )).ToList(),
+        w.Notes
     );
 }

@@ -1,4 +1,6 @@
 "use client";
+import { useMe } from "@/features/auth/hooks/useAuth";
+import { canWorkPermission } from "@/lib/workPermissions";
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
@@ -16,6 +18,8 @@ import { filterInputStyle } from "@/components/ui/fieldStyles";
 import { formatDateOnly } from "./ProductionRequestStatusBadge";
 
 export function ProductionOrderTable() {
+  const { data: me } = useMe();
+  const canManage = canWorkPermission(me, "production.manage");
   const t = useTranslations("Dashboard.production.orderTable");
   const locale = useLocale();
   const intlLocale = locale === "en" ? "en-US" : "uk-UA";
@@ -105,7 +109,7 @@ export function ProductionOrderTable() {
       <PageHeader
         title={t("title")}
         actions={
-          <Btn icon={<Plus size={15} />} onClick={() => setCreateOpen(true)}>
+          <Btn disabled={!canManage} icon={<Plus size={15} />} onClick={() => setCreateOpen(true)}>
             {t("addOrder")}
           </Btn>
         }

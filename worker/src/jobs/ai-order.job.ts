@@ -1,3 +1,4 @@
+import { getWorkerGrant, workerAccessToken } from "../services/worker-auth";
 import { Worker, Job } from "bullmq";
 import { redisConnection } from "../redis";
 import { db } from "../db";
@@ -12,17 +13,6 @@ const API_BASE = process.env.API_BASE_URL ?? "http://localhost:5100";
 const SERVICE_EMAIL = process.env.WORKER_API_EMAIL ?? "";
 const SERVICE_PASSWORD = process.env.WORKER_API_PASSWORD ?? "";
 
-async function login(): Promise<string> {
-  const res = await fetch(`${API_BASE}/api/auth/login`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email: SERVICE_EMAIL, password: SERVICE_PASSWORD }),
-  });
-  if (!res.ok) throw new Error(`service login failed: HTTP ${res.status}`);
-  const body = (await res.json()) as { accessToken?: string };
-  if (!body.accessToken) throw new Error("service login returned no token");
-  return body.accessToken;
-}
 
 async function runAiOrderGeneration(): Promise<void> {
   if (!SERVICE_EMAIL || !SERVICE_PASSWORD) {
@@ -30,7 +20,9 @@ async function runAiOrderGeneration(): Promise<void> {
     return;
   }
 
-  const token = await login();
+  const grant = await getWorkerGrant();
+  const tenantId = grant.tenantId;
+  const token = workerAccessToken(grant);
 
   const client = await db.connect();
   let stores: { id: string; tenant_id: string; name: string }[];
@@ -45,7 +37,7 @@ async function runAiOrderGeneration(): Promise<void> {
     // (v4 Store→Location rename). Querying "stores" here silently threw every run — the
     // nightly cron never generated a single AI order suggestion in production.
     const res = await client.query<{ id: string; tenant_id: string; name: string }>(
-      'SELECT "Id" AS id, "TenantId" AS tenant_id, "Name" AS name FROM locations WHERE "IsActive"',
+      'SELECT "Id" AS id, "TenantId" AS tenant_id, "Name" AS name FROM locations WHERE "IsActive" AND "TenantId" = $1', [tenantId],
     );
     stores = res.rows;
   } finally {
@@ -58,7 +50,7 @@ async function runAiOrderGeneration(): Promise<void> {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
+          Authorization: `Bearer ${await token()}`,
         },
         body: JSON.stringify({ storeId: store.id }),
       });

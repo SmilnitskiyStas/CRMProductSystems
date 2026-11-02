@@ -11,6 +11,15 @@ public sealed class PosTransactionItem
     public decimal PriceRetail { get; init; }
     public decimal DiscountAmount { get; init; }
     public decimal PriceFinal { get; init; }
+    // Nullable for historical rows: never backfill old tax/cost from today's catalog.
+    public decimal? VatRate { get; init; }
+    public decimal? VatAmount { get; set; }
+    public decimal? TaxableAmount { get; set; }
+    public decimal? LineTotal { get; init; }
+    public decimal? UnitCost { get; init; }
+    public string? ProductNameSnapshot { get; init; }
+    public string? BarcodeSnapshot { get; init; }
+    public string? PriceSnapshotHash { get; init; }
     // Expiry read from the package by CV at checkout (v3 Phase 3); null = pure FEFO
     public DateOnly? ExpiryDate { get; init; }
     public int? CvConfidence { get; init; }

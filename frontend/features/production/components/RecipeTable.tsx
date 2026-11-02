@@ -1,4 +1,6 @@
 "use client";
+import { useMe } from "@/features/auth/hooks/useAuth";
+import { canWorkPermission } from "@/lib/workPermissions";
 
 import { useState } from "react";
 import { Plus, Pencil, PowerOff } from "lucide-react";
@@ -20,6 +22,8 @@ interface Props {
 }
 
 export function RecipeTable({ showInactive, toolbarExtra }: Props) {
+  const { data: me } = useMe();
+  const canManage = canWorkPermission(me, "production.manage");
   const t = useTranslations("Dashboard.production.recipeTable");
   const { data: recipes = [], isLoading, isError } = useRecipes(showInactive);
   const deactivate = useDeactivateRecipe();
@@ -64,7 +68,7 @@ export function RecipeTable({ showInactive, toolbarExtra }: Props) {
     {
       key: "actions",
       header: "",
-      render: (recipe) => (
+      render: (recipe) => canManage ? (
         <ActionMenu
           items={[
             { label: t("editTitle"), icon: <Pencil size={13} />, onClick: () => setEditRecipe(recipe) },
@@ -81,7 +85,7 @@ export function RecipeTable({ showInactive, toolbarExtra }: Props) {
               : []),
           ]}
         />
-      ),
+      ) : null,
     },
   ];
 
@@ -100,7 +104,7 @@ export function RecipeTable({ showInactive, toolbarExtra }: Props) {
         actions={
           <>
             {toolbarExtra}
-            <Btn icon={<Plus size={15} />} onClick={() => setCreateOpen(true)}>
+            <Btn disabled={!canManage} icon={<Plus size={15} />} onClick={() => setCreateOpen(true)}>
               {t("addRecipe")}
             </Btn>
           </>

@@ -66,12 +66,12 @@ export const productionApi = {
   /** GET /api/production/orders?status= */
   getOrders: (status?: string) => {
     const qs = status ? `?status=${status}` : "";
-    return api.get<ProductionOrderListItemDto[]>(`/api/production/orders${qs}`);
+    return api.get<ProductionOrderListItemDto[]>(`/api/production/orders${qs}`).then(rows => rows.map(normalizeOrder));
   },
 
   /** GET /api/production/orders/{id} */
   getOrder: (id: string) =>
-    api.get<ProductionOrderDetailDto>(`/api/production/orders/${id}`),
+    api.get<ProductionOrderDetailDto>(`/api/production/orders/${id}`).then(normalizeOrder),
 
   /** POST /api/production/orders */
   createOrder: (body: ProductionOrderCreateDto) =>
@@ -196,3 +196,8 @@ export const productionInsightsApi = {
   getStock: (p: { kind: StockKind; locationId?: string }) =>
     api.get<ProductionStockItemDto[]>(`/api/production/stock${qs(p)}`),
 };
+
+function normalizeOrder<T extends { status: string }>(order: T): T {
+  const status = order.status.replace(/_/g, "").toLowerCase();
+  return { ...order, status: status === "inprogress" ? "in_progress" : status };
+}

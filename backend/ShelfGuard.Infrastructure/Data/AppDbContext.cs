@@ -4,12 +4,50 @@ using Microsoft.EntityFrameworkCore.ChangeTracking;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using ShelfGuard.Domain.Constants;
 using ShelfGuard.Domain.Entities;
+using ShelfGuard.Domain.Entities.Erp;
 
 namespace ShelfGuard.Infrastructure.Data;
 
 public sealed class AppDbContext : DbContext
 {
+    public DbSet<ConsumerRefreshToken> ConsumerRefreshTokens => Set<ConsumerRefreshToken>();
+
+    private void PrepareConsumerAuthVersions()
+    {
+        ChangeTracker.DetectChanges();
+        foreach (var entry in ChangeTracker.Entries<ConsumerAccount>().Where(e => e.State == EntityState.Modified))
+        {
+            if (entry.Property(a => a.PasswordHash).OriginalValue != entry.Entity.PasswordHash
+                || entry.Property(a => a.IsActive).OriginalValue != entry.Entity.IsActive)
+                entry.Entity.AuthVersion = checked(entry.Property(a => a.AuthVersion).OriginalValue + 1);
+        }
+    }
+
+    public override int SaveChanges(bool acceptAllChangesOnSuccess)
+    {
+        PrepareConsumerAuthVersions();
+        return base.SaveChanges(acceptAllChangesOnSuccess);
+    }
+
+    public override Task<int> SaveChangesAsync(bool acceptAllChangesOnSuccess, CancellationToken cancellationToken = default)
+    {
+        PrepareConsumerAuthVersions();
+        return base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
+    }
     public AppDbContext(DbContextOptions<AppDbContext> options) : base(options) { }
+
+    // W2 parallel ERP schema. No legacy posting path writes these tables yet.
+    public DbSet<BusinessDocument> BusinessDocuments => Set<BusinessDocument>();
+    public DbSet<DocumentLine> DocumentLines => Set<DocumentLine>();
+    public DbSet<DocumentPosting> DocumentPostings => Set<DocumentPosting>();
+    public DbSet<DocumentLink> DocumentLinks => Set<DocumentLink>();
+    public DbSet<DocumentApproval> DocumentApprovals => Set<DocumentApproval>();
+    public DbSet<InventoryLedgerEntry> InventoryLedgerEntries => Set<InventoryLedgerEntry>();
+    public DbSet<InventoryBalanceProjection> InventoryBalanceProjections => Set<InventoryBalanceProjection>();
+    public DbSet<InventoryReservation> InventoryReservations => Set<InventoryReservation>();
+    public DbSet<InventoryReconciliation> InventoryReconciliations => Set<InventoryReconciliation>();
+    public DbSet<OutboxEvent> OutboxEvents => Set<OutboxEvent>();
+    public DbSet<InboxDeduplication> InboxDeduplication => Set<InboxDeduplication>();
 
     // Auth (existing)
     public DbSet<Tenant> Tenants => Set<Tenant>();
@@ -82,6 +120,7 @@ public sealed class AppDbContext : DbContext
 
     // v3 — IoT foundation
     public DbSet<IotDevice> IotDevices => Set<IotDevice>();
+    public DbSet<IotMessageReceipt> IotMessageReceipts => Set<IotMessageReceipt>();
     public DbSet<TemperatureReading> TemperatureReadings => Set<TemperatureReading>();
     public DbSet<WeightReading> WeightReadings => Set<WeightReading>();
 
@@ -237,6 +276,12 @@ public sealed class AppDbContext : DbContext
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
+        PosReturnModel.Configure(builder);
+        ErpModelConfiguration.Configure(builder);
+        PricingModelConfiguration.Configure(builder);
+        LabelModelConfiguration.Configure(builder);
+        LabelJobArchiveModelConfiguration.Configure(builder);
+        LabelPrinterModelConfiguration.Configure(builder);
         // ── Tenant ─────────────────────────────────────────────────────────
         builder.Entity<Tenant>(e =>
         {
@@ -319,14 +364,19 @@ public sealed class AppDbContext : DbContext
             e.Property(u => u.FailedLoginAttempts).HasDefaultValue(0);
             e.Property(u => u.LockoutUntil).IsRequired(false);
 
-            // Temporary password (forgot-password flow, TASK-464/465)
+            // Legacy temporary password compatibility; new recovery uses a separate proof.
             e.Property(u => u.TempPasswordExpiresAt).IsRequired(false);
+            e.Property(u => u.PasswordResetTokenHash).HasMaxLength(64);
+            e.Property(u => u.PasswordResetExpiresAt).IsRequired(false);
+            e.Property(u => u.PasswordResetRequestedAt).IsRequired(false);
+            e.Property(u => u.AuthVersion).HasDefaultValue(0).IsConcurrencyToken();
 
             // 2FA TOTP (TASK-330)
             e.Property(u => u.TotpSecret).IsRequired(false);
             e.Property(u => u.TotpEnabled).HasDefaultValue(false);
-            e.Property(u => u.TotpLastTimestep).IsRequired(false);
+            e.Property(u => u.TotpLastTimestep).IsRequired(false).IsConcurrencyToken();
             e.Property(u => u.TotpRecoveryCodes)
+             .IsConcurrencyToken()
              .HasColumnType("jsonb")
              .HasConversion(
                  v => v == null ? null : System.Text.Json.JsonSerializer.Serialize(v, (System.Text.Json.JsonSerializerOptions?)null),
@@ -346,6 +396,7 @@ public sealed class AppDbContext : DbContext
             e.HasKey(rt => rt.Id);
             e.Property(rt => rt.Id).HasDefaultValueSql("gen_random_uuid()");
             e.Property(rt => rt.TokenHash).HasMaxLength(64).IsRequired();
+            e.HasIndex(rt => new { rt.UserId, rt.SessionId }).IsUnique().HasFilter("\"RevokedAt\" IS NULL");
             e.HasIndex(rt => rt.TokenHash).IsUnique();
             e.Property(rt => rt.ExpiresAt).IsRequired();
             e.Property(rt => rt.ReplacedByTokenHash).HasMaxLength(64);
@@ -353,6 +404,18 @@ public sealed class AppDbContext : DbContext
             e.HasOne(rt => rt.User).WithMany(u => u.RefreshTokens)
              .HasForeignKey(rt => rt.UserId).OnDelete(DeleteBehavior.Cascade);
         });
+
+        builder.Entity<ConsumerRefreshToken>(e =>
+        {
+            e.ToTable("consumer_refresh_tokens");
+            e.HasKey(t => t.Id);
+            e.Property(t => t.TokenHash).HasMaxLength(64).IsRequired();
+            e.Property(t => t.ReplacedByTokenHash).HasMaxLength(64);
+            e.HasIndex(t => t.TokenHash).IsUnique();
+            e.HasIndex(t => new { t.ConsumerAccountId, t.SessionId }).IsUnique().HasFilter("\"RevokedAt\" IS NULL");
+            e.HasOne(t => t.ConsumerAccount).WithMany().HasForeignKey(t => t.ConsumerAccountId).OnDelete(DeleteBehavior.Cascade);
+        });
+        builder.Entity<ConsumerAccount>().Property(a => a.AuthVersion).HasDefaultValue(0).IsConcurrencyToken();
 
         // ── Product (POC) ───────────────────────────────────────────────────
         builder.Entity<Product>(e =>
@@ -652,7 +715,7 @@ public sealed class AppDbContext : DbContext
             e.HasKey(s => s.Id);
             e.Property(s => s.Id).HasDefaultValueSql("gen_random_uuid()");
             e.Property(s => s.BatchNumber).HasMaxLength(100);
-            e.Property(s => s.Quantity).HasColumnType("decimal(10,2)").IsRequired();
+            e.Property(s => s.Quantity).HasColumnType("decimal(10,2)").IsRequired().IsConcurrencyToken();
             e.Property(s => s.QuantityInitial).HasColumnType("decimal(10,2)").IsRequired();
             e.Property(s => s.ExpiryDate).IsRequired();
             e.Property(s => s.Status).HasMaxLength(30).HasDefaultValue("safe");
@@ -759,6 +822,9 @@ public sealed class AppDbContext : DbContext
             e.ToTable("stock_receipts");
             e.HasKey(r => r.Id);
             e.Property(r => r.Id).HasDefaultValueSql("gen_random_uuid()");
+            // Serialize receipt posting/cancellation/edits using PostgreSQL's existing row version.
+            // New stock rows have distinct IDs, so ProductStock's token alone cannot stop a replay.
+            e.Property<uint>("xmin").IsRowVersion();
             e.Property(r => r.Status).HasMaxLength(30).HasDefaultValue("draft");
             e.Property(r => r.CreatedAt).HasDefaultValueSql("NOW()");
             e.Property(r => r.DestinationStoreId).HasColumnName("DestinationLocationId");
@@ -766,6 +832,7 @@ public sealed class AppDbContext : DbContext
             e.Property(r => r.DelayReason).HasMaxLength(500);
             // TASK-755: auto replenishment drafts (Source manual | auto_replenishment, taken-by lock).
             e.Property(r => r.Source).HasMaxLength(30).HasDefaultValue("manual");
+            e.Property(r => r.ReceivingWorkJson).HasColumnType("jsonb");
             // TASK-354: TenantId had no index at all on this table (RLS filters every
             // query by TenantId — same gap pattern as WriteOff had before its
             // idx_write_offs_tenant_store_status index further below).
@@ -794,6 +861,8 @@ public sealed class AppDbContext : DbContext
             e.ToTable("stock_transfers");
             e.HasKey(t => t.Id);
             e.Property(t => t.Id).HasDefaultValueSql("gen_random_uuid()");
+            // A stale confirm/cancel must roll back its entire stock change with the document.
+            e.Property<uint>("xmin").IsRowVersion();
             e.Property(t => t.TransferType).HasMaxLength(50);
             e.Property(t => t.Status).HasMaxLength(30).HasDefaultValue("draft");
             e.Property(t => t.CreatedAt).HasDefaultValueSql("NOW()");
@@ -832,6 +901,7 @@ public sealed class AppDbContext : DbContext
             e.Property(w => w.Id).HasDefaultValueSql("gen_random_uuid()");
             e.Property(w => w.Status).HasMaxLength(30).HasDefaultValue("draft");
             e.Property(w => w.Reason).HasMaxLength(50);
+            e.Property(w => w.Notes).HasMaxLength(100);
             e.Property(w => w.TotalLossAmount).HasColumnType("decimal(12,2)");
             e.Property(w => w.TotalLossAmountPurchase).HasColumnType("decimal(12,2)");
             e.Property(w => w.TotalReimbursementAmount).HasColumnType("decimal(12,2)");
@@ -1269,6 +1339,18 @@ public sealed class AppDbContext : DbContext
              .HasForeignKey(d => d.ZoneId).OnDelete(DeleteBehavior.SetNull).IsRequired(false);
         });
 
+        // Ingestion keys outlive devices and telemetry retention; no cascading device FK.
+        builder.Entity<IotMessageReceipt>(e =>
+        {
+            e.ToTable("iot_message_receipts");
+            e.HasKey(r => r.Id);
+            e.Property(r => r.Id).HasDefaultValueSql("gen_random_uuid()");
+            e.Property(r => r.MessageKey).HasMaxLength(64).IsRequired();
+            e.Property(r => r.PayloadHash).HasMaxLength(64).IsRequired();
+            e.Property(r => r.CreatedAt).HasDefaultValueSql("NOW()");
+            e.HasIndex(r => new { r.TenantId, r.DeviceId, r.MessageKey }).IsUnique();
+        });
+
         // ── TemperatureReading (v3) ─────────────────────────────────────────
         builder.Entity<TemperatureReading>(e =>
         {
@@ -1416,6 +1498,12 @@ public sealed class AppDbContext : DbContext
             e.Property(i => i.PriceRetail).HasColumnType("decimal(12,2)");
             e.Property(i => i.DiscountAmount).HasColumnType("decimal(12,2)").HasDefaultValue(0m);
             e.Property(i => i.PriceFinal).HasColumnType("decimal(12,2)");
+            e.Property(i => i.VatRate).HasColumnType("decimal(5,2)");
+            e.Property(i => i.VatAmount).HasColumnType("decimal(12,2)");
+            e.Property(i => i.TaxableAmount).HasColumnType("decimal(12,2)");
+            e.Property(i => i.LineTotal).HasColumnType("decimal(12,2)");
+            e.Property(i => i.UnitCost).HasColumnType("decimal(12,2)");
+            e.Property(i => i.PriceSnapshotHash).HasMaxLength(64);
             e.HasIndex(i => i.TransactionId);
             // Covering index: load receipt lines without heap fetch
             e.HasIndex(i => i.TransactionId)
@@ -2054,6 +2142,7 @@ public sealed class AppDbContext : DbContext
         builder.Entity<ProductionOrder>(e =>
         {
             e.ToTable("production_orders");
+            e.Property(o => o.Status).IsConcurrencyToken();
             e.HasKey(o => o.Id);
             e.Property(o => o.Id).HasDefaultValueSql("gen_random_uuid()");
             e.Property(o => o.PlannedQty).HasColumnType("numeric(10,3)").IsRequired();
@@ -2101,6 +2190,7 @@ public sealed class AppDbContext : DbContext
         builder.Entity<ProductionRequest>(e =>
         {
             e.ToTable("production_requests");
+            e.Property(r => r.Status).IsConcurrencyToken();
             e.HasKey(r => r.Id);
             e.Property(r => r.Id).ValueGeneratedNever();
             e.Property(r => r.NeededBy).HasColumnType("date");
@@ -2159,6 +2249,8 @@ public sealed class AppDbContext : DbContext
         builder.Entity<Customer>(e =>
         {
             e.ToTable("customers");
+            // A sale racing a return must not overwrite the customer's net totals.
+            e.Property<uint>("xmin").IsRowVersion().HasColumnName("xmin");
             e.HasKey(c => c.Id);
             e.Property(c => c.Id).HasDefaultValueSql("gen_random_uuid()");
             e.Property(c => c.Name).HasColumnType("text").IsRequired();

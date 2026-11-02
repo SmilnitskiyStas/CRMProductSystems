@@ -316,7 +316,7 @@ public sealed class TransferServiceTests
         transfer.Status = "received";
         _repo.GetByIdAsync(transfer.Id, Arg.Any<CancellationToken>()).Returns(transfer);
 
-        var (t, error) = await _sut.CancelAsync(transfer.Id);
+        var (t, error) = await _sut.CancelAsync(transfer.Id, _userId);
         Assert.Null(t);
         Assert.Contains("Cannot cancel", error);
     }
@@ -331,10 +331,75 @@ public sealed class TransferServiceTests
         _repo.GetStockByIdAsync(stock.Id, Arg.Any<CancellationToken>()).Returns(stock);
 
         var itemQty = transfer.Items.First().Quantity;
-        await _sut.CancelAsync(transfer.Id);
+        await _sut.CancelAsync(transfer.Id, _userId);
 
         Assert.Equal(30 + itemQty, stock.Quantity);
         _repo.Received(1).UpdateStock(stock);
+        await _repo.Received(1).AddMovementAsync(Arg.Is<StockMovement>(m =>
+            m.MovementType == "transfer" && m.ReferenceId == transfer.Id
+            && m.ReferenceType == "stock_transfer_cancellation" && m.ProductStockId == stock.Id
+            && m.TenantId == _tenantId && m.ProductId == _productId
+            && m.QuantityBefore == 30 && m.QuantityAfter == 30 + itemQty && m.Quantity == itemQty
+            && m.FromStoreId == null && m.ToStoreId == _fromStore && m.PerformedBy == _userId),
+            Arg.Any<CancellationToken>());
+        await _repo.Received(1).SaveChangesAsync(Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task CancelAsync_MissingLaterSourceDoesNotPartiallyRestoreOrCancel()
+    {
+        var stock = BuildStock(quantity: 30);
+        var transfer = BuildTransfer(stock);
+        transfer.Items.Add(new StockTransferItem { TransferId = transfer.Id,
+            ProductStockId = Guid.NewGuid(), ProductId = _productId, Quantity = 2 });
+        _repo.GetByIdAsync(transfer.Id, Arg.Any<CancellationToken>()).Returns(transfer);
+        _repo.GetStockByIdAsync(stock.Id, Arg.Any<CancellationToken>()).Returns(stock);
+
+        var (result, error) = await _sut.CancelAsync(transfer.Id, _userId);
+
+        Assert.Null(result);
+        Assert.Contains("unavailable", error);
+        Assert.Equal(30, stock.Quantity);
+        Assert.Equal("in_transit", transfer.Status);
+        _repo.DidNotReceive().UpdateStock(Arg.Any<ProductStock>());
+        await _repo.DidNotReceive().AddMovementAsync(Arg.Any<StockMovement>(), Arg.Any<CancellationToken>());
+        await _repo.DidNotReceive().SaveChangesAsync(Arg.Any<CancellationToken>());
+    }
+
+    [Theory]
+    [InlineData("tenant")]
+    [InlineData("store")]
+    [InlineData("product")]
+    public async Task CancelAsync_InconsistentSourceDoesNotMutateInventory(string mismatch)
+    {
+        var stock = new ProductStock { TenantId = mismatch == "tenant" ? Guid.NewGuid() : _tenantId,
+            StoreId = mismatch == "store" ? Guid.NewGuid() : _fromStore,
+            ProductId = mismatch == "product" ? Guid.NewGuid() : _productId, Quantity = 30 };
+        var transfer = BuildTransfer(stock);
+        _repo.GetByIdAsync(transfer.Id, Arg.Any<CancellationToken>()).Returns(transfer);
+        _repo.GetStockByIdAsync(stock.Id, Arg.Any<CancellationToken>()).Returns(stock);
+
+        var (result, error) = await _sut.CancelAsync(transfer.Id, _userId);
+
+        Assert.Null(result);
+        Assert.NotNull(error);
+        Assert.Equal(30, stock.Quantity);
+        Assert.Equal("in_transit", transfer.Status);
+        await _repo.DidNotReceive().SaveChangesAsync(Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task CancelAsync_RepeatDoesNotRestoreOrLogTwice()
+    {
+        var stock = BuildStock(quantity: 30);
+        var transfer = BuildTransfer(stock);
+        _repo.GetByIdAsync(transfer.Id, Arg.Any<CancellationToken>()).Returns(transfer);
+        _repo.GetStockByIdAsync(stock.Id, Arg.Any<CancellationToken>()).Returns(stock);
+        Assert.Null((await _sut.CancelAsync(transfer.Id, _userId)).Error);
+        Assert.NotNull((await _sut.CancelAsync(transfer.Id, _userId)).Error);
+        Assert.Equal(50, stock.Quantity);
+        await _repo.Received(1).AddMovementAsync(Arg.Any<StockMovement>(), Arg.Any<CancellationToken>());
+        await _repo.Received(1).SaveChangesAsync(Arg.Any<CancellationToken>());
     }
 
     // ── helpers ────────────────────────────────────────────────────────────

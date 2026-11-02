@@ -1,4 +1,5 @@
 "use client";
+import { canWorkPermission } from "@/lib/workPermissions";
 
 import { useState, useRef, useEffect, KeyboardEvent } from "react";
 import { useTranslations, useLocale } from "next-intl";
@@ -633,12 +634,14 @@ function PulsingDots() {
 
 type SupportView = "list" | "new" | "chat";
 
-export function SupportChatWidget({ userRole, onClose, activeTab, onTabChange }: Props) {
+export function SupportChatWidget({ userRole, onClose, activeTab: requestedTab, onTabChange }: Props) {
   const t = useTranslations("Common");
   const tTopBar = useTranslations("Dashboard.topBar");
   const tChat = useTranslations("Dashboard.supportChat");
   const isProvider = PROVIDER_TEAM.has(userRole as AppRole);
   const { data: me } = useMe();
+  const canUseAi = canWorkPermission(me, "ai_assistant.use");
+  const activeTab = requestedTab === "assistant" && !canUseAi ? "support" : requestedTab;
   const [view, setView] = useState<SupportView>("list");
   const [selectedSession, setSelectedSession] = useState<ChatSessionDto | null>(null);
 
@@ -731,7 +734,7 @@ export function SupportChatWidget({ userRole, onClose, activeTab, onTabChange }:
             flexShrink: 0,
           }}
         >
-          {(["support", "assistant"] as ChatTab[]).map((tab) => {
+          {(["support", ...(canUseAi ? ["assistant"] : [])] as ChatTab[]).map((tab) => {
             const isActive = activeTab === tab;
             return (
               <button
@@ -872,7 +875,7 @@ export function SupportChatWidget({ userRole, onClose, activeTab, onTabChange }:
 
       {/* ── AI Assistant tab content — always mounted to preserve message history ── */}
       <div style={{ flex: 1, display: activeTab === "assistant" ? "flex" : "none", flexDirection: "column", overflow: "hidden" }}>
-        <AiAssistantTab />
+        {canUseAi && <AiAssistantTab />}
       </div>
     </div>
   );

@@ -86,7 +86,13 @@ export function WeeklyKpiCards({ data, isLoading }: Props) {
                 )}
               </span>
               {!isLoading && metric && (
-                <TrendIndicator current={metric.current} previous={metric.previous} format={card.format} size="sm" />
+                <TrendIndicator
+                  current={metric.current}
+                  previous={metric.previous}
+                  format={card.format}
+                  size="sm"
+                  lowerIsBetter={card.key === "writeOffLoss"}
+                />
               )}
               <span style={{ color: "#4B5563", fontSize: 11 }}>{t("comparisonNote")}</span>
             </div>

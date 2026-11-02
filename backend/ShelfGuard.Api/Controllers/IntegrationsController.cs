@@ -73,6 +73,7 @@ public sealed class IntegrationsController : ControllerBase
 
     /// <summary>Creates or updates the config for a service. Merges credentials into JSONB.</summary>
     [HttpPut("{service}")]
+    [RequireRecentMfa]
     [Authorize(Policy = AppPolicies.IntegrationsManageOrCapability)]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(typeof(object), StatusCodes.Status400BadRequest)]
@@ -91,6 +92,7 @@ public sealed class IntegrationsController : ControllerBase
 
     /// <summary>Removes the integration config entirely (clears credentials).</summary>
     [HttpDelete("{service}")]
+    [RequireRecentMfa]
     [Authorize(Policy = AppPolicies.IntegrationsManageOrCapability)]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
