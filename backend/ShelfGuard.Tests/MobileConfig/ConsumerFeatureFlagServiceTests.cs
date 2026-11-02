@@ -111,4 +111,26 @@ public sealed class ConsumerFeatureFlagServiceTests
     {
         await Assert.ThrowsAsync<ArgumentException>(() => _sut.IsEnabledAsync(TenantId, "not_a_real_flag"));
     }
+
+    [Theory]
+    [InlineData("catalog")]
+    [InlineData("promotions")]
+    [InlineData("coupons")]
+    [InlineData("news")]
+    public async Task Explicit_published_navigation_overrides_stale_false_seed(string feature)
+    {
+        var json = $$"""{"features":{"{{feature}}":false},"navigation":[{"type":"{{feature}}"}]}""";
+        _publishedRead.GetPublishedConfigAsync(TenantId, Arg.Any<CancellationToken>())
+            .Returns((json, "etag", (MobileConfigReadError?)null));
+        Assert.True(await _sut.IsEnabledAsync(TenantId, feature));
+    }
+
+    [Fact]
+    public async Task Explicit_false_without_navigation_stays_disabled()
+    {
+        const string json = """{"features":{"catalog":false},"navigation":[{"type":"home"}]}""";
+        _publishedRead.GetPublishedConfigAsync(TenantId, Arg.Any<CancellationToken>())
+            .Returns((json, "etag", (MobileConfigReadError?)null));
+        Assert.False(await _sut.IsEnabledAsync(TenantId, "catalog"));
+    }
 }

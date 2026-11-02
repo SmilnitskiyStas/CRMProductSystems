@@ -45,7 +45,7 @@ export function useCreateRecipe() {
   return useMutation({
     mutationFn: (body: RecipeCreateDto) => productionApi.createRecipe(body),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["production", "recipes"] });
+      queryClient.invalidateQueries({ queryKey: ["production"] });
     },
   });
 }
@@ -55,8 +55,7 @@ export function useUpdateRecipe(id: string) {
   return useMutation({
     mutationFn: (body: RecipeUpdateDto) => productionApi.updateRecipe(id, body),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["production", "recipes"] });
-      queryClient.invalidateQueries({ queryKey: PRODUCTION_KEYS.recipe(id) });
+      queryClient.invalidateQueries({ queryKey: ["production"] });
     },
   });
 }
@@ -66,7 +65,7 @@ export function useDeactivateRecipe() {
   return useMutation({
     mutationFn: (id: string) => productionApi.deactivateRecipe(id),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["production", "recipes"] });
+      queryClient.invalidateQueries({ queryKey: ["production"] });
     },
   });
 }
@@ -96,7 +95,7 @@ export function useCreateProductionOrder() {
     mutationFn: (body: ProductionOrderCreateDto) =>
       productionApi.createOrder(body),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["production", "orders"] });
+      queryClient.invalidateQueries({ queryKey: ["production"] });
     },
   });
 }
@@ -107,8 +106,7 @@ export function useUpdateProductionOrder(id: string) {
     mutationFn: (body: ProductionOrderUpdateDto) =>
       productionApi.updateOrder(id, body),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: PRODUCTION_KEYS.order(id) });
-      queryClient.invalidateQueries({ queryKey: ["production", "orders"] });
+      queryClient.invalidateQueries({ queryKey: ["production"] });
     },
   });
 }
@@ -118,19 +116,18 @@ export function useStartProductionOrder(id: string) {
   return useMutation({
     mutationFn: () => productionApi.startOrder(id),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: PRODUCTION_KEYS.order(id) });
-      queryClient.invalidateQueries({ queryKey: ["production", "orders"] });
+      queryClient.invalidateQueries({ queryKey: ["production"] });
     },
   });
 }
+
 
 export function useCompleteProductionOrder(id: string) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: () => productionApi.completeOrder(id),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: PRODUCTION_KEYS.order(id) });
-      queryClient.invalidateQueries({ queryKey: ["production", "orders"] });
+      queryClient.invalidateQueries({ queryKey: ["production"] });
     },
   });
 }
@@ -140,8 +137,7 @@ export function useCancelProductionOrder(id: string) {
   return useMutation({
     mutationFn: () => productionApi.cancelOrder(id),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: PRODUCTION_KEYS.order(id) });
-      queryClient.invalidateQueries({ queryKey: ["production", "orders"] });
+      queryClient.invalidateQueries({ queryKey: ["production"] });
     },
   });
 }
@@ -151,12 +147,11 @@ export function useShipOrderRequests(id: string) {
   return useMutation({
     mutationFn: () => productionApi.shipOrderRequests(id),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: PRODUCTION_KEYS.order(id) });
-      queryClient.invalidateQueries({ queryKey: ["production", "orders"] });
-      queryClient.invalidateQueries({ queryKey: ["production", "requests"] });
+      queryClient.invalidateQueries({ queryKey: ["production"] });
     },
   });
 }
+
 
 // ─── Selectors ────────────────────────────────────────────────────────────────
 

@@ -521,6 +521,73 @@ public sealed class LoyaltyService : ILoyaltyService
         return (result, null, null);
     }
 
+    public async Task<(PagedResult<ConsumerPurchaseDto>? Purchases, string? Error, int? StatusCode)> GetPurchasesAsync(
+        Guid consumerAccountId, Guid tenantId, Guid? storeId, int page, int pageSize, CancellationToken ct = default)
+    {
+        // Validate ownership under consumer RLS BEFORE entering the tenant read scope.
+        var membership = await _loyalty.GetMembershipByTenantConsumerAsync(tenantId, consumerAccountId, ct);
+        if (membership is null) return (null, "You are not a member of this loyalty program.", 404);
+        var clampedPage = Math.Max(1, page);
+        var clampedSize = Math.Clamp(pageSize, 1, 200);
+        var result = await _tenantScope.ExecuteAsync(tenantId, async () =>
+        {
+            var (purchases, total) = await _loyalty.GetPurchasesPagedAsync(
+                tenantId, membership.Id, storeId, clampedPage, clampedSize, ct);
+            var entries = await _loyalty.GetLedgerEntriesForTransactionsAsync(
+                tenantId, purchases.Select(p => p.Id).ToList(), ct);
+            var ownEntries = entries.Where(e => e.TenantId == tenantId && e.MembershipId == membership.Id)
+                .ToLookup(e => e.PosTransactionId);
+            return new PagedResult<ConsumerPurchaseDto>
+            {
+                Items = purchases.Select(p =>
+                {
+                    var ledger = ownEntries[p.Id].ToList();
+                    return new ConsumerPurchaseDto(p.Id, p.StoreId, p.Store?.Name ?? "Магазин",
+                        p.Store?.Address, p.ReceiptNumber, p.CreatedAt, p.TotalAmount,
+                        ledger.Where(e => e.EntryType == LoyaltyEntryType.Accrual || e.EntryType == LoyaltyEntryType.Reward)
+                            .Sum(e => e.Amount),
+                        -ledger.Where(e => e.EntryType == LoyaltyEntryType.Redemption).Sum(e => e.Amount),
+                        ledger.Count > 0);
+                }).ToList(),
+                TotalCount = total, Page = clampedPage, PageSize = clampedSize,
+            };
+        }, ct);
+        return (result, null, null);
+    }
+
+    public async Task<(ConsumerReceiptDto? Receipt, string? Error, int? StatusCode)> GetReceiptAsync(
+        Guid consumerAccountId, Guid tenantId, Guid purchaseId, CancellationToken ct = default)
+    {
+        var membership = await _loyalty.GetMembershipByTenantConsumerAsync(tenantId, consumerAccountId, ct);
+        if (membership is null) return (null, "Receipt not found.", 404);
+        var receipt = await _tenantScope.ExecuteAsync<ConsumerReceiptDto?>(tenantId, async () =>
+        {
+            var purchase = await _loyalty.GetPurchaseByIdAsync(tenantId, membership.Id, purchaseId, ct);
+            if (purchase is null) return null;
+            var ledger = (await _loyalty.GetLedgerEntriesForTransactionsAsync(tenantId, new[] { purchaseId }, ct))
+                .Where(e => e.TenantId == tenantId && e.MembershipId == membership.Id).ToList();
+            static decimal Money(decimal value) => Math.Round(value, 2, MidpointRounding.AwayFromZero);
+            var items = purchase.Items.OrderBy(i => i.Id).Select(i => new ConsumerReceiptItemDto(
+                i.Id, i.Product?.Name ?? "Товар", i.Product?.Unit, i.Quantity, i.PriceRetail,
+                i.DiscountAmount, i.PriceFinal, Money(i.DiscountAmount * i.Quantity),
+                Money(i.PriceFinal * i.Quantity), i.PromotionLabel)).ToList();
+            // Missing lines are unknown, NOT a zero-priced/discount-free receipt.
+            decimal? before = items.Count > 0 ? items.Sum(i => Money(i.UnitPrice * i.Quantity)) : null;
+            decimal? discount = items.Count > 0 ? items.Sum(i => i.DiscountTotal) : null;
+            decimal? after = items.Count > 0 ? items.Sum(i => i.LineTotal) : null;
+            var redeemed = -ledger.Where(e => e.EntryType == LoyaltyEntryType.Redemption).Sum(e => e.Amount);
+            // Derive historic monetary bonus payment from the saved receipt totals, never
+            // today's configurable bonus conversion rate. Do not infer it without lines.
+            decimal? bonusPaid = redeemed > 0 && after.HasValue && after.Value >= purchase.TotalAmount
+                ? Money(after.Value - purchase.TotalAmount) : null;
+            return new ConsumerReceiptDto(purchase.Id, purchase.Store?.Name ?? "Магазин", purchase.Store?.Address,
+                purchase.ReceiptNumber, purchase.CreatedAt, items, before, discount, after, purchase.TotalAmount,
+                ledger.Where(e => e.EntryType == LoyaltyEntryType.Accrual || e.EntryType == LoyaltyEntryType.Reward)
+                    .Sum(e => e.Amount), redeemed, bonusPaid);
+        }, ct);
+        return receipt is null ? (null, "Receipt not found.", 404) : (receipt, null, null);
+    }
+
     // ── Tier ladder — consumer-facing (TASK-615) ──────────────────────────────
 
     /// <summary>See <see cref="ILoyaltyService.GetTierProgressAsync"/>.</summary>

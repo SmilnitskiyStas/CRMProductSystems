@@ -10,7 +10,9 @@ public sealed record CatalogSyncRow(
     string Unit,
     bool IsActive,
     DateTime UpdatedAt,
-    Guid? CategoryId = null);
+    Guid? CategoryId = null,
+    Guid TenantId = default,
+    decimal? PricePurchase = null);
 
 public interface ICatalogSyncRepository
 {

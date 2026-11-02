@@ -18,8 +18,6 @@ export const REQUEST_KEYS = {
     ["production", "requests", "summary", loc, status] as const,
 };
 
-const PIPELINE_KEY = ["production", "insights", "pipeline"] as const;
-
 export function useProductionRequests(filters: ProductionRequestFilters) {
   return useQuery({
     queryKey: REQUEST_KEYS.list(filters),
@@ -53,8 +51,8 @@ export function useProductionRequestSummary(
 function useInvalidateRequests() {
   const qc = useQueryClient();
   return () => {
-    qc.invalidateQueries({ queryKey: REQUEST_KEYS.all });
-    qc.invalidateQueries({ queryKey: PIPELINE_KEY });
+    qc.invalidateQueries({ queryKey: ["production"] });
+    qc.invalidateQueries({ queryKey: ["production"] });
   };
 }
 
@@ -121,10 +119,7 @@ export function useShipProductionRequest() {
   return useMutation({
     mutationFn: (id: string) => productionApi.shipRequest(id),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: REQUEST_KEYS.all });
-      qc.invalidateQueries({ queryKey: ["production", "order"] });
-      qc.invalidateQueries({ queryKey: ["production", "orders"] });
-      qc.invalidateQueries({ queryKey: PIPELINE_KEY });
+      qc.invalidateQueries({ queryKey: ["production"] });
     },
   });
 }
@@ -134,9 +129,7 @@ export function useSyncRequestOrders() {
   return useMutation({
     mutationFn: (id: string) => productionApi.syncRequestOrders(id),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: REQUEST_KEYS.all });
-      qc.invalidateQueries({ queryKey: ["production", "orders"] });
-      qc.invalidateQueries({ queryKey: PIPELINE_KEY });
+      qc.invalidateQueries({ queryKey: ["production"] });
     },
   });
 }
@@ -146,9 +139,7 @@ export function useCreateOrdersFromRequests() {
   return useMutation({
     mutationFn: (body: OrdersFromRequestsDto) => productionApi.createOrdersFromRequests(body),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: REQUEST_KEYS.all });
-      qc.invalidateQueries({ queryKey: ["production", "orders"] });
-      qc.invalidateQueries({ queryKey: PIPELINE_KEY });
+      qc.invalidateQueries({ queryKey: ["production"] });
     },
   });
 }

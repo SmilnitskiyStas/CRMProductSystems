@@ -160,6 +160,8 @@ file sealed class FakeProductionRepo : IProductionRepository
         return Task.CompletedTask;
     }
 
+    public Task<ProductStock?> GetOutputForOrderAsync(Guid id, CancellationToken ct = default) =>
+        Task.FromResult(Stock.FirstOrDefault(s => s.SourceType == "production" && s.SourceId == id));
     public Task SaveChangesAsync(CancellationToken ct = default) => Task.CompletedTask;
 }
 
@@ -252,7 +254,7 @@ public sealed class ProductionServiceTests
         var output     = Build.FinishedProduct("Bread");
         var recipe     = Build.Recipe(output.Id);
         var ingredient = Build.Ingredient(recipe.Id, rawMat.Id, qty: 5m);
-        var order      = Build.Order(recipe.Id, ProductionOrderStatus.Planned);
+        var order      = Build.Order(recipe.Id, ProductionOrderStatus.InProgress);
 
         repo.Items.Add(rawMat);
         repo.Items.Add(output);
@@ -291,7 +293,7 @@ public sealed class ProductionServiceTests
         var output     = new Item { TenantId = Guid.NewGuid(), Name = "Bread", ItemType = "product" };
         var recipe     = Build.Recipe(output.Id);
         var ingredient = Build.Ingredient(recipe.Id, rawMat.Id, qty: 1m);
-        var order      = Build.Order(recipe.Id, ProductionOrderStatus.Planned);
+        var order      = Build.Order(recipe.Id, ProductionOrderStatus.InProgress);
 
         repo.Items.Add(rawMat);
         repo.Items.Add(output);
@@ -311,7 +313,7 @@ public sealed class ProductionServiceTests
 
         // No consumption may happen before the shelf-life check — order stays Planned,
         // raw material stock untouched.
-        Assert.Equal(ProductionOrderStatus.Planned, order.Status);
+        Assert.Equal(ProductionOrderStatus.InProgress, order.Status);
         Assert.Equal(10m, repo.Stock.First(s => s.ProductId == rawMat.Id).Quantity);
         Assert.Empty(repo.Consumptions);
         Assert.Empty(repo.StockEvents);
@@ -320,7 +322,7 @@ public sealed class ProductionServiceTests
     // ── CompleteOrderAsync — happy path (Planned status) ─────────────────────
 
     [Fact]
-    public async Task CompleteOrderAsync_HappyPath_FromPlanned_CreatesConsumptionsAndOutputBatch()
+    public async Task CompleteOrderAsync_HappyPath_ConsumesFefo_CreatesConsumptionsAndOutputBatch()
     {
         var repo       = new FakeProductionRepo();
         var svc        = BuildSvc(repo);
@@ -329,7 +331,7 @@ public sealed class ProductionServiceTests
         var recipe     = Build.Recipe(output.Id);
         var ingredient = Build.Ingredient(recipe.Id, rawMat.Id, qty: 1m);
         // plannedQty = 2, recipe outputQty = 1 → scale = 2 → need 2 kg flour
-        var order      = Build.Order(recipe.Id, ProductionOrderStatus.Planned, plannedQty: 2m);
+        var order      = Build.Order(recipe.Id, ProductionOrderStatus.InProgress, plannedQty: 2m);
 
         repo.Items.Add(rawMat);
         repo.Items.Add(output);
@@ -512,7 +514,7 @@ public sealed class ProductionServiceTests
     // ── UpdateOrderAsync — must not bypass start/complete/cancel ─────────────
 
     [Fact]
-    public async Task UpdateOrderAsync_StatusChange_Returns409_AndKeepsStatus()
+    public async Task UpdateOrderAsync_StatusChange_Returns400_AndKeepsStatus()
     {
         var repo   = new FakeProductionRepo();
         var svc    = BuildSvc(repo);
@@ -527,13 +529,13 @@ public sealed class ProductionServiceTests
             await svc.UpdateOrderAsync(order.Id, new ProductionOrderUpdateDto("Done", null));
 
         Assert.Null(result);
-        Assert.Equal(409, statusCode);
+        Assert.Equal(400, statusCode);
         Assert.NotNull(error);
         Assert.Equal(ProductionOrderStatus.Planned, order.Status);
     }
 
     [Fact]
-    public async Task UpdateOrderAsync_SameStatusAndNotes_Succeeds()
+    public async Task UpdateOrderAsync_NotesWithoutStatus_Succeeds()
     {
         var repo   = new FakeProductionRepo();
         var svc    = BuildSvc(repo);
@@ -546,7 +548,7 @@ public sealed class ProductionServiceTests
         var planned = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(2));
 
         var (result, error, _) = await svc.UpdateOrderAsync(
-            order.Id, new ProductionOrderUpdateDto("Planned", "note", null, planned));
+            order.Id, new ProductionOrderUpdateDto(null, "note", null, planned));
 
         Assert.Null(error);
         Assert.NotNull(result);

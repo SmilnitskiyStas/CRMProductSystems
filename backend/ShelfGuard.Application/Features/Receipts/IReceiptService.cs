@@ -65,6 +65,9 @@ public interface IReceiptService
 
 public static class ReceiptErrors
 {
+    public const string CategoryWorkActive = "Накладна розподілена за категоріями. Редагуйте лише свою категорію.";
+    public const string CategoriesIncomplete = "Спочатку завершіть приймання всіх категорій.";
+    public const string SourceChanged = "Receipt changed. Reload its lines before saving.";
     public const string NotFound = "Receipt not found.";
     public const string TakenByOther = "Receipt is taken by another user.";
     public const string NotDraft = "Редагувати або надсилати можна лише чернетку замовлення.";

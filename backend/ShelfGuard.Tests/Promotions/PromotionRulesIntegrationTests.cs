@@ -98,6 +98,9 @@ public sealed class PromotionRulesIntegrationTests : IAsyncLifetime
     {
         if (!_ready) return;
         await using var db = NewContext();
+        // Keep immutable accepted evidence; the explicit disposable harness removes this database as a whole.
+        if (await db.Set<ShelfGuard.Domain.Entities.Erp.PosPricingSnapshot>().AnyAsync(a => a.TenantId == _tenantId)) return;
+
         foreach (var sql in new[]
         {
             "DELETE FROM promotion_rule_applications WHERE \"TenantId\" = {0}",

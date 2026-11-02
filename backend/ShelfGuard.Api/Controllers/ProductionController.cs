@@ -31,6 +31,7 @@ public sealed class ProductionController : ControllerBase
     // ─────────────────────────────────────────────────────────────────────────
 
     [HttpGet("recipes")]
+    [Authorize(Policy = AppPolicies.ProductionView)]
     [ProducesResponseType(typeof(List<RecipeListItemDto>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetRecipes(
         [FromQuery] bool includeInactive = false, CancellationToken ct = default)
@@ -40,6 +41,7 @@ public sealed class ProductionController : ControllerBase
     }
 
     [HttpGet("recipes/{id:guid}")]
+    [Authorize(Policy = AppPolicies.ProductionView)]
     [ProducesResponseType(typeof(RecipeDetailDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetRecipeById(Guid id, CancellationToken ct)
@@ -49,6 +51,7 @@ public sealed class ProductionController : ControllerBase
     }
 
     [HttpPost("recipes")]
+    [Authorize(Policy = AppPolicies.ProductionManage)]
     [ProducesResponseType(typeof(RecipeDetailDto), StatusCodes.Status201Created)]
     [ProducesResponseType(typeof(object), StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> CreateRecipe(
@@ -66,6 +69,7 @@ public sealed class ProductionController : ControllerBase
     }
 
     [HttpPut("recipes/{id:guid}")]
+    [Authorize(Policy = AppPolicies.ProductionManage)]
     [ProducesResponseType(typeof(RecipeDetailDto), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(object), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(object), StatusCodes.Status404NotFound)]
@@ -78,6 +82,7 @@ public sealed class ProductionController : ControllerBase
     }
 
     [HttpDelete("recipes/{id:guid}")]
+    [Authorize(Policy = AppPolicies.ProductionManage)]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(typeof(object), StatusCodes.Status404NotFound)]
     [ProducesResponseType(typeof(object), StatusCodes.Status409Conflict)]
@@ -93,6 +98,7 @@ public sealed class ProductionController : ControllerBase
     // ─────────────────────────────────────────────────────────────────────────
 
     [HttpGet("orders")]
+    [Authorize(Policy = AppPolicies.ProductionView)]
     [ProducesResponseType(typeof(List<ProductionOrderListItemDto>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetOrders(
         [FromQuery] string? status,
@@ -105,6 +111,7 @@ public sealed class ProductionController : ControllerBase
     }
 
     [HttpGet("orders/{id:guid}")]
+    [Authorize(Policy = AppPolicies.ProductionView)]
     [ProducesResponseType(typeof(ProductionOrderDetailDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetOrderById(Guid id, CancellationToken ct)
@@ -114,6 +121,7 @@ public sealed class ProductionController : ControllerBase
     }
 
     [HttpPost("orders")]
+    [Authorize(Policy = AppPolicies.ProductionManage)]
     [ProducesResponseType(typeof(ProductionOrderDetailDto), StatusCodes.Status201Created)]
     [ProducesResponseType(typeof(object), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(object), StatusCodes.Status404NotFound)]
@@ -130,20 +138,13 @@ public sealed class ProductionController : ControllerBase
         return StatusCode(StatusCodes.Status201Created, order);
     }
 
-    /// <summary>
-    /// Aggregates accepted/partial store requests by item and creates one Planned production
-    /// order per item (recipe = active recipe producing it). All-or-nothing.
-    /// </summary>
     [HttpPost("orders/from-requests")]
-    [ProducesResponseType(typeof(List<ProductionOrderCreatedDto>), StatusCodes.Status201Created)]
-    [ProducesResponseType(typeof(object), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(object), StatusCodes.Status409Conflict)]
-    [ProducesResponseType(typeof(object), StatusCodes.Status422UnprocessableEntity)]
+    [Authorize(Policy = AppPolicies.ProductionManage)]
     public async Task<IActionResult> CreateOrdersFromRequests(
         [FromBody] ProductionOrdersFromRequestsDto dto, CancellationToken ct)
     {
         var tenantId = ResolveTenantId();
-        var userId   = ResolveUserId();
+        var userId = ResolveUserId();
         if (tenantId is null || userId is null) return Forbid();
 
         var (orders, error, statusCode) =
@@ -153,6 +154,7 @@ public sealed class ProductionController : ControllerBase
     }
 
     [HttpPut("orders/{id:guid}")]
+    [Authorize(Policy = AppPolicies.ProductionManage)]
     [ProducesResponseType(typeof(ProductionOrderDetailDto), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(object), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(object), StatusCodes.Status404NotFound)]
@@ -166,6 +168,8 @@ public sealed class ProductionController : ControllerBase
     }
 
     [HttpPost("orders/{id:guid}/complete")]
+    [Authorize(Policy = AppPolicies.ProductionComplete)]
+    [RequireRecentMfa]
     [ProducesResponseType(typeof(ProductionCompleteResultDto), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(object), StatusCodes.Status404NotFound)]
     [ProducesResponseType(typeof(object), StatusCodes.Status409Conflict)]
@@ -196,19 +200,14 @@ public sealed class ProductionController : ControllerBase
         return Ok(result);
     }
 
-    /// <summary>
-    /// For a Done order: ships every linked accepted/partial request whose orders are all Done.
-    /// Per-request results; one failure never aborts the batch.
-    /// </summary>
     [HttpPost("orders/{id:guid}/ship-requests")]
+    [Authorize(Policy = AppPolicies.ProductionComplete)]
+    [RequireRecentMfa]
     [Authorize(Policy = AppPolicies.CanReceiveStock)]
-    [ProducesResponseType(typeof(List<ProductionShipRequestResultDto>), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(object), StatusCodes.Status404NotFound)]
-    [ProducesResponseType(typeof(object), StatusCodes.Status409Conflict)]
     public async Task<IActionResult> ShipOrderRequests(Guid id, CancellationToken ct)
     {
         var tenantId = ResolveTenantId();
-        var userId   = ResolveUserId();
+        var userId = ResolveUserId();
         if (tenantId is null || userId is null) return Forbid();
 
         var (results, error, statusCode) = await _requests.ShipOrderRequestsAsync(id, tenantId.Value, userId.Value, ct);
@@ -217,17 +216,17 @@ public sealed class ProductionController : ControllerBase
     }
 
     [HttpPost("orders/{id:guid}/start")]
-    [ProducesResponseType(typeof(ProductionOrderDetailDto), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(object), StatusCodes.Status404NotFound)]
-    [ProducesResponseType(typeof(object), StatusCodes.Status409Conflict)]
+    [Authorize(Policy = AppPolicies.ProductionComplete)]
+    [RequireRecentMfa]
     public async Task<IActionResult> StartOrder(Guid id, CancellationToken ct)
     {
-        var (order, error, statusCode) = await _svc.StartOrderAsync(id, ct);
-        if (error is not null) return StatusCode(statusCode!.Value, new { error });
-        return Ok(order);
+        var (order, error, status) = await _svc.StartOrderAsync(id, ct);
+        return error == null ? Ok(order) : StatusCode(status!.Value, new { error });
     }
 
     [HttpPost("orders/{id:guid}/cancel")]
+    [Authorize(Policy = AppPolicies.ProductionCancel)]
+    [RequireRecentMfa]
     [ProducesResponseType(typeof(ProductionOrderDetailDto), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(object), StatusCodes.Status404NotFound)]
     [ProducesResponseType(typeof(object), StatusCodes.Status409Conflict)]

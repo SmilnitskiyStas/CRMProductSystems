@@ -129,7 +129,7 @@ public sealed class AutoReplenishmentTenantRunnerRlsIntegrationTests : IAsyncLif
             var receiptRepo = new ReceiptRepository(db);
             var notifications = new NotificationRepository(db);
             var receiptService = new Application.Features.Receipts.ReceiptService(
-                receiptRepo, notifications, new ActivityLogRepository(db));
+                receiptRepo, new ActivityLogRepository(db));
             var service = new AutoReplenishmentService(
                 receiptRepo,
                 new ProductionDemandRepository(db),

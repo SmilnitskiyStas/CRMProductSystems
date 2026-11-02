@@ -22,10 +22,12 @@ public sealed class LoyaltyController : ControllerBase
 {
     private readonly ILoyaltyService _loyalty;
     private readonly ITenantContext _tenantContext;
+    private readonly ShelfGuard.Application.Features.Pos.IPosLoyaltyQuoteIssuer? _quotes;
 
-    public LoyaltyController(ILoyaltyService loyalty, ITenantContext tenantContext)
+    public LoyaltyController(ILoyaltyService loyalty, ITenantContext tenantContext, ShelfGuard.Application.Features.Pos.IPosLoyaltyQuoteIssuer? quotes = null)
     {
         _loyalty = loyalty;
+        _quotes = quotes;
         _tenantContext = tenantContext;
     }
 
@@ -47,7 +49,7 @@ public sealed class LoyaltyController : ControllerBase
         if (error is not null)
             return StatusCode(statusCode ?? 400, new { error });
 
-        return Ok(result);
+        return Ok(await Certify(result, tenantId.Value, ct));
     }
 
     [HttpPost("resolve-identifier")]
@@ -63,7 +65,15 @@ public sealed class LoyaltyController : ControllerBase
         if (tenantId is null) return Forbid();
         var (result, error, statusCode) = await _loyalty.ResolveNumericIdentifierAsync(
             tenantId.Value, request.IdentifierType, request.Value, ct);
-        return error is null ? Ok(result) : StatusCode(statusCode ?? 400, new { error });
+        return error is null ? Ok(await Certify(result, tenantId.Value, ct)) : StatusCode(statusCode ?? 400, new { error });
+    }
+
+    private async Task<ResolveLoyaltyCodeResult?> Certify(ResolveLoyaltyCodeResult? result, Guid tenant, CancellationToken ct)
+    {
+        if (result is null || _quotes is null || !Guid.TryParse(User.FindFirst("register_id")?.Value, out var register)) return result;
+        var q = await _quotes.ForResolvedAsync(tenant, register, result.MembershipId, ct);
+        return q is null ? result : result with { LoyaltySnapshot = q.Token, LoyaltySnapshotExpiresAt = q.ExpiresAt,
+            TierId = q.TierId, TierName = q.TierName, TierDiscountPercent = q.DiscountPercent, LoyaltyEnabled = q.Enabled, CustomerId = q.CustomerId };
     }
 
     /// <summary>

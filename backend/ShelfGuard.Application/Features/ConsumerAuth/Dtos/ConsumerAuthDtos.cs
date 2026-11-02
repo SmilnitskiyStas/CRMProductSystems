@@ -15,4 +15,7 @@ public sealed record ConsumerAuthResponse(
     string AccessToken,
     Guid ConsumerAccountId,
     string FullName,
-    string Phone);
+    string Phone,
+    string? RefreshToken = null);
+
+public sealed record ConsumerRefreshRequest(string RefreshToken);

@@ -23,4 +23,10 @@ public interface IRefreshTokenRepository
     Task RevokeAllForUserAsync(Guid userId, CancellationToken ct = default);
 
     Task SaveChangesAsync(CancellationToken ct = default);
+
+    Task<bool> TryRotateAsync(RefreshToken existing, RefreshToken next, CancellationToken ct = default);
+    Task RevokeSessionAsync(Guid userId, Guid sessionId, CancellationToken ct = default);
+    Task RevokeAllSessionsAsync(Guid userId, CancellationToken ct = default);
+    Task<RefreshToken?> GetSessionAsync(Guid userId, Guid sessionId, CancellationToken ct = default);
+    Task<bool> ConfirmMfaAsync(User user, Guid sessionId, DateTime verifiedAt, CancellationToken ct = default);
 }

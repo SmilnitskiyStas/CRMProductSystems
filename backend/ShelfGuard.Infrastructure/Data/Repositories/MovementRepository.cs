@@ -4,7 +4,7 @@ using ShelfGuard.Domain.Interfaces;
 
 namespace ShelfGuard.Infrastructure.Data.Repositories;
 
-public sealed class MovementRepository : IMovementRepository
+public sealed partial class MovementRepository : IMovementRepository
 {
     private readonly AppDbContext _db;
 

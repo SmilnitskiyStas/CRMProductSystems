@@ -220,6 +220,7 @@ public sealed class PosController : ControllerBase
     /// Auth: AtLeastStoreManager (same service account the worker uses to login).
     /// </summary>
     [HttpGet("sales/pending-fiscalization")]
+    [AllowWorkerToken]
     [Authorize(Policy = AppPolicies.AtLeastStoreManager)]
     [ProducesResponseType(typeof(IReadOnlyList<PendingFiscalizationDto>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetPendingFiscalization(CancellationToken ct)
@@ -235,6 +236,7 @@ public sealed class PosController : ControllerBase
     /// Auth: AtLeastStoreManager (same service account the worker uses to login).
     /// </summary>
     [HttpPost("sales/{id:guid}/fiscalize")]
+    [AllowWorkerToken]
     [Authorize(Policy = AppPolicies.AtLeastStoreManager)]
     [ProducesResponseType(typeof(FiscalizeResultDto), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(object), StatusCodes.Status404NotFound)]

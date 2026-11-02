@@ -1,3 +1,4 @@
+using ShelfGuard.Domain.Constants;
 using ShelfGuard.Application.Common;
 using ShelfGuard.Application.Features.LegalEntities;
 using ShelfGuard.Application.Features.Locations;
@@ -105,6 +106,13 @@ public sealed class UserService : IUserService
     [
         "dashboard", "inventory", "stock", "receipts",
         "transfers", "write-offs", "analytics", "users", "settings",
+        TenantRoleCapabilities.LabelsPreview, TenantRoleCapabilities.LabelsTemplatesManage,
+        TenantRoleCapabilities.LabelsPrint, TenantRoleCapabilities.LabelsBulk,
+        TenantRoleCapabilities.LabelsAudit,
+        TenantRoleCapabilities.LabelsPrintersManage,
+        TenantRoleCapabilities.PricingView, TenantRoleCapabilities.PricingManage,
+        TenantRoleCapabilities.ProductionView, TenantRoleCapabilities.ProductionManage,
+        TenantRoleCapabilities.ProductionComplete, TenantRoleCapabilities.ProductionCancel, TenantRoleCapabilities.AiAssistantUse,
     ];
 
     /// <summary>UI locales the platform ships message catalogs for (i18n Block 1, TASK-375).</summary>

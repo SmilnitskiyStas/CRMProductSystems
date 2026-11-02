@@ -10,6 +10,7 @@ import { toast } from "sonner";
 import { Btn } from "@/components/ui/Btn";
 import { inputStyle, labelStyle } from "@/components/ui/fieldStyles";
 import { API_BASE } from "@/lib/api";
+import { PrivateImage } from "@/components/ui/PrivateImage";
 import {
   useContractSettings,
   useUpsertContractSettings,
@@ -19,10 +20,6 @@ import type { UpsertContractSettingsRequest } from "../types";
 
 function Req() {
   return <span style={{ color: "#F87171" }}> *</span>;
-}
-
-function resolveImageUrl(url: string): string {
-  return url.startsWith("http") ? url : `${API_BASE}${url}`;
 }
 
 interface FormState {
@@ -99,8 +96,8 @@ function ImageUploadField({
         >
           {imageUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={resolveImageUrl(imageUrl)}
+            <PrivateImage
+              src={imageUrl}
               alt={label}
               style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain" }}
             />

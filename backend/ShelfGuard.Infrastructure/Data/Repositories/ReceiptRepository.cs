@@ -119,7 +119,11 @@ public sealed class ReceiptRepository : IReceiptRepository
     public async Task AddMovementAsync(StockMovement movement, CancellationToken ct = default) =>
         await _db.StockMovements.AddAsync(movement, ct);
 
-    public void Update(StockReceipt receipt) => _db.StockReceipts.Update(receipt);
+    public async Task AddNotificationAsync(NotificationQueue notification, CancellationToken ct = default) =>
+        await _db.NotificationQueues.AddAsync(notification, ct);
+
+    // The document and lines are tracked; do not mark their catalog/supplier/location graph modified.
+    public void Update(StockReceipt receipt) => _db.Entry(receipt).State = EntityState.Modified;
 
     public Task<List<StockReceipt>> GetUntakenAutoDraftsAsync(Guid storeId, CancellationToken ct = default) =>
         _db.StockReceipts
@@ -127,7 +131,7 @@ public sealed class ReceiptRepository : IReceiptRepository
             .Include(r => r.Supplier)
             .Include(r => r.DestinationStore)
             .Where(r => r.DestinationStoreId == storeId && r.Status == "draft"
-                        && r.Source == ReceiptSource.AutoReplenishment && r.TakenByUserId == null)
+                        && r.Source == ReceiptSource.AutoReplenishment && r.TakenByUserId == null && r.ReceivingWorkJson == null)
             .OrderByDescending(r => r.CreatedAt)
             .ToListAsync(ct);
 
@@ -168,8 +172,29 @@ public sealed class ReceiptRepository : IReceiptRepository
         return row is null ? (false, null) : (true, row.PricePurchase);
     }
 
-    public void UpdateItem(StockReceiptItem item) => _db.StockReceiptItems.Update(item);
+    public void UpdateItem(StockReceiptItem item) => _db.Entry(item).State = EntityState.Modified;
 
-    public Task SaveChangesAsync(CancellationToken ct = default) =>
-        _db.SaveChangesAsync(ct);
+    public async Task SaveChangesAsync(CancellationToken ct = default)
+    {
+        try
+        {
+            // Child-only editors (add/remove/auto replenishment) participate in the same
+            // parent xmin precondition as reviewed updates and receiving. All changes roll
+            // back together when a concurrent operator has edited or posted the receipt.
+            var changedReceipts = _db.ChangeTracker.Entries<StockReceiptItem>()
+                .Where(e => e.State is EntityState.Added or EntityState.Modified or EntityState.Deleted)
+                .Select(e => e.Entity.ReceiptId).ToHashSet();
+            foreach (var parent in _db.ChangeTracker.Entries<StockReceipt>()
+                         .Where(e => e.State == EntityState.Unchanged && changedReceipts.Contains(e.Entity.Id)))
+                parent.State = EntityState.Modified;
+            await _db.SaveChangesAsync(ct);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            // EF rolls back the save transaction. Discard staged stock/outbox rows so a later
+            // save in this request cannot accidentally commit the losing posting. The API maps to 409.
+            _db.ChangeTracker.Clear();
+            throw;
+        }
+    }
 }

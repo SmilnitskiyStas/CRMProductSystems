@@ -1,3 +1,4 @@
+import { getWorkerGrant, workerAccessToken } from "../services/worker-auth";
 // TASK-069: Fiscalization retry job
 //
 // Cron: every 5 minutes  (cron pattern "*/5 * * * *")
@@ -9,8 +10,8 @@
 // 2. For each pending transaction calls POST /api/pos/sales/{id}/fiscalize.
 // 3. Logs fiscal_code on success, error on failure.
 //
-// Auth: re-uses the same WORKER_API_EMAIL/WORKER_API_PASSWORD service account pattern
-// as ai-order.job.ts — the worker logs in via /api/auth/login and sends a Bearer token.
+// Auth: dedicated loopback worker grant, scoped to this tenant and three allowed job routes.
+// It never issues a workspace session or bypasses human MFA.
 // The new backend endpoints require AtLeastStoreManager, which the service account role satisfies.
 
 import { Worker, Job } from "bullmq";
@@ -39,17 +40,6 @@ type FiscalizeResult = {
 
 // ── Auth ───────────────────────────────────────────────────────────────────
 
-async function login(): Promise<string> {
-  const res = await fetch(`${API_BASE}/api/auth/login`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email: SERVICE_EMAIL, password: SERVICE_PASSWORD }),
-  });
-  if (!res.ok) throw new Error(`service login failed: HTTP ${res.status}`);
-  const body = (await res.json()) as { accessToken?: string };
-  if (!body.accessToken) throw new Error("service login returned no token");
-  return body.accessToken;
-}
 
 // ── Core logic ─────────────────────────────────────────────────────────────
 
@@ -59,11 +49,11 @@ async function runFiscalizationRetry(): Promise<void> {
     return;
   }
 
-  const token = await login();
+  const token = workerAccessToken(await getWorkerGrant());
 
   // 1. Fetch all pending transactions
   const listRes = await fetch(`${API_BASE}/api/pos/sales/pending-fiscalization`, {
-    headers: { Authorization: `Bearer ${token}` },
+    headers: { Authorization: `Bearer ${await token()}` },
   });
 
   if (!listRes.ok) {
@@ -89,7 +79,7 @@ async function runFiscalizationRetry(): Promise<void> {
     try {
       const res = await fetch(`${API_BASE}/api/pos/sales/${tx.id}/fiscalize`, {
         method: "POST",
-        headers: { Authorization: `Bearer ${token}` },
+        headers: { Authorization: `Bearer ${await token()}` },
       });
 
       if (!res.ok) {

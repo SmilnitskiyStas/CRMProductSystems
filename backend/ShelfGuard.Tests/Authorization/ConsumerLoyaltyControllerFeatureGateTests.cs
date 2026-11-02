@@ -42,6 +42,8 @@ public sealed class ConsumerLoyaltyControllerFeatureGateTests
     [InlineData(nameof(ConsumerLoyaltyController.GetCode))]
     [InlineData(nameof(ConsumerLoyaltyController.SetPreferredStore))]
     [InlineData(nameof(ConsumerLoyaltyController.GetHistory))]
+    [InlineData(nameof(ConsumerLoyaltyController.GetPurchases))]
+    [InlineData(nameof(ConsumerLoyaltyController.GetReceipt))]
     public void Existing_member_action_carries_no_RequireConsumerFeature_attribute(string methodName)
     {
         var method = GetPublicMethod(methodName);

@@ -24,7 +24,12 @@ public sealed record ReceiptDto(
     DateTime? TakenAt = null,
     // TASK-757: set when the draft was confirmed and marked as sent to the supplier (status "ordered").
     DateTime? OrderedAt = null,
-    string? OrderedByName = null
+    string? OrderedByName = null,
+    string? ReceivingFingerprint = null,
+    Guid? ErpDocumentId = null,
+    Guid? ErpPostingId = null,
+    bool ErpReplayed = false,
+    ReceiptWorkDto? ReceivingWork = null
 );
 
 public sealed record ReceiptItemDto(
@@ -38,7 +43,8 @@ public sealed record ReceiptItemDto(
     DateOnly? ExpiryDate,
     string? BatchNumber,
     string? DiscrepancyNotes,
-    bool IsProcessed
+    bool IsProcessed,
+    string? Unit = null
 );
 
 /// <summary>Move the expected delivery date of an open (not yet received) receipt to a later day.</summary>
@@ -70,7 +76,8 @@ public sealed record UpdateReceiptItemRequest(
 );
 
 public sealed record UpdateItemsRequest(
-    List<UpdateItemPayload> Items
+    List<UpdateItemPayload> Items,
+    string? ExpectedFingerprint = null
 );
 
 public sealed record UpdateItemPayload(

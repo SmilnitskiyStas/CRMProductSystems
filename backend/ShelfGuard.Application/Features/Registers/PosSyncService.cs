@@ -2,6 +2,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using ShelfGuard.Application.Features.Promotions;
+using ShelfGuard.Application.Features.Pos;
 using ShelfGuard.Domain.Interfaces;
 
 namespace ShelfGuard.Application.Features.Registers;
@@ -15,14 +16,20 @@ public sealed class PosSyncService : IPosSyncService
     private readonly IPromotionRuleRepository? _promotions;
     private readonly ICashRegisterRepository? _registers;
     private readonly ILocationRepository? _locations;
+    private readonly IPosPriceSnapshots? _priceSnapshots;
+    private readonly IPosPromotionSnapshots? _promotionSnapshots;
 
     public PosSyncService(
         ICatalogSyncRepository catalog,
         IPromotionRuleRepository? promotions = null,
         ICashRegisterRepository? registers = null,
-        ILocationRepository? locations = null)
+        ILocationRepository? locations = null,
+        IPosPriceSnapshots? priceSnapshots = null,
+        IPosPromotionSnapshots? promotionSnapshots = null)
     {
         _locations = locations;
+        _promotionSnapshots = promotionSnapshots;
+        _priceSnapshots = priceSnapshots;
         _catalog = catalog;
         _promotions = promotions;
         _registers = registers;
@@ -41,8 +48,13 @@ public sealed class PosSyncService : IPosSyncService
         var last = page.Count > 0 ? page[^1] : null;
 
         return new SyncCatalogResponse(
-            Items: page.Select(r => new SyncCatalogItemDto(
-                r.Id, r.Name, r.Barcodes, r.PriceRetail, r.VatRate, r.Unit, r.IsActive, r.UpdatedAt, r.CategoryId)).ToList(),
+            Items: page.Select(r =>
+            {
+                var snapshot = r.IsActive && r.PriceRetail is >= 0 && r.TenantId != Guid.Empty
+                    ? _priceSnapshots?.Issue(r, serverTime) : null;
+                return new SyncCatalogItemDto(r.Id, r.Name, r.Barcodes, r.PriceRetail, r.VatRate, r.Unit,
+                    r.IsActive, r.UpdatedAt, r.CategoryId, snapshot?.Token, snapshot?.ExpiresAt);
+            }).ToList(),
             HasMore: hasMore,
             NextSince: last?.UpdatedAt ?? since,
             NextAfterId: last?.Id ?? afterId,
@@ -90,8 +102,13 @@ public sealed class PosSyncService : IPosSyncService
                 $"{x.Row.RuleId:D}|{x.Row.VersionId:D}|{x.Row.Name}|{x.Def!.Scope.ValidFrom:O}|{x.Def.Scope.ValidTo:O}")
             .Append($"tz|{storeTimeZone}"));
 
+        // Renew even on notModified: the lease authenticates the complete set, not just applied rules.
+        var proof = registerId is Guid proofRegister
+            ? _promotionSnapshots?.Issue(tenantId, storeId, proofRegister, storeTimeZone,
+                applicable.Select(x => x.Row).ToArray(), serverTime) : null;
+
         if (string.Equals(etag, current, StringComparison.Ordinal))
-            return (new SyncPromotionsResponse(current, true, serverTime, [], storeTimeZone), null, null);
+            return (new SyncPromotionsResponse(current, true, serverTime, [], storeTimeZone, proof?.Token, proof?.ExpiresAt), null, null);
 
         var rules = applicable.Select(x =>
         {
@@ -101,7 +118,7 @@ public sealed class PosSyncService : IPosSyncService
                 DateTime.SpecifyKind(x.Row.CreatedAt, DateTimeKind.Utc), doc.RootElement.Clone());
         }).ToList();
 
-        return (new SyncPromotionsResponse(current, false, serverTime, rules, storeTimeZone), null, null);
+        return (new SyncPromotionsResponse(current, false, serverTime, rules, storeTimeZone, proof?.Token, proof?.ExpiresAt), null, null);
     }
 
     /// <summary>Hash of the applicable set (rule ids, immutable version ids, names, valid windows).</summary>

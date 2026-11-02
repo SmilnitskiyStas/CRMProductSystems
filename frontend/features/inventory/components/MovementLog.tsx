@@ -5,6 +5,7 @@ import { ChevronDown, ChevronRight } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { Btn } from "@/components/ui/Btn";
 import type { MovementDto } from "../api/movements";
+import { signedMovementQuantity } from "../lib/movementQuantity";
 
 const PAGE = 25;
 
@@ -17,8 +18,6 @@ interface Props {
   hoveredId: string | null;
   onHover: (id: string | null) => void;
 }
-
-const SIGN_PLUS = new Set(["receipt", "adjustment"]);
 
 function DetailField({ label, children }: { label: string; children: React.ReactNode }) {
   return (
@@ -92,7 +91,8 @@ export function MovementLog({ movements, lineMeta, intlLocale, hoveredId, onHove
         {shown.map((m) => {
           const meta = lineMeta[m.movementType];
           const color = meta?.color ?? "#6B7280";
-          const isPlus = SIGN_PLUS.has(m.movementType);
+          const quantity = signedMovementQuantity(m);
+          const isPlus = quantity >= 0;
           const hovered = hoveredId === m.id;
           const expanded = expandedId === m.id;
           const store = m.fromStoreName && m.toStoreName
@@ -153,7 +153,7 @@ export function MovementLog({ movements, lineMeta, intlLocale, hoveredId, onHove
                 ) : null}
 
                 <span style={{ fontFamily: "monospace", fontSize: 12, flexShrink: 0, color: isPlus ? "#4ADE80" : "#F87171" }}>
-                  {isPlus ? `+${m.quantity}` : `−${Math.abs(m.quantity)}`}
+                  {isPlus ? `+${quantity}` : `−${Math.abs(quantity)}`}
                 </span>
 
               </div>
@@ -168,7 +168,7 @@ export function MovementLog({ movements, lineMeta, intlLocale, hoveredId, onHove
                   <DetailField label={tl("store")}>{store}</DetailField>
                   <DetailField label={tl("quantity")}>
                     <span style={{ fontFamily: "monospace", color: isPlus ? "#4ADE80" : "#F87171" }}>
-                      {isPlus ? `+${m.quantity}` : `−${Math.abs(m.quantity)}`}
+                      {isPlus ? `+${quantity}` : `−${Math.abs(quantity)}`}
                     </span>
                   </DetailField>
                   <DetailField label={tl("balance")}>
@@ -189,7 +189,9 @@ export function MovementLog({ movements, lineMeta, intlLocale, hoveredId, onHove
                   <DetailField label={tl("document")}>
                     {m.referenceType ? (
                       <span>
-                        {m.referenceType}
+                        {m.referenceType === "stock_adjustment" ? t("movementType.adjustment")
+                          : m.referenceType === "stock_transfer_cancellation" ? tl("transferCancellation")
+                          : m.referenceType}
                         {m.referenceId && (
                           <span style={{ color: "#6B7280", fontFamily: "monospace", fontSize: 11 }}>
                             {" "}#{m.referenceId.slice(0, 8)}

@@ -1,6 +1,7 @@
 import { Worker, Job } from "bullmq";
 import { redisConnection } from "../redis";
 import { db } from "../db";
+import { inventoryRetentionPredicate } from "../services/inventory-retention";
 
 // v1-spec §8.3: cleanup.job — daily, archive sold_out batches older than 30 days.
 // TASK-040 additionally purges aged event/log rows so the tables don't grow unbounded.
@@ -16,14 +17,18 @@ async function runCleanup(): Promise<void> {
   try {
     // Disable RLS for the worker — runs as privileged service role
     await client.query("SET app.role = 'worker'");
+    // An activated scope is permanent. Its events are ERP audit and depleted batches
+    // may be needed by a later exact POS return; neither is legacy retention data.
+    const unfencedStock = await inventoryRetentionPredicate(client, "LocationId");
+    const unfencedEvents = await inventoryRetentionPredicate(client, "StoreId");
 
     // 1. Archive sold_out batches not touched for N days (LastCheckedAt is the
     //    most recent timestamp we have for when the batch reached sold_out)
     const archived = await client.query(
-      `UPDATE product_stock
+      `UPDATE product_stock retained
        SET "Status" = 'archived'
        WHERE "Status" = 'sold_out'
-         AND "LastCheckedAt" < NOW() - make_interval(days => $1)`,
+         AND "LastCheckedAt" < NOW() - make_interval(days => $1)${unfencedStock}`,
       [SOLD_OUT_ARCHIVE_DAYS]
     );
 
@@ -37,8 +42,8 @@ async function runCleanup(): Promise<void> {
 
     // 3. Purge aged stock_events (IoT/scan event stream, not the audit log)
     const stockEvents = await client.query(
-      `DELETE FROM stock_events
-       WHERE "CreatedAt" < NOW() - make_interval(days => $1)`,
+      `DELETE FROM stock_events retained
+       WHERE "CreatedAt" < NOW() - make_interval(days => $1) AND "EventType" <> 'quality_release'${unfencedEvents}`,
       [STOCK_EVENTS_RETENTION_DAYS]
     );
 

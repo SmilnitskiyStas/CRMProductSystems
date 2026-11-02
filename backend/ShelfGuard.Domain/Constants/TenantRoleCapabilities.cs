@@ -31,6 +31,20 @@ public sealed record TenantRoleCapabilityGroup(string Specialty, IReadOnlyList<T
 /// </summary>
 public static class TenantRoleCapabilities
 {
+    // Pricing keeps its stock/manager role floor even with an explicit capability.
+    public const string LabelsPreview = "labels.preview";
+    public const string LabelsTemplatesManage = "labels.templates.manage";
+    public const string LabelsPrint = "labels.print";
+    public const string LabelsBulk = "labels.bulk";
+    public const string LabelsAudit = "labels.audit";
+    public const string LabelsPrintersManage = "labels.printers.manage";
+    public const string PricingView = "pricing.view";
+    public const string PricingManage = "pricing.manage";
+    public const string ProductionView = "production.view";
+    public const string ProductionManage = "production.manage";
+    public const string ProductionComplete = "production.complete";
+    public const string ProductionCancel = "production.cancel";
+    public const string AiAssistantUse = "ai_assistant.use";
     // ── HR ────────────────────────────────────────────────────────────────
 
     /// <summary>Invite/update/deactivate users on UsersController. Deliberately excludes
@@ -150,6 +164,7 @@ public static class TenantRoleCapabilities
     /// </summary>
     public static readonly HashSet<string> All =
     [
+        LabelsPreview, LabelsTemplatesManage, LabelsPrint, LabelsBulk, LabelsAudit, LabelsPrintersManage, PricingView, PricingManage, ProductionView, ProductionManage, ProductionComplete, ProductionCancel, AiAssistantUse,
         UsersManage, SchedulesManage,
         AnalyticsView, AnalyticsViewMargin, IntegrationsView, IntegrationsManage,
         TenantUserPermissions.LegalEntitiesManage,
@@ -166,6 +181,22 @@ public static class TenantRoleCapabilities
     /// </summary>
     public static readonly IReadOnlyList<TenantRoleCapabilityGroup> Groups =
     [
+        new("Макети цінників ERP",
+        [new(LabelsPreview, "Перегляд тестових шаблонів"),
+         new(LabelsTemplatesManage, "Керування шаблонами та призначеннями магазинам"),
+         new(LabelsPrint, "Тестові завдання друку (симулятор)"),
+         new(LabelsBulk, "Масові тестові завдання (явне надання права)"),
+         new(LabelsAudit, "Аудит завдань інших операторів у доступних магазинах (явне право)"),
+         new(LabelsPrintersManage, "Керування тестовими профілями принтерів (явне право)")]),
+        new("Планові ціни ERP",
+        [new(PricingView, "Перегляд планових цін (складські ролі)"),
+         new(PricingManage, "Погодження прайсів (керівні ролі)")]),
+        new("Виробництво та AI",
+        [new(ProductionView, "Перегляд рецептів і виробничих замовлень"),
+         new(ProductionManage, "Керування рецептами та запланованими замовленнями"),
+         new(ProductionComplete, "Початок і проведення виробництва"),
+         new(ProductionCancel, "Скасування непроведених замовлень"),
+         new(AiAssistantUse, "Виклик AI-помічника в межах наявних прав на дані")]),
         new("HR",
         [
             new(UsersManage, "Керування користувачами (запросити / редагувати / деактивувати)"),

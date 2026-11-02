@@ -223,7 +223,7 @@ public sealed class TransferService : ITransferService
     }
 
     public async Task<(TransferDto? Transfer, string? Error)> CancelAsync(
-        Guid id, CancellationToken ct = default)
+        Guid id, Guid cancelledBy, CancellationToken ct = default)
     {
         var transfer = await _repo.GetByIdAsync(id, ct);
         if (transfer is null)
@@ -235,16 +235,41 @@ public sealed class TransferService : ITransferService
         if (transfer.Status == "cancelled")
             return (null, "Transfer is already cancelled.");
 
-        // Restore deducted source stock
+        // Resolve every source before staging any restoration: a missing/inconsistent batch
+        // must leave the transfer open, rather than silently losing part of the quantity.
+        var restorations = new List<(StockTransferItem Item, ProductStock Stock)>();
         foreach (var item in transfer.Items)
         {
             var sourceStock = await _repo.GetStockByIdAsync(item.ProductStockId, ct);
-            if (sourceStock is not null)
+            if (sourceStock is null)
+                return (null, $"Cannot cancel transfer: source stock batch {item.ProductStockId} is unavailable.");
+            if (sourceStock.TenantId != transfer.TenantId || sourceStock.StoreId != transfer.FromStoreId
+                || sourceStock.ProductId != item.ProductId || item.Quantity <= 0)
+                return (null, "Cannot cancel transfer: source stock does not match the transfer item.");
+            restorations.Add((item, sourceStock));
+        }
+
+        foreach (var (item, sourceStock) in restorations)
+        {
+            var before = sourceStock.Quantity;
+            sourceStock.Quantity += item.Quantity;
+            sourceStock.Status = StockStatus.Compute(sourceStock.Quantity, sourceStock.ExpiryDate, sourceStock.LastCheckedAt);
+            _repo.UpdateStock(sourceStock);
+            await _repo.AddMovementAsync(new StockMovement
             {
-                sourceStock.Quantity += item.Quantity;
-                sourceStock.Status = StockStatus.Compute(sourceStock.Quantity, sourceStock.ExpiryDate, sourceStock.LastCheckedAt);
-                _repo.UpdateStock(sourceStock);
-            }
+                TenantId = transfer.TenantId,
+                MovementType = "transfer",
+                ProductStockId = sourceStock.Id,
+                ProductId = sourceStock.ProductId,
+                ToStoreId = transfer.FromStoreId,
+                ToZoneId = sourceStock.ZoneId,
+                Quantity = item.Quantity,
+                QuantityBefore = before,
+                QuantityAfter = sourceStock.Quantity,
+                ReferenceId = transfer.Id,
+                ReferenceType = "stock_transfer_cancellation",
+                PerformedBy = cancelledBy,
+            }, ct);
         }
 
         transfer.Status = "cancelled";

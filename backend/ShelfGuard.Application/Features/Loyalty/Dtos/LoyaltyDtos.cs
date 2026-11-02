@@ -75,6 +75,23 @@ public sealed record LoyaltyCodeDto(
     string AccountNumber,
     string? CardNumber);
 
+/// <summary>Consumer-safe purchase summary. Never exposes cashier, payment or fiscal secrets.</summary>
+public sealed record ConsumerPurchaseDto(
+    Guid Id, Guid StoreId, string StoreName, string? StoreAddress, string ReceiptNumber,
+    DateTime CreatedAt, decimal AmountPaid, decimal BonusesAccrued, decimal BonusesRedeemed,
+    bool CanReview);
+
+public sealed record ConsumerReceiptItemDto(
+    Guid Id, string ProductName, string? Unit, decimal Quantity, decimal UnitPrice,
+    decimal UnitDiscount, decimal UnitPriceAfterDiscount, decimal DiscountTotal,
+    decimal LineTotal, string? PromotionLabel);
+
+public sealed record ConsumerReceiptDto(
+    Guid Id, string StoreName, string? StoreAddress, string ReceiptNumber, DateTime CreatedAt,
+    IReadOnlyList<ConsumerReceiptItemDto> Items, decimal? TotalBeforeDiscount,
+    decimal? DiscountTotal, decimal? TotalAfterDiscount, decimal AmountPaid,
+    decimal BonusesAccrued, decimal BonusesRedeemed, decimal? BonusPaymentAmount);
+
 public sealed record LoyaltyLedgerEntryDto(
     Guid Id,
     string EntryType,
@@ -182,7 +199,8 @@ public sealed record ResolveLoyaltyCodeResult(
     decimal Balance,
     Guid? TierId = null,
     string? TierName = null,
-    decimal? TierDiscountPercent = null);
+    decimal? TierDiscountPercent = null,
+    string? LoyaltySnapshot = null, DateTime? LoyaltySnapshotExpiresAt = null, bool? LoyaltyEnabled = null);
 
 public sealed record ManualLoyaltyAdjustRequest(
     Guid MembershipId,

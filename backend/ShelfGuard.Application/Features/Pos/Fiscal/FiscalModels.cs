@@ -39,7 +39,8 @@ public sealed record FiscalReceiptItem(
     string Name,
     decimal UnitPrice,
     decimal Quantity,
-    string? Barcode = null);
+    string? Barcode = null,
+    decimal? VatRate = null);
 
 public sealed record FiscalPayment(FiscalPaymentKind Kind, decimal Amount);
 
@@ -49,7 +50,10 @@ public sealed record FiscalReceiptRequest(
     IReadOnlyList<FiscalReceiptItem> Items,
     IReadOnlyList<FiscalPayment> Payments,
     string? LocalReceiptId = null,
-    string? CashierName = null);
+    string? CashierName = null,
+    bool IsReturn = false,
+    string? RelatedReceiptId = null,
+    bool TechnicalReturn = false);
 
 public sealed record FiscalReceiptResult(
     string? ProviderReceiptId,

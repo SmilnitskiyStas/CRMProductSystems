@@ -1,5 +1,6 @@
 import { api } from "@/lib/api";
 import type { PagedResult } from "@/lib/api-types";
+import { receiveReviewedReceipt, type ReceivingConfirmation } from "./receipt-receiving";
 import type {
   ReceiptDto, CreateReceiptRequest, UpdateItemPayload,
   UpdateReceiptHeaderPayload, AddReceiptItemPayload,
@@ -43,7 +44,9 @@ export const receiptsApi = {
   updateItems: (id: string, items: UpdateItemPayload[]) =>
     api.put<ReceiptDto>(`/api/receipts/${id}/items`, { items }),
 
-  receive: (id: string) => api.put<ReceiptDto>(`/api/receipts/${id}/receive`),
+  receive: (id: string, confirmation?: ReceivingConfirmation) => confirmation
+    ? receiveReviewedReceipt(id, confirmation, () => api.put<ReceiptDto>(`/api/receipts/${id}/receive`))
+    : api.put<ReceiptDto>(`/api/receipts/${id}/receive`),
 
   cancel: (id: string) => api.put<ReceiptDto>(`/api/receipts/${id}/cancel`),
 

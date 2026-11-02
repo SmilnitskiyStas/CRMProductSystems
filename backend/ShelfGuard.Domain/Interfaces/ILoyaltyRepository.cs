@@ -82,12 +82,25 @@ public interface ILoyaltyRepository
     Task<List<LoyaltyLedgerEntry>> GetLedgerEntriesForTransactionsAsync(
         Guid tenantId, IReadOnlyCollection<Guid> transactionIds, CancellationToken ct = default);
 
+    /// <summary>One row per owned purchase, including zero-bonus purchases linked directly
+    /// to the membership. Legacy purchases may instead be linked through the ledger.</summary>
+    Task<(List<PosTransaction> Items, int Total)> GetPurchasesPagedAsync(
+        Guid tenantId, Guid membershipId, Guid? storeId, int page, int pageSize, CancellationToken ct = default);
+
+    Task<PosTransaction?> GetPurchaseByIdAsync(
+        Guid tenantId, Guid membershipId, Guid purchaseId, CancellationToken ct = default);
+
     Task AddLedgerEntryAsync(LoyaltyLedgerEntry entry, CancellationToken ct = default);
     Task<List<LoyaltyBonusLot>> GetAvailableBonusLotsAsync(Guid tenantId, Guid membershipId, CancellationToken ct = default) =>
         Task.FromResult(new List<LoyaltyBonusLot>());
     Task AddBonusLotAsync(LoyaltyBonusLot lot, CancellationToken ct = default) => Task.CompletedTask;
     Task<bool> HasPurchaseAccrualAsync(Guid tenantId, Guid membershipId, CancellationToken ct = default) =>
         Task.FromResult(false);
+
+    Task<bool> IsCheckoutProgramAvailableAsync(Guid tenantId, CancellationToken ct = default) => Task.FromResult(false);
+
+    // Unknown reward history must never authorize another certified first-purchase reward.
+    Task<bool> HasFirstPurchaseRewardAsync(Guid tenantId, Guid membershipId, CancellationToken ct = default) => Task.FromResult(true);
 
     // ── Settings (one row per tenant) ────────────────────────────────────────
 

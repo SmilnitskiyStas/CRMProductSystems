@@ -17,8 +17,17 @@ public sealed record IncomingSupplyRow(
     Guid? DestinationStoreId,
     string? DestinationStoreName);
 
+public sealed record StockHistorySnapshot(
+    decimal CurrentStock,
+    DateOnly AsOfDate,
+    IReadOnlyDictionary<DateOnly, decimal> DailyChanges);
+
 public interface IMovementRepository
 {
+    /// <summary>Actual product balance and daily changes, including POS consumption, without pagination.</summary>
+    Task<StockHistorySnapshot> GetStockHistoryAsync(
+        Guid tenantId, Guid productId, Guid? storeId, DateOnly from, CancellationToken ct = default);
+
     /// <summary>
     /// Open supply for one product (draft receipts + new/confirmed/shipped marketplace orders),
     /// optionally limited to one destination store. Same openness rules the order engine uses for

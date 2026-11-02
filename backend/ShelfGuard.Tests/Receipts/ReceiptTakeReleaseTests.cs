@@ -16,7 +16,7 @@ public sealed class ReceiptTakeReleaseTests
     private readonly Guid _other = Guid.NewGuid();
 
     public ReceiptTakeReleaseTests() => _sut = new ReceiptService(
-        _repo, Substitute.For<INotificationRepository>(), Substitute.For<IActivityLogRepository>());
+        _repo, Substitute.For<IActivityLogRepository>());
 
     private StockReceipt Draft(Guid? takenBy = null, string status = "draft")
     {

@@ -1,9 +1,11 @@
 "use client";
+import { canWorkPermission } from "@/lib/workPermissions";
 
 import { Btn } from "@/components/ui/Btn";
 import { useState, useRef, useEffect } from "react";
 import { useTranslations } from "next-intl";
 import { isServiceUnavailable } from "@/lib/api";
+import { useMe } from "@/features/auth/hooks/useAuth";
 import { useAiAssistant } from "../hooks/useAiAssistant";
 import type { AiAssistantContextSummary } from "../types";
 
@@ -15,6 +17,7 @@ interface ChatMessage {
 
 export function AiAssistantWidget() {
   const t = useTranslations("Dashboard.aiAssistant.widget");
+  const { data: me } = useMe();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -23,6 +26,8 @@ export function AiAssistantWidget() {
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, isPending]);
+
+  if (!canWorkPermission(me, "ai_assistant.use")) return null;
 
   function handleSend() {
     const text = input.trim();
@@ -207,6 +212,7 @@ export function AiAssistantWidget() {
 
 function ContextBadges({ context }: { context: AiAssistantContextSummary }) {
   const t = useTranslations("Dashboard.aiAssistant.widget");
+  const { data: me } = useMe();
   const badges = [
     { count: context.criticalStockBatchesCount, label: t("badgeCriticalBatches", { count: context.criticalStockBatchesCount }), color: "#EF4444" },
     { count: context.pendingOrdersCount, label: t("badgeOrders", { count: context.pendingOrdersCount }), color: "#F59E0B" },

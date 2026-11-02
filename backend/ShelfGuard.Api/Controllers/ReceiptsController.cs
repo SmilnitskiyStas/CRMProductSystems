@@ -74,7 +74,7 @@ public sealed class ReceiptsController : ControllerBase
         return CreatedAtAction(nameof(GetById), new { id = receipt!.Id }, receipt);
     }
 
-    [HttpPut("{id:guid}/items")]
+    [HttpPut("{id:guid}/items"), RequestSizeLimit(8 * 1024 * 1024)]
     [Authorize(Policy = AppPolicies.CanReceiveStock)]
     [ProducesResponseType(typeof(ReceiptDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
@@ -86,6 +86,7 @@ public sealed class ReceiptsController : ControllerBase
 
         if (error == "Receipt not found.") return NotFound();
         if (error == ReceiptErrors.TakenByOther) return Conflict(new { error });
+        if (error == ReceiptErrors.SourceChanged) return Conflict(new { error, code = "receipt_edit_conflict" });
         if (error is not null) return BadRequest(new { error });
 
         return Ok(receipt);

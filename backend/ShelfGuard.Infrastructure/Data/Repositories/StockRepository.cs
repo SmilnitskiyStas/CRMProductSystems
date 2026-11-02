@@ -184,8 +184,9 @@ public sealed class StockRepository : IStockRepository
             .Include(s => s.Store)
             .Include(s => s.Zone)
             .Where(s => s.ProductId == productId && s.StoreId == storeId && s.Quantity > 0
-                     && s.Status != "sold_out" && s.Status != "archived")
+                     && s.Status != "sold_out" && s.Status != "archived" && s.Status != "expired" && s.Status != "temp_violation")
             .OrderBy(s => s.ExpiryDate)
+              .ThenBy(s => s.AddedAt).ThenBy(s => s.Id)
             .ToListAsync(ct);
 
     public async Task<List<ProductStock>> GetActionRequiredAsync(Guid? storeId, CancellationToken ct = default)
@@ -319,10 +320,22 @@ public sealed class StockRepository : IStockRepository
         await _db.StockMovements.AddAsync(movement, ct);
 
     public void Update(ProductStock stock) =>
-        _db.ProductStocks.Update(stock);
+        _db.Entry(stock).State = EntityState.Modified;
 
-    public Task SaveChangesAsync(CancellationToken ct = default) =>
-        _db.SaveChangesAsync(ct);
+    public async Task SaveChangesAsync(CancellationToken ct = default)
+    {
+        try
+        {
+            await _db.SaveChangesAsync(ct);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            // The failed transaction rolled back the balance and its adjustment together.
+            // A subsequent save in this request must not resurrect the staged movement.
+            _db.ChangeTracker.Clear();
+            throw;
+        }
+    }
 
     // ── helpers ────────────────────────────────────────────────────────────
 

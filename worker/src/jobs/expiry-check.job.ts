@@ -1,6 +1,7 @@
 import { Worker, Job, Queue } from "bullmq";
 import { redisConnection } from "../redis";
 import { db } from "../db";
+import { updateBatchExpirySql } from "../services/batch-expiry";
 
 const notificationQueue = new Queue("notifications", { connection: redisConnection });
 
@@ -59,7 +60,7 @@ async function runExpiryCheck(): Promise<void> {
              COALESCE(i."PerishabilityClass", 'standard') AS perishability_class
       FROM product_stock ps
       JOIN items i ON i."Id" = ps."ProductId"
-      WHERE ps."Quantity" > 0
+      WHERE ps."Quantity" > 0 AND ps."Status" NOT IN ('temp_violation','archived','sold_out')
     `);
 
     const today = new Date();
@@ -86,13 +87,8 @@ async function runExpiryCheck(): Promise<void> {
         newStatus === "expired" && row.notified_critical_at === null; // reuse critical flag for expired
 
       if (statusChanged || shouldNotifyWarning || shouldNotifyCritical || shouldNotifyExpired) {
-        await client.query(
-          `UPDATE product_stock
-           SET "Status"             = $1,
-               "LastCheckedAt"      = $2,
-               "NotifiedWarningAt"  = CASE WHEN $3 THEN $2::timestamptz ELSE "NotifiedWarningAt"  END,
-               "NotifiedCriticalAt" = CASE WHEN $4 THEN $2::timestamptz ELSE "NotifiedCriticalAt" END
-           WHERE "Id" = $5`,
+        const result = await client.query(
+          updateBatchExpirySql,
           [
             newStatus,
             now,
@@ -101,6 +97,7 @@ async function runExpiryCheck(): Promise<void> {
             row.id,
           ]
         );
+        if (result.rowCount === 0) continue;
         updated++;
 
         if (shouldNotifyWarning || shouldNotifyCritical || shouldNotifyExpired) {

@@ -23,8 +23,7 @@ export interface AuthUserDto {
    * signal (no Tier 2 backend enforcement yet) — see Sidebar.tsx/useRequireTab.ts for how
    * it's combined (OR) with the existing role/capability-based visibility checks. */
   tabs?: string[] | null;
-  /** True while the account's current password is a temporary one issued by
-   * `POST /api/auth/forgot-password` (TASK-465/466 temp-password redesign) — valid 3h,
+  /** Compatibility for temporary passwords issued by the retired recovery flow — valid 3h,
    * cleared the moment the user changes it via `POST /api/auth/change-password`, or simply
    * expires on its own. Fresh on every mint site (login/refresh/2fa-verify) and `/auth/me`. */
   passwordIsTemporary: boolean;
@@ -38,11 +37,16 @@ export interface LoginRequest {
   password: string;
 }
 
-// ---- Forgot password (public, TASK-457; redesigned to issue a temporary password
-// instead of a reset link/token — TASK-465/466) ----
+// ---- Public proof-based password recovery ----
 
 export interface ForgotPasswordRequest {
   email: string;
+}
+
+export interface ResetPasswordRequest {
+  email: string;
+  token: string;
+  newPassword: string;
 }
 
 /** Successful login/refresh/2FA-verify — tokens issued. */
@@ -57,7 +61,11 @@ export interface TwoFactorChallengeResponse {
   challengeToken: string;
 }
 
-export type LoginResponse = LoginSuccessResponse | TwoFactorChallengeResponse;
+export interface MfaEnrollmentResponse { requiresMfaEnrollment: true; enrollmentToken: string; }
+export function isMfaEnrollment(res: LoginResponse): res is MfaEnrollmentResponse {
+  return "requiresMfaEnrollment" in res && res.requiresMfaEnrollment === true;
+}
+export type LoginResponse = LoginSuccessResponse | TwoFactorChallengeResponse | MfaEnrollmentResponse;
 
 export function isTwoFactorChallenge(
   res: LoginResponse,
@@ -79,6 +87,8 @@ export interface TwoFactorSetupResponse {
 }
 
 export interface TwoFactorEnableResponse {
+  accessToken: string;
+  user: AuthUserDto;
   /** 8 one-time recovery codes — shown exactly once, never retrievable again. */
   recoveryCodes: string[];
 }

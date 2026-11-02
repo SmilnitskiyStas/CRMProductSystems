@@ -50,4 +50,5 @@ public interface IProductionRepository
     // ─────────────────────────────────────────────────────────────────────────
 
     Task SaveChangesAsync(CancellationToken ct = default);
+    Task<ProductStock?> GetOutputForOrderAsync(Guid orderId, CancellationToken ct = default);
 }

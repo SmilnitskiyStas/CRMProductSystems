@@ -136,7 +136,10 @@ public sealed class StockController : ControllerBase
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> Update(Guid id, UpdateStockRequest request, CancellationToken ct)
     {
-        var (stock, error) = await _stock.UpdateAsync(id, request, ct);
+        var (_, performedBy) = GetContext();
+        if (performedBy is null) return Forbid();
+
+        var (stock, error) = await _stock.UpdateAsync(id, performedBy.Value, request, ct);
 
         if (error == "Stock batch not found.")
             return NotFound();

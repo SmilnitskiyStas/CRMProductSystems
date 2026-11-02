@@ -61,6 +61,7 @@ public sealed class MobileConfigPreviewService : IMobileConfigPreviewService
         var features = document["features"] as JsonObject ?? new JsonObject();
         features["loyalty"] = await _loyalty.IsEnabledAsync(tenantId, ct);
         document["features"] = features;
+        ConsumerNavigationAvailability.Apply(document);
 
         return document.ToJsonString();
     }

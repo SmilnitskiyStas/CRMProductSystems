@@ -1,12 +1,13 @@
 "use client";
 
 import { useState } from "react";
-import { Eye, ShieldCheck, BarChart2 } from "lucide-react";
+import { Eye, ShieldCheck, BarChart2, Trash2, SlidersHorizontal } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useTranslations, useLocale } from "next-intl";
 import type { ProductStockDto, BatchStatus, StockSortBy } from "../types";
 import { STATUS_COLOR } from "../types";
 import { StatusBadge } from "./StatusBadge";
+import { canWriteOffBatch } from "../lib/stockWriteOff";
 import { ActionMenu } from "@/components/ui/ActionMenu";
 import { Table, type TableColumn } from "@/components/ui/Table";
 import {
@@ -23,6 +24,8 @@ interface Props {
   onSelectId: (id: string, checked: boolean) => void;
   onSelectAll: (checked: boolean) => void;
   onVerify?: (id: string) => void;
+  onWriteOff?: (batch: ProductStockDto) => void;
+  onAdjust?: (batch: ProductStockDto) => void;
   sortBy: StockSortBy;
   sortDescending: boolean;
   onSort: (key: StockSortBy) => void;
@@ -91,6 +94,7 @@ function StockDetail({ item }: { item: ProductStockDto }) {
       </DrawerSection>
 
       <DrawerSection title={t("sectionStock")}>
+        {item.quantity <= 0 && <p style={{ color: "#9CA3AF", fontSize: 12 }}>{tOverdue("emptyBatchHint")}</p>}
         <DrawerGrid>
           <DrawerField
             label={t("quantity")}
@@ -177,6 +181,8 @@ export function StockTable({
   onSelectId,
   onSelectAll,
   onVerify,
+  onWriteOff,
+  onAdjust,
   sortBy,
   sortDescending,
   onSort,
@@ -204,7 +210,8 @@ export function StockTable({
     );
   }
 
-  const allSelected = items.length > 0 && items.every((i) => selectedIds.has(i.id));
+  const selectable = items.filter(canWriteOffBatch);
+  const allSelected = selectable.length > 0 && selectable.every((i) => selectedIds.has(i.id));
   const someSelected = items.some((i) => selectedIds.has(i.id)) && !allSelected;
 
   // Checkbox occupies index 0 structurally, so the product-name column (the real "name/label"
@@ -219,6 +226,8 @@ export function StockTable({
         <input
           type="checkbox"
           checked={allSelected}
+          disabled={selectable.length === 0}
+          aria-label={t("selectAllBatches")}
           ref={(el) => {
             if (el) el.indeterminate = someSelected;
           }}
@@ -230,6 +239,8 @@ export function StockTable({
         <input
           type="checkbox"
           checked={selectedIds.has(item.id)}
+          disabled={!canWriteOffBatch(item)}
+          aria-label={t("selectBatch", { name: item.productName, date: formatDate(item.expiryDate) })}
           onChange={(e) => onSelectId(item.id, e.target.checked)}
           style={{ cursor: "pointer", accentColor: "#3B82F6" }}
         />
@@ -310,6 +321,14 @@ export function StockTable({
       render: (item) => (
         <ActionMenu
           items={[
+            ...(onAdjust ? [{ label: t("adjustBatch"), icon: <SlidersHorizontal size={13} />, onClick: () => onAdjust(item) }] : []),
+            ...(onWriteOff ? [{
+              label: t("writeOffBatch"),
+              icon: <Trash2 size={13} />,
+              variant: "danger" as const,
+              disabled: !canWriteOffBatch(item),
+              onClick: () => onWriteOff(item),
+            }, { separator: true }] : []),
             {
               label: t("actionMenu.viewDetails"),
               icon: <Eye size={13} />,

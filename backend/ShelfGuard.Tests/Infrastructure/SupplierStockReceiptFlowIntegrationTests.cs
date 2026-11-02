@@ -27,7 +27,7 @@ public sealed class SupplierStockReceiptFlowIntegrationTests : IAsyncLifetime
     private bool _dbAvailable;
     private string _cs = TestPostgres.DefaultConnectionString;
 
-    private Guid _tenantId, _supplierItemId, _warehouseId;
+    private Guid _tenantId, _supplierId, _supplierItemId, _warehouseId;
     private readonly Guid _receiptScopeId = Guid.NewGuid();
 
     public SupplierStockReceiptFlowIntegrationTests(ITestOutputHelper output) => _output = output;
@@ -40,25 +40,14 @@ public sealed class SupplierStockReceiptFlowIntegrationTests : IAsyncLifetime
             await using var db = TestPostgres.NewContext(_cs);
             await db.Database.OpenConnectionAsync();
 
-            // Reuse an existing supplier tenant that already has at least one SupplierItem —
-            // avoids the NOT NULL columns on `suppliers` a fresh seed would have to satisfy.
-            var row = await db.Database
-                .SqlQueryRaw<SeedRow>(
-                    @"SELECT si.""TenantId"" AS ""TenantId"", si.""Id"" AS ""SupplierItemId""
-                      FROM supplier_items si
-                      JOIN tenants t ON t.""Id"" = si.""TenantId"" AND t.""BusinessType"" = 'supplier'
-                      LIMIT 1")
-                .FirstOrDefaultAsync();
-
-            if (row is null)
-            {
-                _dbAvailable = false;
-                _output.WriteLine("No supplier tenant with a SupplierItem on the dev DB — skipped.");
-                return;
-            }
-
-            _tenantId = row.TenantId;
-            _supplierItemId = row.SupplierItemId;
+            // Own every fixture row. Borrowing another test's supplier caused both false passes
+            // on an empty CI database and races with that test's cleanup in the full suite.
+            var tenant = Tenant.Create($"Receipt regression {_receiptScopeId:N}", $"receipt-regression-{_receiptScopeId:N}");
+            Assert.Null(tenant.UpdateBusinessType("supplier"));
+            var supplier = new Supplier { TenantId = tenant.Id, Name = "Synthetic receipt supplier" };
+            var item = new SupplierItem { TenantId = tenant.Id, SupplierId = supplier.Id, CustomName = "Synthetic item", Unit = "шт" };
+            db.AddRange(tenant, supplier, item);
+            _tenantId = tenant.Id; _supplierId = supplier.Id; _supplierItemId = item.Id;
 
             var wh = new Location
             {
@@ -76,6 +65,7 @@ public sealed class SupplierStockReceiptFlowIntegrationTests : IAsyncLifetime
         catch (Exception ex)
         {
             _dbAvailable = false;
+            if (!string.IsNullOrEmpty(Environment.GetEnvironmentVariable("SHELFGUARD_TEST_DB_CONNECTION"))) throw;
             _output.WriteLine($"Dev Postgres unavailable — skipped: {ex.Message}");
         }
     }
@@ -90,6 +80,9 @@ public sealed class SupplierStockReceiptFlowIntegrationTests : IAsyncLifetime
               DELETE FROM supplier_stock_receipt_items WHERE ""ReceiptId"" IN (SELECT ""Id"" FROM supplier_stock_receipts WHERE ""WarehouseId"" = {0});
               DELETE FROM supplier_stock_receipts WHERE ""WarehouseId"" = {0};
               DELETE FROM locations WHERE ""Id"" = {0};", _warehouseId);
+        await db.Database.ExecuteSqlInterpolatedAsync($"DELETE FROM supplier_items WHERE \"Id\"={_supplierItemId}");
+        await db.Database.ExecuteSqlInterpolatedAsync($"DELETE FROM suppliers WHERE \"Id\"={_supplierId}");
+        await db.Database.ExecuteSqlInterpolatedAsync($"DELETE FROM tenants WHERE \"Id\"={_tenantId}");
     }
 
     private (SupplierStockReceiptService Svc, IDisposable Ctx) Build()
@@ -155,5 +148,4 @@ public sealed class SupplierStockReceiptFlowIntegrationTests : IAsyncLifetime
         }
     }
 
-    private sealed record SeedRow(Guid TenantId, Guid SupplierItemId);
 }

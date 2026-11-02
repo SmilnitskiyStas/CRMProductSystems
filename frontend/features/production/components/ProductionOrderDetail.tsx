@@ -1,4 +1,6 @@
 "use client";
+import { useMe } from "@/features/auth/hooks/useAuth";
+import { canWorkPermission } from "@/lib/workPermissions";
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
@@ -45,6 +47,9 @@ interface InsufficientStockError {
 }
 
 export function ProductionOrderDetail({ id }: Props) {
+  const { data: me } = useMe();
+  const canComplete = canWorkPermission(me, "production.complete");
+  const canCancel = canWorkPermission(me, "production.cancel");
   const t = useTranslations("Dashboard.production.orderDetail");
   const tCommon = useTranslations("Common");
   const locale = useLocale();
@@ -89,7 +94,7 @@ export function ProductionOrderDetail({ id }: Props) {
 
   function handleStart() {
     clearFeedback();
-    startOrder.mutate();
+    startOrder.mutate(undefined, { onError: err => setActionError(err.message) });
   }
 
   function handleComplete() {
@@ -253,19 +258,19 @@ export function ProductionOrderDetail({ id }: Props) {
         actions={
           !isReadOnly ? (
             <>
-              {status === "planned" && (
+              {canComplete && status === "planned" && (
                 <Btn onClick={handleStart} disabled={anyPending}>
                   {startOrder.isPending ? t("starting") : t("start")}
                 </Btn>
               )}
 
-              {status === "in_progress" && (
+              {canComplete && status === "in_progress" && (
                 <Btn variant="success" onClick={handleComplete} disabled={anyPending}>
                   {completeOrder.isPending ? t("completing") : t("complete")}
                 </Btn>
               )}
 
-              {(status === "planned" || status === "in_progress") && (
+              {canCancel && (status === "planned" || status === "in_progress") && (
                 <Btn variant="danger" onClick={handleCancel} disabled={anyPending}>
                   {cancelOrder.isPending ? t("cancelling") : t("cancel")}
                 </Btn>

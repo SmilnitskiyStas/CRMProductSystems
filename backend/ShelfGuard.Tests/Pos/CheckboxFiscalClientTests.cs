@@ -74,6 +74,17 @@ public sealed class CheckboxFiscalClientTests
         """{"id":"rcpt-1","serial":1,"status":"DONE","fiscal_code":"FC123456","fiscal_date":"2026-06-12T10:05:00+00:00","total_sum":12550,"tax_url":"https://cabinet.tax.gov.ua/r/123"}""";
 
     // ── signin flow ────────────────────────────────────────────────────────
+    [Fact]
+    public async Task Full_return_marks_every_good_and_links_original_receipt_with_stable_UUID()
+    {
+        var (client,handler,_)=Build();handler.Enqueue(HttpStatusCode.OK,TokenJson);handler.Enqueue(HttpStatusCode.OK,ReceiptDoneJson);
+        var id=Guid.NewGuid().ToString();var original=Guid.NewGuid().ToString();
+        await client.CreateReceiptAsync(new([new("frozen-code","Frozen name",50,2)], [new(FiscalPaymentKind.Cash,100)],id,IsReturn:true,RelatedReceiptId:original,TechnicalReturn:true));
+        using var doc=JsonDocument.Parse(handler.Requests.Last().Body!);var p=doc.RootElement;
+        Assert.Equal(id,p.GetProperty("id").GetString());Assert.Equal(original,p.GetProperty("related_receipt_id").GetString());Assert.True(p.GetProperty("technical_return").GetBoolean());
+        Assert.True(p.GetProperty("goods")[0].GetProperty("is_return").GetBoolean());Assert.Equal(5000,p.GetProperty("goods")[0].GetProperty("good").GetProperty("price").GetInt64());
+        Assert.Equal(10000,p.GetProperty("payments")[0].GetProperty("value").GetInt64());
+    }
 
     [Fact]
     public async Task First_call_signs_in_with_pin_and_license_key_then_uses_bearer()

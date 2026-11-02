@@ -30,6 +30,7 @@ export interface WriteOffDto {
   storeName: string;
   status: WriteOffStatus;
   reason: WriteOffReason | null;
+  notes?: string | null;
   totalLossAmount: number | null;
   totalLossAmountPurchase: number | null;
   totalReimbursementAmount: number | null;

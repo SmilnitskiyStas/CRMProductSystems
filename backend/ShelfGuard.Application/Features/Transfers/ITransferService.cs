@@ -21,5 +21,5 @@ public interface ITransferService
         Guid id, Guid confirmedBy, Guid tenantId, string? role, CancellationToken ct = default);
 
     Task<(TransferDto? Transfer, string? Error)> CancelAsync(
-        Guid id, CancellationToken ct = default);
+        Guid id, Guid cancelledBy, CancellationToken ct = default);
 }

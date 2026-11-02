@@ -30,6 +30,8 @@ public sealed class StockReceipt
     /// <summary>Manager who took an auto draft into work; null = untaken (the daily job may still rewrite it).</summary>
     public Guid? TakenByUserId { get; set; }
     public DateTime? TakenAt { get; set; }
+    // Frozen category membership and per-category receiving ownership. Null keeps legacy receiving.
+    public string? ReceivingWorkJson { get; set; }
 
     // ── Sent to supplier (TASK-757): draft -> ordered ───────────────────────────────────────────────
     public DateTime? OrderedAt { get; set; }
