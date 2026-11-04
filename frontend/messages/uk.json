@@ -7978,6 +7978,7 @@
       "colStatus": "Статус",
       "colActions": "Дії",
       "statusNew": "Нова",
+      "badgeCritical": "КРИТИЧНО",
       "statusProcessed": "Оброблена",
       "markProcessed": "Позначити обробленою",
       "markUnprocessed": "Повернути в нові",

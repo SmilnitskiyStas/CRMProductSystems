@@ -65,6 +65,22 @@ function LeadCard({ lead, onOpen }: { lead: LandingLeadDto; onOpen: () => void }
           {lead.company && <div style={{ color: "#9CA3AF", fontSize: 13, marginTop: 2 }}>{lead.company}</div>}
         </div>
         <div style={{ textAlign: "right" }}>
+          {lead.isCritical && (
+            <span
+              style={{
+                display: "inline-block",
+                padding: "2px 10px",
+                borderRadius: 999,
+                fontSize: 11,
+                fontWeight: 700,
+                marginRight: 6,
+                background: "#4C1D1D",
+                color: "#FCA5A5",
+              }}
+            >
+              {t("badgeCritical")}
+            </span>
+          )}
           <span
             style={{
               display: "inline-block",

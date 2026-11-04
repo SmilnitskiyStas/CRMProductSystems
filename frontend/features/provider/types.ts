@@ -271,6 +271,8 @@ export interface LandingLeadDto {
   utmMedium: string | null;
   utmCampaign: string | null;
   isProcessed: boolean;
+  isCritical: boolean;
+  criticalReason: string | null;
   createdAt: string;
   processedAt: string | null;
   processedByUserId: string | null;

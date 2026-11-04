@@ -27,12 +27,18 @@ public sealed class LandingLead
     public Guid? ProcessedByUserId { get; private set; }
     public string? AdminNote { get; private set; }
 
+    /// <summary>Set at capture time by LeadCriticalityEvaluator.</summary>
+    public bool IsCritical { get; private set; }
+    /// <summary>Short reason code(s), e.g. "network+urgent+repeat". Max 50 chars.</summary>
+    public string? CriticalReason { get; private set; }
+
     private LandingLead() { }
 
     public static LandingLead Create(
         string name, string phone, string? company, string? message, string source = "landing",
         string? pageUrl = null, string? locale = null, string? referrer = null,
-        string? utmSource = null, string? utmMedium = null, string? utmCampaign = null) => new()
+        string? utmSource = null, string? utmMedium = null, string? utmCampaign = null,
+        bool isCritical = false, string? criticalReason = null) => new()
     {
         Id          = Guid.NewGuid(),
         Name        = name,
@@ -48,6 +54,8 @@ public sealed class LandingLead
         UtmSource   = utmSource,
         UtmMedium   = utmMedium,
         UtmCampaign = utmCampaign,
+        IsCritical  = isCritical,
+        CriticalReason = criticalReason,
     };
 
     public void MarkProcessed(Guid? userId)

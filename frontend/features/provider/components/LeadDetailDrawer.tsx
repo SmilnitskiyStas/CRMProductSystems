@@ -107,6 +107,12 @@ export function LeadDetailDrawer({
           <span style={{ color: lead.isProcessed ? "#4ADE80" : "#93C5FD", fontWeight: 600 }}>
             {lead.isProcessed ? t("statusProcessed") : t("statusNew")}
           </span>
+          {lead.isCritical && (
+            <span style={{ color: "#FCA5A5", fontWeight: 700, marginLeft: 8 }}>
+              {t("badgeCritical")}
+              {lead.criticalReason ? ` (${lead.criticalReason})` : ""}
+            </span>
+          )}
         </Field>
         <Field label={t("fieldPhone")}>
           <a

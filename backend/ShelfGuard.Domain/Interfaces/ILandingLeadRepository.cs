@@ -14,5 +14,8 @@ public interface ILandingLeadRepository
     Task<(List<LandingLead> Items, int Total)> ListAsync(
         string status, string? search, int page, int pageSize, CancellationToken ct);
 
+    /// <summary>Phones of leads created at or after <paramref name="since"/> (repeat-lead detection).</summary>
+    Task<List<string>> GetPhonesSinceAsync(DateTime since, CancellationToken ct);
+
     Task<int> CountUnprocessedAsync(CancellationToken ct);
 }

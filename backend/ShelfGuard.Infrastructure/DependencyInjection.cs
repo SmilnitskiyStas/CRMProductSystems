@@ -279,6 +279,12 @@ public static class DependencyInjection
             Services.ProviderRolesService>();
 
         // TASK-333 - Landing page leads
+        // Lead owner push (Telegram). Off by default; config only from env/settings (Leads__Telegram__*).
+        services.Configure<Integrations.LeadsTelegramOptions>(
+            configuration.GetSection(Integrations.LeadsTelegramOptions.Section));
+        services.AddHttpClient<Application.Features.Leads.ILeadNotifier, Integrations.TelegramLeadNotifier>(
+                http => http.Timeout = TimeSpan.FromSeconds(5))
+            .RemoveAllLoggers(); // request URL contains the bot token — keep it out of HttpClient logs
         services.AddScoped<Domain.Interfaces.ILandingLeadRepository,
             Data.Repositories.LandingLeadRepository>();
 

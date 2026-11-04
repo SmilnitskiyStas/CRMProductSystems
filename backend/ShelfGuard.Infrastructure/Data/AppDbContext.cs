@@ -2263,6 +2263,8 @@ public sealed class AppDbContext : DbContext
             e.Property(l => l.ProcessedAt).IsRequired(false);
             e.Property(l => l.ProcessedByUserId).IsRequired(false);
             e.Property(l => l.AdminNote).HasMaxLength(1000).IsRequired(false);
+            e.Property(l => l.IsCritical).HasDefaultValue(false);
+            e.Property(l => l.CriticalReason).HasMaxLength(50).IsRequired(false);
             e.HasIndex(l => l.CreatedAt);
             e.HasIndex(l => l.IsProcessed);
         });

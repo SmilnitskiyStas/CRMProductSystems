@@ -7978,6 +7978,7 @@
       "colStatus": "Status",
       "colActions": "Actions",
       "statusNew": "New",
+      "badgeCritical": "CRITICAL",
       "statusProcessed": "Processed",
       "markProcessed": "Mark processed",
       "markUnprocessed": "Move back to new",

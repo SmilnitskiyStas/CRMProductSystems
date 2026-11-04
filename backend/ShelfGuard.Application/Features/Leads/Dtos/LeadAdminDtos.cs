@@ -14,6 +14,8 @@ public sealed record LandingLeadDto(
     string? UtmMedium,
     string? UtmCampaign,
     bool IsProcessed,
+    bool IsCritical,
+    string? CriticalReason,
     DateTime CreatedAt,
     DateTime? ProcessedAt,
     Guid? ProcessedByUserId,

@@ -45,6 +45,9 @@ public sealed class LandingLeadRepository(AppDbContext db) : ILandingLeadReposit
         return (items, total);
     }
 
+    public Task<List<string>> GetPhonesSinceAsync(DateTime since, CancellationToken ct) =>
+        db.LandingLeads.AsNoTracking().Where(l => l.CreatedAt >= since).Select(l => l.Phone).ToListAsync(ct);
+
     public Task<int> CountUnprocessedAsync(CancellationToken ct) =>
         db.LandingLeads.CountAsync(l => !l.IsProcessed, ct);
 }
