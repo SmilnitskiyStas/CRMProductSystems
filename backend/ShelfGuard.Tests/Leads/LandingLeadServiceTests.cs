@@ -15,10 +15,15 @@ namespace ShelfGuard.Tests.Leads;
 public sealed class LandingLeadServiceTests
 {
     private readonly ILandingLeadRepository _repo = Substitute.For<ILandingLeadRepository>();
+    private readonly ILeadNotifier _notifier = Substitute.For<ILeadNotifier>();
     private readonly LandingLeadService _sut;
 
-    public LandingLeadServiceTests() =>
-        _sut = new LandingLeadService(_repo, NullLogger<LandingLeadService>.Instance);
+    public LandingLeadServiceTests()
+    {
+        _repo.GetPhonesSinceAsync(Arg.Any<DateTime>(), Arg.Any<CancellationToken>())
+            .Returns(new List<string>());
+        _sut = new LandingLeadService(_repo, _notifier, NullLogger<LandingLeadService>.Instance);
+    }
 
     private static CaptureLeadRequest Valid(
         string? name = "Іван Петренко",
@@ -197,6 +202,171 @@ public sealed class LandingLeadServiceTests
         await _repo.Received(1).AddAsync(
             Arg.Is<LandingLead>(l => l.Source == "landing" && l.Locale == null),
             Arg.Any<CancellationToken>());
+    }
+
+    // ── Beauty source, criticality, Telegram push ──────────────────────────
+
+    [Theory]
+    [InlineData("beauty")]
+    [InlineData("Beauty-Join")]
+    public async Task CaptureAsync_BeautySource_Accepted(string source)
+    {
+        await _sut.CaptureAsync(Valid() with { Source = source }, CancellationToken.None);
+
+        await _repo.Received(1).AddAsync(
+            Arg.Is<LandingLead>(l => l.Source == source.ToLowerInvariant()), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task CaptureAsync_PublicBeautyLead_HasNoBeautyIdentity_AndIsNotVerified()
+    {
+        LandingLead? saved = null;
+        await _repo.AddAsync(Arg.Do<LandingLead>(l => saved = l), Arg.Any<CancellationToken>());
+
+        await _sut.CaptureAsync(Valid() with { Source = "beauty" }, CancellationToken.None);
+
+        Assert.NotNull(saved);
+        Assert.Null(saved!.ExternalId);
+        Assert.Null(saved.BeautyTenantRef);
+        Assert.Null(saved.BeautyTenantSlug);
+        Assert.Null(saved.RequestType);
+        Assert.Null(saved.ReporterRole);
+        Assert.Null(saved.Contact);
+
+        _repo.ListAsync(Arg.Any<string>(), Arg.Any<string?>(), Arg.Any<int>(), Arg.Any<int>(), Arg.Any<CancellationToken>(), Arg.Any<string?>())
+            .Returns((new List<LandingLead> { saved }, 1));
+        var list = await _sut.ListAsync("all", null, 1, 20, CancellationToken.None);
+        Assert.False(list.Items.Single().VerifiedBeauty);
+    }
+
+    [Fact]
+    public async Task ListAsync_HmacCreatedLead_IsVerifiedBeauty()
+    {
+        var lead = LandingLead.Create("Іван", "+380671234567", "Салон", "msg", "beauty",
+            requestType: "support", beautyTenantRef: "ref-1", externalId: "fb-1", beautyTenantSlug: "salon");
+        _repo.ListAsync(Arg.Any<string>(), Arg.Any<string?>(), Arg.Any<int>(), Arg.Any<int>(), Arg.Any<CancellationToken>(), Arg.Any<string?>())
+            .Returns((new List<LandingLead> { lead }, 1));
+
+        var list = await _sut.ListAsync("all", null, 1, 20, CancellationToken.None);
+
+        Assert.True(list.Items.Single().VerifiedBeauty);
+    }
+
+    private static async Task<LeadNotification> WaitForNotification(ILeadNotifier notifier)
+    {
+        for (var i = 0; i < 100; i++)
+        {
+            var call = notifier.ReceivedCalls().FirstOrDefault();
+            if (call is not null) return (LeadNotification)call.GetArguments()[0]!;
+            await Task.Delay(20);
+        }
+        throw new TimeoutException("notifier was not called");
+    }
+
+    [Fact]
+    public async Task CaptureAsync_Urgent_SavedAsCritical_AndNotifiesCritical()
+    {
+        await _sut.CaptureAsync(Valid(message: "Потрібно терміново"), CancellationToken.None);
+
+        await _repo.Received(1).AddAsync(
+            Arg.Is<LandingLead>(l => l.IsCritical && l.CriticalReason == "urgent"), Arg.Any<CancellationToken>());
+        var n = await WaitForNotification(_notifier);
+        Assert.True(n.IsCritical);
+    }
+
+    [Fact]
+    public async Task CaptureAsync_Ordinary_SavedAsNotCritical_NotifiesOrdinary()
+    {
+        await _sut.CaptureAsync(Valid(), CancellationToken.None);
+
+        await _repo.Received(1).AddAsync(
+            Arg.Is<LandingLead>(l => !l.IsCritical && l.CriticalReason == null), Arg.Any<CancellationToken>());
+        var n = await WaitForNotification(_notifier);
+        Assert.False(n.IsCritical);
+    }
+
+    [Fact]
+    public async Task CaptureAsync_SamePhoneWithinWindow_IsCriticalRepeat()
+    {
+        _repo.GetPhonesSinceAsync(Arg.Any<DateTime>(), Arg.Any<CancellationToken>())
+            .Returns(new List<string> { "+38 (067) 123-45-67" });
+
+        await _sut.CaptureAsync(Valid(), CancellationToken.None);
+
+        await _repo.Received(1).AddAsync(
+            Arg.Is<LandingLead>(l => l.IsCritical && l.CriticalReason == "repeat"), Arg.Any<CancellationToken>());
+        // lookup window is 7 days back from now
+        await _repo.Received(1).GetPhonesSinceAsync(
+            Arg.Is<DateTime>(d => Math.Abs((DateTime.UtcNow - d - TimeSpan.FromDays(7)).TotalMinutes) < 1),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task CaptureAsync_RepeatLookupFails_StillSavesLead()
+    {
+        _repo.GetPhonesSinceAsync(Arg.Any<DateTime>(), Arg.Any<CancellationToken>())
+            .Returns(Task.FromException<List<string>>(new InvalidOperationException("db")));
+
+        var error = await _sut.CaptureAsync(Valid(), CancellationToken.None);
+
+        Assert.Null(error);
+        await _repo.Received(1).SaveChangesAsync(Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task CaptureAsync_Honeypot_DoesNotNotify()
+    {
+        await _sut.CaptureAsync(Valid(website: "http://spam.example"), CancellationToken.None);
+        await Task.Delay(100);
+
+        Assert.Empty(_notifier.ReceivedCalls());
+    }
+
+    [Fact]
+    public async Task CaptureAsync_ValidationError_DoesNotNotify()
+    {
+        await _sut.CaptureAsync(Valid(name: "A"), CancellationToken.None);
+        await Task.Delay(100);
+
+        Assert.Empty(_notifier.ReceivedCalls());
+    }
+
+    [Fact]
+    public async Task CaptureAsync_NotifierThrows_DoesNotBreakCapture()
+    {
+        _notifier.NotifyAsync(Arg.Any<LeadNotification>(), Arg.Any<CancellationToken>())
+            .Returns(Task.FromException(new HttpRequestException("telegram down")));
+
+        var error = await _sut.CaptureAsync(Valid(), CancellationToken.None);
+
+        Assert.Null(error);
+        await _repo.Received(1).SaveChangesAsync(Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task CaptureAsync_NotifierHangs_DoesNotDelayResponse()
+    {
+        var gate = new TaskCompletionSource();
+        _notifier.NotifyAsync(Arg.Any<LeadNotification>(), Arg.Any<CancellationToken>()).Returns(gate.Task);
+
+        var capture = _sut.CaptureAsync(Valid(), CancellationToken.None);
+        var finished = await Task.WhenAny(capture, Task.Delay(2000));
+        gate.SetResult();
+
+        Assert.Same(capture, finished);
+    }
+
+    [Fact]
+    public async Task CaptureAsync_DbFailure_DoesNotNotify()
+    {
+        _repo.SaveChangesAsync(Arg.Any<CancellationToken>())
+            .Returns(Task.FromException(new InvalidOperationException("db down")));
+
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => _sut.CaptureAsync(Valid(), CancellationToken.None));
+        await Task.Delay(100);
+
+        Assert.Empty(_notifier.ReceivedCalls());
     }
 
     [Fact]

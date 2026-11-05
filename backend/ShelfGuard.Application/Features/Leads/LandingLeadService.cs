@@ -7,12 +7,14 @@ namespace ShelfGuard.Application.Features.Leads;
 
 public sealed class LandingLeadService(
     ILandingLeadRepository leads,
+    ILeadNotifier notifier,
     ILogger<LandingLeadService> logger) : ILandingLeadService
 {
     /// <summary>Whitelist of form origins accepted from the client; unknown values fall back to "landing".</summary>
     public static readonly IReadOnlySet<string> AllowedSources = new HashSet<string>(StringComparer.Ordinal)
     {
         "landing", "retail", "features", "roadmap", "how-it-works", "for-whom", "join",
+        "beauty", "beauty-join",
     };
 
     private static readonly IReadOnlySet<string> AllowedLocales = new HashSet<string>(StringComparer.Ordinal) { "uk", "en" };
@@ -49,6 +51,19 @@ public sealed class LandingLeadService(
         var locale = NormalizeOptional(request.Locale)?.ToLowerInvariant();
         if (locale is null || !AllowedLocales.Contains(locale)) locale = null;
 
+        // Criticality is best-effort: a failing repeat lookup must not block capturing the lead.
+        var isRepeat = false;
+        try
+        {
+            var recent = await leads.GetPhonesSinceAsync(DateTime.UtcNow - LeadCriticalityEvaluator.RepeatWindow, ct);
+            isRepeat = LeadCriticalityEvaluator.IsRepeat(phone, recent);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            logger.LogWarning("Repeat-lead lookup failed ({ErrorType}); continuing without it.", ex.GetType().Name);
+        }
+        var criticalReason = LeadCriticalityEvaluator.Evaluate(company, message, isRepeat);
+
         var lead = LandingLead.Create(
             name, phone, company, message, source,
             pageUrl: Truncate(request.PageUrl, 300),
@@ -56,7 +71,9 @@ public sealed class LandingLeadService(
             referrer: Truncate(request.Referrer, 300),
             utmSource: Truncate(request.UtmSource, 100),
             utmMedium: Truncate(request.UtmMedium, 100),
-            utmCampaign: Truncate(request.UtmCampaign, 150));
+            utmCampaign: Truncate(request.UtmCampaign, 150),
+            isCritical: criticalReason is not null,
+            criticalReason: criticalReason);
 
         try
         {
@@ -77,21 +94,30 @@ public sealed class LandingLeadService(
             "Landing lead saved: {LeadId}, source {Source}, company: {Company}",
             lead.Id, source, company ?? "-");
 
-        // Notification channel: the unprocessed-leads badge in the provider admin menu
-        // (GET api/provider/leads/count). No Telegram/email push for now.
+        // Owner push (Telegram): fire-and-forget AFTER the save. Never awaited, never throws,
+        // never delays the response; the notifier has its own 5s HttpClient timeout.
+        var notification = new LeadNotification(source, name, phone, company, message, lead.IsCritical, lead.CriticalReason);
+        _ = Task.Run(async () =>
+        {
+            try { await notifier.NotifyAsync(notification, CancellationToken.None); }
+            catch (Exception ex) { logger.LogWarning("Lead notifier failed: {ErrorType}", ex.GetType().Name); }
+        });
+
         return null;
     }
 
     public async Task<LandingLeadListDto> ListAsync(
-        string? status, string? search, int page, int pageSize, CancellationToken ct)
+        string? status, string? search, int page, int pageSize, CancellationToken ct, string? requestType = null)
     {
+        var type = requestType?.Trim().ToLowerInvariant();
+        if (type is not ("cooperation" or "improvement" or "bug")) type = null;
         var normalizedStatus = status is "new" or "processed" ? status : "all";
         page = Math.Max(1, page);
         pageSize = Math.Clamp(pageSize, 1, 100);
         var term = NormalizeOptional(search);
         if (term is { Length: > 100 }) term = term[..100];
 
-        var (items, total) = await leads.ListAsync(normalizedStatus, term, page, pageSize, ct);
+        var (items, total) = await leads.ListAsync(normalizedStatus, term, page, pageSize, ct, type);
         return new LandingLeadListDto(items.Select(ToDto).ToList(), total, page, pageSize);
     }
 
@@ -120,8 +146,13 @@ public sealed class LandingLeadService(
 
     private static LandingLeadDto ToDto(LandingLead l) => new(
         l.Id, l.Name, l.Phone, l.Company, l.Message, l.Source, l.PageUrl, l.Locale, l.Referrer,
-        l.UtmSource, l.UtmMedium, l.UtmCampaign, l.IsProcessed, l.CreatedAt, l.ProcessedAt,
-        l.ProcessedByUserId, l.AdminNote);
+        l.UtmSource, l.UtmMedium, l.UtmCampaign, l.IsProcessed, l.IsCritical, l.CriticalReason, l.CreatedAt, l.ProcessedAt,
+        l.ProcessedByUserId, l.AdminNote,
+        l.RequestType, l.RequestType is null ? null : l.Company, l.BeautyTenantSlug, l.BeautyTenantRef,
+        l.ReporterRole, l.Contact,
+        // True only for leads created via the HMAC path (Beauty -> ShelfGuard); anonymous landing
+        // submissions never carry ExternalId/BeautyTenantRef (not settable via CaptureLeadRequest).
+        VerifiedBeauty: !string.IsNullOrEmpty(l.ExternalId) && !string.IsNullOrEmpty(l.BeautyTenantRef));
 
     private static string? NormalizeOptional(string? value)
     {

@@ -2505,13 +2505,13 @@
         "timeFrom": "From",
         "done": "Done",
         "day": {
-          "4": "Thu",
-          "3": "Wed",
+          "1": "Mon",
           "2": "Tue",
+          "3": "Wed",
+          "4": "Thu",
           "5": "Fri",
           "6": "Sat",
-          "7": "Sun",
-          "1": "Mon"
+          "7": "Sun"
         },
         "zoneMany": "each store's local time",
         "allStoresHelp": "Turn off to choose specific stores. New stores join automatically while the promotion covers all.",
@@ -3834,7 +3834,19 @@
       "processedAt": "Processed {date}",
       "noteCancel": "Cancel",
       "loadError": "Could not load leads",
-      "colCompany": "Company"
+      "colCompany": "Company",
+      "badgeCritical": "CRITICAL",
+      "sourceBeauty": "Beauty CRM",
+      "badgeVerifiedBeauty": "Verified Beauty request",
+      "beautyBusiness": "Beauty business",
+      "fieldRequestType": "Request type",
+      "filterRequestType": "Filter by request type",
+      "requestTypeAll": "All types",
+      "requestType": {
+        "cooperation": "Cooperation",
+        "improvement": "Improvement",
+        "bug": "Not working"
+      }
     },
     "receipts": {
       "drawer": {
@@ -5367,6 +5379,75 @@
         "live_chat": "Live chat",
         "view_clients": "View clients",
         "marketplace": "Marketplace"
+      },
+      "beauty": {
+        "sectionTitle": "Beauty CRM",
+        "loading": "Loading…",
+        "close": "Close",
+        "cancel": "Cancel",
+        "save": "Save",
+        "saving": "Saving…",
+        "statusNone": "None",
+        "statusActive": "Active",
+        "statusSuspended": "Suspended",
+        "noneHint": "No Beauty CRM business has been created for this company yet.",
+        "slugLabel": "Slug",
+        "ownerLabel": "Owner",
+        "owner": {
+          "invited": "invited",
+          "active": "active"
+        },
+        "noModules": "No modules enabled",
+        "createButton": "Create Beauty CRM business",
+        "modulesButton": "Modules",
+        "inviteButton": "New owner invitation",
+        "suspendButton": "Suspend",
+        "resumeButton": "Resume",
+        "inviteDisabledSuspended": "The business is suspended — resume it first to issue an invitation.",
+        "inviteDisabledActive": "The owner has already activated their account.",
+        "createTitle": "Create Beauty CRM business",
+        "fieldName": "Name",
+        "fieldSlug": "Slug (booking address)",
+        "fieldOwnerEmail": "Owner email",
+        "fieldOwnerName": "Owner name (optional)",
+        "fieldModules": "Modules",
+        "createSubmit": "Create",
+        "creating": "Creating…",
+        "modulesTitle": "Beauty CRM modules",
+        "suspendTitle": "Suspend business?",
+        "suspendMessage": "Staff will not be able to sign in and public booking and the widget will be turned off. Data is not changed. This can be undone.",
+        "suspendConfirm": "Suspend",
+        "resumeTitle": "Resume business?",
+        "resumeMessage": "Staff sign-in and public booking become available again. Earlier sessions are not restored.",
+        "resumeConfirm": "Resume",
+        "inviteTitle": "Owner invitation",
+        "inviteWarning": "The link is shown once and is valid for 72 hours. Copy it now and pass it to the owner over a secure channel — it cannot be viewed again after this window is closed.",
+        "inviteLinkLabel": "Invitation link",
+        "copy": "Copy",
+        "copied": "Copied",
+        "copyFailed": "Could not copy automatically — select the link and copy it manually.",
+        "inviteExpires": "Valid until {date}",
+        "errors": {
+          "nameRequired": "Enter a name",
+          "slugInvalid": "Slug: 2–63 characters, lowercase Latin letters, digits and hyphens",
+          "emailInvalid": "Enter a valid email",
+          "modulesRequired": "Select at least one module",
+          "slugTaken": "This slug is already taken — choose another.",
+          "externalRefConflict": "A Beauty CRM business with different details already exists for this company.",
+          "unavailable": "Beauty CRM is temporarily unavailable. Try again later.",
+          "validation": "The server rejected the data — check the fields.",
+          "tenantSuspended": "The business is suspended.",
+          "generic": "Could not complete the action. Try again."
+        },
+        "modules": {
+          "beauty_booking": "Booking and calendar",
+          "beauty_catalog": "Service catalog and promotions",
+          "beauty_clients": "Clients",
+          "beauty_analytics": "Analytics",
+          "beauty_channels": "Channels (Telegram, Instagram…)",
+          "beauty_ai": "AI assistant",
+          "beauty_marketing": "Campaigns and coupons"
+        }
       }
     },
     "users": {
@@ -6908,10 +6989,10 @@
         "toLabel": "To",
         "selectAllStores": "All stores",
         "preset": {
-          "custom": "Custom",
-          "60": "60 days",
           "30": "30 days",
-          "90": "90 days"
+          "60": "60 days",
+          "90": "90 days",
+          "custom": "Custom"
         }
       },
       "frequency": {

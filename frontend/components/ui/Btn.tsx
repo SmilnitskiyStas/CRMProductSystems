@@ -65,6 +65,8 @@ interface BtnProps {
   style?: CSSProperties;
   /** Icon to render to the left of children */
   icon?: ReactNode;
+  /** Focus the button on mount (dialogs). */
+  autoFocus?: boolean;
   title?: string;
   "aria-label"?: string;
   className?: string;
@@ -83,6 +85,7 @@ export function Btn({
   type = "button",
   style,
   icon,
+  autoFocus,
   title,
   "aria-label": ariaLabel,
   className,
@@ -111,6 +114,7 @@ export function Btn({
       className={className}
       onClick={onClick}
       disabled={disabled}
+      autoFocus={autoFocus}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       style={{

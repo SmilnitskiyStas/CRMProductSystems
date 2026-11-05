@@ -9,6 +9,7 @@ import { DetailDrawer } from "@/components/ui/DetailDrawer";
 import { textareaStyle } from "@/components/ui/fieldStyles";
 import { useUpdateLead } from "../hooks/useProviderLeads";
 import type { LandingLeadDto } from "../types";
+import { isVerifiedBeauty, leadRequestType } from "../lib/leadRequest";
 
 export function formatLeadDate(iso: string): string {
   return new Date(iso).toLocaleString("uk-UA", {
@@ -84,6 +85,8 @@ export function LeadDetailDrawer({
     update.mutate({ id: lead.id, body: { adminNote: note } }, { onError });
 
   const utm = [lead.utmSource, lead.utmMedium, lead.utmCampaign].filter(Boolean).join(" / ");
+  const requestType = leadRequestType(lead);
+  const beauty = isVerifiedBeauty(lead);
   const dash = <span style={{ color: "#4B5563" }}>—</span>;
 
   return (
@@ -108,6 +111,12 @@ export function LeadDetailDrawer({
           <span style={{ color: lead.isProcessed ? "#4ADE80" : "#93C5FD", fontWeight: 600 }}>
             {lead.isProcessed ? t("statusProcessed") : t("statusNew")}
           </span>
+          {lead.isCritical && (
+            <span style={{ color: "#FCA5A5", fontWeight: 700, marginLeft: 8 }}>
+              {t("badgeCritical")}
+              {lead.criticalReason ? ` (${lead.criticalReason})` : ""}
+            </span>
+          )}
         </Field>
         <Field label={t("fieldPhone")}>
           <a
@@ -132,7 +141,19 @@ export function LeadDetailDrawer({
       </Section>
 
       <Section title={t("sectionOrigin")}>
-        <Field label={t("colSource")}>{lead.source}</Field>
+        <Field label={t("colSource")}>
+          {beauty ? t("sourceBeauty") : lead.source}
+          {beauty && (
+            <span style={{ color: "#4ADE80", fontWeight: 700, marginLeft: 8 }}>{t("badgeVerifiedBeauty")}</span>
+          )}
+        </Field>
+        {requestType && <Field label={t("fieldRequestType")}>{t(`requestType.${requestType}`)}</Field>}
+        {beauty && (
+          <Field label={t("beautyBusiness")}>
+            {lead.beautyTenantName ?? dash}
+            {lead.beautyTenantSlug ? <span style={{ color: "#6B7280" }}> ({lead.beautyTenantSlug})</span> : null}
+          </Field>
+        )}
         <Field label={t("fieldPage")}>{lead.pageUrl ? <SafeLink value={lead.pageUrl} /> : dash}</Field>
         <Field label={t("fieldLocale")}>{lead.locale ?? dash}</Field>
         <Field label={t("fieldReferrer")}>{lead.referrer ? <SafeLink value={lead.referrer} /> : dash}</Field>

@@ -15,10 +15,14 @@ public sealed class LandingLeadRepository(AppDbContext db) : ILandingLeadReposit
     public Task<LandingLead?> GetByIdAsync(Guid id, CancellationToken ct) =>
         db.LandingLeads.FirstOrDefaultAsync(l => l.Id == id, ct);
 
+    public Task<LandingLead?> GetByExternalIdAsync(string externalId, CancellationToken ct) =>
+        db.LandingLeads.AsNoTracking().FirstOrDefaultAsync(l => l.ExternalId == externalId, ct);
+
     public async Task<(List<LandingLead> Items, int Total)> ListAsync(
-        string status, string? search, int page, int pageSize, CancellationToken ct)
+        string status, string? search, int page, int pageSize, CancellationToken ct, string? requestType = null)
     {
         IQueryable<LandingLead> q = db.LandingLeads.AsNoTracking();
+        if (requestType is not null) q = q.Where(l => l.RequestType == requestType);
 
         if (status == "new") q = q.Where(l => !l.IsProcessed);
         else if (status == "processed") q = q.Where(l => l.IsProcessed);
@@ -44,6 +48,9 @@ public sealed class LandingLeadRepository(AppDbContext db) : ILandingLeadReposit
             .ToListAsync(ct);
         return (items, total);
     }
+
+    public Task<List<string>> GetPhonesSinceAsync(DateTime since, CancellationToken ct) =>
+        db.LandingLeads.AsNoTracking().Where(l => l.CreatedAt >= since).Select(l => l.Phone).ToListAsync(ct);
 
     public Task<int> CountUnprocessedAsync(CancellationToken ct) =>
         db.LandingLeads.CountAsync(l => !l.IsProcessed, ct);

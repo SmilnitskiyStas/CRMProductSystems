@@ -10,7 +10,7 @@ public interface ILandingLeadService
     /// </summary>
     Task<string?> CaptureAsync(CaptureLeadRequest request, CancellationToken ct);
 
-    Task<LandingLeadListDto> ListAsync(string? status, string? search, int page, int pageSize, CancellationToken ct);
+    Task<LandingLeadListDto> ListAsync(string? status, string? search, int page, int pageSize, CancellationToken ct, string? requestType = null);
 
     Task<LeadCountDto> CountUnprocessedAsync(CancellationToken ct);
 

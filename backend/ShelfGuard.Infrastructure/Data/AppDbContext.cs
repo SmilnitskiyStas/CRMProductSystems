@@ -183,6 +183,7 @@ public sealed class AppDbContext : DbContext
 
     // Landing page leads — provider-level, no tenant_id (TASK-333)
     public DbSet<LandingLead> LandingLeads => Set<LandingLead>();
+    public DbSet<BeautyTenantLink> BeautyTenantLinks => Set<BeautyTenantLink>();
 
     // Supplier RBAC — custom roles (tenant-scoped) + task board (TASK-305)
     public DbSet<SupplierRole> SupplierRoles => Set<SupplierRole>();
@@ -2407,7 +2408,7 @@ public sealed class AppDbContext : DbContext
             e.Property(l => l.Name).HasMaxLength(100).IsRequired();
             e.Property(l => l.Phone).HasMaxLength(30).IsRequired();
             e.Property(l => l.Company).HasMaxLength(150).IsRequired(false);
-            e.Property(l => l.Message).HasMaxLength(1000).IsRequired(false);
+            e.Property(l => l.Message).HasMaxLength(2000).IsRequired(false);
             e.Property(l => l.Source).HasMaxLength(50).IsRequired().HasDefaultValue("landing");
             e.Property(l => l.IsProcessed).HasDefaultValue(false);
             e.Property(l => l.CreatedAt).HasDefaultValueSql("NOW()");
@@ -2420,8 +2421,34 @@ public sealed class AppDbContext : DbContext
             e.Property(l => l.ProcessedAt).IsRequired(false);
             e.Property(l => l.ProcessedByUserId).IsRequired(false);
             e.Property(l => l.AdminNote).HasMaxLength(1000).IsRequired(false);
+            e.Property(l => l.IsCritical).HasDefaultValue(false);
+            e.Property(l => l.CriticalReason).HasMaxLength(50).IsRequired(false);
+            e.Property(l => l.RequestType).HasMaxLength(20).IsRequired(false);
+            e.Property(l => l.BeautyTenantRef).HasMaxLength(64).IsRequired(false);
+            e.Property(l => l.BeautyTenantSlug).HasMaxLength(63).IsRequired(false);
+            e.Property(l => l.ReporterRole).HasMaxLength(20).IsRequired(false);
+            e.Property(l => l.Contact).HasMaxLength(200).IsRequired(false);
+            e.Property(l => l.ExternalId).HasMaxLength(64).IsRequired(false);
             e.HasIndex(l => l.CreatedAt);
             e.HasIndex(l => l.IsProcessed);
+            e.HasIndex(l => l.ExternalId).IsUnique().HasFilter("\"ExternalId\" IS NOT NULL");
+        });
+
+        // ── BeautyTenantLink (ADR-018 control plane) ──────────────────────────
+        // Provider-level table: no RLS. No secrets, no invite tokens.
+        builder.Entity<BeautyTenantLink>(e =>
+        {
+            e.ToTable("beauty_tenant_links");
+            e.HasKey(l => l.Id);
+            e.Property(l => l.Id).HasDefaultValueSql("gen_random_uuid()");
+            e.Property(l => l.TenantId).IsRequired();
+            e.Property(l => l.BeautyTenantId).IsRequired(false);
+            e.Property(l => l.BeautySlug).HasMaxLength(63).IsRequired();
+            e.Property(l => l.BeautyStatus).HasMaxLength(20).IsRequired().HasDefaultValue("active");
+            e.Property(l => l.LastSyncedAt).IsRequired();
+            e.Property(l => l.CreatedAt).HasDefaultValueSql("NOW()");
+            e.HasIndex(l => l.TenantId).IsUnique();
+            e.HasIndex(l => l.BeautySlug).IsUnique();
         });
 
         // ── SupplierRole (TASK-305) ───────────────────────────────────────────

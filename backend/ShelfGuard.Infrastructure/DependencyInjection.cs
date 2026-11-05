@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using ShelfGuard.Application.Features.Pricing;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Npgsql;
 using ShelfGuard.Application.Features.Pos.Fiscal;
 using ShelfGuard.Application.Services;
@@ -373,8 +374,32 @@ public static class DependencyInjection
             Services.ProviderRolesService>();
 
         // TASK-333 - Landing page leads
+        // Lead owner push (Telegram). Off by default; config only from env/settings (Leads__Telegram__*).
+        services.Configure<Integrations.LeadsTelegramOptions>(
+            configuration.GetSection(Integrations.LeadsTelegramOptions.Section));
+        services.AddHttpClient<Application.Features.Leads.ILeadNotifier, Integrations.TelegramLeadNotifier>(
+                http => http.Timeout = TimeSpan.FromSeconds(5))
+            .RemoveAllLoggers(); // request URL contains the bot token — keep it out of HttpClient logs
         services.AddScoped<Domain.Interfaces.ILandingLeadRepository,
             Data.Repositories.LandingLeadRepository>();
+
+        // ADR-018 - Beauty CRM control plane. Outbound HMAC client (ShelfGuard -> Beauty) and inbound
+        // HMAC verifier (Beauty -> ShelfGuard). Secrets only from env (BeautyControl__*, BeautyFeedbackInbound__*).
+        services.TryAddSingleton(TimeProvider.System);
+        services.Configure<Application.Features.BeautyControl.BeautyControlOptions>(
+            configuration.GetSection(Application.Features.BeautyControl.BeautyControlOptions.Section));
+        services.Configure<Application.Features.BeautyControl.BeautyFeedbackInboundOptions>(
+            configuration.GetSection(Application.Features.BeautyControl.BeautyFeedbackInboundOptions.Section));
+        services.AddHttpClient<Application.Features.BeautyControl.IBeautyControlClient, Integrations.BeautyControlClient>()
+            // Signed X-BCRM-* headers must never be replayed to a redirect target.
+            .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false })
+            .RemoveAllLoggers(); // never log request URLs/bodies of the control plane
+        services.AddSingleton<Application.Features.BeautyControl.IBeautyNonceStore, Integrations.BeautyNonceStore>();
+        services.AddSingleton<Application.Features.BeautyControl.IBeautyInboundKeyProvider, Integrations.BeautyInboundKeyProvider>();
+        services.AddSingleton<Application.Features.BeautyControl.IBeautyInboundAuthenticator,
+            Application.Features.BeautyControl.BeautyInboundAuthenticator>();
+        services.AddScoped<Domain.Interfaces.IBeautyTenantLinkRepository,
+            Data.Repositories.BeautyTenantLinkRepository>();
 
         // TASK-341 - Temporary per-user permission grants (ADR-019)
         services.AddScoped<Domain.Interfaces.IUserPermissionGrantRepository,

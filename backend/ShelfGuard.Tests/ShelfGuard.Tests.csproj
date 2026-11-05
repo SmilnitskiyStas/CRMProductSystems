@@ -29,6 +29,8 @@
     <None Include="..\..\desktop\tests\fixtures\label-job-profile.v2.json" Link="Fixtures\label-job-profile.v2.json" CopyToOutputDirectory="PreserveNewest" />
     <!-- Shared with the cashier's TypeScript engine mirror: keep the path stable. -->
     <None Include="Promotions\golden-vectors.json" CopyToOutputDirectory="PreserveNewest" />
+    <!-- Copied from Beauty CRM .ai/artifacts/contracts (ADR-018). TEST-ONLY secret. -->
+    <None Include="BeautyControl\ADR-018-hmac-test-vector.json" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\..\docs\ERM\AgruSystems_W2_Parallel_Schema.sql" Link="Fixtures\erp-w2.sql" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\..\docs\ERM\AgruSystems_W4B_Scope_Fence.sql" Link="Fixtures\erp-w4b.sql" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\..\docs\ERM\AgruSystems_W4D_Receipt_Posting.sql" Link="Fixtures\erp-w4d.sql" CopyToOutputDirectory="PreserveNewest" />

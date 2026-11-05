@@ -53,7 +53,7 @@ public sealed class LandingLeadRepositoryIntegrationTests : IAsyncLifetime
         if (!_dbAvailable) { _output.WriteLine("DB not available, skipped."); return; }
 
         await using var db = NewContext();
-        var service = new LandingLeadService(new LandingLeadRepository(db), NullLogger<LandingLeadService>.Instance);
+        var service = new LandingLeadService(new LandingLeadRepository(db), NSubstitute.Substitute.For<ILeadNotifier>(), NullLogger<LandingLeadService>.Instance);
 
         var name = "Lead " + _run;
         var error = await service.CaptureAsync(
