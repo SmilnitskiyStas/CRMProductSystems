@@ -13,6 +13,7 @@ import type { TenantDetailDto, TenantAiAgentDto, AiAgentTestResult, BusinessType
 import { useTenant, useUpdatePlan, useUpdateModules, useImpersonate, useTenantUsers, useActivateTenant, useDeactivateTenant, useTenantAiAgents, useUpdateAiAgent } from "../hooks/useProvider";
 import { providerApi } from "../api/provider";
 import { AddTenantUserModal } from "./AddTenantUserModal";
+import { BeautySection } from "./BeautySection";
 import { setToken, getToken } from "@/lib/api";
 import { ME_KEY } from "@/features/auth/hooks/useAuth";
 import { Btn } from "@/components/ui/Btn";
@@ -453,6 +454,9 @@ export function TenantDetailPanel({ tenantId, onClose, onImpersonated, onViewLog
               </div>
             )}
           </div>
+
+          {/* Beauty CRM control plane (TASK-828) */}
+          <BeautySection tenantId={tenantId} tenantName={tenant.name} tenantSlug={tenant.slug} />
 
           {/* AI agents (managed-AI Phase 1; per-slot since Phase 4) */}
           <div style={{ background: "#0D1117", border: "1px solid #1F2937", borderRadius: 10, padding: "14px 16px" }}>

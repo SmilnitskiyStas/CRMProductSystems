@@ -6,7 +6,9 @@ import { toast } from "sonner";
 import { Phone, Search } from "lucide-react";
 import { Btn } from "@/components/ui/Btn";
 import { useProviderLeads, useUpdateLead } from "../hooks/useProviderLeads";
-import type { LandingLeadDto, LeadStatusFilter } from "../types";
+import { LEAD_REQUEST_TYPES } from "../types";
+import type { LandingLeadDto, LeadRequestTypeFilter, LeadStatusFilter } from "../types";
+import { isVerifiedBeauty, leadRequestType } from "../lib/leadRequest";
 import { LeadDetailDrawer, formatLeadDate } from "./LeadDetailDrawer";
 
 const PAGE_SIZE = 20;
@@ -27,6 +29,8 @@ function LeadCard({ lead, onOpen }: { lead: LandingLeadDto; onOpen: () => void }
     );
 
   const utm = utmLine(lead);
+  const requestType = leadRequestType(lead);
+  const beauty = isVerifiedBeauty(lead);
   const muted = { color: "#6B7280", fontSize: 12 } as const;
 
   return (
@@ -65,6 +69,38 @@ function LeadCard({ lead, onOpen }: { lead: LandingLeadDto; onOpen: () => void }
           {lead.company && <div style={{ color: "#9CA3AF", fontSize: 13, marginTop: 2 }}>{lead.company}</div>}
         </div>
         <div style={{ textAlign: "right" }}>
+          {requestType && (
+            <span
+              style={{
+                display: "inline-block",
+                padding: "2px 10px",
+                borderRadius: 999,
+                fontSize: 11,
+                fontWeight: 600,
+                marginRight: 6,
+                background: "#2D1B69",
+                color: "#C4B5FD",
+              }}
+            >
+              {t(`requestType.${requestType}`)}
+            </span>
+          )}
+          {beauty && (
+            <span
+              style={{
+                display: "inline-block",
+                padding: "2px 10px",
+                borderRadius: 999,
+                fontSize: 11,
+                fontWeight: 700,
+                marginRight: 6,
+                background: "#1a3a2e",
+                color: "#4ADE80",
+              }}
+            >
+              {t("badgeVerifiedBeauty")}
+            </span>
+          )}
           {lead.isCritical && (
             <span
               style={{
@@ -118,8 +154,13 @@ function LeadCard({ lead, onOpen }: { lead: LandingLeadDto; onOpen: () => void }
 
       <div style={{ ...muted, display: "flex", flexWrap: "wrap", gap: "2px 14px" }}>
         <span>
-          {t("colSource")}: {lead.source}
+          {t("colSource")}: {beauty ? t("sourceBeauty") : lead.source}
         </span>
+        {beauty && (lead.beautyTenantName || lead.beautyTenantSlug) && (
+          <span>
+            {t("beautyBusiness")}: {lead.beautyTenantName ?? lead.beautyTenantSlug}
+          </span>
+        )}
         {utm && <span>UTM: {utm}</span>}
         {lead.adminNote && <span>{t("note")}: ✓</span>}
       </div>
@@ -144,6 +185,7 @@ function LeadCard({ lead, onOpen }: { lead: LandingLeadDto; onOpen: () => void }
 export function LeadsPanel() {
   const t = useTranslations("Dashboard.providerLeads");
   const [status, setStatus] = useState<LeadStatusFilter>("new");
+  const [requestType, setRequestType] = useState<LeadRequestTypeFilter>("all");
   const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
@@ -158,8 +200,9 @@ export function LeadsPanel() {
     return () => clearTimeout(id);
   }, [searchInput]);
 
-  const { data, isLoading, isError } = useProviderLeads({ status, search, page, pageSize: PAGE_SIZE });
-  const items = data?.items ?? [];
+  const { data, isLoading, isError } = useProviderLeads({ status, search, page, pageSize: PAGE_SIZE, requestType });
+  // The server filters by requestType; re-checking here keeps the list correct if it ignores the param.
+  const items = (data?.items ?? []).filter((l) => requestType === "all" || leadRequestType(l) === requestType);
   const openLead = items.find((l) => l.id === openId) ?? null;
   const total = data?.total ?? 0;
   const pages = Math.max(1, Math.ceil(total / PAGE_SIZE));
@@ -188,6 +231,29 @@ export function LeadsPanel() {
             </Btn>
           ))}
         </div>
+        <select
+          aria-label={t("filterRequestType")}
+          value={requestType}
+          onChange={(e) => {
+            setRequestType(e.target.value as LeadRequestTypeFilter);
+            setPage(1);
+          }}
+          style={{
+            background: "#111827",
+            border: "1px solid #374151",
+            borderRadius: 8,
+            color: "#E8EDF5",
+            fontSize: 13,
+            padding: "7px 10px",
+          }}
+        >
+          <option value="all">{t("requestTypeAll")}</option>
+          {LEAD_REQUEST_TYPES.map((rt) => (
+            <option key={rt} value={rt}>
+              {t(`requestType.${rt}`)}
+            </option>
+          ))}
+        </select>
         <div style={{ position: "relative", flex: "1 1 240px", maxWidth: 360 }}>
           <Search size={14} color="#6B7280" style={{ position: "absolute", left: 10, top: 10 }} />
           <input

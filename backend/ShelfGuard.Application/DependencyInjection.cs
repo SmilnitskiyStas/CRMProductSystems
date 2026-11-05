@@ -58,6 +58,8 @@ services.AddScoped<IAuthService, AuthService>();
         services.AddScoped<Features.ConsumerContent.IConsumerContentService, Features.ConsumerContent.ConsumerContentService>();
         services.AddScoped<Features.ConsumerAssistant.IConsumerAssistantService, Features.ConsumerAssistant.ConsumerAssistantService>();
         services.AddScoped<IProviderService, ProviderService>();
+        services.AddScoped<Features.BeautyControl.IBeautyProvisioningService, Features.BeautyControl.BeautyProvisioningService>();
+        services.AddScoped<Features.BeautyControl.IBeautyFeedbackService, Features.BeautyControl.BeautyFeedbackService>();
         services.AddScoped<ITenantAiConfigService, TenantAiConfigService>();
         services.AddScoped<IProviderTeamService, ProviderTeamService>();
         services.AddScoped<IMovementService, MovementService>();

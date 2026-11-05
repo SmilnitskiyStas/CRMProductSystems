@@ -50,6 +50,8 @@ interface BtnProps {
   style?: CSSProperties;
   /** Icon to render to the left of children */
   icon?: ReactNode;
+  /** Focus the button on mount (dialogs). */
+  autoFocus?: boolean;
 }
 
 export function Btn({
@@ -61,6 +63,7 @@ export function Btn({
   type = "button",
   style,
   icon,
+  autoFocus,
 }: BtnProps) {
   const [hovered, setHovered] = useState(false);
   const v = VARIANT_STYLES[variant];
@@ -79,6 +82,7 @@ export function Btn({
       type={type}
       onClick={onClick}
       disabled={disabled}
+      autoFocus={autoFocus}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       style={{

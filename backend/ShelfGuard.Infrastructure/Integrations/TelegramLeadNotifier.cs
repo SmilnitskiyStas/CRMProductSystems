@@ -54,12 +54,16 @@ public sealed class TelegramLeadNotifier(
         var msg = string.IsNullOrWhiteSpace(n.Message) ? "-" : n.Message.Trim();
         if (msg.Length > MaxMessageChars) msg = msg[..MaxMessageChars] + "…";
         var reason = n.IsCritical && !string.IsNullOrEmpty(n.CriticalReason) ? $" ({n.CriticalReason})" : "";
-        return string.Join('\n',
+        var lines = new List<string>
+        {
             $"Нова заявка: {status}{reason}",
             $"Джерело: {n.Source}",
-            $"Ім’я: {n.Name}",
-            $"Телефон: {n.Phone}",
-            $"Компанія: {(string.IsNullOrWhiteSpace(n.Company) ? "-" : n.Company)}",
-            $"Повідомлення: {msg}");
+        };
+        if (!string.IsNullOrWhiteSpace(n.RequestType)) lines.Add($"Тип: {n.RequestType}");
+        lines.Add($"Ім’я: {n.Name}");
+        lines.Add($"Телефон: {n.Phone}");
+        lines.Add($"Компанія: {(string.IsNullOrWhiteSpace(n.Company) ? "-" : n.Company)}");
+        lines.Add($"Повідомлення: {msg}");
+        return string.Join('\n', lines);
     }
 }

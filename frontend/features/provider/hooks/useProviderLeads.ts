@@ -2,7 +2,7 @@
 
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { providerLeadsApi } from "../api/providerLeads";
-import type { LeadStatusFilter, UpdateLeadBody } from "../types";
+import type { LeadRequestTypeFilter, LeadStatusFilter, UpdateLeadBody } from "../types";
 
 export const PROVIDER_LEADS_KEY = ["provider", "leads"] as const;
 export const PROVIDER_LEADS_COUNT_KEY = ["provider", "leads", "count"] as const;
@@ -12,6 +12,7 @@ export function useProviderLeads(params: {
   search: string;
   page: number;
   pageSize: number;
+  requestType?: LeadRequestTypeFilter;
 }) {
   return useQuery({
     queryKey: [...PROVIDER_LEADS_KEY, "list", params] as const,

@@ -19,7 +19,14 @@ public sealed record LandingLeadDto(
     DateTime CreatedAt,
     DateTime? ProcessedAt,
     Guid? ProcessedByUserId,
-    string? AdminNote);
+    string? AdminNote,
+    string? RequestType = null,
+    string? BeautyTenantName = null,
+    string? BeautyTenantSlug = null,
+    string? BeautyTenantRef = null,
+    string? ReporterRole = null,
+    string? Contact = null,
+    bool VerifiedBeauty = false);
 
 public sealed record LandingLeadListDto(
     List<LandingLeadDto> Items,

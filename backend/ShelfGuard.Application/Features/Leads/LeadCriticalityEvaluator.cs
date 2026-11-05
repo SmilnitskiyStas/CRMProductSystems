@@ -14,6 +14,8 @@ public static class LeadCriticalityEvaluator
     public const string ReasonNetwork = "network";
     public const string ReasonUrgent = "urgent";
     public const string ReasonRepeat = "repeat";
+    public const string ReasonBug = "bug";
+    public const string RequestTypeBug = "bug";
 
     private static readonly string[] UrgentKeywords = ["терміново", "urgent", "asap", "сьогодні"];
 
@@ -37,12 +39,14 @@ public static class LeadCriticalityEvaluator
     }
 
     /// <returns>Reason codes joined by "+" (max 50 chars), null when the lead is not critical.</returns>
-    public static string? Evaluate(string? company, string? message, bool isRepeat)
+    public static string? Evaluate(string? company, string? message, bool isRepeat, string? requestType = null)
     {
-        var reasons = new List<string>(3);
+        var reasons = new List<string>(4);
         if (HasNetworkSignal(company, message)) reasons.Add(ReasonNetwork);
         if (HasUrgentSignal(message)) reasons.Add(ReasonUrgent);
         if (isRepeat) reasons.Add(ReasonRepeat);
+        // Beauty CRM "doesn't work" requests are always critical.
+        if (string.Equals(requestType, RequestTypeBug, StringComparison.Ordinal)) reasons.Add(ReasonBug);
         return reasons.Count == 0 ? null : string.Join('+', reasons);
     }
 

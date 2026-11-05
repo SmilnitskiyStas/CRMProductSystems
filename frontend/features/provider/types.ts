@@ -257,6 +257,10 @@ export interface UpdateCategoryBody {
 
 export type LeadStatusFilter = "new" | "processed" | "all";
 
+export type LeadRequestType = "cooperation" | "improvement" | "bug";
+export const LEAD_REQUEST_TYPES: LeadRequestType[] = ["cooperation", "improvement", "bug"];
+export type LeadRequestTypeFilter = "all" | LeadRequestType;
+
 export interface LandingLeadDto {
   id: string;
   name: string;
@@ -277,6 +281,12 @@ export interface LandingLeadDto {
   processedAt: string | null;
   processedByUserId: string | null;
   adminNote: string | null;
+  /** Beauty CRM requests (TASK-833). Absent/null on ordinary website leads. */
+  requestType?: LeadRequestType | null;
+  beautyTenantName?: string | null;
+  beautyTenantSlug?: string | null;
+  /** True only when the lead arrived via the signed (HMAC) Beauty channel; anonymous form posts are never verified. */
+  verifiedBeauty?: boolean;
 }
 
 export interface LandingLeadListDto {
@@ -289,4 +299,53 @@ export interface LandingLeadListDto {
 export interface UpdateLeadBody {
   isProcessed?: boolean;
   adminNote?: string;
+}
+
+// ── Beauty CRM control plane (TASK-828) ─────────────────────────────────────
+
+/** Module keys of Beauty's `BeautyModules.Known` (beauty-contracts §27.1; Beauty AuthModels.cs). */
+export const BEAUTY_MODULES = [
+  "beauty_booking",
+  "beauty_catalog",
+  "beauty_clients",
+  "beauty_analytics",
+  "beauty_channels",
+  "beauty_ai",
+  "beauty_marketing",
+] as const;
+export type BeautyModuleKey = (typeof BEAUTY_MODULES)[number];
+
+/** `BeautyModules.All` — what a new Beauty tenant gets by default (beauty_marketing is opt-in). */
+export const BEAUTY_DEFAULT_MODULES: string[] = BEAUTY_MODULES.filter((m) => m !== "beauty_marketing");
+
+export type BeautyTenantStatus = "active" | "suspended";
+export type BeautyOwnerState = "invited" | "active";
+
+export interface BeautyTenantStateDto {
+  exists: boolean;
+  slug?: string;
+  status?: BeautyTenantStatus;
+  modules?: string[];
+  ownerState?: BeautyOwnerState;
+}
+
+export interface CreateBeautyTenantRequest {
+  shelfGuardTenantId: string;
+  name: string;
+  slug: string;
+  ownerEmail: string;
+  ownerName?: string;
+  modules?: string[];
+}
+
+export interface CreateBeautyTenantResponse {
+  slug: string;
+  status: "active";
+  inviteUrl: string;
+  inviteExpiresAt: string;
+}
+
+export interface BeautyOwnerInviteResponse {
+  inviteUrl: string;
+  expiresAt: string;
 }

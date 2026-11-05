@@ -217,6 +217,41 @@ public sealed class LandingLeadServiceTests
             Arg.Is<LandingLead>(l => l.Source == source.ToLowerInvariant()), Arg.Any<CancellationToken>());
     }
 
+    [Fact]
+    public async Task CaptureAsync_PublicBeautyLead_HasNoBeautyIdentity_AndIsNotVerified()
+    {
+        LandingLead? saved = null;
+        await _repo.AddAsync(Arg.Do<LandingLead>(l => saved = l), Arg.Any<CancellationToken>());
+
+        await _sut.CaptureAsync(Valid() with { Source = "beauty" }, CancellationToken.None);
+
+        Assert.NotNull(saved);
+        Assert.Null(saved!.ExternalId);
+        Assert.Null(saved.BeautyTenantRef);
+        Assert.Null(saved.BeautyTenantSlug);
+        Assert.Null(saved.RequestType);
+        Assert.Null(saved.ReporterRole);
+        Assert.Null(saved.Contact);
+
+        _repo.ListAsync(Arg.Any<string>(), Arg.Any<string?>(), Arg.Any<int>(), Arg.Any<int>(), Arg.Any<CancellationToken>(), Arg.Any<string?>())
+            .Returns((new List<LandingLead> { saved }, 1));
+        var list = await _sut.ListAsync("all", null, 1, 20, CancellationToken.None);
+        Assert.False(list.Items.Single().VerifiedBeauty);
+    }
+
+    [Fact]
+    public async Task ListAsync_HmacCreatedLead_IsVerifiedBeauty()
+    {
+        var lead = LandingLead.Create("Іван", "+380671234567", "Салон", "msg", "beauty",
+            requestType: "support", beautyTenantRef: "ref-1", externalId: "fb-1", beautyTenantSlug: "salon");
+        _repo.ListAsync(Arg.Any<string>(), Arg.Any<string?>(), Arg.Any<int>(), Arg.Any<int>(), Arg.Any<CancellationToken>(), Arg.Any<string?>())
+            .Returns((new List<LandingLead> { lead }, 1));
+
+        var list = await _sut.ListAsync("all", null, 1, 20, CancellationToken.None);
+
+        Assert.True(list.Items.Single().VerifiedBeauty);
+    }
+
     private static async Task<LeadNotification> WaitForNotification(ILeadNotifier notifier)
     {
         for (var i = 0; i < 100; i++)

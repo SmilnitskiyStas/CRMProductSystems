@@ -21,8 +21,9 @@ public sealed class ProviderLeadsController(ILandingLeadService leads) : Control
     [ProducesResponseType(typeof(LandingLeadListDto), StatusCodes.Status200OK)]
     public async Task<IActionResult> List(
         [FromQuery] string? status, [FromQuery] string? search,
-        [FromQuery] int page = 1, [FromQuery] int pageSize = 20, CancellationToken ct = default) =>
-        Ok(await leads.ListAsync(status, search, page, pageSize, ct));
+        [FromQuery] int page = 1, [FromQuery] int pageSize = 20,
+        [FromQuery] string? requestType = null, CancellationToken ct = default) =>
+        Ok(await leads.ListAsync(status, search, page, pageSize, ct, requestType));
 
     [HttpGet("count")]
     [ProducesResponseType(typeof(LeadCountDto), StatusCodes.Status200OK)]

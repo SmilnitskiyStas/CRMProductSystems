@@ -107,15 +107,17 @@ public sealed class LandingLeadService(
     }
 
     public async Task<LandingLeadListDto> ListAsync(
-        string? status, string? search, int page, int pageSize, CancellationToken ct)
+        string? status, string? search, int page, int pageSize, CancellationToken ct, string? requestType = null)
     {
+        var type = requestType?.Trim().ToLowerInvariant();
+        if (type is not ("cooperation" or "improvement" or "bug")) type = null;
         var normalizedStatus = status is "new" or "processed" ? status : "all";
         page = Math.Max(1, page);
         pageSize = Math.Clamp(pageSize, 1, 100);
         var term = NormalizeOptional(search);
         if (term is { Length: > 100 }) term = term[..100];
 
-        var (items, total) = await leads.ListAsync(normalizedStatus, term, page, pageSize, ct);
+        var (items, total) = await leads.ListAsync(normalizedStatus, term, page, pageSize, ct, type);
         return new LandingLeadListDto(items.Select(ToDto).ToList(), total, page, pageSize);
     }
 
@@ -145,7 +147,12 @@ public sealed class LandingLeadService(
     private static LandingLeadDto ToDto(LandingLead l) => new(
         l.Id, l.Name, l.Phone, l.Company, l.Message, l.Source, l.PageUrl, l.Locale, l.Referrer,
         l.UtmSource, l.UtmMedium, l.UtmCampaign, l.IsProcessed, l.IsCritical, l.CriticalReason, l.CreatedAt, l.ProcessedAt,
-        l.ProcessedByUserId, l.AdminNote);
+        l.ProcessedByUserId, l.AdminNote,
+        l.RequestType, l.RequestType is null ? null : l.Company, l.BeautyTenantSlug, l.BeautyTenantRef,
+        l.ReporterRole, l.Contact,
+        // True only for leads created via the HMAC path (Beauty -> ShelfGuard); anonymous landing
+        // submissions never carry ExternalId/BeautyTenantRef (not settable via CaptureLeadRequest).
+        VerifiedBeauty: !string.IsNullOrEmpty(l.ExternalId) && !string.IsNullOrEmpty(l.BeautyTenantRef));
 
     private static string? NormalizeOptional(string? value)
     {

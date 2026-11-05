@@ -26,6 +26,7 @@ public sealed class RoleControllerFeatureProvider : IApplicationFeatureProvider<
 
     private static readonly HashSet<string> Provider = new(StringComparer.Ordinal)
     {
+        "BeautyIntegration", "ProviderBeauty",
         "Admin", "AdminChat", "AdminServiceDesk", "MarketplaceAdmin", "Provider", "ProviderCategories",
         "ProviderLeads", "ProviderRoles", "ProviderSchedule", "ProviderTeam", "PublicLeads",
         "Marketplace", "MarketplaceChat", "MarketplaceCooperation", "SupplierProfileSettings",
