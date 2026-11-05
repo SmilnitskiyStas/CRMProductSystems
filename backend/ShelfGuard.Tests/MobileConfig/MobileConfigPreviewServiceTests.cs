@@ -204,6 +204,24 @@ public sealed class MobileConfigPreviewServiceTests
         await _repo.DidNotReceive().AddThemeAsync(Arg.Any<MobileTheme>(), Arg.Any<CancellationToken>());
     }
 
+    [Fact]
+    public async Task Preview_matches_navigation_availability_without_rewriting_draft()
+    {
+        var tenant = SeedTenant();
+        var original = DraftDocumentJson.Replace("\"news\": false", "\"news\": false, \"catalog\": false")
+            .Replace("\"type\": \"profile\"", "\"type\": \"catalog\"");
+        var config = SeedDraftConfig(tenant.Id, original, 2);
+        _tenants.GetByIdAsync(tenant.Id, Arg.Any<CancellationToken>()).Returns(tenant);
+        _repo.GetByTenantIdAsync(tenant.Id, Arg.Any<CancellationToken>()).Returns(config);
+
+        var json = await _sut.GetPreviewAsync(tenant.Id);
+
+        using var doc = JsonDocument.Parse(json);
+        Assert.True(doc.RootElement.GetProperty("features").GetProperty("catalog").GetBoolean());
+        Assert.False(doc.RootElement.GetProperty("features").GetProperty("news").GetBoolean());
+        Assert.Equal(original, config.DraftVersion!.ConfigurationJson);
+    }
+
     // ── helpers ──────────────────────────────────────────────────────────────
 
     private static Tenant SeedTenant(

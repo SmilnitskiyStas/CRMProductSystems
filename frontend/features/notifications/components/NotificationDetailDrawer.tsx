@@ -1,8 +1,7 @@
 "use client";
 
-import { useEffect } from "react";
 import { useTranslations, useLocale } from "next-intl";
-import { X, CheckCircle, Clock, Send, AlertTriangle, RotateCcw } from "lucide-react";
+import { CheckCircle, Clock, Send, AlertTriangle, RotateCcw } from "lucide-react";
 import type { NotificationHistoryItem } from "../types";
 import {
   getEventTypeLabel,
@@ -10,6 +9,8 @@ import {
   CHANNEL_ICONS,
   getEventTypeSource,
 } from "../types";
+import { Btn } from "@/components/ui/Btn";
+import { DetailDrawer } from "@/components/ui/DetailDrawer";
 
 interface Props {
   item: NotificationHistoryItem | null;
@@ -49,14 +50,6 @@ export function NotificationDetailDrawer({ item, onClose, onMarkUnread }: Props)
   const tEventSource = useTranslations("Dashboard.notifications.eventSource");
   const locale = useLocale();
   const intlLocale = locale === "en" ? "en-US" : "uk-UA";
-  // Close on Escape
-  useEffect(() => {
-    if (!item) return;
-    const handler = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
-    document.addEventListener("keydown", handler);
-    return () => document.removeEventListener("keydown", handler);
-  }, [item, onClose]);
-
   if (!item) return null;
 
   const source = getEventTypeSource(tEventSource, item.eventType, {
@@ -69,59 +62,15 @@ export function NotificationDetailDrawer({ item, onClose, onMarkUnread }: Props)
   const parsed    = parsePayload(item.payload);
 
   return (
-    <>
-      {/* Backdrop */}
-      <div
-        onClick={onClose}
-        style={{
-          position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 40,
-        }}
-      />
-
-      {/* Drawer panel */}
-      <div
-        style={{
-          position: "fixed", top: 0, right: 0, bottom: 0,
-          width: 420, maxWidth: "100vw",
-          background: "#0D1117",
-          borderLeft: "1px solid #1F2937",
-          zIndex: 50,
-          display: "flex", flexDirection: "column",
-          overflowY: "auto",
-        }}
-      >
-        {/* Header */}
-        <div style={{
-          padding: "20px 24px 16px",
-          borderBottom: "1px solid #1F2937",
-          display: "flex", alignItems: "center", justifyContent: "space-between",
-          flexShrink: 0,
-        }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <span style={{ fontSize: 22 }}>{CHANNEL_ICONS[item.channel]}</span>
-            <div>
-              <div style={{ color: "#E8EDF5", fontSize: 14, fontWeight: 600 }}>
-                {getEventTypeLabel(tEventTypes, item.eventType)}
-              </div>
-              <div style={{ color: "#4B5563", fontSize: 12, marginTop: 2 }}>
-                {t("via")} {getChannelLabel(tChannels, item.channel)}
-              </div>
-            </div>
-          </div>
-          <button
-            onClick={onClose}
-            style={{
-              background: "transparent", border: "1px solid #1F2937",
-              borderRadius: 8, padding: "6px 8px", cursor: "pointer", color: "#6B7280",
-              display: "flex", alignItems: "center",
-            }}
-          >
-            <X size={16} />
-          </button>
-        </div>
-
+    <DetailDrawer
+      isOpen
+      onClose={onClose}
+      title={`${CHANNEL_ICONS[item.channel]} ${getEventTypeLabel(tEventTypes, item.eventType)}`}
+      subtitle={`${t("via")} ${getChannelLabel(tChannels, item.channel)}`}
+      width={420}
+    >
         {/* Body */}
-        <div style={{ padding: 24, display: "flex", flexDirection: "column", gap: 20 }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
 
           {/* Read status */}
           <div style={{
@@ -140,29 +89,16 @@ export function NotificationDetailDrawer({ item, onClose, onMarkUnread }: Props)
                 : t("unreadStatus")}
             </span>
             {item.isRead && onMarkUnread && (
-              <button
-                onClick={() => onMarkUnread(item.id)}
+              <Btn
+                size="xs"
+                variant="ghost"
+                icon={<RotateCcw size={11} />}
                 title={t("markUnreadTitle")}
-                style={{
-                  display: "flex", alignItems: "center", gap: 5,
-                  background: "transparent", border: "1px solid #1F2937",
-                  borderRadius: 6, padding: "3px 8px",
-                  color: "#6B7280", fontSize: 11, cursor: "pointer",
-                  transition: "border-color 0.1s, color 0.1s",
-                  flexShrink: 0,
-                }}
-                onMouseEnter={(e) => {
-                  (e.currentTarget as HTMLElement).style.borderColor = "#3B82F6";
-                  (e.currentTarget as HTMLElement).style.color = "#93C5FD";
-                }}
-                onMouseLeave={(e) => {
-                  (e.currentTarget as HTMLElement).style.borderColor = "#1F2937";
-                  (e.currentTarget as HTMLElement).style.color = "#6B7280";
-                }}
+                onClick={() => onMarkUnread(item.id)}
+                style={{ flexShrink: 0 }}
               >
-                <RotateCcw size={11} />
                 {t("markUnreadLabel")}
-              </button>
+              </Btn>
             )}
           </div>
 
@@ -207,8 +143,7 @@ export function NotificationDetailDrawer({ item, onClose, onMarkUnread }: Props)
             <Row label={t("idLabel")} value={item.id} valueStyle={{ color: "#374151", fontSize: 11 }} />
           </div>
         </div>
-      </div>
-    </>
+    </DetailDrawer>
   );
 }
 

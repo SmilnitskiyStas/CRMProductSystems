@@ -6,6 +6,7 @@ import { ChevronDown, Store } from "lucide-react";
 import { useStores } from "@/features/stores/hooks/useStores";
 import { useMe } from "@/features/auth/hooks/useAuth";
 import { useStoreContext } from "@/lib/useStoreContext";
+import { Btn } from "@/components/ui/Btn";
 
 export function StoreSelector() {
   const t = useTranslations("Dashboard.storeSelector");
@@ -208,22 +209,9 @@ export function StoreSelector() {
             })}
           </div>
           <div style={{ padding: 10, borderTop: "1px solid #1F2937" }}>
-            <button
-              onClick={applyStores}
-              style={{
-                width: "100%",
-                background: "#1D3461",
-                border: "1px solid #3B82F6",
-                borderRadius: 7,
-                color: "#93C5FD",
-                fontSize: 12,
-                fontWeight: 600,
-                padding: "8px 0",
-                cursor: "pointer",
-              }}
-            >
+            <Btn variant="primary" size="sm" fullWidth onClick={applyStores}>
               {t("doneButton")}
-            </button>
+            </Btn>
           </div>
         </div>
       )}

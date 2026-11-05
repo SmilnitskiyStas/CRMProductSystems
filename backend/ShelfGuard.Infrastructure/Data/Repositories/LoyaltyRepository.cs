@@ -117,6 +117,30 @@ public sealed class LoyaltyRepository : ILoyaltyRepository
             .ToListAsync(ct);
     }
 
+    public async Task<(List<PosTransaction> Items, int Total)> GetPurchasesPagedAsync(
+        Guid tenantId, Guid membershipId, Guid? storeId, int page, int pageSize, CancellationToken ct = default)
+    {
+        var query = OwnedPurchases(tenantId, membershipId);
+        if (storeId.HasValue) query = query.Where(t => t.StoreId == storeId.Value);
+        var total = await query.CountAsync(ct);
+        var items = await query.Include(t => t.Store)
+            .OrderByDescending(t => t.CreatedAt).ThenByDescending(t => t.Id)
+            .Skip((page - 1) * pageSize).Take(pageSize).ToListAsync(ct);
+        return (items, total);
+    }
+
+    public Task<PosTransaction?> GetPurchaseByIdAsync(
+        Guid tenantId, Guid membershipId, Guid purchaseId, CancellationToken ct = default) =>
+        OwnedPurchases(tenantId, membershipId).Include(t => t.Store)
+            .Include(t => t.Items).ThenInclude(i => i.Product)
+            .FirstOrDefaultAsync(t => t.Id == purchaseId, ct);
+
+    private IQueryable<PosTransaction> OwnedPurchases(Guid tenantId, Guid membershipId) =>
+        _db.PosTransactions.AsNoTracking().Where(t => t.TenantId == tenantId
+            && (t.Status == "completed" || t.Status == "fiscalized" || t.Status == "pending_fiscalization")
+            && (t.LoyaltyMembershipId == membershipId || _db.LoyaltyLedgerEntries.Any(e =>
+                e.TenantId == tenantId && e.MembershipId == membershipId && e.PosTransactionId == t.Id)));
+
     public Task AddLedgerEntryAsync(LoyaltyLedgerEntry entry, CancellationToken ct = default) =>
         _db.LoyaltyLedgerEntries.AddAsync(entry, ct).AsTask();
 
@@ -135,6 +159,16 @@ public sealed class LoyaltyRepository : ILoyaltyRepository
     public Task<bool> HasPurchaseAccrualAsync(Guid tenantId, Guid membershipId, CancellationToken ct = default) =>
         _db.LoyaltyLedgerEntries.AnyAsync(x => x.TenantId == tenantId && x.MembershipId == membershipId
             && x.EntryType == LoyaltyEntryType.Accrual && x.PosTransactionId != null, ct);
+
+    public async Task<bool> IsCheckoutProgramAvailableAsync(Guid tenantId, CancellationToken ct = default)
+    {
+        var tenant = await _db.Tenants.AsNoTracking().SingleOrDefaultAsync(t => t.Id == tenantId && t.IsActive, ct);
+        return tenant is not null && tenant.HasModule("loyalty") && tenant.HasModule("pos");
+    }
+
+    public Task<bool> HasFirstPurchaseRewardAsync(Guid tenantId, Guid membershipId, CancellationToken ct = default) =>
+        _db.LoyaltyLedgerEntries.AnyAsync(x => x.TenantId == tenantId && x.MembershipId == membershipId
+            && x.EntryType == LoyaltyEntryType.Reward && x.PosTransactionId != null && x.Note == "Винагорода за першу покупку", ct);
 
     // ── Settings ─────────────────────────────────────────────────────────────
 

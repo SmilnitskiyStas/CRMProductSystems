@@ -1,0 +1,17 @@
+.root { background:#0d1117; border:1px solid #1f2937; border-radius:10px; padding:18px; display:grid; gap:12px; color:#d1d5db; min-width:0; }
+.root h3,.root p { margin:0; }
+.root h3 { color:#e8edf5; font-size:16px; }
+.root p { font-size:13px; line-height:1.5; }
+.root label { display:grid; gap:6px; font-size:12px; }
+.root input,.root select { background:#111827; color:#e8edf5; border:1px solid #374151; border-radius:6px; padding:8px; min-width:0; max-width:100%; }
+.root input[type=checkbox] { width:16px; height:16px; }
+.root button { background:#182435; color:#dbeafe; border:1px solid #374151; border-radius:7px; padding:9px 14px; cursor:pointer; font-size:12px; }
+.root button:disabled { opacity:.45; cursor:default; }
+.root fieldset { border:1px solid #273449; border-radius:7px; margin:10px 0; padding:12px; min-width:0; }
+.root legend { font-size:13px; color:#e8edf5; padding:0 6px; }
+.root :global(.receipt-input-grid) { display:grid; grid-template-columns:repeat(auto-fit,minmax(155px,1fr)); gap:10px; }
+.root :global(.receipt-line-viewport) { max-height:55vh; overflow:auto; padding-right:6px; }
+.root :global(.receipt-page-controls) { display:grid; gap:10px; }
+.root :global(.actions) { display:flex; flex-wrap:wrap; gap:10px; align-items:end; }
+.root :global(.error),.root :global(.warning-note) { color:#fbbf24; padding:10px; border:1px solid #784f21; border-radius:7px; }
+.root :global(.confirmation) { display:flex; align-items:center; }

@@ -3,31 +3,13 @@
 import { useState } from "react";
 import { useTranslations } from "next-intl";
 import { Btn } from "@/components/ui/Btn";
+import { inputStyle, labelStyle } from "@/components/ui/fieldStyles";
 import { useLocations } from "@/features/locations/hooks/useLocations";
 import { useAssignItemZone, useItemZones, useUnassignItemZone } from "../hooks/useProducts";
 
 interface Props {
   productId: string;
 }
-
-const inputStyle: React.CSSProperties = {
-  width: "100%",
-  background: "#111827",
-  border: "1px solid #1F2937",
-  borderRadius: 8,
-  color: "#E8EDF5",
-  fontSize: 13,
-  padding: "8px 12px",
-  outline: "none",
-  boxSizing: "border-box",
-};
-
-const labelStyle: React.CSSProperties = {
-  display: "block",
-  color: "#9CA3AF",
-  fontSize: 12,
-  marginBottom: 5,
-};
 
 const emptyStyle: React.CSSProperties = {
   color: "#4B5563",

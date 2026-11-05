@@ -147,6 +147,7 @@ public static class TenantRoleTabs
     // Procurement (moduleKey "procurement")
     public const string ItemOrders = "/orders";
     public const string ItemAiOrders = "/ai-orders";
+    public const string ItemOrdersProduction = "/orders/production";
 
     // Marketplace (moduleKey "marketplace")
     public const string ItemMarketplaceSuppliers = "/marketplace";
@@ -160,6 +161,12 @@ public static class TenantRoleTabs
     // Production (moduleKey "production")
     public const string ItemProductionRecipes = "/production/recipes";
     public const string ItemProductionOrders = "/production/orders";
+    public const string ItemProductionRequests = "/production/requests";
+    public const string ItemProductionOverview = "/production/overview";
+    public const string ItemProductionPlan = "/production/plan";
+    public const string ItemProductionShipments = "/production/shipments";
+    public const string ItemProductionWarehouse = "/production/warehouse";
+    public const string ItemProductionAnalytics = "/production/analytics";
 
     // Analytics (no moduleKey — always visible per role/permission)
     public const string ItemAnalytics = "/analytics";
@@ -201,10 +208,11 @@ public static class TenantRoleTabs
         ItemInventory, ItemStock, ItemReceipts, ItemTransfers, ItemWriteOffs, ItemLocations, ItemIot,
         ItemPos, ItemSales, ItemCustomers,
         ItemEvents,
-        ItemOrders, ItemAiOrders,
+        ItemOrders, ItemOrdersProduction, ItemAiOrders,
         ItemMarketplaceSuppliers, ItemMarketplaceOrders,
         ItemAutoServiceWorkOrders, ItemAutoServiceCustomers, ItemAutoServiceCatalog,
-        ItemProductionRecipes, ItemProductionOrders,
+        ItemProductionRecipes, ItemProductionOrders, ItemProductionRequests,
+        ItemProductionOverview, ItemProductionPlan, ItemProductionShipments, ItemProductionWarehouse, ItemProductionAnalytics,
         ItemAnalytics, ItemAnalyticsPos,
         ItemConsumerAppMessages, ItemConsumerAppBanners, ItemConsumerAppPromotions, ItemConsumerAppCatalog,
         ItemConsumerAppDesign, ItemConsumerAppPages, ItemConsumerAppNavigation, ItemConsumerAppFeatures,
@@ -258,6 +266,7 @@ public static class TenantRoleTabs
         new(Procurement, "Постачання",
         [
             new(ItemOrders, "Замовлення постачання"),
+            new(ItemOrdersProduction, "Замовлення у виробництво"),
             new(ItemAiOrders, "AI Постачання"),
         ]),
         new(Marketplace, "Маркетплейс",
@@ -273,8 +282,14 @@ public static class TenantRoleTabs
         ]),
         new(Production, "Виробництво",
         [
+            new(ItemProductionOverview, "Огляд"),
+            new(ItemProductionRequests, "Заявки"),
+            new(ItemProductionPlan, "План і потреба"),
+            new(ItemProductionOrders, "Виробничі замовлення"),
+            new(ItemProductionShipments, "Відвантаження"),
+            new(ItemProductionWarehouse, "Склад виробництва"),
+            new(ItemProductionAnalytics, "Аналітика"),
             new(ItemProductionRecipes, "Рецепти"),
-            new(ItemProductionOrders, "Ордери"),
         ]),
         new(Analytics, "Аналітика",
         [

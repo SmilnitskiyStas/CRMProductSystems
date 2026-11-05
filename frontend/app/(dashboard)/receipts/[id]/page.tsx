@@ -1,6 +1,14 @@
 "use client";
+import { Btn } from "@/components/ui/Btn";
+import { PageContainer } from "@/components/ui/PageContainer";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { BackLink } from "@/components/ui/BackLink";
 
-import { useState } from "react";
+import { ReceiptCategoryPanel } from "@/features/receipts/components/ReceiptCategoryPanel";
+import { categorySource } from "@/features/receipts/api/category-work";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { ApiError, getSessionEpoch } from "@/lib/api";
+import { hasPendingReceiving } from "@/features/receipts/api/receipt-receiving";
 import { useParams, useRouter } from "next/navigation";
 import { ArrowLeft, Check, Package, Truck, Building2, Calendar, Hash, CheckCircle2 } from "lucide-react";
 import { useTranslations, useLocale } from "next-intl";
@@ -110,10 +118,26 @@ export default function ReceiptDetailPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
 
-  const { data: receipt, isLoading } = useReceiptDetail(access === true ? id : null);
+  const { data: receipt, isLoading, refetch: reloadReceipt } = useReceiptDetail(access === true ? id : null);
+  const categorySnapshot=useMemo(()=>receipt?categorySource(receipt):null,[receipt]);
   const updateItems = useUpdateReceiptItems(id);
   const receive = useReceiveReceipt();
   const cancel = useCancelReceipt();
+  const [categoryBlocked,setCategoryBlocked]=useState(false);
+  const [linePage,setLinePage]=useState(1);
+  const [lineSearch,setLineSearch]=useState("");
+  const [receivingPending, setReceivingPending] = useState(false);
+  const [receivingBusy, setReceivingBusy] = useState(false);
+  const [reviewRequired, setReviewRequired] = useState(false);
+  const receivingLock = useRef(false);
+  const receivingIdentity = useRef("");
+  receivingIdentity.current = `${me?.tenantId}:${me?.id}:${id}`;
+  useEffect(() => {
+    setReviewRequired(false);
+    if (!me?.tenantId) { setReceivingPending(false); return; }
+    try { setReceivingPending(hasPendingReceiving(id, { tenantId: me.tenantId, actorId: me.id, locationId: "" })); }
+    catch { setReceivingPending(true); }
+  }, [id, me?.id, me?.tenantId]);
 
   const [edits, setEdits] = useState<
     Record<
@@ -145,7 +169,8 @@ export default function ReceiptDetailPage() {
     );
   }
 
-  const isEditable = receipt.status === "draft" || receipt.status === "in_transit";
+  const collaborative=!!receipt.receivingWork?.active;
+  const isEditable = !collaborative && !receivingPending && !receivingBusy && !reviewRequired && (receipt.status === "draft" || receipt.status === "ordered" || receipt.status === "in_transit");
 
   function getEdit(itemId: string) {
     return (
@@ -170,7 +195,9 @@ export default function ReceiptDetailPage() {
   const processedCount = receipt.items.filter(
     (i) => getEdit(i.id).confirmed || i.isProcessed,
   ).length;
-  const allProcessed = processedCount === receipt.items.length;
+  const allProcessed = collaborative ? receipt.receivingWork!.groups.every(g=>g.ready) : processedCount === receipt.items.length;
+  const filteredLines=receipt.items.filter(l=>!lineSearch.trim()||`${l.productName} ${l.productBarcode??""} ${l.batchNumber??""}`.toLocaleLowerCase("uk-UA").includes(lineSearch.trim().toLocaleLowerCase("uk-UA")));
+  const totalLinePages=Math.max(1,Math.ceil(filteredLines.length/50)),currentLinePage=Math.min(linePage,totalLinePages);
 
   async function handleSave() {
     const payload: UpdateItemPayload[] = Object.entries(edits)
@@ -181,15 +208,34 @@ export default function ReceiptDetailPage() {
         expiryDate: e.expiryDate || undefined,
         batchNumber: e.batchNumber || undefined,
       }));
+    if (collaborative) return receipt!;
     if (payload.length > 0) {
-      await updateItems.mutateAsync(payload);
+      return await updateItems.mutateAsync(payload);
     }
+    return receipt!;
   }
 
   async function handleReceive() {
-    await handleSave();
-    await receive.mutateAsync(id);
-    router.push("/receipts");
+    if (receivingLock.current) return;
+    receivingLock.current = true; setReceivingBusy(true);
+    const identity = receivingIdentity.current, epoch = getSessionEpoch();
+    const current = () => receivingIdentity.current === identity && getSessionEpoch() === epoch;
+    try {
+      const reviewed = receivingPending ? receipt! : await handleSave();
+      if (!current()) return;
+      await receive.mutateAsync(me?.tenantId ? { id, confirmation: { tenantId: me.tenantId, actorId: me.id,
+        locationId: reviewed.destinationStoreId, expectedFingerprint: reviewed.receivingFingerprint } } : id);
+      if (current()) { setReceivingPending(false); router.push("/receipts"); }
+    } catch (error) {
+      if (!current()) return;
+      if (me?.tenantId) {
+        try {
+          const pending = hasPendingReceiving(id, { tenantId: me.tenantId, actorId: me.id, locationId: "" }); setReceivingPending(pending);
+          if (!pending && error instanceof ApiError && (error.body as { code?: string } | undefined)?.code === "receipt_posting_conflict") setReviewRequired(true);
+        }
+        catch { setReceivingPending(true); }
+      }
+    } finally { receivingLock.current = false; setReceivingBusy(false); }
   }
 
   const itemColumns: TableColumn<ReceiptItemDto>[] = [
@@ -220,7 +266,7 @@ export default function ReceiptDetailPage() {
       key: "ordered",
       header: tDetail("headers.ordered"),
       cellStyle: { fontFamily: "monospace" },
-      render: (item) => item.quantityOrdered,
+      render: (item) => `${item.quantityOrdered}${item.unit ? ` ${item.unit}` : ""}`,
     },
     {
       key: "received",
@@ -349,84 +395,19 @@ export default function ReceiptDetailPage() {
   ];
 
   return (
-    <div style={{ padding: "24px 32px", display: "flex", flexDirection: "column", gap: 20 }}>
-      {/* ── Header ─────────────────────────────────────────────────────── */}
-      <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-        <button
-          onClick={() => router.push("/receipts")}
-          style={{
-            background: "transparent",
-            border: "none",
-            color: "#6B7280",
-            cursor: "pointer",
-            display: "flex",
-            alignItems: "center",
-            gap: 4,
-            fontSize: 13,
-            padding: 0,
-            flexShrink: 0,
-          }}
-        >
-          <ArrowLeft size={15} /> {tCommon("back")}
-        </button>
-
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-            <h1 style={{ color: "#E8EDF5", fontSize: 18, fontWeight: 700, margin: 0 }}>
-              {t("title")}
-            </h1>
-            <ReceiptStatusBadge status={receipt.status as ReceiptStatus} />
-          </div>
-          <p style={{ color: "#4B5563", fontSize: 12, marginTop: 3, marginBottom: 0 }}>
-            {receipt.destinationStoreName}
-            {receipt.supplierName && ` · ${receipt.supplierName}`}
-            {receipt.expectedAt &&
-              ` · ${t("drawer.expected")}: ${new Date(receipt.expectedAt).toLocaleDateString(intlLocale)}`}
-          </p>
-        </div>
-
-        {isEditable && (
-          <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
-            <button
-              onClick={() => cancel.mutate(id)}
-              disabled={cancel.isPending}
-              style={{
-                background: "transparent",
-                border: "1px solid #374151",
-                borderRadius: 8,
-                color: "#6B7280",
-                fontSize: 13,
-                padding: "8px 14px",
-                cursor: "pointer",
-              }}
-            >
-              {tCommon("cancel")}
-            </button>
-            <button
-              onClick={handleReceive}
-              disabled={!allProcessed || receive.isPending}
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 6,
-                background: allProcessed ? "#059669" : "#1F2937",
-                border: "none",
-                borderRadius: 8,
-                color: allProcessed ? "#fff" : "#4B5563",
-                fontSize: 13,
-                fontWeight: 600,
-                padding: "8px 16px",
-                cursor: allProcessed ? "pointer" : "not-allowed",
-                transition: "background 0.2s",
-                opacity: receive.isPending ? 0.6 : 1,
-              }}
-            >
-              <Check size={14} />
-              {tDetail("confirmReceive")}
-            </button>
-          </div>
-        )}
-      </div>
+    <PageContainer>
+      <BackLink onClick={() => router.push("/receipts")}>{tCommon("back")}</BackLink>
+      <PageHeader title={<span style={{display:"inline-flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>{t("title")}<ReceiptStatusBadge status={receipt.status as ReceiptStatus}/></span>}
+        subtitle={<>{receipt.destinationStoreName}{receipt.supplierName&&` · ${receipt.supplierName}`}{receipt.expectedAt&&` · ${t("drawer.expected")}: ${new Date(receipt.expectedAt).toLocaleDateString(intlLocale)}`}</>}
+        actions={(isEditable || collaborative && ["draft","ordered","in_transit"].includes(receipt.status) || receivingPending || receivingBusy || reviewRequired)?<>
+          <Btn variant="ghost" onClick={()=>cancel.mutate(id)} disabled={cancel.isPending||receivingPending||receivingBusy}>{tCommon("cancel")}</Btn>
+          <Btn variant="success" icon={<Check size={14}/>} onClick={handleReceive} disabled={categoryBlocked||(!receivingPending&&!allProcessed)||receivingBusy||updateItems.isPending||reviewRequired}>{tDetail(receivingPending?"retryReceive":"confirmReceive")}</Btn>
+        </>:undefined}/>
+      {receivingPending && <p role="status" style={{ color: "#FBBF24" }}>{tDetail("receivingUncertain")}</p>}
+      {updateItems.error instanceof Error && <p role="alert" style={{ color: "#F87171" }}>{updateItems.error.message}</p>}
+      {reviewRequired && <button onClick={async () => { const result = await reloadReceipt(); if (!result.error) { setEdits({}); setReviewRequired(false); } }}>{tDetail("reviewReceiving")}</button>}
+      {receive.error instanceof ApiError && <p role="alert" style={{ color: "#F87171" }}>{tDetail(
+        (receive.error.body as { code?: string } | undefined)?.code === "receipt_receiving_storage" ? "receivingStorage" : "receivingFailed")}</p>}
 
       {/* ── Info cards ─────────────────────────────────────────────────── */}
       <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
@@ -486,10 +467,13 @@ export default function ReceiptDetailPage() {
         </div>
       )}
 
+      {!receivingPending && <ReceiptCategoryPanel source={categorySnapshot!} onBlocked={setCategoryBlocked} user={{id:me!.id,role:me!.role,twoFactorEnabled:me!.twoFactorEnabled}} onChanged={()=>{void reloadReceipt();}} onReview={()=>{void reloadReceipt();}}/>}
       {/* ── Items table ────────────────────────────────────────────────── */}
+      {!collaborative && <><label>Пошук товару<input aria-label="Пошук рядків накладної" style={inputStyle} value={lineSearch} onChange={e=>{setLineSearch(e.target.value);setLinePage(1);}}/></label>
       <Table
         columns={itemColumns}
-        rows={receipt.items}
+        rows={filteredLines.slice((currentLinePage-1)*50,currentLinePage*50)}
+        page={currentLinePage} totalPages={totalLinePages} totalCount={filteredLines.length} onPageChange={setLinePage}
         rowKey={(item) => item.id}
         minWidth={700}
         rowStyle={(item) => {
@@ -498,6 +482,7 @@ export default function ReceiptDetailPage() {
         }}
       />
 
+      </>}
       {/* ── Notes ──────────────────────────────────────────────────────── */}
       {receipt.notes && (
         <div
@@ -514,6 +499,6 @@ export default function ReceiptDetailPage() {
           <div style={{ color: "#9CA3AF", fontSize: 13 }}>{receipt.notes}</div>
         </div>
       )}
-    </div>
+    </PageContainer>
   );
 }

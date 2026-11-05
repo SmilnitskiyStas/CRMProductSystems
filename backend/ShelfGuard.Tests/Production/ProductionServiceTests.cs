@@ -17,6 +17,10 @@ file sealed class FakeProductionRepo : IProductionRepository
     public List<Item>                        Items         { get; } = [];
     public List<ProductStock>                Stock         { get; } = [];
     public List<StockEvent>                  StockEvents   { get; } = [];
+    public List<Location>                    Locations     { get; } = [];
+
+    public Task<Location?> GetLocationByIdAsync(Guid locationId, CancellationToken ct = default) =>
+        Task.FromResult(Locations.FirstOrDefault(l => l.Id == locationId));
 
     // ── Recipes ────────────────────────────────────────────────────────────
 
@@ -156,6 +160,8 @@ file sealed class FakeProductionRepo : IProductionRepository
         return Task.CompletedTask;
     }
 
+    public Task<ProductStock?> GetOutputForOrderAsync(Guid id, CancellationToken ct = default) =>
+        Task.FromResult(Stock.FirstOrDefault(s => s.SourceType == "production" && s.SourceId == id));
     public Task SaveChangesAsync(CancellationToken ct = default) => Task.CompletedTask;
 }
 
@@ -211,7 +217,8 @@ public sealed class ProductionServiceTests
     private static readonly Guid TenantId = Guid.NewGuid();
     private static readonly Guid UserId   = Guid.NewGuid();
 
-    private static ProductionService BuildSvc(IProductionRepository repo) => new(repo);
+    private static ProductionService BuildSvc(IProductionRepository repo) =>
+        new(repo, NSubstitute.Substitute.For<IProductionOrderSyncService>());
 
     // ── CompleteOrderAsync — wrong status (Done) → 409 ───────────────────────
 
@@ -247,7 +254,7 @@ public sealed class ProductionServiceTests
         var output     = Build.FinishedProduct("Bread");
         var recipe     = Build.Recipe(output.Id);
         var ingredient = Build.Ingredient(recipe.Id, rawMat.Id, qty: 5m);
-        var order      = Build.Order(recipe.Id, ProductionOrderStatus.Planned);
+        var order      = Build.Order(recipe.Id, ProductionOrderStatus.InProgress);
 
         repo.Items.Add(rawMat);
         repo.Items.Add(output);
@@ -286,7 +293,7 @@ public sealed class ProductionServiceTests
         var output     = new Item { TenantId = Guid.NewGuid(), Name = "Bread", ItemType = "product" };
         var recipe     = Build.Recipe(output.Id);
         var ingredient = Build.Ingredient(recipe.Id, rawMat.Id, qty: 1m);
-        var order      = Build.Order(recipe.Id, ProductionOrderStatus.Planned);
+        var order      = Build.Order(recipe.Id, ProductionOrderStatus.InProgress);
 
         repo.Items.Add(rawMat);
         repo.Items.Add(output);
@@ -306,7 +313,7 @@ public sealed class ProductionServiceTests
 
         // No consumption may happen before the shelf-life check — order stays Planned,
         // raw material stock untouched.
-        Assert.Equal(ProductionOrderStatus.Planned, order.Status);
+        Assert.Equal(ProductionOrderStatus.InProgress, order.Status);
         Assert.Equal(10m, repo.Stock.First(s => s.ProductId == rawMat.Id).Quantity);
         Assert.Empty(repo.Consumptions);
         Assert.Empty(repo.StockEvents);
@@ -315,7 +322,7 @@ public sealed class ProductionServiceTests
     // ── CompleteOrderAsync — happy path (Planned status) ─────────────────────
 
     [Fact]
-    public async Task CompleteOrderAsync_HappyPath_FromPlanned_CreatesConsumptionsAndOutputBatch()
+    public async Task CompleteOrderAsync_HappyPath_ConsumesFefo_CreatesConsumptionsAndOutputBatch()
     {
         var repo       = new FakeProductionRepo();
         var svc        = BuildSvc(repo);
@@ -324,7 +331,7 @@ public sealed class ProductionServiceTests
         var recipe     = Build.Recipe(output.Id);
         var ingredient = Build.Ingredient(recipe.Id, rawMat.Id, qty: 1m);
         // plannedQty = 2, recipe outputQty = 1 → scale = 2 → need 2 kg flour
-        var order      = Build.Order(recipe.Id, ProductionOrderStatus.Planned, plannedQty: 2m);
+        var order      = Build.Order(recipe.Id, ProductionOrderStatus.InProgress, plannedQty: 2m);
 
         repo.Items.Add(rawMat);
         repo.Items.Add(output);
@@ -502,5 +509,93 @@ public sealed class ProductionServiceTests
         Assert.True(ok);
         Assert.Null(error);
         Assert.False(recipe.IsActive);
+    }
+
+    // ── UpdateOrderAsync — must not bypass start/complete/cancel ─────────────
+
+    [Fact]
+    public async Task UpdateOrderAsync_StatusChange_Returns400_AndKeepsStatus()
+    {
+        var repo   = new FakeProductionRepo();
+        var svc    = BuildSvc(repo);
+        var output = Build.FinishedProduct();
+        var recipe = Build.Recipe(output.Id);
+        var order  = Build.Order(recipe.Id, ProductionOrderStatus.Planned);
+        repo.Items.Add(output);
+        repo.Recipes.Add(recipe);
+        repo.Orders.Add(order);
+
+        var (result, error, statusCode) =
+            await svc.UpdateOrderAsync(order.Id, new ProductionOrderUpdateDto("Done", null));
+
+        Assert.Null(result);
+        Assert.Equal(400, statusCode);
+        Assert.NotNull(error);
+        Assert.Equal(ProductionOrderStatus.Planned, order.Status);
+    }
+
+    [Fact]
+    public async Task UpdateOrderAsync_NotesWithoutStatus_Succeeds()
+    {
+        var repo   = new FakeProductionRepo();
+        var svc    = BuildSvc(repo);
+        var output = Build.FinishedProduct();
+        var recipe = Build.Recipe(output.Id);
+        var order  = Build.Order(recipe.Id, ProductionOrderStatus.Planned);
+        repo.Items.Add(output);
+        repo.Recipes.Add(recipe);
+        repo.Orders.Add(order);
+        var planned = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(2));
+
+        var (result, error, _) = await svc.UpdateOrderAsync(
+            order.Id, new ProductionOrderUpdateDto(null, "note", null, planned));
+
+        Assert.Null(error);
+        Assert.NotNull(result);
+        Assert.Equal("note", order.Notes);
+        Assert.Equal(planned, order.PlannedDate);
+    }
+
+    // ── CreateOrderAsync — location must be a production location ────────────
+
+    [Fact]
+    public async Task CreateOrderAsync_NonProductionLocation_Returns422()
+    {
+        var repo   = new FakeProductionRepo();
+        var svc    = BuildSvc(repo);
+        var output = Build.FinishedProduct();
+        var recipe = Build.Recipe(output.Id);
+        var shop   = new Location { TenantId = TenantId, Name = "Shop", Type = "shop" };
+        repo.Items.Add(output);
+        repo.Recipes.Add(recipe);
+        repo.Locations.Add(shop);
+
+        var (order, error, statusCode) = await svc.CreateOrderAsync(
+            new ProductionOrderCreateDto(recipe.Id, shop.Id, 5m, null), TenantId, UserId);
+
+        Assert.Null(order);
+        Assert.Equal(422, statusCode);
+        Assert.NotNull(error);
+        Assert.Empty(repo.Orders);
+    }
+
+    [Fact]
+    public async Task CreateOrderAsync_ProductionLocation_Succeeds()
+    {
+        var repo   = new FakeProductionRepo();
+        var svc    = BuildSvc(repo);
+        var output = Build.FinishedProduct();
+        var recipe = Build.Recipe(output.Id);
+        var prod   = new Location { TenantId = TenantId, Name = "Цех", Type = "production" };
+        repo.Items.Add(output);
+        repo.Recipes.Add(recipe);
+        repo.Locations.Add(prod);
+
+        var (order, error, _) = await svc.CreateOrderAsync(
+            new ProductionOrderCreateDto(recipe.Id, prod.Id, 5m, null), TenantId, UserId);
+
+        Assert.Null(error);
+        Assert.NotNull(order);
+        Assert.Single(repo.Orders);
     }
 }

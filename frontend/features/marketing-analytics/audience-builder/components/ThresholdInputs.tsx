@@ -2,18 +2,8 @@
 
 import { useTranslations } from "next-intl";
 import { useAudienceBuilderStore } from "../store/useAudienceBuilderStore";
+import { filterInputStyle, labelStyle } from "@/components/ui/fieldStyles";
 
-const inputStyle: React.CSSProperties = {
-  background: "#0D1117",
-  border: "1px solid #1F2937",
-  borderRadius: 6,
-  color: "#E8EDF5",
-  fontSize: 13,
-  padding: "8px 10px",
-  outline: "none",
-  width: 170,
-};
-const labelStyle: React.CSSProperties = { color: "#4B5563", fontSize: 12, marginBottom: 4, display: "block" };
 
 function parseNumberOrNull(raw: string): number | null {
   if (raw.trim() === "") return null;
@@ -40,7 +30,7 @@ export function ThresholdInputs() {
           inputMode="decimal"
           value={minQuantity ?? ""}
           onChange={(e) => setMinQuantity(parseNumberOrNull(e.target.value))}
-          style={inputStyle}
+          style={{ ...filterInputStyle, width: 170 }}
         />
       </div>
       <div>
@@ -51,7 +41,7 @@ export function ThresholdInputs() {
           inputMode="decimal"
           value={minAmount ?? ""}
           onChange={(e) => setMinAmount(parseNumberOrNull(e.target.value))}
-          style={inputStyle}
+          style={{ ...filterInputStyle, width: 170 }}
         />
       </div>
     </div>

@@ -175,8 +175,8 @@ docker compose logs -f  # tail logs
 │   ├── events/                # Activity log
 │   ├── catalog/               # Internal catalog service
 │   └── modules/               # Feature flags / module activation
-├── components/                # Shared UI: shadcn/ui + custom (20 components)
-│   ├── ui/                    # button, dialog, form, table, badge, etc.
+├── components/                # Shared UI kit (inline-styled)
+│   ├── ui/                    # Btn, Table, Modal, Pagination, ActionMenu, DetailDrawer, StatusPill, Tabs, PageHeader… (shadcn badge/button/input/form/label/dialog = legacy, unused)
 │   └── layout/                # Sidebar, TopBar, UserMenu, StoreSelector
 └── lib/                       # api.ts, query-client.ts, roles.ts, utils.ts
 ```

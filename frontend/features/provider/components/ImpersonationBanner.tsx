@@ -44,6 +44,7 @@ export function ImpersonationBanner({ tenantName, tenantId, onExit }: Props) {
   return (
     <div
       style={{
+        // eslint-disable-next-line no-restricted-syntax -- sticky banner
         position: "fixed",
         top: 0,
         left: 0,

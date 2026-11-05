@@ -1,9 +1,12 @@
 "use client";
 
 import { useParams, useRouter } from "next/navigation";
-import { ArrowLeft, Loader2 } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { useTranslations } from "next-intl";
+import { PageContainer } from "@/components/ui/PageContainer";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { BackLink } from "@/components/ui/BackLink";
 import { ProductForm } from "@/features/inventory/components/ProductForm";
 import { useProduct, useUpdateProduct } from "@/features/inventory/hooks/useProducts";
 import type { UpdateProductPayload } from "@/features/inventory/types";
@@ -52,24 +55,9 @@ export default function EditProductPage() {
   }
 
   return (
-    <div style={{ padding: "24px 32px" }}>
-      {/* Header */}
-      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 20 }}>
-        <button
-          onClick={() => router.back()}
-          style={{
-            background: "transparent", border: "none",
-            color: "#6B7280", cursor: "pointer",
-            display: "flex", alignItems: "center", gap: 4,
-            fontSize: 13, padding: 0, flexShrink: 0,
-          }}
-        >
-          <ArrowLeft size={15} /> {tCommon("back")}
-        </button>
-        <h1 style={{ color: "#E8EDF5", fontSize: 20, fontWeight: 700, margin: 0 }}>
-          {t("titleEdit")}
-        </h1>
-      </div>
+    <PageContainer>
+      <BackLink onClick={() => router.back()}>{tCommon("back")}</BackLink>
+      <PageHeader title={t("titleEdit")} />
 
       <ProductForm
         product={product}
@@ -79,6 +67,6 @@ export default function EditProductPage() {
         onCreate={() => {}}
         onUpdate={handleUpdate}
       />
-    </div>
+    </PageContainer>
   );
 }

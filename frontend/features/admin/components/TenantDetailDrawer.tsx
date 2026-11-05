@@ -10,6 +10,7 @@ import {
 } from "../types";
 import type { TenantDto } from "../types";
 import { Btn } from "@/components/ui/Btn";
+import { StatusPill } from "@/components/ui/StatusPill";
 
 interface Props {
   tenantId: string;
@@ -154,19 +155,12 @@ export function TenantDetailDrawer({ tenantId, onClose }: Props) {
           <div>
             <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4 }}>
               <div style={{ color: "#E8EDF5", fontSize: 18, fontWeight: 700 }}>{tenant.name}</div>
-              <span
-                style={{
-                  padding: "2px 8px",
-                  borderRadius: 5,
-                  fontSize: 11,
-                  fontWeight: 600,
-                  background: tenant.isActive ? "#052e16" : "#1F1211",
-                  border: `1px solid ${tenant.isActive ? "#166534" : "#7F1D1D"}`,
-                  color: tenant.isActive ? "#4ADE80" : "#F87171",
-                }}
+              <StatusPill
+                bg={tenant.isActive ? "#052e16" : "#1F1211"}
+                text={tenant.isActive ? "#4ADE80" : "#F87171"}
               >
                 {tenant.isActive ? t("statusActive") : t("statusDeactivated")}
-              </span>
+              </StatusPill>
             </div>
             <div style={{ color: "#4B5563", fontSize: 12 }}>
               {tenant.slug} · {t("registeredPrefix")} {formatDate(tenant.createdAt, intlLocale)}
@@ -186,12 +180,9 @@ export function TenantDetailDrawer({ tenantId, onClose }: Props) {
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
               <div style={{ color: "#9CA3AF", fontSize: 12, fontWeight: 600 }}>{t("planSectionTitle")}</div>
               {!editingPlan && (
-                <button
-                  onClick={() => startEditPlan(tenant)}
-                  style={{ background: "none", border: "none", color: "#60A5FA", fontSize: 12, cursor: "pointer" }}
-                >
+                <Btn variant="link" size="sm" onClick={() => startEditPlan(tenant)}>
                   {t("changeButton")}
-                </button>
+                </Btn>
               )}
             </div>
 
@@ -231,20 +222,13 @@ export function TenantDetailDrawer({ tenantId, onClose }: Props) {
                 </div>
               </div>
             ) : (
-              <span
-                style={{
-                  display: "inline-block",
-                  padding: "4px 12px",
-                  borderRadius: 7,
-                  fontSize: 13,
-                  fontWeight: 600,
-                  background: PLAN_COLORS[tenant.plan]?.bg,
-                  border: `1px solid ${PLAN_COLORS[tenant.plan]?.border}`,
-                  color: PLAN_COLORS[tenant.plan]?.text,
-                }}
+              <StatusPill
+                bg={PLAN_COLORS[tenant.plan]?.bg}
+                text={PLAN_COLORS[tenant.plan]?.text}
+                style={{ fontSize: 13, padding: "4px 12px" }}
               >
                 {tPlans(tenant.plan)}
-              </span>
+              </StatusPill>
             )}
           </div>
 
@@ -253,12 +237,9 @@ export function TenantDetailDrawer({ tenantId, onClose }: Props) {
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
               <div style={{ color: "#9CA3AF", fontSize: 12, fontWeight: 600 }}>{t("modulesSectionTitle")}</div>
               {!editingModules && (
-                <button
-                  onClick={() => startEditModules(tenant)}
-                  style={{ background: "none", border: "none", color: "#60A5FA", fontSize: 12, cursor: "pointer" }}
-                >
+                <Btn variant="link" size="sm" onClick={() => startEditModules(tenant)}>
                   {t("configureButton")}
-                </button>
+                </Btn>
               )}
             </div>
 

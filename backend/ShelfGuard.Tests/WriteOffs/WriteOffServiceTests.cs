@@ -52,6 +52,33 @@ public sealed class WriteOffServiceTests
             });
 
     // ── Create ─────────────────────────────────────────────────────────────
+    [Fact]
+    public async Task Create_header_sums_the_same_rounded_cents_that_are_persisted_on_lines()
+    {
+        var request=new CreateWriteOffRequest(_storeId,"expired",null,[new(null,_productId,.01m,.5m),new(null,_productId,.01m,.5m)]);
+        await _sut.CreateAsync(_tenantId,_userId,request);
+        await _repo.Received().AddAsync(Arg.Is<WriteOff>(w=>w.TotalLossAmount==.02m&&w.Items.All(i=>i.LossAmount==.01m)),Arg.Any<CancellationToken>());
+    }
+    [Fact]
+    public async Task Rounding_storage_keeps_the_existing_raw_percentage_reimbursement_basis()
+    {
+        StubItem(new Item{Id=_productId,TenantId=_tenantId,Name="Priced",PricePurchase=.50m});
+        await _sut.CreateAsync(_tenantId,_userId,new(_storeId,"expired",null,[new(null,_productId,.01m,.5m,true,"percent",50)]));
+        await _repo.Received().AddAsync(Arg.Is<WriteOff>(w=>w.Items.Single().LossAmountPurchase==.01m&&w.Items.Single().ReimbursementAmount==0m),Arg.Any<CancellationToken>());
+    }
+    [Theory] [InlineData(1.001)] [InlineData(100000000)]
+    public async Task Create_rejects_quantity_precision_or_overflow_before_persistence(decimal quantity)
+    {
+        var request=new CreateWriteOffRequest(_storeId,"expired",null,[new(Guid.NewGuid(),Guid.NewGuid(),quantity,null)]);
+        var(result,error)=await _sut.CreateAsync(_tenantId,_userId,request);Assert.Null(result);Assert.NotNull(error);
+        await _repo.DidNotReceive().SaveChangesAsync(Arg.Any<CancellationToken>());
+    }
+    [Theory] [InlineData(.001)] [InlineData(-1)]
+    public async Task Create_rejects_negative_or_implicitly_rounded_unit_price(decimal price)
+    {
+        var(result,error)=await _sut.CreateAsync(_tenantId,_userId,new(_storeId,"expired",null,[new(null,_productId,1,price)]));
+        Assert.Null(result);Assert.NotNull(error);await _repo.DidNotReceive().SaveChangesAsync(Arg.Any<CancellationToken>());
+    }
 
     [Fact]
     public async Task CreateAsync_EmptyItems_ReturnsError()
@@ -83,7 +110,7 @@ public sealed class WriteOffServiceTests
     [InlineData("other")]
     public async Task CreateAsync_AllValidReasons_Succeed(string reason)
     {
-        var req = new CreateWriteOffRequest(_storeId, reason, null, [
+        var req = new CreateWriteOffRequest(_storeId, reason, reason == "expired" ? null : "Пошкоджено пакування товару", [
             new(null, _productId, 5, 10m)
         ]);
         _repo.GetByIdAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>())
@@ -95,9 +122,9 @@ public sealed class WriteOffServiceTests
     }
 
     [Fact]
-    public async Task CreateAsync_NullReason_IsValid()
+    public async Task CreateAsync_NullReason_WithExplanation_IsOther()
     {
-        var req = new CreateWriteOffRequest(_storeId, null, null, [
+        var req = new CreateWriteOffRequest(_storeId, null, "Пошкоджено пакування товару", [
             new(null, _productId, 5, null)
         ]);
         _repo.GetByIdAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>())
@@ -649,6 +676,42 @@ public sealed class WriteOffServiceTests
 
         Assert.Equal("rejected", writeOff.Status);
         _repo.Received(1).Update(writeOff);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("               ")]
+    [InlineData("12345678901234")]
+    public async Task CreateAsync_ManualExplanationTooShort_DoesNotSave(string? notes)
+    {
+        var request = new CreateWriteOffRequest(_storeId, "other", notes, [new(null, _productId, 1, null)]);
+        var (result, error) = await _sut.CreateAsync(_tenantId, _userId, request);
+        Assert.Null(result); Assert.Contains("15 and 100", error);
+        await _repo.DidNotReceive().AddAsync(Arg.Any<WriteOff>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task CreateAsync_ManualExplanationTooLong_DoesNotSave()
+    {
+        var request = new CreateWriteOffRequest(_storeId, "damaged", new string('а', 101), [new(null, _productId, 1, null)]);
+        var (_, error) = await _sut.CreateAsync(_tenantId, _userId, request);
+        Assert.Contains("15 and 100", error);
+        await _repo.DidNotReceive().AddAsync(Arg.Any<WriteOff>(), Arg.Any<CancellationToken>());
+    }
+
+    [Theory]
+    [InlineData(15)]
+    [InlineData(100)]
+    public async Task CreateAsync_ManualExplanation_IsTrimmedSavedAndReturned(int length)
+    {
+        WriteOff? saved = null;
+        _repo.AddAsync(Arg.Any<WriteOff>(), Arg.Any<CancellationToken>()).Returns(Task.CompletedTask)
+            .AndDoes(call => saved = call.Arg<WriteOff>());
+        _repo.GetByIdAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns(_ => saved);
+        var request = new CreateWriteOffRequest(_storeId, "other", "  " + new string('а', length) + "  ", [new(null, _productId, 1, null)]);
+        var (result, error) = await _sut.CreateAsync(_tenantId, _userId, request);
+        Assert.Null(error); Assert.Equal(new string('а', length), saved!.Notes); Assert.Equal(saved.Notes, result!.Notes);
     }
 
     // ── helpers ────────────────────────────────────────────────────────────

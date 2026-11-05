@@ -93,6 +93,7 @@ public sealed class StoreScopeRlsIntegrationTests : IAsyncLifetime
             "write_offs", "discounts", "stock_receipts", "stock_movements", "stock_transfers",
             "shelf_items", "shelf_scans", // AddShelfItemsAndScans
             "promo_no_sales_alerts", // AddPromoNoSalesAlerts
+            "production_requests", // AddProductionRequests
         };
 
         const string sql = @"

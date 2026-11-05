@@ -4,6 +4,8 @@ import { useState } from "react";
 import { Plus, ChevronDown, ChevronRight, Pencil, Trash2 } from "lucide-react";
 import { useTranslations, useLocale } from "next-intl";
 import { useCustomers, useDeleteCustomer, useVehicles } from "../hooks/useAutoService";
+import { Btn } from "@/components/ui/Btn";
+import { PageHeader } from "@/components/ui/PageHeader";
 import { CustomerForm } from "./CustomerForm";
 import { VehicleForm } from "./VehicleForm";
 import type { CustomerDto } from "../types";
@@ -31,23 +33,9 @@ function CustomerVehicleList({ customer }: { customer: CustomerDto }) {
         <span style={{ color: "#9CA3AF", fontSize: 12, fontWeight: 600, textTransform: "uppercase" }}>
           {t("vehiclesLabel")}
         </span>
-        <button
-          onClick={() => setShowVehicleForm(true)}
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 4,
-            padding: "4px 10px",
-            borderRadius: 6,
-            border: "1px solid #1F2937",
-            background: "transparent",
-            color: "#9CA3AF",
-            fontSize: 11,
-            cursor: "pointer",
-          }}
-        >
-          <Plus size={12} /> {t("addVehicle")}
-        </button>
+        <Btn variant="ghost" size="xs" icon={<Plus size={12} />} onClick={() => setShowVehicleForm(true)}>
+          {t("addVehicle")}
+        </Btn>
       </div>
 
       {isLoading ? (
@@ -188,33 +176,15 @@ export function CustomerTable() {
 
   return (
     <>
-      {/* Toolbar */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
-        <div>
-          <h1 style={{ color: "#E8EDF5", fontSize: 22, fontWeight: 700, margin: 0 }}>{t("title")}</h1>
-          <p style={{ color: "#4B5563", fontSize: 14, marginTop: 4 }}>
-            {t("subtitle")}
-          </p>
-        </div>
-        <button
-          onClick={() => setShowCreate(true)}
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 8,
-            padding: "9px 16px",
-            borderRadius: 8,
-            border: "none",
-            background: "#1D4ED8",
-            color: "#E8EDF5",
-            fontSize: 13,
-            fontWeight: 600,
-            cursor: "pointer",
-          }}
-        >
-          <Plus size={16} /> {t("addCustomer")}
-        </button>
-      </div>
+      <PageHeader
+        title={t("title")}
+        subtitle={t("subtitle")}
+        actions={
+          <Btn icon={<Plus size={16} />} onClick={() => setShowCreate(true)}>
+            {t("addCustomer")}
+          </Btn>
+        }
+      />
 
       {/* Table */}
       <Table

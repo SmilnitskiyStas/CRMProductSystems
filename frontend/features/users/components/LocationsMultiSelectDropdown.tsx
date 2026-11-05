@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { ChevronDown } from "lucide-react";
+import { Btn } from "@/components/ui/Btn";
 
 export interface LocationsMultiSelectOption {
   id: string;
@@ -135,17 +136,15 @@ export function LocationsMultiSelectDropdown({
                 </label>
               ))}
             </div>
-            <button
-              type="button"
+            <Btn
+              size="sm"
+              variant="ghost"
+              fullWidth
               onClick={() => setOpen(false)}
-              style={{
-                marginTop: 8, width: "100%", padding: "7px 0",
-                background: "transparent", border: "1px solid #374151", borderRadius: 7,
-                color: "#9CA3AF", fontSize: 12, fontWeight: 600, cursor: "pointer",
-              }}
+              style={{ marginTop: 8 }}
             >
               {doneLabel}
-            </button>
+            </Btn>
           </div>,
           document.body,
         )

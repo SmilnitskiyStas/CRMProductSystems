@@ -111,7 +111,7 @@ namespace ShelfGuard.Infrastructure.Migrations
             // own RLS cannot hide rows from the migration session. Dangling itemIds (item deleted
             // or never existed), malformed uuids and non-array `items` are skipped.
             migrationBuilder.Sql(@"
-                SELECT set_config('app.role', 'provider', true);
+                SET LOCAL app.role = 'provider';
 
                 INSERT INTO shelf_items (""Id"", ""TenantId"", ""LocationId"", ""ZoneId"", ""ShelfId"", ""ItemId"", ""ExpectedFacings"", ""CreatedAt"")
                 SELECT DISTINCT ON (q.zone_id, q.shelf_id, q.item_id)

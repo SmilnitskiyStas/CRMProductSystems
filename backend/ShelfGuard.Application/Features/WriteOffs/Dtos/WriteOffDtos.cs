@@ -13,7 +13,8 @@ public sealed record WriteOffDto(
     string? PdfUrl,
     DateTime CreatedAt,
     DateTime? ApprovedAt,
-    List<WriteOffItemDto> Items
+    List<WriteOffItemDto> Items,
+    string? Notes = null
 );
 
 public sealed record WriteOffItemDto(

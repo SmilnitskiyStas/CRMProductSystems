@@ -82,7 +82,9 @@ public sealed record SyncCatalogItemDto(
     DateTime UpdatedAt,
     // Target of category-wide promotion rules. Added after the first cashier release: rows synced
     // earlier lack it until they change, so the cashier must run one full resync (since=null).
-    Guid? CategoryId = null);
+    Guid? CategoryId = null,
+    string? PriceSnapshot = null,
+    DateTime? PriceSnapshotExpiresAt = null);
 
 /// <summary>
 /// Page of changed items. Call again with since=NextSince&amp;afterId=NextAfterId while HasMore.
@@ -119,4 +121,6 @@ public sealed record SyncPromotionsResponse(
     bool NotModified,
     DateTime ServerTime,
     IReadOnlyList<SyncPromotionRuleDto> Rules,
-    string? StoreTimeZone = null);
+    string? StoreTimeZone = null,
+    string? PromotionSnapshot = null,
+    DateTime? PromotionSnapshotExpiresAt = null);

@@ -8,6 +8,8 @@ import { useMe } from "@/features/auth/hooks/useAuth";
 import { CustomerMessageHistory } from "@/features/notifications/components/CustomerMessageHistory";
 import { AT_LEAST_ENTERPRISE_ADMIN, hasRole } from "@/lib/roles";
 import { Btn } from "@/components/ui/Btn";
+import { PageContainer } from "@/components/ui/PageContainer";
+import { PageHeader } from "@/components/ui/PageHeader";
 
 export default function ConsumerAppMessagesPage() {
   const t = useTranslations("Dashboard.consumerApp.customerMessagesPage");
@@ -19,9 +21,8 @@ export default function ConsumerAppMessagesPage() {
   if (roleAccess === null) return null;
 
   return (
-    <div style={{ padding: "28px 32px", width: "100%", boxSizing: "border-box", display: "flex", flexDirection: "column", gap: 20 }}>
-      <h1 style={{ color: "#E8EDF5", fontSize: 22, fontWeight: 700, margin: 0 }}>{t("title")}</h1>
-      <p style={{ color: "#64748B", fontSize: 14, margin: "-14px 0 0" }}>{t("subtitle")}</p>
+    <PageContainer>
+      <PageHeader title={t("title")} subtitle={t("subtitle")} />
 
       <section style={{ background: "#0D1117", border: "1px solid #1F2937", borderRadius: 14, padding: 24 }}>
         <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 20, flexWrap: "wrap" }}>
@@ -41,7 +42,6 @@ export default function ConsumerAppMessagesPage() {
       </section>
 
       <CustomerMessageHistory />
-
-    </div>
+    </PageContainer>
   );
 }

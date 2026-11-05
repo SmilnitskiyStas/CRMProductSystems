@@ -1,3 +1,6 @@
+using Microsoft.Extensions.Configuration;
+using NSubstitute;
+using ShelfGuard.Infrastructure.Services;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
 using Npgsql;
@@ -33,15 +36,13 @@ namespace ShelfGuard.Tests.Pos;
 /// had. After: the loser's SaveChangesAsync throws on the xmin mismatch, LoyaltyRepository
 /// translates that into ConcurrencyConflictException, and PosService.CreateSaleAsync turns it
 /// into a clean 409 instead of corrupting Balance. Skips (soft-pass) when no reachable Postgres
-/// is configured. Override via env var SHELFGUARD_TEST_DB_CONNECTION.
+/// is configured. Uses only the explicit disposable SHELFGUARD_RECOVERY_TEST_DB fixture.
 /// </summary>
+[Collection("Session database")]
 public sealed class LoyaltyConcurrencySalesIntegrationTests : IAsyncLifetime
 {
-    private const string DefaultConnectionString =
-        "Host=localhost;Port=5435;Database=crm;Username=crm;Password=crm_dev_password";
-
     private readonly ITestOutputHelper _output;
-    private string _connectionString = DefaultConnectionString;
+    private string _connectionString = string.Empty;
     private bool _dbAvailable;
 
     private Guid _tenantId;
@@ -60,7 +61,8 @@ public sealed class LoyaltyConcurrencySalesIntegrationTests : IAsyncLifetime
     public async Task InitializeAsync()
     {
         _connectionString =
-            Environment.GetEnvironmentVariable("SHELFGUARD_TEST_DB_CONNECTION") ?? DefaultConnectionString;
+            Environment.GetEnvironmentVariable("SHELFGUARD_RECOVERY_TEST_DB") ?? string.Empty;
+        if (string.IsNullOrEmpty(_connectionString)) return;
 
         try
         {
@@ -68,18 +70,17 @@ public sealed class LoyaltyConcurrencySalesIntegrationTests : IAsyncLifetime
             await probe.OpenAsync();
             _dbAvailable = true;
         }
-        catch (Exception ex)
+        catch
         {
             _dbAvailable = false;
-            _output.WriteLine(
-                $"Skipping loyalty concurrency integration test — no reachable Postgres at '{_connectionString}': {ex.Message}");
-            return;
+            throw new InvalidOperationException("Explicit disposable PostgreSQL fixture is unavailable.");
         }
 
         _barcodeA = $"CONC-LOY-A-{Guid.NewGuid():N}"[..20];
         _barcodeB = $"CONC-LOY-B-{Guid.NewGuid():N}"[..20];
 
         await using var db = NewContext();
+        await db.Database.EnsureCreatedAsync();
 
         var tenant = Tenant.Create($"Loyalty Concurrency Test {Guid.NewGuid():N}", $"loyalty-conc-test-{Guid.NewGuid():N}");
         var store = new Location { TenantId = tenant.Id, Name = "Loyalty Concurrency Test Store" };
@@ -153,6 +154,10 @@ public sealed class LoyaltyConcurrencySalesIntegrationTests : IAsyncLifetime
         if (!_dbAvailable) return;
 
         await using var db = NewContext();
+        // Accepted archives are immutable. This explicit disposable recovery database is removed by the harness.
+        if (await db.Set<ShelfGuard.Domain.Entities.Erp.PosPricingSnapshot>().AnyAsync(a => a.TenantId == _tenantId)) return;
+        if (await db.CashRegisters.AnyAsync(r => r.TenantId == _tenantId)) return;
+
         await db.Database.ExecuteSqlInterpolatedAsync($"DELETE FROM loyalty_ledger_entries WHERE \"TenantId\" = {_tenantId}");
         await db.Database.ExecuteSqlInterpolatedAsync($"DELETE FROM loyalty_memberships WHERE \"TenantId\" = {_tenantId}");
         await db.Database.ExecuteSqlInterpolatedAsync($"DELETE FROM loyalty_program_settings WHERE \"TenantId\" = {_tenantId}");
@@ -167,7 +172,7 @@ public sealed class LoyaltyConcurrencySalesIntegrationTests : IAsyncLifetime
         await db.Database.ExecuteSqlInterpolatedAsync($"DELETE FROM tenants WHERE \"Id\" = {_tenantId}");
     }
 
-    [Fact]
+    [RecoveryPostgresFact]
     public async Task Two_concurrent_redemptions_against_the_same_membership_never_overspend_the_balance()
     {
         if (!_dbAvailable)
@@ -225,6 +230,138 @@ public sealed class LoyaltyConcurrencySalesIntegrationTests : IAsyncLifetime
         // proves CreateSaleAsync isn't just returning a stale/optimistic figure to the caller.
         var successfulSale = results.Single(r => r.Error is null).Sale!;
         Assert.Equal(finalMembership.Balance, successfulSale.LoyaltyBalance);
+    }
+
+    private async Task<(Guid Register, Guid Cashier, CreateSaleRequest Request, IPosPriceSnapshots Prices,
+        IPosPromotionSnapshots Promotions, IPosLoyaltySnapshots Terms)> Certified(bool race = false)
+    {
+        await using var db = NewContext();
+        (await db.Tenants.SingleAsync(t => t.Id == _tenantId)).UpdateModules(["inventory", "pos", "loyalty"]);
+        var originalShift = await db.PosShifts.SingleAsync(t => t.Id == _shiftId);
+        var reg = new CashRegister { TenantId = _tenantId, StoreId = originalShift.StoreId, Number = 1, Name = "Synthetic certified POS" };
+        reg.IssueActivationCode(reg.Id.ToString("N") + reg.Id.ToString("N"), DateTime.UtcNow.AddMinutes(10)); db.Add(reg);
+        var tier = new LoyaltyTierDefinition { TenantId = _tenantId, Name = "Original", SortOrder = 1,
+            DiscountPercent = race ? 0 : 25, AccrualMultiplier = race ? 0 : 10 };
+        db.Add(tier); await db.SaveChangesAsync();
+        if (race)
+        {
+            // The column's INSERT default is 1%; set an explicit zero after the store-generated value is read.
+            tier.AccrualMultiplier = 0;
+            db.Entry(tier).Property(t => t.AccrualMultiplier).IsModified = true;
+        }
+        Assert.True(await new CashRegisterRepository(db).TryActivateAsync(reg.Id, reg.Id.ToString("N") + reg.Id.ToString("N"), Guid.NewGuid().ToString("N") + Guid.NewGuid().ToString("N"), DateTime.UtcNow));
+        await db.Entry(reg).ReloadAsync();
+        var member = await db.LoyaltyMemberships.SingleAsync(m => m.Id == _membershipId);
+        member.CurrentTierId = tier.Id; member.Balance = race ? 40 : 100;
+        var settings = await db.LoyaltyProgramSettings.SingleAsync(t => t.TenantId == _tenantId);
+        settings.BonusUnitsPerCurrencyUnit = race ? 1 : 100; settings.RedemptionCapPercent = 100;
+        var shift = new PosShift { TenantId = _tenantId, StoreId = reg.StoreId, RegisterId = reg.Id };
+        db.Add(shift); await db.SaveChangesAsync();
+        var config = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?> {
+            ["Jwt:Secret"] = "synthetic-certified-postgres-secret-0123456789" }).Build();
+        var terms = new PosLoyaltySnapshots(config); var prices = new PosPriceSnapshots(config); var promotions = new PosPromotionSnapshots(config);
+        var quote = await new PosLoyaltyQuoteIssuer(new CashRegisterRepository(db), new LoyaltyRepository(db), terms, TimeProvider.System)
+            .ForResolvedAsync(_tenantId, reg.Id, member.Id, default);
+        Assert.NotNull(quote);
+        var at = DateTime.UtcNow; var product = (await new ItemRepository(db).GetByBarcodeAsync(_barcodeA))!;
+        var price = prices.Issue(new CatalogSyncRow(product.Id, product.Name, product.Barcodes.ToArray(), product.PriceRetail,
+            product.VatRate, product.Unit, true, at, TenantId: _tenantId), at);
+        var promo = promotions.Issue(_tenantId, reg.StoreId, reg.Id, null, [], at)!;
+        var request = new CreateSaleRequest(shift.Id, [new(_barcodeA, 1, "lc1." + price.Token)], "Cash", 100,
+            LoyaltyMembershipId: member.Id, RedeemAmount: race ? 30 : 100, ClientTransactionId: Guid.NewGuid(), OccurredAt: at,
+            ExpectedTotal: race ? 10 : 29, PromotionSnapshot: promo.Token,
+            ExpectedPriceSegments: [new(0, 1, race ? 40 : 30)], LoyaltySnapshot: quote.Token);
+        return (reg.Id, Guid.NewGuid(), request, prices, promotions, terms);
+    }
+    private static PosService CertifiedService(AppDbContext db, IPosPriceSnapshots prices, IPosPromotionSnapshots promotions,
+        IPosLoyaltySnapshots terms, Func<ILoyaltyRepository, ILoyaltyRepository>? wrap = null)
+    {
+        var registers = Substitute.For<ICashRegisterRepository>();
+        registers.HadSessionAtAsync(default, default, default, default, default).ReturnsForAnyArgs(true);
+        return new(new PosRepository(db), new StockRepository(db), new ItemRepository(db), new DiscountRepository(db),
+            new StaticFiscalServiceFactory(new NoopFiscalService()), wrap?.Invoke(new LoyaltyRepository(db)) ?? new LoyaltyRepository(db),
+            new CustomerRepository(db), NullLogger<PosService>.Instance, registers: registers,
+            priceSnapshots: prices, promotionSnapshots: promotions, loyaltySnapshots: terms);
+    }
+
+    [RecoveryPostgresFact]
+    public async Task Certified_tier_and_bonus_terms_survive_database_changes_and_replay_uses_original_committed_receipt()
+    {
+        var c = await Certified();
+        await using (var db = NewContext())
+        {
+            var member = await db.LoyaltyMemberships.Include(m => m.CurrentTier).SingleAsync(m => m.Id == _membershipId);
+            member.CurrentTier!.DiscountPercent = 90; member.CurrentTier.AccrualMultiplier = 90;
+            var settings = await db.LoyaltyProgramSettings.SingleAsync(s => s.TenantId == _tenantId);
+            settings.BonusUnitsPerCurrencyUnit = 1; settings.RedemptionCapPercent = 0;
+            await db.SaveChangesAsync();
+        }
+        await using (var db = NewContext())
+        {
+            var service = CertifiedService(db, c.Prices, c.Promotions, c.Terms);
+            var (batch, _, _) = await service.CreateSalesBatchAsync(_tenantId, c.Cashier, new([c.Request]), registerId: c.Register);
+            var result = Assert.Single(batch!.Results); Assert.Equal("created", result.Status);
+            Assert.Equal(29, result.Sale!.Subtotal); Assert.Equal(290, result.Sale.LoyaltyAccrued);
+        }
+        await using (var db = NewContext())
+        {
+            var member = await db.LoyaltyMemberships.SingleAsync(m => m.Id == _membershipId); member.Status = LoyaltyMembershipStatus.Blocked;
+            Assert.Equal(290, member.Balance); await db.SaveChangesAsync();
+        }
+        await using var replayDb = NewContext();
+        var replayService = CertifiedService(replayDb, c.Prices, c.Promotions, c.Terms);
+        var (replayed, _, _) = await replayService.CreateSalesBatchAsync(_tenantId, c.Cashier, new([c.Request]), registerId: c.Register);
+        Assert.Equal("duplicate", Assert.Single(replayed!.Results).Status);
+        Assert.Equal(1, await replayDb.PosTransactions.CountAsync(t => t.TenantId == _tenantId));
+        Assert.Equal(2, await replayDb.LoyaltyLedgerEntries.CountAsync(t => t.TenantId == _tenantId));
+        Assert.Equal(1, await replayDb.Set<ShelfGuard.Domain.Entities.Erp.PosPricingSnapshot>().CountAsync(t => t.TenantId == _tenantId));
+    }
+
+    [RecoveryPostgresTheory]
+    [InlineData(false)][InlineData(true)]
+    public async Task Certified_quote_cannot_override_depleted_live_balance_or_removed_program(bool module)
+    {
+        var c = await Certified();
+        await using (var db = NewContext())
+        {
+            if (module) (await db.Tenants.SingleAsync(t => t.Id == _tenantId)).UpdateModules(["inventory", "pos"]);
+            else (await db.LoyaltyMemberships.SingleAsync(m => m.Id == _membershipId)).Balance = 0;
+            await db.SaveChangesAsync();
+        }
+        await using var saleDb = NewContext();
+        var (batch, _, _) = await CertifiedService(saleDb, c.Prices, c.Promotions, c.Terms)
+            .CreateSalesBatchAsync(_tenantId, c.Cashier, new([c.Request]), registerId: c.Register);
+        Assert.Equal("failed", Assert.Single(batch!.Results).Status);
+        Assert.False(await saleDb.PosTransactions.AnyAsync(t => t.TenantId == _tenantId));
+        Assert.False(await saleDb.LoyaltyLedgerEntries.AnyAsync(t => t.TenantId == _tenantId));
+        Assert.Equal(20, await saleDb.ProductStocks.Where(t => t.TenantId == _tenantId).SumAsync(t => t.Quantity));
+    }
+
+    [RecoveryPostgresFact]
+    public async Task Concurrent_certified_redemptions_cannot_spend_the_same_live_balance_twice()
+    {
+        var c = await Certified(race: true);
+        await using var a = NewContext(); await using var b = NewContext();
+        var aRead = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var bRead = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var sa = CertifiedService(a, c.Prices, c.Promotions, c.Terms, r => new RendezvousLoyaltyRepository(r, aRead, bRead.Task));
+        var sb = CertifiedService(b, c.Prices, c.Promotions, c.Terms, r => new RendezvousLoyaltyRepository(r, bRead, aRead.Task, true));
+        CreateSaleRequest requestB;
+        await using (var db = NewContext())
+        {
+            var product = (await new ItemRepository(db).GetByBarcodeAsync(_barcodeB))!;
+            var price = c.Prices.Issue(new CatalogSyncRow(product.Id, product.Name, product.Barcodes.ToArray(), product.PriceRetail,
+                product.VatRate, product.Unit, true, DateTime.UtcNow, TenantId: _tenantId), DateTime.UtcNow);
+            requestB = c.Request with { ClientTransactionId = Guid.NewGuid(), Items = [new(_barcodeB, 1, "lc1." + price.Token)] };
+        }
+        var results = await Task.WhenAll(sa.CreateSalesBatchAsync(_tenantId, c.Cashier, new([c.Request]), registerId: c.Register),
+            sb.CreateSalesBatchAsync(_tenantId, c.Cashier, new([requestB]), registerId: c.Register));
+        var outcomes = results.Select(r => Assert.Single(r.Result!.Results)).ToArray();
+        Assert.Single(outcomes, r => r.Status == "created"); Assert.Single(outcomes, r => r.ErrorStatusCode == 409);
+        await using var verify = NewContext();
+        Assert.Equal(10, (await verify.LoyaltyMemberships.SingleAsync(m => m.Id == _membershipId)).Balance);
+        Assert.Equal(1, await verify.PosTransactions.CountAsync(t => t.TenantId == _tenantId));
+        Assert.Equal(1, await verify.LoyaltyLedgerEntries.CountAsync(t => t.TenantId == _tenantId));
     }
 
     // ── helpers ──────────────────────────────────────────────────────────────
@@ -309,8 +446,14 @@ public sealed class LoyaltyConcurrencySalesIntegrationTests : IAsyncLifetime
             Inner.GetLedgerPagedAsync(tenantId, membershipId, page, pageSize, ct);
         public Task<List<LoyaltyLedgerEntry>> GetLedgerEntriesForTransactionsAsync(Guid tenantId, IReadOnlyCollection<Guid> transactionIds, CancellationToken ct = default) =>
             Inner.GetLedgerEntriesForTransactionsAsync(tenantId, transactionIds, ct);
+        public Task<(List<PosTransaction> Items, int Total)> GetPurchasesPagedAsync(Guid tenantId, Guid membershipId, Guid? storeId, int page, int pageSize, CancellationToken ct = default) =>
+            Inner.GetPurchasesPagedAsync(tenantId, membershipId, storeId, page, pageSize, ct);
+        public Task<PosTransaction?> GetPurchaseByIdAsync(Guid tenantId, Guid membershipId, Guid purchaseId, CancellationToken ct = default) =>
+            Inner.GetPurchaseByIdAsync(tenantId, membershipId, purchaseId, ct);
         public Task AddLedgerEntryAsync(LoyaltyLedgerEntry entry, CancellationToken ct = default) =>
             Inner.AddLedgerEntryAsync(entry, ct);
+        public Task<bool> IsCheckoutProgramAvailableAsync(Guid tenantId, CancellationToken ct = default) => Inner.IsCheckoutProgramAvailableAsync(tenantId, ct);
+        public Task<bool> HasFirstPurchaseRewardAsync(Guid tenantId, Guid membershipId, CancellationToken ct = default) => Inner.HasFirstPurchaseRewardAsync(tenantId, membershipId, ct);
         public Task<LoyaltyProgramSettings?> GetSettingsAsync(Guid tenantId, CancellationToken ct = default) =>
             Inner.GetSettingsAsync(tenantId, ct);
         public Task AddSettingsAsync(LoyaltyProgramSettings settings, CancellationToken ct = default) =>

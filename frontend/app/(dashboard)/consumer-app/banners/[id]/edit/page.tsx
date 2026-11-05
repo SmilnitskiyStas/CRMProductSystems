@@ -6,6 +6,7 @@ import { AccessDenied } from "@/components/AccessDenied";
 import { useMe } from "@/features/auth/hooks/useAuth";
 import { BannerForm } from "@/features/consumer-app/components/BannerForm";
 import { AT_LEAST_ENTERPRISE_ADMIN, hasRole } from "@/lib/roles";
+import { PageContainer } from "@/components/ui/PageContainer";
 
 export default function EditConsumerAppBannerPage() {
   const router = useRouter();
@@ -18,12 +19,12 @@ export default function EditConsumerAppBannerPage() {
   if (roleAccess === null) return null;
 
   return (
-    <div style={{ padding: "28px 32px", width: "100%", boxSizing: "border-box" }}>
+    <PageContainer>
       <BannerForm
         bannerId={params.id}
         presentation="page"
         onClose={() => router.push("/consumer-app/banners")}
       />
-    </div>
+    </PageContainer>
   );
 }

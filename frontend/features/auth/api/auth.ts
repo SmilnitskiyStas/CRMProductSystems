@@ -1,9 +1,11 @@
-import { api, setToken, clearToken } from "@/lib/api";
+import { api, setToken, clearToken, getSessionEpoch, ApiError } from "@/lib/api";
 import { setStoredUser, clearStoredUser } from "../store";
 import {
   isTwoFactorChallenge,
+  isMfaEnrollment,
   type AuthUserDto,
   type ForgotPasswordRequest,
+  type ResetPasswordRequest,
   type LoginRequest,
   type LoginResponse,
   type LoginSuccessResponse,
@@ -32,10 +34,20 @@ function normalizeAuthUser<T extends AuthUserDto>(user: T): T {
 }
 
 export const authApi = {
+  setupEnrollment: (enrollmentToken: string): Promise<TwoFactorSetupResponse> =>
+    api.post("/api/auth/mfa-enrollment/setup", { enrollmentToken }),
+  enableEnrollment: async (enrollmentToken: string, code: string): Promise<TwoFactorEnableResponse> => {
+    const epoch = getSessionEpoch();
+    const result = await api.post<TwoFactorEnableResponse>("/api/auth/mfa-enrollment/enable", { enrollmentToken, code });
+    if (epoch !== getSessionEpoch()) throw new ApiError(401, "Session changed.");
+    setToken(result.accessToken);
+    setStoredUser(normalizeAuthUser(result.user));
+    return result;
+  },
   login: async (payload: LoginRequest): Promise<LoginResponse> => {
     const res = await api.post<LoginResponse>("/api/auth/login", payload);
     // 2FA challenge — no tokens issued yet, the user must pass the code step first.
-    if (isTwoFactorChallenge(res)) return res;
+    if (isTwoFactorChallenge(res) || isMfaEnrollment(res)) return res;
     setToken(res.accessToken);
     normalizeAuthUser(res.user);
     setStoredUser(res.user);
@@ -71,13 +83,22 @@ export const authApi = {
   getMe: async (): Promise<AuthUserDto> =>
     normalizeAuthUser(await api.get<AuthUserDto>("/api/auth/me")),
 
+  logoutAll: async (): Promise<void> => {
+    await api.post<void>("/api/auth/logout-all");
+    clearToken(); clearStoredUser();
+  },
+
   // ---- Forgot password (public) ----
 
-  /** Always resolves — the backend returns 204 regardless of whether the email exists.
-   *  Issues a temporary password (valid 3h) to the address if it belongs to a known,
-   *  active account — no separate reset step; the user just logs in with it. */
+  /** Requests a short-lived email link. Existing credentials/sessions remain unchanged. */
   forgotPassword: (payload: ForgotPasswordRequest): Promise<void> =>
     api.post<void>("/api/auth/forgot-password", payload),
+
+  resetPassword: async (payload: ResetPasswordRequest): Promise<void> => {
+    await api.post<void>("/api/auth/reset-password", payload);
+    clearToken();
+    clearStoredUser();
+  },
 
   // ---- 2FA management (authorized) ----
 
@@ -86,9 +107,21 @@ export const authApi = {
     api.post<TwoFactorSetupResponse>("/api/auth/2fa/setup"),
 
   /** Confirms the pending secret with a code → returns one-time recovery codes. */
-  enableTwoFactor: (code: string): Promise<TwoFactorEnableResponse> =>
-    api.post<TwoFactorEnableResponse>("/api/auth/2fa/enable", { code }),
+  enableTwoFactor: async (code: string): Promise<TwoFactorEnableResponse> => {
+    const epoch = getSessionEpoch();
+    const result = await api.post<TwoFactorEnableResponse>("/api/auth/2fa/enable", { code });
+    if (epoch !== getSessionEpoch()) throw new ApiError(401, "Session changed.");
+    setToken(result.accessToken);
+    setStoredUser(normalizeAuthUser(result.user));
+    return result;
+  },
 
-  disableTwoFactor: (payload: TwoFactorDisableRequest): Promise<void> =>
-    api.post<void>("/api/auth/2fa/disable", payload),
+  disableTwoFactor: async (payload: TwoFactorDisableRequest): Promise<LoginSuccessResponse> => {
+    const epoch = getSessionEpoch();
+    const result = await api.post<LoginSuccessResponse>("/api/auth/2fa/disable", payload);
+    if (epoch !== getSessionEpoch()) throw new ApiError(401, "Session changed.");
+    setToken(result.accessToken);
+    setStoredUser(normalizeAuthUser(result.user));
+    return result;
+  },
 };

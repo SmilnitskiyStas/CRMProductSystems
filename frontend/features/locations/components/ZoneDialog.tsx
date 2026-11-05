@@ -2,6 +2,9 @@
 
 import { useState } from "react";
 import { useTranslations } from "next-intl";
+import { Modal } from "@/components/ui/Modal";
+import { Btn } from "@/components/ui/Btn";
+import { inputStyle, labelStyle } from "@/components/ui/fieldStyles";
 import type { LocationZoneDto } from "../types";
 import { useCreateZone } from "../hooks/useFloorPlan";
 
@@ -51,53 +54,8 @@ export function ZoneDialog({ locationId, initialType, onCreated, onClose }: Prop
     );
   }
 
-  const inputStyle: React.CSSProperties = {
-    background: "#0B0E14",
-    border: "1px solid #1F2937",
-    borderRadius: 8,
-    color: "#E8EDF5",
-    fontSize: 13,
-    padding: "8px 12px",
-    width: "100%",
-    boxSizing: "border-box",
-    outline: "none",
-  };
-
-  const labelStyle: React.CSSProperties = {
-    color: "#9CA3AF",
-    fontSize: 12,
-    marginBottom: 4,
-    display: "block",
-  };
-
   return (
-    <div
-      style={{
-        position: "fixed",
-        inset: 0,
-        zIndex: 1000,
-        background: "rgba(0,0,0,0.6)",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-      }}
-      onClick={onClose}
-    >
-      <div
-        style={{
-          background: "#161B26",
-          border: "1px solid #1F2937",
-          borderRadius: 16,
-          padding: 28,
-          width: 420,
-          maxWidth: "calc(100vw - 32px)",
-        }}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <h2 style={{ color: "#E8EDF5", fontSize: 16, fontWeight: 700, margin: "0 0 20px 0" }}>
-          {t("title")}
-        </h2>
-
+    <Modal title={t("title")} onClose={onClose} width={420}>
         <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 16 }}>
           <div>
             <label style={labelStyle}>{t("nameLabel")}</label>
@@ -163,42 +121,14 @@ export function ZoneDialog({ locationId, initialType, onCreated, onClose }: Prop
           )}
 
           <div style={{ display: "flex", gap: 10, marginTop: 4 }}>
-            <button
-              type="button"
-              onClick={onClose}
-              style={{
-                flex: 1,
-                background: "#0B0E14",
-                border: "1px solid #1F2937",
-                color: "#9CA3AF",
-                borderRadius: 8,
-                padding: "9px 16px",
-                fontSize: 13,
-                cursor: "pointer",
-              }}
-            >
+            <Btn variant="ghost" onClick={onClose} style={{ flex: 1, justifyContent: "center" }}>
               {tCommon("cancel")}
-            </button>
-            <button
-              type="submit"
-              disabled={createZone.isPending || !name.trim()}
-              style={{
-                flex: 2,
-                background: createZone.isPending || !name.trim() ? "#1F2937" : "#2563EB",
-                border: "none",
-                color: createZone.isPending || !name.trim() ? "#6B7280" : "#fff",
-                borderRadius: 8,
-                padding: "9px 16px",
-                fontSize: 13,
-                fontWeight: 600,
-                cursor: createZone.isPending || !name.trim() ? "default" : "pointer",
-              }}
-            >
+            </Btn>
+            <Btn type="submit" disabled={createZone.isPending || !name.trim()} style={{ flex: 2, justifyContent: "center" }}>
               {createZone.isPending ? t("creating") : t("submit")}
-            </button>
+            </Btn>
           </div>
         </form>
-      </div>
-    </div>
+    </Modal>
   );
 }

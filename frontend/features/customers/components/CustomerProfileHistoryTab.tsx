@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useTranslations, useLocale } from "next-intl";
 import { useCustomerProfileHistory } from "../hooks/useCustomers";
+import { Pagination } from "@/components/ui/Pagination";
 
 interface Props {
   customerId: string;
@@ -99,41 +100,12 @@ export function CustomerProfileHistoryTab({ customerId, active }: Props) {
       ))}
 
       {totalPages > 1 && (
-        <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 4 }}>
-          <button
-            onClick={() => setPage((p) => Math.max(1, p - 1))}
-            disabled={page === 1}
-            style={{
-              background: "#111827",
-              border: "1px solid #1F2937",
-              borderRadius: 6,
-              color: page === 1 ? "#374151" : "#9CA3AF",
-              fontSize: 12,
-              padding: "5px 12px",
-              cursor: page === 1 ? "not-allowed" : "pointer",
-            }}
-          >
-            {t("prevButton")}
-          </button>
-          <span style={{ color: "#4B5563", fontSize: 12 }}>
-            {page} / {totalPages}
-          </span>
-          <button
-            onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-            disabled={page === totalPages}
-            style={{
-              background: "#111827",
-              border: "1px solid #1F2937",
-              borderRadius: 6,
-              color: page === totalPages ? "#374151" : "#9CA3AF",
-              fontSize: 12,
-              padding: "5px 12px",
-              cursor: page === totalPages ? "not-allowed" : "pointer",
-            }}
-          >
-            {t("nextButton")}
-          </button>
-        </div>
+        <Pagination
+          page={page}
+          totalPages={totalPages}
+          totalCount={data?.totalCount ?? items.length}
+          onPageChange={setPage}
+        />
       )}
     </div>
   );

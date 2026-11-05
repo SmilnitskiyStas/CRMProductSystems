@@ -11,10 +11,12 @@ export type WeightAssessment = {
 const MULTIPLE_TOLERANCE = 0.05;
 
 export function assessWeightDelta(deltaGrams: number, unitWeightGrams: number): WeightAssessment {
-  if (unitWeightGrams <= 0 || deltaGrams === 0) return { units: 0, confidence: 0 };
+  if (!Number.isFinite(deltaGrams) || !Number.isFinite(unitWeightGrams)
+    || unitWeightGrams <= 0 || deltaGrams === 0) return { units: 0, confidence: 0 };
 
   const ratio = Math.abs(deltaGrams) / unitWeightGrams;
   const rounded = Math.round(ratio);
+  if (!Number.isSafeInteger(rounded) || rounded > 99_999_999) return { units: 0, confidence: 0 };
   const isMultiple = rounded >= 1 && Math.abs(ratio - rounded) <= MULTIPLE_TOLERANCE * rounded;
 
   if (!isMultiple) return { units: 0, confidence: 60 };
@@ -44,10 +46,11 @@ export type DeviceConfig = {
 // pg returns jsonb columns as parsed objects; raw strings appear via tests/other drivers
 export function parseDeviceConfig(raw: unknown): DeviceConfig {
   if (!raw) return {};
-  if (typeof raw === "object") return raw as DeviceConfig;
+  if (typeof raw === "object") return Array.isArray(raw) ? {} : raw as DeviceConfig;
   if (typeof raw !== "string") return {};
   try {
-    return JSON.parse(raw) as DeviceConfig;
+    const parsed: unknown = JSON.parse(raw);
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed as DeviceConfig : {};
   } catch {
     return {};
   }
@@ -55,7 +58,7 @@ export function parseDeviceConfig(raw: unknown): DeviceConfig {
 
 // Explicit alert_above wins; otherwise the profile default; otherwise no alerting
 export function tempAlertThreshold(config: DeviceConfig): number | null {
-  if (typeof config.alert_above === "number") return config.alert_above;
+  if (typeof config.alert_above === "number" && Number.isFinite(config.alert_above)) return config.alert_above;
   if (config.profile && config.profile in PROFILE_ALERT_ABOVE) {
     return PROFILE_ALERT_ABOVE[config.profile];
   }

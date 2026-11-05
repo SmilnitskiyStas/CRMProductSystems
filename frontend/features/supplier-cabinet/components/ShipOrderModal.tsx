@@ -16,9 +16,10 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useTranslations, useLocale } from "next-intl";
-import { X } from "lucide-react";
 import { toast } from "sonner";
 import { Btn } from "@/components/ui/Btn";
+import { Modal } from "@/components/ui/Modal";
+import { inputStyle, labelStyle, selectStyle } from "@/components/ui/fieldStyles";
 import { useModules } from "@/features/modules/hooks/useModules";
 import type { MarketplaceOrderDto } from "@/features/marketplace/types";
 import { useSupplierWarehouses } from "../hooks/useSupplierWarehouses";
@@ -30,30 +31,6 @@ interface Props {
   onClose: () => void;
 }
 
-const overlayStyle: React.CSSProperties = {
-  position: "fixed",
-  inset: 0,
-  background: "rgba(0,0,0,0.6)",
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  zIndex: 999,
-  padding: 20,
-};
-
-const inputStyle: React.CSSProperties = {
-  width: "100%",
-  boxSizing: "border-box",
-  background: "#1F2937",
-  border: "1px solid #374151",
-  borderRadius: 8,
-  color: "#E8EDF5",
-  fontSize: 13,
-  padding: "9px 12px",
-  outline: "none",
-  fontFamily: "inherit",
-};
-
 const compactInputStyle: React.CSSProperties = {
   width: "100%",
   background: "#0A0F1A",
@@ -64,29 +41,6 @@ const compactInputStyle: React.CSSProperties = {
   padding: "6px 8px",
   outline: "none",
   boxSizing: "border-box",
-};
-
-const labelStyle: React.CSSProperties = {
-  display: "block",
-  color: "#9CA3AF",
-  fontSize: 12,
-  marginBottom: 6,
-};
-
-const addBatchBtnStyle: React.CSSProperties = {
-  marginTop: 8,
-  background: "none",
-  border: "none",
-  color: "#60A5FA",
-  fontSize: 11,
-  fontFamily: "inherit",
-  padding: 0,
-  cursor: "pointer",
-};
-
-const selectStyle: React.CSSProperties = {
-  ...inputStyle,
-  appearance: "auto",
 };
 
 function todayIso(): string {
@@ -110,37 +64,7 @@ export function ShipOrderModal({ order, onClose }: Props) {
   const title = t("shipModalTitle", { number: order.orderNumber });
 
   return (
-    <div style={overlayStyle} onClick={onClose}>
-      <div
-        style={{
-          background: "#0F1623",
-          border: "1px solid #1F2937",
-          borderRadius: 12,
-          width: "100%",
-          maxWidth: inventoryOn ? 640 : 440,
-          maxHeight: "85vh",
-          overflowY: "auto",
-          padding: 20,
-        }}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            marginBottom: 14,
-          }}
-        >
-          <h3 style={{ color: "#E8EDF5", fontSize: 15, fontWeight: 700, margin: 0 }}>{title}</h3>
-          <button
-            onClick={onClose}
-            style={{ background: "none", border: "none", cursor: "pointer", color: "#4B5563", padding: 4 }}
-          >
-            <X size={18} />
-          </button>
-        </div>
-
+    <Modal title={title} onClose={onClose} width={inventoryOn ? 640 : 440}>
         {modulesLoading ? (
           <div style={{ color: "#6B7280", fontSize: 13, padding: "12px 0" }}>{t("loading")}</div>
         ) : inventoryOn ? (
@@ -154,8 +78,7 @@ export function ShipOrderModal({ order, onClose }: Props) {
         ) : (
           <SimpleShipForm order={order} onClose={onClose} t={t} tCommon={tCommon} />
         )}
-      </div>
-    </div>
+    </Modal>
   );
 }
 
@@ -440,9 +363,10 @@ function BatchShipForm({
                     </div>
                   )}
                   {extraAllocs.length > 0 && (
-                    <button
-                      type="button"
-                      style={addBatchBtnStyle}
+                    <Btn
+                      variant="link"
+                      size="sm"
+                      style={{ marginTop: 8 }}
                       onClick={() =>
                         setExpandedLines((prev) => ({ ...prev, [line.orderItemId]: !prev[line.orderItemId] }))
                       }
@@ -450,7 +374,7 @@ function BatchShipForm({
                       {isExpanded
                         ? t("shipModalHideBatches")
                         : t("shipModalAddBatch", { count: extraAllocs.length })}
-                    </button>
+                    </Btn>
                   )}
                 </>
               )}

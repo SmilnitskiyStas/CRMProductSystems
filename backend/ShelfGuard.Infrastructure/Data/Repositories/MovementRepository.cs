@@ -4,7 +4,7 @@ using ShelfGuard.Domain.Interfaces;
 
 namespace ShelfGuard.Infrastructure.Data.Repositories;
 
-public sealed class MovementRepository : IMovementRepository
+public sealed partial class MovementRepository : IMovementRepository
 {
     private readonly AppDbContext _db;
 
@@ -51,7 +51,7 @@ public sealed class MovementRepository : IMovementRepository
                 from r in _db.StockReceipts
                 from i in r.Items
                 where r.TenantId == tenantId
-                      && r.Status == "draft"
+                      && (r.Status == "draft" || r.Status == "ordered")
                       && i.ProductId == productId
                       && (!storeId.HasValue || r.DestinationStoreId == storeId)
                 select new

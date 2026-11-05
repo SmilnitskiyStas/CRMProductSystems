@@ -1,10 +1,12 @@
 "use client";
 
 import { useState } from "react";
-import { X } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useCreateWorkOrder, useVehicles } from "../hooks/useAutoService";
 import { useUsers } from "@/features/users/hooks/useUsers";
+import { Modal } from "@/components/ui/Modal";
+import { Btn } from "@/components/ui/Btn";
+import { labelStyle, selectStyle, textareaStyle } from "@/components/ui/fieldStyles";
 import type { CreateWorkOrderRequest } from "../types";
 
 interface Props {
@@ -45,58 +47,11 @@ export function CreateWorkOrderModal({ onClose }: Props) {
   }
 
   return (
-    <div
-      style={{
-        position: "fixed",
-        inset: 0,
-        background: "rgba(0,0,0,0.7)",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        zIndex: 1000,
-      }}
-      onClick={(e) => e.target === e.currentTarget && onClose()}
-    >
-      <div
-        style={{
-          background: "#111827",
-          border: "1px solid #1F2937",
-          borderRadius: 12,
-          padding: "24px",
-          width: "100%",
-          maxWidth: 440,
-        }}
-      >
-        {/* Header */}
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            marginBottom: 20,
-          }}
-        >
-          <h2 style={{ color: "#E8EDF5", fontSize: 16, fontWeight: 700, margin: 0 }}>
-            {t("title")}
-          </h2>
-          <button
-            onClick={onClose}
-            style={{
-              background: "transparent",
-              border: "none",
-              color: "#6B7280",
-              cursor: "pointer",
-              padding: 4,
-            }}
-          >
-            <X size={18} />
-          </button>
-        </div>
-
+    <Modal title={t("title")} onClose={onClose} width={440}>
         <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 14 }}>
           {/* Vehicle */}
           <div>
-            <label style={{ color: "#9CA3AF", fontSize: 12, marginBottom: 6, display: "block" }}>
+            <label style={labelStyle}>
               {t("vehicleLabel")}
             </label>
             <select
@@ -115,7 +70,7 @@ export function CreateWorkOrderModal({ onClose }: Props) {
 
           {/* Mechanic */}
           <div>
-            <label style={{ color: "#9CA3AF", fontSize: 12, marginBottom: 6, display: "block" }}>
+            <label style={labelStyle}>
               {t("mechanicLabel")}
             </label>
             <select
@@ -134,7 +89,7 @@ export function CreateWorkOrderModal({ onClose }: Props) {
 
           {/* Notes */}
           <div>
-            <label style={{ color: "#9CA3AF", fontSize: 12, marginBottom: 6, display: "block" }}>
+            <label style={labelStyle}>
               {t("notesLabel")}
             </label>
             <textarea
@@ -143,8 +98,7 @@ export function CreateWorkOrderModal({ onClose }: Props) {
               rows={3}
               placeholder={t("notesPlaceholder")}
               style={{
-                ...inputStyle,
-                resize: "vertical",
+                ...textareaStyle,
                 minHeight: 72,
               }}
             />
@@ -158,59 +112,14 @@ export function CreateWorkOrderModal({ onClose }: Props) {
 
           {/* Actions */}
           <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 4 }}>
-            <button type="button" onClick={onClose} style={btnSecondaryStyle}>
+            <Btn variant="ghost" onClick={onClose}>
               {t("cancel")}
-            </button>
-            <button
-              type="submit"
-              disabled={createWorkOrder.isPending}
-              style={btnPrimaryStyle}
-            >
+            </Btn>
+            <Btn type="submit" disabled={createWorkOrder.isPending}>
               {createWorkOrder.isPending ? t("creating") : t("create")}
-            </button>
+            </Btn>
           </div>
         </form>
-      </div>
-    </div>
+    </Modal>
   );
 }
-
-// ─── Shared micro-styles ──────────────────────────────────────────────────────
-
-const inputStyle: React.CSSProperties = {
-  width: "100%",
-  padding: "9px 12px",
-  background: "#0D1117",
-  border: "1px solid #1F2937",
-  borderRadius: 8,
-  color: "#E8EDF5",
-  fontSize: 13,
-  outline: "none",
-  boxSizing: "border-box",
-};
-
-const selectStyle: React.CSSProperties = {
-  ...inputStyle,
-  appearance: "auto",
-};
-
-const btnPrimaryStyle: React.CSSProperties = {
-  padding: "9px 20px",
-  borderRadius: 8,
-  border: "none",
-  background: "#1D4ED8",
-  color: "#E8EDF5",
-  fontSize: 13,
-  fontWeight: 600,
-  cursor: "pointer",
-};
-
-const btnSecondaryStyle: React.CSSProperties = {
-  padding: "9px 16px",
-  borderRadius: 8,
-  border: "1px solid #1F2937",
-  background: "transparent",
-  color: "#6B7280",
-  fontSize: 13,
-  cursor: "pointer",
-};

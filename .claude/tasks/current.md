@@ -1632,8 +1632,55 @@ single-flight refresh + cross-tab lock (`lib/api.ts`), 10 с grace у `AuthServi
 ### TASK-749 — Акційні товари без продажів (сповіщення + `/analytics/pos`) — review
 Детектор (3 джерела акцій, пороги в `PromoNoSalesThresholds`), `GET /api/analytics/pos/promo-no-sales`, worker `promo-no-sales` (07:00, дедуп `promo_no_sales_alerts`, міграція `AddPromoNoSalesAlerts`), банер на `/analytics/pos`. Лог: `.claude/logs/tasks/749_*`. Не закомічено.
 
+### TASK-750 — Заявки магазинів на виробництво, backend (Етап 1) — review
+Сутності `ProductionRequest`/`Line`/`ProductionOrderRequestLine` + міграція `AddProductionRequests` (RLS + store_scope), `ProductionRequestService`, `api/production-requests` + `POST api/production/orders/from-requests`, ship через StockTransfer `production_to_store`, нотифікація `production_request.submitted`, фікс `UpdateOrderAsync` (без обходу статусів) і валідація `Location.Type=="production"`. Лог: `.claude/logs/tasks/750_*`. Не закомічено; фронтенд — окремо.
+
+### TASK-751 — Заявки на виробництво, frontend (Етап 1) — review
+`/production/requests`: список + фільтри, форма «Нова заявка» (чернетка/подати), деталі (редагувати/подати/скасувати), для тенантів з модулем production — вкладка «Зведення по товарах» (попередження без рецепта), розгляд (прийняти/змінити кількість з причиною), відхилення, відвантаження, мульти-вибір → «Створити виробничі замовлення». Ордери: neededBy/plannedDate + блок заявок. Sidebar: пункт «Заявки» у групі «Виробництво». Лог: `.claude/logs/tasks/751_*`. tsc+eslint чисті, не закомічено, у браузері не перевірено.
+
+### TASK-753 — Авто-чернетки заявок на виробництво, frontend (Етап 3) — review
+Залишки товару в магазині у формі заявки, бейдж джерела (Авто · буфер/акція), autoReason у деталях, кнопка «Розрахувати потребу» (auto-generate). tsc+eslint чисті, у браузері не перевірено. Лог: `.claude/logs/tasks/753_*`.
+
+### TASK-752 — Авто-аналіз потреби власного виробництва, backend (Етап 3) — review
+`ProductionDemandService`: для самовиробних товарів (активний рецепт) рахує потребу магазину (буфер+safety − непрострочений залишок − у дорозі − відкриті заявки, × коеф. подія/погода/промо) і ведe одну авто-чернетку на магазин (`auto_buffer`/`auto_promo`, `AutoReason` у рядку, міграція AddProductionRequestLineAutoReason). `POST /api/production-requests/auto-generate`, worker cron 05:30, outbox `production_request.auto_draft`. 2811 тестів зелені. Лог: `.claude/logs/tasks/752_*`.
+
+### TASK-754 — Авто-аналіз потреби виробництва: окремий прогін на КОЖЕН тенант — review
+Worker більше не логіниться сервісним акаунтом: перелічує тенанти (`production` модуль + активна production-локація, SELECT у tx з `SET LOCAL app.role='worker'`) і для кожного кличе `POST /api/internal/production-demand/run {tenantId}` (секрет `X-Internal-Job-Key` = `INTERNAL_JOB_KEY`, вимкнено без ключа; gateway віддає 404 на `/api/internal/`; worker ходить на loopback-порт api_core `127.0.0.1:5110`). `ProductionDemandTenantRunner`: одна tx з `SET LOCAL app.tenant_id=<id>, app.role='enterprise_admin'` (без bypass), перевірка tenant/active/module. Ручний endpoint без змін. dotnet test 2827/2827 (+ live-RLS тест A/B), worker tsc чистий. Prod: задати `INTERNAL_JOB_KEY`. Лог: `.claude/logs/tasks/754_*`. Не закомічено.
+
+### TASK-755 — Авто-чернетки замовлень постачальникам (backend) — review
+Щоденний cron 07:00 (`replenishment-drafts`, окремий прогін на тенант через `POST /api/internal/replenishment-drafts/run`, той самий INTERNAL_JOB_KEY/RLS-патерн що TASK-754). `AutoReplenishmentService`: для кожного активного не-production магазину бере `IOrderCalcService` (без самовиробних товарів, власні untaken авточернетки виключені з «у дорозі»), групує за `DefaultSupplierId`, одна draft `stock_receipts` (Source `auto_replenishment`) на (магазин, постачальник); idempotent refresh, taken/manual не чіпає. Міграція `AddAutoReplenishmentDrafts` (Source/TakenByUserId/TakenAt), `POST /api/receipts/{id}/take|release`, `POST /api/receipts/auto-generate`, `?source=` фільтр, `QuantityOrdered` у `PUT /items`, outbox `order.auto_draft`. dotnet test 2865/2865 (+ live-RLS A/B), worker tsc чистий. Окремого confirm-переходу немає: draft і є замовлення. Лог: `.claude/logs/tasks/755_*`. Не закомічено.
+
+- TASK-756 (frontend-developer): /orders "Автозаявки на сьогодні" section (take/release/edit qty/calculate), receipts Auto badge, order.auto_draft label. tsc+eslint clean. Log: logs/tasks/756_*.md
+
+- TASK-758 (frontend): order card page /orders/[id] (edit lines/supplier/notes, send to supplier, print, cancel); auto cards open/take->navigate. Awaiting TASK-757 backend.
+
+- TASK-757 (backend): draft order editing + send. PUT /receipts/{id}/header, POST/DELETE /receipts/{id}/items[/{itemId}], POST /receipts/{id}/send -> status `ordered` (OrderedAt/OrderedByUserId, migration AddReceiptOrderedFields). `ordered` counted in transit, receive/cancel OK, tracking ordered->confirmed. Tests pass. Log: logs/tasks/757_*.md. Not committed.
+
+### TASK-759 — Production block UI alignment (frontend) — review
+Production pages/forms/detail + OrderCard/AutoOrdersSection switched to shared Btn/Table/Modal/ActionMenu, pill badges, 22px headers. tsc + eslint clean. Log: .claude/logs/tasks/759_2026-10-22_production-ui-alignment_frontend-developer.md
+
+- TASK-760: store-side /orders/production + production-only /production/requests via `mode` prop; sidebar item + TenantRoleTabs key. See logs/tasks/760_*.
+
+- TASK-762 (frontend, review): production inbox (stage chips, sync-orders retry, no ship/summary) + "Виробничі замовлення" with per-store ship / ship-all. tsc+eslint clean. See logs/tasks/762_*.
+
+- TASK-761 (backend, review): accepted requests auto-plan into Planned production orders (ProductionOrderSyncService, advisory-lock find-or-create), productionStage/hasRecipe/linkedOrders DTOs, sync-orders + ship-requests endpoints, ship guard, `production_request.ready` notification. 2941 tests green. See logs/tasks/761_*.
 ### TASK-750 — Планограма backend: підкладка плану, типи зон, інсайти полиці, збагачення AI-скану — review
 Upload фону плану, нові типи зон, `GET .../shelves/{shelfId}/insights`, enrich скану (склад/продажі/рекомендація) + `ShelfRestockAdvisor`. Без міграцій. Лог: `.claude/logs/tasks/750_*` (раніше позначався TASK-747).
 
 ### TASK-751 — Планограма frontend: підкладка плану, типи зон, ShelfInsightPanel, збагачений скан, компактні зони — review
 tsc/lint/next build OK. Лог: `.claude/logs/tasks/751_*` (раніше TASK-748).
+
+- TASK-764 (frontend-developer): production Overview/Plan/Shipments/Warehouse pages + reordered sidebar; tsc+eslint clean; awaiting TASK-763 contract check. Log: logs/tasks/764_*.md
+
+### TASK-763 production insights read endpoints (backend) - done
+Overview/plan/shipments/stock GETs under api/production + TenantRoleTabs keys; tests green. Log: logs/tasks/763_*.
+
+- TASK-766 (frontend-developer): production Overview pipeline (4 windows + period + stats) on GET /api/production/pipeline; tsc+eslint clean; verify against TASK-765. Log: logs/tasks/766_*.md
+
+- TASK-765 (backend-developer, done): GET /api/production/pipeline — 4-stage pipeline read model (new/inWork/ready current; shipped + stats per period in location tz). See logs/tasks/765_*.md.
+
+- TASK-768 (frontend-developer): production Overview compact cards + detail modal, shipped-today window; new /production/analytics page (KPIs, chart, tables, CSV) + sidebar item; tsc+eslint clean; verify vs TASK-767. Log: logs/tasks/768_*.md
+
+- TASK-767 (backend-developer): GET /api/production/analytics + TenantRoleTabs `/production/analytics`; 9 tests, build OK. Log: logs/tasks/767_*.md
+
+- TASK-769 (frontend-developer): UI standard consolidation - shared PageContainer/PageHeader/BackLink/Tabs/StatusPill/fieldStyles + Btn extensions; applied to production + orders block; ESLint guard; docs. tsc+lint clean. Log: logs/tasks/769_*.md

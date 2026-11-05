@@ -4,26 +4,8 @@ import { useState } from "react";
 import { useTranslations } from "next-intl";
 import type { Customer, CreateCustomerPayload, UpdateCustomerPayload } from "../types";
 import { Btn } from "@/components/ui/Btn";
-
-const inputStyle: React.CSSProperties = {
-  width: "100%",
-  background: "#0D1117",
-  border: "1px solid #374151",
-  borderRadius: 8,
-  padding: "9px 12px",
-  color: "#E8EDF5",
-  fontSize: 13,
-  outline: "none",
-  boxSizing: "border-box",
-};
-
-const labelStyle: React.CSSProperties = {
-  display: "block",
-  color: "#9CA3AF",
-  fontSize: 12,
-  fontWeight: 500,
-  marginBottom: 6,
-};
+import { Modal } from "@/components/ui/Modal";
+import { inputStyle, labelStyle, textareaStyle } from "@/components/ui/fieldStyles";
 
 function validate(
   name: string,
@@ -99,76 +81,15 @@ export function CustomerForm({ customer, isPending, error, onClose, onSubmit }: 
   }
 
   return (
-    <>
-      {/* Backdrop */}
-      <div
-        onClick={onClose}
-        style={{
-          position: "fixed",
-          inset: 0,
-          background: "rgba(0,0,0,0.6)",
-          zIndex: 300,
-          backdropFilter: "blur(2px)",
-        }}
-      />
-
-      {/* Modal */}
-      <div
-        style={{
-          position: "fixed",
-          top: "50%",
-          left: "50%",
-          transform: "translate(-50%, -50%)",
-          width: "min(520px, 95vw)",
-          background: "#0D1117",
-          border: "1px solid #1F2937",
-          borderRadius: 14,
-          zIndex: 301,
-          display: "flex",
-          flexDirection: "column",
-          maxHeight: "90vh",
-          overflow: "hidden",
-        }}
-      >
-        {/* Header */}
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            padding: "18px 22px",
-            borderBottom: "1px solid #1F2937",
-            flexShrink: 0,
-          }}
-        >
-          <div>
-            <h2 style={{ color: "#E8EDF5", fontSize: 15, fontWeight: 700, margin: 0 }}>
-              {isEdit ? t("titleEdit") : t("titleNew")}
-            </h2>
-            <p style={{ color: "#4B5563", fontSize: 12, margin: "3px 0 0" }}>
-              {isEdit ? t("subtitleEdit") : t("subtitleNew")}
-            </p>
-          </div>
-          <button
-            onClick={onClose}
-            style={{
-              background: "transparent",
-              border: "1px solid #1F2937",
-              borderRadius: 8,
-              padding: "5px 9px",
-              color: "#4B5563",
-              fontSize: 16,
-              cursor: "pointer",
-            }}
-          >
-            ✕
-          </button>
-        </div>
+    <Modal title={isEdit ? t("titleEdit") : t("titleNew")} onClose={onClose} width={520}>
+      <p style={{ color: "#4B5563", fontSize: 12, margin: "-14px 0 16px" }}>
+        {isEdit ? t("subtitleEdit") : t("subtitleNew")}
+      </p>
 
         {/* Form */}
         <form
           onSubmit={handleSubmit}
-          style={{ padding: 22, overflowY: "auto", display: "flex", flexDirection: "column", gap: 14 }}
+          style={{ display: "flex", flexDirection: "column", gap: 14 }}
         >
           {/* Name */}
           <div>
@@ -221,11 +142,7 @@ export function CustomerForm({ customer, isPending, error, onClose, onSubmit }: 
               onChange={(e) => setNotes(e.target.value)}
               placeholder={t("notesPlaceholder")}
               rows={3}
-              style={{
-                ...inputStyle,
-                resize: "vertical",
-                fontFamily: "inherit",
-              }}
+              style={textareaStyle}
             />
           </div>
 
@@ -298,7 +215,6 @@ export function CustomerForm({ customer, isPending, error, onClose, onSubmit }: 
             </Btn>
           </div>
         </form>
-      </div>
-    </>
+    </Modal>
   );
 }

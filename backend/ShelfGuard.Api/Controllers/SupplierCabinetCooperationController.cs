@@ -54,6 +54,7 @@ public sealed class SupplierCabinetCooperationController : ControllerBase
 
     /// <summary>Approves a pending request: generates the contract PDF and moves to awaiting_signature.</summary>
     [HttpPost("cooperation-requests/{id:guid}/approve")]
+    [RequireRecentMfa]
     [ProducesResponseType(typeof(CooperationAgreementDto), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(object), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(object), StatusCodes.Status404NotFound)]
@@ -68,6 +69,7 @@ public sealed class SupplierCabinetCooperationController : ControllerBase
 
     /// <summary>Rejects a pending request with a reason.</summary>
     [HttpPost("cooperation-requests/{id:guid}/reject")]
+    [RequireRecentMfa]
     [ProducesResponseType(typeof(CooperationAgreementDto), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(object), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(object), StatusCodes.Status404NotFound)]
@@ -83,6 +85,7 @@ public sealed class SupplierCabinetCooperationController : ControllerBase
 
     /// <summary>Re-renders the contract PDF (same number). Only while awaiting_signature — never after signing.</summary>
     [HttpPost("cooperation-requests/{id:guid}/regenerate-contract")]
+    [RequireRecentMfa]
     [ProducesResponseType(typeof(CooperationAgreementDto), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(object), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(object), StatusCodes.Status404NotFound)]
@@ -97,6 +100,7 @@ public sealed class SupplierCabinetCooperationController : ControllerBase
 
     /// <summary>Sends the generated contract to Вчасно for e-signature (per-tenant API key).</summary>
     [HttpPost("cooperation-requests/{id:guid}/send-to-vchasno")]
+    [RequireRecentMfa]
     [ProducesResponseType(typeof(CooperationAgreementDto), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(object), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(object), StatusCodes.Status404NotFound)]
@@ -111,6 +115,7 @@ public sealed class SupplierCabinetCooperationController : ControllerBase
 
     /// <summary>Confirms the contract is signed (via Вчасно or physically) → status active.</summary>
     [HttpPost("cooperation-requests/{id:guid}/mark-signed")]
+    [RequireRecentMfa]
     [ProducesResponseType(typeof(CooperationAgreementDto), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(object), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(object), StatusCodes.Status404NotFound)]
@@ -125,6 +130,7 @@ public sealed class SupplierCabinetCooperationController : ControllerBase
 
     /// <summary>Terminates an active agreement (optional reason).</summary>
     [HttpPost("cooperation-requests/{id:guid}/terminate")]
+    [RequireRecentMfa]
     [ProducesResponseType(typeof(CooperationAgreementDto), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(object), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(object), StatusCodes.Status404NotFound)]
@@ -178,6 +184,7 @@ public sealed class SupplierCabinetCooperationController : ControllerBase
 
     /// <summary>Creates/replaces the own contract requisites (images are uploaded separately).</summary>
     [HttpPut("contract-settings")]
+    [RequireRecentMfa]
     [ProducesResponseType(typeof(SupplierContractSettingsDto), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(object), StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> UpsertContractSettings(
@@ -192,6 +199,7 @@ public sealed class SupplierCabinetCooperationController : ControllerBase
 
     /// <summary>Uploads the director's signature image (PNG/JPG, max 2 MB).</summary>
     [HttpPost("contract-settings/signature-image")]
+    [RequireRecentMfa]
     [ProducesResponseType(typeof(object), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(object), StatusCodes.Status400BadRequest)]
     public Task<IActionResult> UploadSignatureImage(IFormFile file, CancellationToken ct) =>
@@ -199,6 +207,7 @@ public sealed class SupplierCabinetCooperationController : ControllerBase
 
     /// <summary>Uploads the company stamp («мокра печатка») image (PNG/JPG, max 2 MB).</summary>
     [HttpPost("contract-settings/stamp-image")]
+    [RequireRecentMfa]
     [ProducesResponseType(typeof(object), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(object), StatusCodes.Status400BadRequest)]
     public Task<IActionResult> UploadStampImage(IFormFile file, CancellationToken ct) =>
@@ -260,6 +269,7 @@ public sealed class SupplierCabinetCooperationController : ControllerBase
     /// remaining path to Delivered.
     /// </summary>
     [HttpPost("orders/{id:guid}/status")]
+    [RequireRecentMfa]
     [ProducesResponseType(typeof(MarketplaceOrderDto), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(object), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(object), StatusCodes.Status404NotFound)]
@@ -293,6 +303,7 @@ public sealed class SupplierCabinetCooperationController : ControllerBase
     /// <c>warnings</c> (user decision 2026-09-02).
     /// </summary>
     [HttpPost("orders/{id:guid}/ship")]
+    [RequireRecentMfa]
     [RequireModule("supplier_inventory")]
     [ProducesResponseType(typeof(ShipOrderResultDto), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(object), StatusCodes.Status400BadRequest)]
@@ -446,6 +457,7 @@ public sealed class SupplierCabinetCooperationController : ControllerBase
 
     /// <summary>Changes a ticket status (open | in_progress | resolved | closed).</summary>
     [HttpPost("support-tickets/{id:guid}/status")]
+    [RequireRecentMfa]
     [ProducesResponseType(typeof(SupplierSupportTicketDto), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(object), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(object), StatusCodes.Status404NotFound)]

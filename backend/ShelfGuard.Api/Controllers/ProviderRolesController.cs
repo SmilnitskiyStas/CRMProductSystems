@@ -19,6 +19,7 @@ public sealed class ProviderRolesController(IProviderRolesService rolesService) 
     }
 
     [HttpPost]
+    [RequireRecentMfa]
     [Authorize(Policy = AppPolicies.ProviderCanInvite)]
     public async Task<IActionResult> Create([FromBody] CreateProviderRoleRequest req, CancellationToken ct)
     {
@@ -28,6 +29,7 @@ public sealed class ProviderRolesController(IProviderRolesService rolesService) 
     }
 
     [HttpPut("{id:guid}")]
+    [RequireRecentMfa]
     [Authorize(Policy = AppPolicies.ProviderCanInvite)]
     public async Task<IActionResult> Update(Guid id, [FromBody] UpdateProviderRoleRequest req, CancellationToken ct)
     {
@@ -37,6 +39,7 @@ public sealed class ProviderRolesController(IProviderRolesService rolesService) 
     }
 
     [HttpDelete("{id:guid}")]
+    [RequireRecentMfa]
     [Authorize(Policy = AppPolicies.ProviderCanInvite)]
     public async Task<IActionResult> Delete(Guid id, CancellationToken ct)
     {

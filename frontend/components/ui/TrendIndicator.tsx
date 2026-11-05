@@ -14,6 +14,8 @@ interface TrendIndicatorProps {
   /** How to format the raw values shown in the hover tooltip. */
   format?: TrendFormat;
   size?: TrendSize;
+  /** Whether a decrease represents an improvement (for example, write-off losses). */
+  lowerIsBetter?: boolean;
   className?: string;
 }
 
@@ -31,10 +33,10 @@ function formatValue(value: number, format: TrendFormat, locale: string): string
 
 /**
  * Self-contained period-over-period trend badge: computes % change from
- * `current`/`previous` and renders a colored arrow (green up / red down) or
+ * `current`/`previous` and renders a colored arrow (green for improvement) or
  * a neutral dash when there's no comparable baseline.
  */
-export function TrendIndicator({ current, previous, format = "number", size = "md", className }: TrendIndicatorProps) {
+export function TrendIndicator({ current, previous, format = "number", size = "md", lowerIsBetter = false, className }: TrendIndicatorProps) {
   const t = useTranslations("Dashboard.ui.trendIndicator");
   const locale = useLocale();
   const neutral = previous === null || previous === 0;
@@ -45,7 +47,8 @@ export function TrendIndicator({ current, previous, format = "number", size = "m
   const fontSize = size === "sm" ? 11 : 12;
   const iconSize = size === "sm" ? 12 : 14;
 
-  const color = isUp ? "#4ADE80" : isDown ? "#F87171" : "#6B7280";
+  const isImprovement = lowerIsBetter ? isDown : isUp;
+  const color = isUp || isDown ? (isImprovement ? "#4ADE80" : "#F87171") : "#6B7280";
   const Icon = isUp ? TrendingUp : isDown ? TrendingDown : Minus;
 
   const title = neutral

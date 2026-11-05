@@ -40,6 +40,7 @@ export function SupplierClientChatPanel({ clientTenantId, clientTenantName, onCl
   return (
     <div
       style={{
+        // eslint-disable-next-line no-restricted-syntax -- floating chat widget
         position: "fixed",
         bottom: 24,
         right: 24,

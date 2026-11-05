@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { authApi } from "../api/auth";
 import { clearToken, getToken, markLoggedOut } from "@/lib/api";
 import { clearStoredUser } from "../store";
-import { isTwoFactorChallenge, type LoginSuccessResponse } from "../types";
+import { isTwoFactorChallenge, isMfaEnrollment, type LoginSuccessResponse } from "../types";
 import { useStoreContext } from "@/lib/useStoreContext";
 import { AppRoles, PROVIDER_TEAM, type AppRole } from "@/lib/roles";
 
@@ -23,7 +23,7 @@ export function useMe() {
 }
 
 /** Shared post-login handler — used by both password login and 2FA verify. */
-function useCompleteLogin() {
+export function useCompleteLogin() {
   const queryClient = useQueryClient();
   const router = useRouter();
 
@@ -57,7 +57,7 @@ export function useLogin() {
   return useMutation({
     mutationFn: authApi.login,
     onSuccess: (data) => {
-      if (isTwoFactorChallenge(data)) return;
+      if (isTwoFactorChallenge(data) || isMfaEnrollment(data)) return;
       completeLogin(data);
     },
   });
@@ -73,7 +73,7 @@ export function useVerifyTwoFactor() {
   });
 }
 
-/** Requests a temporary password by email. Always resolves once the HTTP request itself
+/** Requests a password-recovery link by email. Always resolves once the HTTP request itself
  *  succeeds — the backend returns 204 unconditionally, regardless of whether the email
  *  exists/is active, so there is no auth side effect and no onSuccess handler here. */
 export function useForgotPassword() {
@@ -83,7 +83,7 @@ export function useForgotPassword() {
 }
 
 /** Logout mutation — clears all auth state and redirects to /login. */
-export function useLogout() {
+export function useLogout({ all = false }: { all?: boolean } = {}) {
   const queryClient = useQueryClient();
   const router = useRouter();
 
@@ -98,10 +98,12 @@ export function useLogout() {
       // Flag BEFORE the logout call: in-flight polling requests (chat widget,
       // notifications) will 401 once the refresh cookie is revoked — the flag
       // keeps them from hijacking the redirect with ?reason=session_expired (BUG-011).
-      markLoggedOut();
-      return authApi.logout();
+      if (!all) markLoggedOut();
+      return all ? authApi.logoutAll() : authApi.logout();
     },
     onSettled: (_data, _error, reason) => {
+      if (all && _error) return; // Never present an unacknowledged global revoke as success.
+      markLoggedOut();
       clearToken();
       clearStoredUser();
       queryClient.clear();

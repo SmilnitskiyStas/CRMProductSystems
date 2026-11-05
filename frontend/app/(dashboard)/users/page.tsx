@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import type { CSSProperties } from "react";
 import { useSearchParams } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { UserPlus } from "lucide-react";
@@ -11,6 +10,9 @@ import { useMe } from "@/features/auth/hooks/useAuth";
 import { useUsers } from "@/features/users/hooks/useUsers";
 import { TenantRolesTab } from "@/features/tenant-roles/components/TenantRolesTab";
 import { Btn } from "@/components/ui/Btn";
+import { PageContainer } from "@/components/ui/PageContainer";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { Tabs } from "@/components/ui/Tabs";
 import { hasRole, AT_LEAST_ENTERPRISE_ADMIN, AT_LEAST_STORE_MANAGER } from "@/lib/roles";
 import { useRequireTab } from "@/lib/useRequireTab";
 
@@ -50,55 +52,29 @@ export default function UsersPage() {
   // Stage 3 RLS enforcement goes live.
   const needsLocationCount = users?.filter((u) => u.needsLocationAssignment).length ?? 0;
 
-  const tabBtnStyle = (active: boolean): CSSProperties => ({
-    padding: "8px 2px",
-    background: "transparent",
-    border: "none",
-    borderBottom: active ? "2px solid #3B82F6" : "2px solid transparent",
-    color: active ? "#3B82F6" : "#4B5563",
-    fontSize: 14,
-    fontWeight: active ? 600 : 500,
-    cursor: "pointer",
-    marginBottom: -1,
-  });
-
   return (
-    <div style={{ padding: "28px 32px" }}>
-      {/* Header */}
-      <div
-        style={{
-          display: "flex",
-          alignItems: "flex-start",
-          justifyContent: "space-between",
-          marginBottom: 20,
-        }}
-      >
-        <div>
-          <h1 style={{ color: "#E8EDF5", fontSize: 22, fontWeight: 700, margin: 0 }}>
-            {t("title")}
-          </h1>
-          <p style={{ color: "#4B5563", fontSize: 14, marginTop: 6 }}>
-            {t("subtitle")}
-          </p>
-        </div>
+    <PageContainer>
+      <PageHeader
+        title={t("title")}
+        subtitle={t("subtitle")}
+        actions={
+          tab === "staff" && isAdmin ? (
+            <Btn icon={<UserPlus size={15} />} onClick={() => setInviteOpen(true)}>
+              {t("inviteButton")}
+            </Btn>
+          ) : undefined
+        }
+      />
 
-        {tab === "staff" && isAdmin && (
-          <Btn icon={<UserPlus size={15} />} onClick={() => setInviteOpen(true)}>
-            {t("inviteButton")}
-          </Btn>
-        )}
-      </div>
-
-      {/* Tabs — "Шаблони ролей" (role templates) is enterprise_admin+ only (ADR-020) */}
       {canManageRoleTemplates && (
-        <div style={{ display: "flex", gap: 22, borderBottom: "1px solid #1F2937", marginBottom: 24 }}>
-          <button style={tabBtnStyle(tab === "staff")} onClick={() => setTab("staff")}>
-            {t("staffTab")}
-          </button>
-          <button style={tabBtnStyle(tab === "role-templates")} onClick={() => setTab("role-templates")}>
-            {t("roleTemplatesTab")}
-          </button>
-        </div>
+        <Tabs<PageTab>
+          value={tab}
+          onChange={setTab}
+          items={[
+            { key: "staff", label: t("staffTab") },
+            { key: "role-templates", label: t("roleTemplatesTab") },
+          ]}
+        />
       )}
 
       {tab === "role-templates" && canManageRoleTemplates ? (
@@ -106,7 +82,7 @@ export default function UsersPage() {
       ) : (
         <>
           {/* Stats row */}
-          <div style={{ display: "flex", gap: 12, marginBottom: 24 }}>
+          <div style={{ display: "flex", gap: 12, marginBottom: 20 }}>
             {[
               { label: t("statTotal"),    value: totalCount,    color: "#60A5FA" },
               { label: t("statActive"),   value: activeCount,   color: "#4ADE80" },
@@ -140,6 +116,6 @@ export default function UsersPage() {
 
       {/* Invite modal */}
       {inviteOpen && <InviteUserModal onClose={() => setInviteOpen(false)} />}
-    </div>
+    </PageContainer>
   );
 }

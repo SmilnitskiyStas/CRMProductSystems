@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <TargetFramework>net8.0</TargetFramework>
     <Nullable>enable</Nullable>
@@ -25,9 +25,21 @@
     <ProjectReference Include="..\ShelfGuard.Infrastructure\ShelfGuard.Infrastructure.csproj" />
   </ItemGroup>
   <ItemGroup>
+    <None Include="..\..\desktop\tests\fixtures\label-job-archive.v1.json" Link="Fixtures\label-job-archive.v1.json" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\..\desktop\tests\fixtures\label-job-profile.v2.json" Link="Fixtures\label-job-profile.v2.json" CopyToOutputDirectory="PreserveNewest" />
     <!-- Shared with the cashier's TypeScript engine mirror: keep the path stable. -->
     <None Include="Promotions\golden-vectors.json" CopyToOutputDirectory="PreserveNewest" />
     <!-- Copied from Beauty CRM .ai/artifacts/contracts (ADR-018). TEST-ONLY secret. -->
     <None Include="BeautyControl\ADR-018-hmac-test-vector.json" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\..\docs\ERM\AgruSystems_W2_Parallel_Schema.sql" Link="Fixtures\erp-w2.sql" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\..\docs\ERM\AgruSystems_W4B_Scope_Fence.sql" Link="Fixtures\erp-w4b.sql" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\..\docs\ERM\AgruSystems_W4D_Receipt_Posting.sql" Link="Fixtures\erp-w4d.sql" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\..\docs\ERM\AgruSystems_W4F_Transfer_Posting.sql" Link="Fixtures\erp-w4f.sql" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\..\docs\ERM\AgruSystems_W4G_WriteOff_Posting.sql" Link="Fixtures\erp-w4g.sql" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\..\docs\ERM\AgruSystems_W4H_POS_Sale_Posting.sql" Link="Fixtures\erp-w4h.sql" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\..\docs\ERM\AgruSystems_W4H2_POS_Return_Posting.sql" Link="Fixtures\erp-w4h2.sql" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\..\docs\ERM\AgruSystems_W4I2_Production_Posting.sql" Link="Fixtures\erp-w4i2.sql" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\..\docs\ERM\AgruSystems_W4J_IoT_Posting.sql" Link="Fixtures\erp-w4j.sql" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\..\docs\ERM\AgruSystems_W4K_Integrated_Posting.sql" Link="Fixtures\erp-w4k.sql" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>

@@ -2,7 +2,9 @@
 
 import { useState } from "react";
 import { useTranslations, useLocale } from "next-intl";
-import { ChevronLeft, ChevronRight, Filter, RefreshCw } from "lucide-react";
+import { Filter, RefreshCw } from "lucide-react";
+import { Btn } from "@/components/ui/Btn";
+import { Pagination } from "@/components/ui/Pagination";
 import { useProviderLogs } from "../hooks/useProvider";
 import { useTenants } from "../hooks/useProvider";
 import type { ProviderLogsFilter } from "../types";
@@ -192,29 +194,13 @@ export function ProviderLogsPanel({ initialTenantId }: { initialTenantId?: strin
 
         <div style={{ display: "flex", gap: 8, marginLeft: "auto" }}>
           {hasFilter && (
-            <button
-              onClick={resetFilters}
-              style={{
-                padding: "7px 12px", borderRadius: 7, fontSize: 12,
-                background: "transparent", border: "1px solid #374151",
-                color: "#6B7280", cursor: "pointer",
-              }}
-            >
+            <Btn variant="ghost" size="sm" onClick={resetFilters}>
               {t("resetButton")}
-            </button>
+            </Btn>
           )}
-          <button
-            onClick={() => refetch()}
-            style={{
-              display: "flex", alignItems: "center", gap: 5,
-              padding: "7px 12px", borderRadius: 7, fontSize: 12,
-              background: "transparent", border: "1px solid #1F2937",
-              color: "#6B7280", cursor: "pointer",
-            }}
-          >
-            <RefreshCw size={12} />
+          <Btn variant="ghost" size="sm" icon={<RefreshCw size={12} />} onClick={() => refetch()}>
             {t("refreshButton")}
-          </button>
+          </Btn>
         </div>
       </div>
 
@@ -337,43 +323,7 @@ export function ProviderLogsPanel({ initialTenantId }: { initialTenantId?: strin
 
       {/* Pagination */}
       {totalPages > 1 && (
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
-          <button
-            onClick={() => setPage((p) => Math.max(1, p - 1))}
-            disabled={page === 1}
-            style={{
-              display: "flex", alignItems: "center", gap: 4,
-              padding: "7px 12px", borderRadius: 7, fontSize: 12,
-              background: "transparent",
-              border: `1px solid ${page === 1 ? "#1F2937" : "#374151"}`,
-              color: page === 1 ? "#1F2937" : "#9CA3AF",
-              cursor: page === 1 ? "default" : "pointer",
-            }}
-          >
-            <ChevronLeft size={14} />
-            {t("prevButton")}
-          </button>
-
-          <span style={{ color: "#4B5563", fontSize: 12, padding: "0 8px" }}>
-            {page} / {totalPages}
-          </span>
-
-          <button
-            onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-            disabled={page === totalPages}
-            style={{
-              display: "flex", alignItems: "center", gap: 4,
-              padding: "7px 12px", borderRadius: 7, fontSize: 12,
-              background: "transparent",
-              border: `1px solid ${page === totalPages ? "#1F2937" : "#374151"}`,
-              color: page === totalPages ? "#1F2937" : "#9CA3AF",
-              cursor: page === totalPages ? "default" : "pointer",
-            }}
-          >
-            {t("nextButton")}
-            <ChevronRight size={14} />
-          </button>
-        </div>
+        <Pagination page={page} totalPages={totalPages} totalCount={data?.total ?? 0} onPageChange={setPage} />
       )}
     </div>
   );

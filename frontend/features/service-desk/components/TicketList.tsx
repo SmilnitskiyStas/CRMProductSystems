@@ -12,6 +12,8 @@ import {
   getTicketPriorityLabel,
 } from "../types";
 import { TicketCard } from "./TicketCard";
+import { Pagination } from "@/components/ui/Pagination";
+import { filterInputStyle } from "@/components/ui/fieldStyles";
 
 const PAGE_SIZE = 20;
 
@@ -41,17 +43,6 @@ export function TicketList({ selectedId, onSelect }: Props) {
   const totalPages = data?.totalPages ?? 1;
   const totalCount = data?.totalCount ?? 0;
 
-  const selectStyle = {
-    background: "#111827",
-    border: "1px solid #1F2937",
-    borderRadius: 6,
-    color: "#9CA3AF",
-    fontSize: 13,
-    padding: "7px 10px",
-    cursor: "pointer",
-    outline: "none",
-  };
-
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
       {/* Filters */}
@@ -72,17 +63,7 @@ export function TicketList({ selectedId, onSelect }: Props) {
             value={search}
             onChange={(e) => { setSearch(e.target.value); setPage(1); }}
             placeholder={t("searchPlaceholder")}
-            style={{
-              width: "100%",
-              background: "#111827",
-              border: "1px solid #1F2937",
-              borderRadius: 6,
-              color: "#E8EDF5",
-              fontSize: 13,
-              padding: "7px 10px 7px 30px",
-              outline: "none",
-              boxSizing: "border-box",
-            }}
+            style={{ ...filterInputStyle, width: "100%", padding: "7px 10px 7px 30px", boxSizing: "border-box" }}
           />
         </div>
 
@@ -90,7 +71,7 @@ export function TicketList({ selectedId, onSelect }: Props) {
         <select
           value={status}
           onChange={(e) => { setStatus(e.target.value as TicketStatus | ""); setPage(1); }}
-          style={selectStyle}
+          style={filterInputStyle}
         >
           <option value="">{t("allStatusesOption")}</option>
           {TICKET_STATUSES.map((s) => (
@@ -102,7 +83,7 @@ export function TicketList({ selectedId, onSelect }: Props) {
         <select
           value={priority}
           onChange={(e) => { setPriority(e.target.value as TicketPriority | ""); setPage(1); }}
-          style={selectStyle}
+          style={filterInputStyle}
         >
           <option value="">{t("allPrioritiesOption")}</option>
           {TICKET_PRIORITIES.map((p) => (
@@ -149,41 +130,7 @@ export function TicketList({ selectedId, onSelect }: Props) {
 
       {/* Pagination */}
       {totalPages > 1 && (
-        <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 4 }}>
-          <button
-            onClick={() => setPage((p) => Math.max(1, p - 1))}
-            disabled={page === 1}
-            style={{
-              background: "#111827",
-              border: "1px solid #1F2937",
-              borderRadius: 6,
-              color: page === 1 ? "#374151" : "#9CA3AF",
-              fontSize: 12,
-              padding: "5px 12px",
-              cursor: page === 1 ? "not-allowed" : "pointer",
-            }}
-          >
-            {t("prevButton")}
-          </button>
-          <span style={{ color: "#4B5563", fontSize: 12 }}>
-            {page} / {totalPages}
-          </span>
-          <button
-            onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-            disabled={page === totalPages}
-            style={{
-              background: "#111827",
-              border: "1px solid #1F2937",
-              borderRadius: 6,
-              color: page === totalPages ? "#374151" : "#9CA3AF",
-              fontSize: 12,
-              padding: "5px 12px",
-              cursor: page === totalPages ? "not-allowed" : "pointer",
-            }}
-          >
-            {t("nextButton")}
-          </button>
-        </div>
+        <Pagination page={page} totalPages={totalPages} totalCount={totalCount} onPageChange={setPage} />
       )}
     </div>
   );

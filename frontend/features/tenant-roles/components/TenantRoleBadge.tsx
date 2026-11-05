@@ -2,6 +2,7 @@
 
 import { useTranslations } from "next-intl";
 import { useTenantRoles } from "../hooks/useTenantRoles";
+import { StatusPill } from "@/components/ui/StatusPill";
 import { useMe } from "@/features/auth/hooks/useAuth";
 import { hasRole, AT_LEAST_ENTERPRISE_ADMIN } from "@/lib/roles";
 
@@ -30,22 +31,11 @@ export function TenantRoleBadge({ tenantRoleId }: Props) {
   if (!role) return null;
 
   return (
-    <span
-      title={!role.isActive ? t("archivedTitle") : undefined}
-      style={{
-        display: "inline-block",
-        background: "#062b29",
-        border: "1px solid #0F766E",
-        borderRadius: 20,
-        padding: "2px 10px",
-        color: "#2DD4BF",
-        fontSize: 11,
-        fontWeight: 600,
-        whiteSpace: "nowrap",
-      }}
-    >
-      {role.name}
-      {!role.isActive && t("archivedSuffix")}
+    <span title={!role.isActive ? t("archivedTitle") : undefined}>
+      <StatusPill bg="#062b29" text="#2DD4BF">
+        {role.name}
+        {!role.isActive && t("archivedSuffix")}
+      </StatusPill>
     </span>
   );
 }

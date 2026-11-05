@@ -1,4 +1,5 @@
 "use client";
+import { inputStyle, labelStyle } from "@/components/ui/fieldStyles";
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
@@ -35,26 +36,6 @@ const cardStyle: React.CSSProperties = {
   border: "1px solid #1F2937",
   borderRadius: 12,
   padding: 24,
-};
-
-const inputStyle: React.CSSProperties = {
-  width: "100%",
-  background: "#0D1117",
-  border: "1px solid #374151",
-  borderRadius: 8,
-  padding: "9px 12px",
-  color: "#E8EDF5",
-  fontSize: 13,
-  outline: "none",
-  boxSizing: "border-box",
-};
-
-const labelStyle: React.CSSProperties = {
-  display: "block",
-  color: "#9CA3AF",
-  fontSize: 12,
-  fontWeight: 500,
-  marginBottom: 6,
 };
 
 const hintStyle: React.CSSProperties = { color: "#4B5563", fontSize: 11, marginTop: 4 };

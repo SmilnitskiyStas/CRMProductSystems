@@ -4,6 +4,7 @@ import type { CSSProperties } from "react";
 import { useTranslations, useLocale } from "next-intl";
 import type { FrequencyAudienceSummaryDto, FrequencyAudienceKey, PriceSegmentKey } from "../../types";
 import { FREQUENCY_AUDIENCE_COLORS, ALL_PRICE_TIERS } from "../../types";
+import { filterInputStyle, labelStyle } from "@/components/ui/fieldStyles";
 
 interface TierOption {
   segment: PriceSegmentKey;
@@ -32,16 +33,6 @@ interface Props {
   tierOptions: TierOption[] | undefined;
 }
 
-const inputStyle: CSSProperties = {
-  background: "#0D1117",
-  border: "1px solid #1F2937",
-  borderRadius: 6,
-  color: "#E8EDF5",
-  fontSize: 13,
-  padding: "7px 10px",
-  outline: "none",
-};
-const labelStyle: CSSProperties = { color: "#4B5563", fontSize: 12, marginBottom: 4, display: "block" };
 
 /**
  * Frequency & reactivation's audience picker (4 clickable cards — Sleeping/Declining/Growing/
@@ -142,7 +133,7 @@ export function FrequencyModeFilter({
                 value={declineThresholdPercent ?? ""}
                 placeholder={t("declineThresholdPlaceholder")}
                 onChange={(e) => onDeclineThresholdChange(e.target.value === "" ? undefined : Number(e.target.value))}
-                style={{ ...inputStyle, width: 110 }}
+                style={{ ...filterInputStyle, width: 110 }}
               />
             </div>
           )}
@@ -154,7 +145,7 @@ export function FrequencyModeFilter({
               min={0}
               value={minSpend ?? ""}
               onChange={(e) => onMinSpendChange(e.target.value === "" ? undefined : Number(e.target.value))}
-              style={{ ...inputStyle, width: 140 }}
+              style={{ ...filterInputStyle, width: 140 }}
             />
           </div>
           <div>
@@ -164,7 +155,7 @@ export function FrequencyModeFilter({
               min={0}
               value={maxSpend ?? ""}
               onChange={(e) => onMaxSpendChange(e.target.value === "" ? undefined : Number(e.target.value))}
-              style={{ ...inputStyle, width: 140 }}
+              style={{ ...filterInputStyle, width: 140 }}
             />
           </div>
           <div>
@@ -172,7 +163,7 @@ export function FrequencyModeFilter({
             <select
               value={priceSegmentFilter ?? ""}
               onChange={(e) => onPriceSegmentFilterChange(e.target.value === "" ? undefined : (e.target.value as PriceSegmentKey))}
-              style={{ ...inputStyle, width: 170 }}
+              style={{ ...filterInputStyle, width: 170 }}
             >
               <option value="">{t("allSegmentsOption")}</option>
               {ALL_PRICE_TIERS.map((tier) => (

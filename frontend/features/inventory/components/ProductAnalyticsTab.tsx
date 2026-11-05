@@ -7,8 +7,8 @@ import {
 } from "recharts";
 import { Loader2, TrendingUp, ArrowDownToLine, Trash2, RefreshCw, Package, Wallet, Clock } from "lucide-react";
 import { useTranslations, useLocale } from "next-intl";
-import { useProductMovements } from "../hooks/useProductMovements";
-import type { MovementDto } from "../api/movements";
+import { useProductMovements, useProductStockHistory } from "../hooks/useProductMovements";
+import { buildProductChartData, type ChartPoint } from "../lib/productChartData";
 import { MovementLog } from "./MovementLog";
 import { useProductIncoming } from "../hooks/useProductIncoming";
 import type { IncomingSupplyDto } from "../api/movements";
@@ -109,26 +109,6 @@ function todayStr(): string {
 
 // ── Chart data ────────────────────────────────────────────────────────────────
 
-interface ChartPoint {
-  date: string;
-  stock: number | null;
-  receipt: number;
-  transfer: number;
-  write_off: number;
-  adjustment: number;
-  /** Revenue/quantitySold/margin (TASK-484) are only populated when showRevenueSeries is true —
-   * merged in separately below, never touched by groupByDay itself. */
-  revenue?: number;
-  quantitySold?: number;
-  /** Units sold that day (POS sales trend) — drawn as the "sold" line on the quantity axis. */
-  sold?: number;
-  /** null = a real sale happened that day but margin is unknown (no Item.PricePurchase on file,
-   * or the caller can't view margin) — distinct from 0 (a sale day with exactly zero margin) and
-   * from "no key at all" (not a showRevenueSeries render). Rendered as a connectNulls gap, not
-   * coerced to 0 — unlike revenue/quantitySold, where "no sales that day" legitimately is 0. */
-  margin?: number | null;
-}
-
 /** Same green/red/gray-by-sign convention as CategoryDetailPanel.tsx's marginColor (interactive
  * analytics + margin plan) — kept as a local copy since these two components don't share a
  * "chart formatting" module today, mirroring how color tokens are inlined throughout this file. */
@@ -149,52 +129,6 @@ function daysOfStockColor(v: number | null | undefined): string {
   if (v < 7) return "#F87171";
   if (v < 30) return "#FBBF24";
   return "#4ADE80";
-}
-
-/**
- * `baseline` is the balance right before `from` (latest movement older than the window). Without
- * it a short range (7/14d) that has few or no movements has no stock value for the days before its
- * first movement, so the line is empty even though the product had stock the whole time.
- */
-function groupByDay(
-  items: MovementDto[],
-  from: string,
-  baseline: number | null = null,
-  /** Last x-axis day (YYYY-MM-DD). Defaults to today; later when a delivery is expected after it. */
-  until?: string,
-): ChartPoint[] {
-  const map = new Map<string, ChartPoint>();
-
-  const start = new Date(from);
-  const today = until ? new Date(until) : new Date();
-  for (let d = new Date(start); d <= today; d.setDate(d.getDate() + 1)) {
-    const key = d.toISOString().slice(0, 10);
-    map.set(key, { date: key, stock: null, receipt: 0, transfer: 0, write_off: 0, adjustment: 0 });
-  }
-
-  // Sort ascending so last quantityAfter per day is the end-of-day balance
-  const sorted = [...items].sort((a, b) => a.createdAt.localeCompare(b.createdAt));
-
-  for (const m of sorted) {
-    const key = m.createdAt.slice(0, 10);
-    const pt = map.get(key);
-    if (!pt) continue;
-
-    if (m.movementType === "receipt")    pt.receipt    += Math.abs(m.quantity);
-    if (m.movementType === "transfer")   pt.transfer   += Math.abs(m.quantity);
-    if (m.movementType === "write_off")  pt.write_off  += Math.abs(m.quantity);
-    if (m.movementType === "adjustment") pt.adjustment += Math.abs(m.quantity);
-    if (m.quantityAfter != null) pt.stock = m.quantityAfter;
-  }
-
-  // Forward-fill stock for days with no movements, starting from the balance carried into the window
-  let lastStock: number | null = baseline;
-  for (const pt of map.values()) {
-    if (pt.stock !== null) lastStock = pt.stock;
-    else if (lastStock !== null) pt.stock = lastStock;
-  }
-
-  return Array.from(map.values());
 }
 
 function formatDateTick(iso: string, intlLocale: string): string {
@@ -522,13 +456,14 @@ export function ProductAnalyticsTab({
     store_id: storeId,
   });
 
-  const movements = data?.items ?? [];
+  const movements = useMemo(() => data?.items ?? [], [data]);
+  const { data: stockHistory, isLoading: isStockHistoryLoading, isError: stockHistoryError } = useProductStockHistory(
+    productId, { from, to, store_id: storeId },
+  );
 
-  // Balance carried into the window: the newest movement strictly before `from` (page_size 1 —
-  // the API returns newest first). Falls back to the first in-window movement's quantityBefore.
   // Open orders heading to the store (internal orders + marketplace) — drawn as future markers.
   const { data: incomingData } = useProductIncoming(productId, storeId);
-  const incoming: IncomingSupplyDto[] = incomingData ?? [];
+  const incoming: IncomingSupplyDto[] = useMemo(() => incomingData ?? [], [incomingData]);
   const lastExpected = incoming
     .map((r) => r.expectedAt)
     .filter((d): d is string => !!d)
@@ -537,25 +472,10 @@ export function ProductAnalyticsTab({
   // Extend the axis only as far as the furthest expected delivery (never shrinks below today).
   const axisEnd = lastExpected && lastExpected > to ? lastExpected : to;
 
-  const dayBeforeFrom = daysAgoStr(rangeDays + 1);
-  const { data: beforeData } = useProductMovements(productId, {
-    to: dayBeforeFrom,
-    page_size: 1,
-    store_id: storeId,
-  });
-  const baselineStock: number | null = useMemo(() => {
-    const prior = beforeData?.items?.[0]?.quantityAfter;
-    if (prior != null) return prior;
-    const firstInWindow = [...movements]
-      .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
-      .find((m) => m.quantityBefore != null);
-    return firstInWindow?.quantityBefore ?? null;
-  }, [beforeData, movements]);
-
   const chartData = useMemo(
-    () => groupByDay(movements, from, baselineStock, axisEnd),
+    () => buildProductChartData(movements, from, axisEnd, stockHistory?.points ?? []),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [movements, from, baselineStock, axisEnd],
+    [movements, from, axisEnd, stockHistory],
   );
 
   // Expected deliveries grouped by day: one marker per date with the summed quantity + status label.
@@ -593,10 +513,10 @@ export function ProductAnalyticsTab({
     productId,
     { from, to, group_by: "day", store_id: storeId },
   );
-  const trendPoints = trendData?.points ?? [];
+  const trendPoints = useMemo(() => trendData?.points ?? [], [trendData]);
 
-  // Merge onto the movement-derived chartData by matching date strings — a day with no sales
-  // becomes 0 (not a gap, unlike stock's forward-fill), a day with sales but unknown margin
+  // Merge sales onto the daily balance by date. A day with no sales becomes 0,
+  // while a day with sales but unknown margin
   // stays null (see ChartPoint's margin doc comment above).
   const mergedChartData = useMemo((): ChartPoint[] => {
     const byDate = new Map(trendPoints.map((p) => [p.date, p]));
@@ -634,11 +554,8 @@ export function ProductAnalyticsTab({
     [trendPoints],
   );
 
-  // Current stock = last known quantityAfter in the period
-  const currentStock = useMemo(() => {
-    const sorted = [...movements].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
-    return sorted.find((m) => m.quantityAfter != null)?.quantityAfter ?? null;
-  }, [movements]);
+  // This is the actual balance across every batch, not the last movement's batch balance.
+  const currentStock = stockHistory?.currentStock ?? null;
 
   // Determine current zone
   const currentZone = useMemo(() => {
@@ -646,7 +563,7 @@ export function ProductAnalyticsTab({
     return zoneForStock(currentStock, buffers);
   }, [buffers, currentStock]);
 
-  if (isLoading) {
+  if (isLoading || isStockHistoryLoading) {
     return (
       <div style={{ display: "flex", alignItems: "center", justifyContent: "center", padding: "48px 0" }}>
         <Loader2 size={28} color="#374151" style={{ animation: "spin 1s linear infinite" }} />
@@ -669,7 +586,7 @@ export function ProductAnalyticsTab({
               cursor: "pointer",
               background: rangeDays === days ? "#1D3461" : "transparent",
               border: `1px solid ${rangeDays === days ? "#3B82F6" : "#1F2937"}`,
-              color: rangeDays === days ? "#60A5FA" : "#6B7280",
+              color: rangeDays === days ? "#93C5FD" : "#6B7280",
               transition: "all 0.1s",
             }}
           >
@@ -753,7 +670,11 @@ export function ProductAnalyticsTab({
           onHover={setHoveredLine}
         />
 
-        {movements.length === 0 && baselineStock == null ? (
+        {stockHistoryError ? (
+          <div role="alert" style={{ textAlign: "center", padding: "32px 0", color: "#F87171", fontSize: 13 }}>
+            {t("stockHistoryError")}
+          </div>
+        ) : movements.length === 0 && !stockHistory?.points.length ? (
           <div style={{ textAlign: "center", padding: "32px 0", color: "#374151", fontSize: 13 }}>
             {t("noMovements")}
           </div>

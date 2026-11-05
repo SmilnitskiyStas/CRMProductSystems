@@ -1,3 +1,5 @@
+using ShelfGuard.Domain.Entities;
+
 namespace ShelfGuard.Application.Features.Stock;
 
 /// <summary>
@@ -12,6 +14,16 @@ public static class StockStatus
     public const string Expired = "expired";
     public const string SoldOut = "sold_out";
     public const string NeedsVerification = "needs_verification";
+    public const string TemperatureHold = "temp_violation";
+
+    public static bool IsUsable(string status, decimal quantity, DateOnly expiry, DateOnly today) =>
+        quantity > 0 && expiry > today && status is not (Expired or SoldOut or "archived" or TemperatureHold);
+
+    public static bool IsUsable(ProductStock stock, DateOnly today) => IsUsable(stock.Status, stock.Quantity, stock.ExpiryDate, today);
+
+    // Quantity restoration and ordinary reads must never release a quality hold.
+    public static string Recalculate(ProductStock stock) => stock.Status is TemperatureHold or "archived"
+        ? stock.Status : Compute(stock.Quantity, stock.ExpiryDate, stock.LastCheckedAt);
 
     public const int NeedsVerificationDays = 90;
     public const int CriticalDays = 6;

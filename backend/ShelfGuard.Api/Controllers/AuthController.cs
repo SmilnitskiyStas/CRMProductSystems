@@ -13,6 +13,7 @@ namespace ShelfGuard.Api.Controllers;
 
 [ApiController]
 [Route("api/auth")]
+[ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
 public sealed class AuthController : ControllerBase
 {
     private readonly IAuthService _auth;
@@ -41,6 +42,7 @@ public sealed class AuthController : ControllerBase
         // TASK-330: password ok but TOTP enabled — no tokens/cookie yet.
         if (outcome.ChallengeToken is not null)
             return Ok(new { requiresTwoFactor = true, challengeToken = outcome.ChallengeToken });
+        if (outcome.EnrollmentToken != null) return Ok(new { requiresMfaEnrollment = true, enrollmentToken = outcome.EnrollmentToken });
 
         SetRefreshTokenCookie(outcome.Response!.RefreshToken);
 
@@ -48,6 +50,38 @@ public sealed class AuthController : ControllerBase
     }
 
     /// <summary>Second login step: TOTP code or recovery code (TASK-330).</summary>
+    [HttpPost("mfa-enrollment/setup")]
+    [AllowAnonymous]
+    [EnableRateLimiting("auth-login")]
+    public async Task<IActionResult> SetupEnrollment([FromBody] MfaEnrollmentRequest request, CancellationToken ct)
+    {
+        var (response, error) = await _auth.SetupEnrollmentAsync(request.EnrollmentToken, ct);
+        return error == null ? Ok(response) : Unauthorized(new { error });
+    }
+
+    [HttpPost("mfa-enrollment/enable")]
+    [AllowAnonymous]
+    [EnableRateLimiting("auth-login")]
+    public async Task<IActionResult> EnableEnrollment([FromBody] MfaEnrollmentEnableRequest request, CancellationToken ct)
+    {
+        var (recoveryCodes, error, session) = await _auth.EnableEnrollmentAsync(request.EnrollmentToken, request.Code, ct);
+        if (error != null) return Unauthorized(new { error });
+        SetRefreshTokenCookie(session!.RefreshToken);
+        return Ok(new { recoveryCodes, session.AccessToken, session.User });
+    }
+
+    [HttpPost("2fa/step-up")]
+    [Authorize]
+    [EnableRateLimiting("auth-login")]
+    public async Task<IActionResult> StepUp([FromBody] MfaStepUpRequest request, CancellationToken ct)
+    {
+        if (User.IsInRole("consumer") || User.HasClaim("impersonated", "true")) return Forbid();
+        var id = ResolveUserId();
+        if (id == null || !Guid.TryParse(User.FindFirstValue("sid"), out var sid)) return Unauthorized();
+        var (response, error) = await _auth.StepUpAsync(id.Value, sid, request.Code, ct);
+        return error == null ? Ok(response) : Unauthorized(new { error });
+    }
+
     [HttpPost("2fa/verify")]
     [AllowAnonymous]
     [EnableRateLimiting("auth-login")]
@@ -91,14 +125,16 @@ public sealed class AuthController : ControllerBase
         var userId = ResolveUserId();
         if (userId is null) return Unauthorized();
 
-        var (recoveryCodes, error) = await _auth.EnableTwoFactorAsync(userId.Value, request.Code, ct);
-        return error is not null ? BadRequest(new { error }) : Ok(new { recoveryCodes });
+        var (recoveryCodes, error, session) = await _auth.EnableTwoFactorAsync(userId.Value, request.Code, ct);
+        if (error is not null) return BadRequest(new { error });
+        SetRefreshTokenCookie(session!.RefreshToken);
+        return Ok(new { recoveryCodes, session.AccessToken, session.User });
     }
 
     /// <summary>Disables 2FA after verifying both the password and a valid code.</summary>
     [HttpPost("2fa/disable")]
     [Authorize]
-    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(typeof(object), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(object), StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> DisableTwoFactor(
         [FromBody] TwoFactorDisableRequest request, CancellationToken ct)
@@ -106,8 +142,10 @@ public sealed class AuthController : ControllerBase
         var userId = ResolveUserId();
         if (userId is null) return Unauthorized();
 
-        var error = await _auth.DisableTwoFactorAsync(userId.Value, request.Password, request.Code, ct);
-        return error is not null ? BadRequest(new { error }) : NoContent();
+        var (response, error) = await _auth.DisableTwoFactorAsync(userId.Value, request.Password, request.Code, ct);
+        if (error is not null) return BadRequest(new { error });
+        SetRefreshTokenCookie(response!.RefreshToken);
+        return Ok(new { response.AccessToken, response.User });
     }
 
     [HttpPost("refresh")]
@@ -122,6 +160,7 @@ public sealed class AuthController : ControllerBase
             return Unauthorized(new { error = "Refresh token not found." });
 
         var (response, error) = await _auth.RefreshAsync(rawToken, ct);
+        if (error == AuthService.RotationRetry) return Conflict(new { error });
         if (error is not null)
         {
             DeleteRefreshTokenCookie();
@@ -134,14 +173,30 @@ public sealed class AuthController : ControllerBase
     }
 
     [HttpPost("logout")]
-    [Authorize]
+    [AllowAnonymous]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     public async Task<IActionResult> Logout(CancellationToken ct)
     {
-        var rawToken = Request.Cookies[RefreshTokenCookie];
-        if (!string.IsNullOrEmpty(rawToken))
+        if (User.IsInRole("consumer") || User.HasClaim("impersonated", "true")) return Forbid();
+        var userId = ResolveUserId();
+        if (userId is not null && Guid.TryParse(User.FindFirstValue("sid"), out var sessionId))
+            await _auth.RevokeSessionAsync(userId.Value, sessionId, ct);
+        else if (Request.Cookies[RefreshTokenCookie] is { Length: > 0 } rawToken)
+            // Expired access tokens can still log out using the HttpOnly SameSite refresh proof.
             await _auth.RevokeAsync(rawToken, ct);
 
+        DeleteRefreshTokenCookie();
+        return NoContent();
+    }
+
+    [HttpPost("logout-all")]
+    [Authorize]
+    public async Task<IActionResult> LogoutAll(CancellationToken ct)
+    {
+        if (User.IsInRole("consumer") || User.HasClaim("impersonated", "true")) return Forbid();
+        var userId = ResolveUserId();
+        if (userId is null) return Unauthorized();
+        await _auth.RevokeAllSessionsAsync(userId.Value, ct);
         DeleteRefreshTokenCookie();
         return NoContent();
     }
@@ -209,24 +264,6 @@ public sealed class AuthController : ControllerBase
 
         var error = await _users.ChangePasswordAsync(userId.Value, request, ct);
         return error is null ? NoContent() : BadRequest(new { error });
-    }
-
-    /// <summary>
-    /// Forgot-password flow (TASK-465 — supersedes the TASK-456 link/token design; see
-    /// AuthService.ForgotPasswordAsync). Always responds 204 regardless of whether the email
-    /// exists/is active — same no-enumeration posture as Login. On success the account gets a
-    /// new temporary password (valid 3 hours) delivered via email/Telegram — there is no
-    /// separate reset-password step; the user logs in directly with it.
-    /// </summary>
-    [HttpPost("forgot-password")]
-    [AllowAnonymous]
-    [EnableRateLimiting("auth-forgot-password")]
-    [ProducesResponseType(StatusCodes.Status204NoContent)]
-    public async Task<IActionResult> ForgotPassword(
-        [FromBody] ForgotPasswordRequest request, CancellationToken ct)
-    {
-        await _auth.ForgotPasswordAsync(request.Email, ClientIp(), ct);
-        return NoContent();
     }
 
     // NOTE (2026-07-15, security fix): a `POST telegram/link` endpoint used to live here,

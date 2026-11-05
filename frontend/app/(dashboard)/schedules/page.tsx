@@ -8,6 +8,10 @@ import { WeekGrid } from "@/features/schedules/components/WeekGrid";
 import { MyShifts } from "@/features/schedules/components/MyShifts";
 import { useSchedule, useUpdateSchedule } from "@/features/schedules/hooks/useSchedules";
 import { Btn } from "@/components/ui/Btn";
+import { PageContainer } from "@/components/ui/PageContainer";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { Tabs } from "@/components/ui/Tabs";
+import { StatusPill } from "@/components/ui/StatusPill";
 import { toast } from "sonner";
 import { useMe } from "@/features/auth/hooks/useAuth";
 import { AT_LEAST_STORE_MANAGER, PROVIDER_TEAM } from "@/lib/roles";
@@ -55,16 +59,13 @@ function WeekGridPanel({
   return (
     <>
       <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14, flexWrap: "wrap" }}>
-        <span
-          style={{
-            padding: "2px 10px", borderRadius: 999, fontSize: 11, fontWeight: 600,
-            background: status === "published" ? "#052e16" : "#111827",
-            color: status === "published" ? "#4ADE80" : "#9CA3AF",
-            border: `1px solid ${status === "published" ? "#16A34A" : "#374151"}`,
-          }}
+        <StatusPill
+          bg={status === "published" ? "#052e16" : "#111827"}
+          text={status === "published" ? "#4ADE80" : "#9CA3AF"}
+          style={{ border: `1px solid ${status === "published" ? "#16A34A" : "#1F2937"}` }}
         >
           {tList(status === "published" ? "statusPublished" : status === "archived" ? "statusArchived" : "statusDraft")}
-        </span>
+        </StatusPill>
         {canManage && status !== "published" && (
           <Btn size="sm" disabled={update.isPending} onClick={() => setStatus("published")}>
             {t("publishButton")}
@@ -111,79 +112,41 @@ export default function SchedulesPage() {
   // Provider team → own weekly slot schedule (not tenant-based WorkSchedule)
   if (PROVIDER_TEAM.has(userRole)) {
     return (
-      <div style={{ padding: "28px 32px" }}>
-        <div style={{ marginBottom: 20 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4 }}>
-            <Calendar size={20} style={{ color: "#3B82F6" }} />
-            <h1 style={{ color: "#E8EDF5", fontSize: 22, fontWeight: 700, margin: 0 }}>
+      <PageContainer>
+        <PageHeader
+          title={
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 10 }}>
+              <Calendar size={20} style={{ color: "#3B82F6" }} />
               {t("teamTitle")}
-            </h1>
-          </div>
-          <p style={{ color: "#4B5563", fontSize: 13, margin: 0 }}>
-            {t("teamSubtitle")}
-          </p>
-        </div>
+            </span>
+          }
+          subtitle={t("teamSubtitle")}
+        />
         <ScheduleTab />
-      </div>
+      </PageContainer>
     );
   }
 
-  const tabStyle = (tab: Tab): React.CSSProperties => ({
-    padding: "8px 18px",
-    borderRadius: 8,
-    border: "none",
-    background: activeTab === tab ? "#1D3461" : "transparent",
-    color: activeTab === tab ? "#93C5FD" : "#6B7280",
-    fontSize: 13,
-    fontWeight: activeTab === tab ? 600 : 400,
-    cursor: "pointer",
-    transition: "background 0.1s, color 0.1s",
-  });
-
   return (
-    <div style={{ padding: "28px 32px", minHeight: "100vh" }}>
-      {/* Header */}
-      <div
-        style={{
-          display: "flex",
-          alignItems: "flex-start",
-          justifyContent: "space-between",
-          marginBottom: 20,
-        }}
-      >
-        <div>
-          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4 }}>
+    <PageContainer style={{ minHeight: "100vh" }}>
+      <PageHeader
+        title={
+          <span style={{ display: "inline-flex", alignItems: "center", gap: 10 }}>
             <Calendar size={20} style={{ color: "#3B82F6" }} />
-            <h1 style={{ color: "#E8EDF5", fontSize: 22, fontWeight: 700, margin: 0 }}>
-              {t("title")}
-            </h1>
-          </div>
-          <p style={{ color: "#4B5563", fontSize: 13, margin: 0 }}>
-            {t("subtitle")}
-          </p>
-        </div>
+            {t("title")}
+          </span>
+        }
+        subtitle={t("subtitle")}
+      />
 
-        {/* Tabs */}
-        <div
-          style={{
-            display: "flex",
-            gap: 4,
-            background: "#111827",
-            border: "1px solid #1F2937",
-            borderRadius: 10,
-            padding: 4,
-          }}
-        >
-          {canManage && (
-            <button style={tabStyle("schedules")} onClick={() => setActiveTab("schedules")}>
-              {t("schedulesTab")}
-            </button>
-          )}
-          <button style={tabStyle("my-shifts")} onClick={() => setActiveTab("my-shifts")}>
-            {t("myShiftsTab")}
-          </button>
-        </div>
-      </div>
+      <Tabs<Tab>
+        items={[
+          ...(canManage ? [{ key: "schedules" as Tab, label: t("schedulesTab") }] : []),
+          { key: "my-shifts" as Tab, label: t("myShiftsTab") },
+        ]}
+        value={activeTab}
+        onChange={setActiveTab}
+      />
 
       {/* My shifts tab */}
       {activeTab === "my-shifts" && <MyShifts />}
@@ -255,6 +218,6 @@ export default function SchedulesPage() {
           </div>
         </div>
       )}
-    </div>
+    </PageContainer>
   );
 }

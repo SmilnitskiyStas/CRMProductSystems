@@ -4,6 +4,8 @@ import { useEffect, useMemo, useState } from "react";
 import { Star } from "lucide-react";
 import { toast } from "sonner";
 import { Btn } from "@/components/ui/Btn";
+import { Table } from "@/components/ui/Table";
+import { inputStyle as input, labelStyle as label } from "@/components/ui/fieldStyles";
 import { useCatalogProducts } from "@/features/catalog/hooks/useCatalog";
 import { useLocations } from "@/features/locations/hooks/useLocations";
 import { LocationsMultiSelectDropdown } from "@/features/users/components/LocationsMultiSelectDropdown";
@@ -12,9 +14,7 @@ import type { MobileCatalogItemSetting, MobileCatalogLayout, MobileCatalogSettin
 import { useCatalogAnalytics, useCatalogPublicationAction, useMobileCatalogPublication, useMobileCatalogSettings, useSaveMobileCatalogSettings, useUploadMobileCatalogBanner } from "../hooks/useMobileCatalogSettings";
 import { SectionTabs } from "./SectionTabs";
 
-const input: React.CSSProperties = { width: "100%", boxSizing: "border-box", background: "#0D1117", border: "1px solid #374151", borderRadius: 8, padding: "9px 12px", color: "#E8EDF5", fontSize: 13, outline: "none" };
 const section: React.CSSProperties = { background: "#10151D", border: "1px solid #202938", borderRadius: 10, padding: 16, display: "flex", flexDirection: "column", gap: 12 };
-const label: React.CSSProperties = { color: "#9CA3AF", fontSize: 12, display: "block", marginBottom: 6 };
 const hint: React.CSSProperties = { color: "#6B7280", fontSize: 11, margin: "4px 0 0" };
 const asset = (v: string | null) => !v ? null : /^https?:\/\//i.test(v) ? v : `${API_BASE.replace(/\/$/, "")}/${v.replace(/^\//, "")}`;
 const datePart = (value: string) => value ? value.split("T")[0] : "";
@@ -43,7 +43,18 @@ function CatalogAnalyticsPanel({ id, onClose }: { id: string; onClose: () => voi
   if (isLoading) return <p style={{ color: "#6B7280" }}>Завантаження статистики…</p>;
   if (isError || !data) return <div><p style={{ color: "#F87171" }}>Не вдалося завантажити статистику.</p><Btn variant="ghost" onClick={onClose}>Назад</Btn></div>;
   const metrics = [["Перегляди каталогу", data.catalogViews], ["Унікальні користувачі", data.uniqueUsers], ["Перегляди товарів", data.productViews], ["Сканування", data.productScans], ["Покупки", data.purchases], ["Конверсія", `${data.conversionPercent}%`], ["Дохід", `${data.revenue.toLocaleString("uk-UA")} ₴`]];
-  return <div style={{ background: "#0D1117", border: "1px solid #1F2937", borderRadius: 14, padding: 22 }}><div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}><div><h2 style={{ color: "#E8EDF5", fontSize: 16, margin: 0 }}>Статистика каталогу</h2><p style={hint}>Покупка зараховується, коли на касі до чека додають товар каталогу та ідентифікують покупця кодом програми лояльності з мобільного застосунку.</p></div><Btn variant="ghost" onClick={onClose}>Назад</Btn></div><div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(150px,1fr))", gap: 10, margin: "18px 0" }}>{metrics.map(([name, value]) => <div key={String(name)} style={{ ...section, gap: 5 }}><strong style={{ color: "#E8EDF5", fontSize: 20 }}>{value}</strong><span style={{ color: "#6B7280", fontSize: 11 }}>{name}</span></div>)}</div><div style={{ overflowX: "auto" }}><table style={{ width: "100%", borderCollapse: "collapse", color: "#D1D5DB", fontSize: 12 }}><thead><tr>{["Товар", "Перегляди", "Сканування в застосунку", "Покупки через код лояльності", "Перегляд → покупка", "Дохід"].map((x) => <th key={x} style={{ textAlign: "left", padding: 9, borderBottom: "1px solid #374151" }}>{x}</th>)}</tr></thead><tbody>{data.products.map((x) => <tr key={x.productId}><td style={{ padding: 9, borderBottom: "1px solid #202938" }}>{x.productName}</td><td>{x.views}</td><td>{x.scans}</td><td>{x.purchases}</td><td>{x.viewToPurchasePercent}%</td><td>{x.revenue.toLocaleString("uk-UA")} ₴</td></tr>)}</tbody></table></div></div>;
+  return <div style={{ background: "#0D1117", border: "1px solid #1F2937", borderRadius: 14, padding: 22 }}><div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}><div><h2 style={{ color: "#E8EDF5", fontSize: 16, margin: 0 }}>Статистика каталогу</h2><p style={hint}>Покупка зараховується, коли на касі до чека додають товар каталогу та ідентифікують покупця кодом програми лояльності з мобільного застосунку.</p></div><Btn variant="ghost" onClick={onClose}>Назад</Btn></div><div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(150px,1fr))", gap: 10, margin: "18px 0" }}>{metrics.map(([name, value]) => <div key={String(name)} style={{ ...section, gap: 5 }}><strong style={{ color: "#E8EDF5", fontSize: 20 }}>{value}</strong><span style={{ color: "#6B7280", fontSize: 11 }}>{name}</span></div>)}</div><Table
+    rowKey={(x) => x.productId}
+    rows={data.products}
+    columns={[
+      { key: "name", header: "Товар", render: (x) => x.productName },
+      { key: "views", header: "Перегляди", render: (x) => x.views },
+      { key: "scans", header: "Сканування в застосунку", render: (x) => x.scans },
+      { key: "purchases", header: "Покупки через код лояльності", render: (x) => x.purchases },
+      { key: "conv", header: "Перегляд → покупка", render: (x) => `${x.viewToPurchasePercent}%` },
+      { key: "revenue", header: "Дохід", render: (x) => `${x.revenue.toLocaleString("uk-UA")} ₴` },
+    ]}
+  /></div>;
 }
 
 function CatalogEditor({ id, onClose }: { id: string | null; onClose: () => void }) {

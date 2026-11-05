@@ -27,11 +27,15 @@ public sealed class OrderCalcRepository : IOrderCalcRepository
     }
 
     public async Task<Dictionary<Guid, decimal>> GetInTransitAsync(
-        Guid storeId, IReadOnlyCollection<Guid> productIds, CancellationToken ct = default)
+        Guid storeId, IReadOnlyCollection<Guid> productIds, CancellationToken ct = default,
+        bool excludeAutoUntakenDrafts = false)
     {
-        // Draft receipts = ordered but not yet received into stock.
+        // Draft + ordered (sent to supplier) receipts = ordered but not yet received into stock.
+        // The auto-job exclusion below applies to untaken auto DRAFTs only (an "ordered" one is always taken).
         return await _db.StockReceipts
-            .Where(r => r.DestinationStoreId == storeId && r.Status == "draft")
+            .Where(r => r.DestinationStoreId == storeId && (r.Status == "draft" || r.Status == "ordered"))
+            .Where(r => !excludeAutoUntakenDrafts
+                        || !(r.Source == ReceiptSource.AutoReplenishment && r.TakenByUserId == null))
             .SelectMany(r => r.Items)
             .Where(i => productIds.Contains(i.ProductId))
             .GroupBy(i => i.ProductId)
@@ -43,7 +47,7 @@ public sealed class OrderCalcRepository : IOrderCalcRepository
         Guid storeId, IReadOnlyCollection<Guid> productIds, DateOnly today, CancellationToken ct = default)
     {
         var rows = await _db.StockReceipts
-            .Where(r => r.DestinationStoreId == storeId && r.Status == "draft"
+            .Where(r => r.DestinationStoreId == storeId && (r.Status == "draft" || r.Status == "ordered")
                         && (r.PostponeCount > 0 || (r.ExpectedAt != null && r.ExpectedAt < today)))
             .SelectMany(r => r.Items.Where(i => productIds.Contains(i.ProductId))
                 .Select(i => new { i.ProductId, i.QuantityOrdered, r.ExpectedAt, r.PostponeCount }))

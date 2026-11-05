@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useTranslations, useLocale } from "next-intl";
 import { useCustomer } from "../hooks/useCustomers";
 import type { Customer, CustomerTransaction } from "../types";
@@ -10,6 +10,9 @@ import { CustomerTierCard } from "./CustomerTierCard";
 import { CustomerTicketsTab } from "./CustomerTicketsTab";
 import { CustomerReviewsTab } from "./CustomerReviewsTab";
 import { CustomerProfileHistoryTab } from "./CustomerProfileHistoryTab";
+import { DetailDrawer } from "@/components/ui/DetailDrawer";
+import { Tabs } from "@/components/ui/Tabs";
+import { StatusPill } from "@/components/ui/StatusPill";
 
 function formatDate(iso: string, intlLocale: string) {
   return new Date(iso).toLocaleDateString(intlLocale, {
@@ -49,20 +52,9 @@ function StatusBadge({ status }: { status: string }) {
   const cfg = configs[status] ?? { bg: "#111827", color: "#6B7280", border: "#374151" };
   const label = t.has(status) ? t(status) : status;
   return (
-    <span
-      style={{
-        background: cfg.bg,
-        border: `1px solid ${cfg.border}`,
-        borderRadius: 20,
-        padding: "2px 10px",
-        color: cfg.color,
-        fontSize: 11,
-        fontWeight: 600,
-        whiteSpace: "nowrap",
-      }}
-    >
+    <StatusPill bg={cfg.bg} text={cfg.color} style={{ border: `1px solid ${cfg.border}` }}>
       {label}
-    </span>
+    </StatusPill>
   );
 }
 
@@ -76,19 +68,6 @@ interface Props {
 
 type DetailTab = "info" | "loyalty" | "tickets" | "reviews" | "history";
 
-const TAB_STYLE = (active: boolean): React.CSSProperties => ({
-  background: "transparent",
-  border: "none",
-  borderBottom: `2px solid ${active ? "#3B82F6" : "transparent"}`,
-  color: active ? "#93C5FD" : "#4B5563",
-  fontSize: 12,
-  fontWeight: active ? 600 : 400,
-  padding: "9px 12px",
-  cursor: "pointer",
-  transition: "color 0.15s, border-color 0.15s",
-  whiteSpace: "nowrap",
-});
-
 export function CustomerDetail({ customer, onClose, onEdit }: Props) {
   const t = useTranslations("Dashboard.customers.detail");
   const tTabs = useTranslations("Dashboard.customers.detail.tabs");
@@ -98,15 +77,6 @@ export function CustomerDetail({ customer, onClose, onEdit }: Props) {
   const uah = new Intl.NumberFormat(intlLocale, { style: "currency", currency: "UAH" });
   const { data: detail, isLoading } = useCustomer(customer.id);
   const [tab, setTab] = useState<DetailTab>("info");
-
-  // Close on Escape
-  useEffect(() => {
-    function handler(e: KeyboardEvent) {
-      if (e.key === "Escape") onClose();
-    }
-    document.addEventListener("keydown", handler);
-    return () => document.removeEventListener("keydown", handler);
-  }, [onClose]);
 
   const transactionColumns: TableColumn<CustomerTransaction>[] = [
     {
@@ -136,115 +106,31 @@ export function CustomerDetail({ customer, onClose, onEdit }: Props) {
   ];
 
   return (
-    <>
-      {/* Backdrop */}
-      <div
-        onClick={onClose}
-        style={{
-          position: "fixed",
-          inset: 0,
-          background: "rgba(0,0,0,0.5)",
-          zIndex: 200,
-        }}
-      />
-
-      {/* Drawer */}
-      <div
-        style={{
-          position: "fixed",
-          top: 0,
-          right: 0,
-          bottom: 0,
-          width: "min(520px, 96vw)",
-          background: "#0D1117",
-          borderLeft: "1px solid #1F2937",
-          zIndex: 201,
-          display: "flex",
-          flexDirection: "column",
-          overflowY: "auto",
-        }}
-      >
-        {/* Header */}
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            padding: "18px 22px",
-            borderBottom: "1px solid #1F2937",
-            flexShrink: 0,
-          }}
-        >
-          <h2 style={{ color: "#E8EDF5", fontSize: 16, fontWeight: 700, margin: 0 }}>
-            {customer.name}
-          </h2>
-          <div style={{ display: "flex", gap: 8 }}>
-            <Btn size="sm" onClick={onEdit}>
-              {t("edit")}
-            </Btn>
-            <button
-              onClick={onClose}
-              style={{
-                background: "transparent",
-                border: "1px solid #1F2937",
-                borderRadius: 8,
-                padding: "5px 9px",
-                color: "#4B5563",
-                fontSize: 16,
-                cursor: "pointer",
-              }}
-            >
-              ✕
-            </button>
-          </div>
-        </div>
-
-        {/* Tabs */}
-        <div
-          style={{
-            display: "flex",
-            gap: 2,
-            padding: "0 22px",
-            borderBottom: "1px solid #1F2937",
-            flexShrink: 0,
-            overflowX: "auto",
-          }}
-        >
-          <button style={TAB_STYLE(tab === "info")} onClick={() => setTab("info")}>
-            {tTabs("info")}
-          </button>
-          <button style={TAB_STYLE(tab === "loyalty")} onClick={() => setTab("loyalty")}>
-            {tTabs("loyalty")}
-          </button>
-          <button style={TAB_STYLE(tab === "tickets")} onClick={() => setTab("tickets")}>
-            {tTabs("tickets")}
-            {!!detail?.openTicketCount && (
-              <span
-                style={{
-                  marginLeft: 6,
-                  background: "#78350F",
-                  color: "#FCD34D",
-                  borderRadius: 999,
-                  padding: "1px 6px",
-                  fontSize: 10,
-                  fontWeight: 700,
-                }}
-              >
-                {detail.openTicketCount}
-              </span>
-            )}
-          </button>
-          <button style={TAB_STYLE(tab === "reviews")} onClick={() => setTab("reviews")}>
-            {tTabs("reviews")}
-          </button>
-          <button style={TAB_STYLE(tab === "history")} onClick={() => setTab("history")}>
-            {tTabs("history")}
-          </button>
-        </div>
+    <DetailDrawer
+      isOpen
+      onClose={onClose}
+      title={customer.name}
+      actions={
+        <Btn size="sm" onClick={onEdit}>
+          {t("edit")}
+        </Btn>
+      }
+    >
+        <Tabs<DetailTab>
+          value={tab}
+          onChange={setTab}
+          items={[
+            { key: "info", label: tTabs("info") },
+            { key: "loyalty", label: tTabs("loyalty") },
+            { key: "tickets", label: tTabs("tickets"), count: detail?.openTicketCount || undefined },
+            { key: "reviews", label: tTabs("reviews") },
+            { key: "history", label: tTabs("history") },
+          ]}
+        />
 
         {/* Tab content */}
         {isLoading ? (
-          <div style={{ color: "#374151", fontSize: 13, padding: "20px 22px" }}>{tCommon("loading")}</div>
+          <div style={{ color: "#374151", fontSize: 13, padding: "20px 0" }}>{tCommon("loading")}</div>
         ) : !detail ? null : (
           <>
             {tab === "info" && (
@@ -252,7 +138,7 @@ export function CustomerDetail({ customer, onClose, onEdit }: Props) {
                 {/* Info card */}
                 <div
                   style={{
-                    margin: "18px 22px 0",
+                    margin: "18px 0 0",
                     background: "#0A1020",
                     border: "1px solid #1F2937",
                     borderRadius: 10,
@@ -306,7 +192,7 @@ export function CustomerDetail({ customer, onClose, onEdit }: Props) {
                 </div>
 
                 {/* Recent transactions */}
-                <div style={{ margin: "18px 22px 22px" }}>
+                <div style={{ margin: "18px 0 0" }}>
                   <h3 style={{ color: "#9CA3AF", fontSize: 12, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em", margin: "0 0 10px" }}>
                     {t("recentTransactionsTitle")}
                   </h3>
@@ -322,32 +208,31 @@ export function CustomerDetail({ customer, onClose, onEdit }: Props) {
             )}
 
             {tab === "loyalty" && (
-              <div style={{ margin: "18px 22px 22px" }}>
+              <div style={{ margin: "18px 0 0" }}>
                 <CustomerTierCard detail={detail} />
               </div>
             )}
 
             {tab === "tickets" && (
-              <div style={{ margin: "18px 22px 22px" }}>
+              <div style={{ margin: "18px 0 0" }}>
                 <CustomerTicketsTab customerId={customer.id} openTicketCount={detail.openTicketCount} />
               </div>
             )}
 
             {tab === "reviews" && (
-              <div style={{ margin: "18px 22px 22px" }}>
+              <div style={{ margin: "18px 0 0" }}>
                 <CustomerReviewsTab reviews={detail.recentReviews} />
               </div>
             )}
 
             {tab === "history" && (
-              <div style={{ margin: "18px 22px 22px" }}>
+              <div style={{ margin: "18px 0 0" }}>
                 <CustomerProfileHistoryTab customerId={customer.id} active={tab === "history"} />
               </div>
             )}
           </>
         )}
-      </div>
-    </>
+    </DetailDrawer>
   );
 }
 

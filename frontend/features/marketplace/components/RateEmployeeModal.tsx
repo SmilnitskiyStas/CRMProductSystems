@@ -7,6 +7,9 @@
 import { useState } from "react";
 import { useTranslations } from "next-intl";
 import { StarRating } from "./StarRating";
+import { Btn } from "@/components/ui/Btn";
+import { Modal } from "@/components/ui/Modal";
+import { textareaStyle } from "@/components/ui/fieldStyles";
 
 interface Props {
   title: string;
@@ -46,35 +49,8 @@ export function RateEmployeeModal({
   }
 
   return (
-    <div
-      style={{
-        position: "fixed",
-        inset: 0,
-        background: "rgba(0,0,0,0.6)",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        zIndex: 1100,
-      }}
-      onClick={(e) => {
-        if (e.target === e.currentTarget) onClose();
-      }}
-    >
-      <div
-        style={{
-          background: "#111827",
-          border: "1px solid #1F2937",
-          borderRadius: 14,
-          padding: "28px 32px",
-          width: 440,
-          maxWidth: "calc(100vw - 32px)",
-          display: "flex",
-          flexDirection: "column",
-          gap: 20,
-        }}
-      >
-        <h2 style={{ color: "#E8EDF5", fontSize: 16, fontWeight: 700, margin: 0 }}>{title}</h2>
-
+    <Modal title={title} onClose={onClose} width={440}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
         <div>
           <div style={{ color: "#9CA3AF", fontSize: 13, marginBottom: 4 }}>{t("personLabel")}</div>
           <div style={{ color: "#E8EDF5", fontSize: 14, fontWeight: 600 }}>{personName}</div>
@@ -92,18 +68,7 @@ export function RateEmployeeModal({
             onChange={(e) => setComment(e.target.value)}
             rows={4}
             placeholder={t("commentPlaceholder")}
-            style={{
-              width: "100%",
-              background: "#0D1117",
-              border: "1px solid #1F2937",
-              borderRadius: 8,
-              color: "#E8EDF5",
-              fontSize: 13,
-              padding: "10px 12px",
-              resize: "vertical",
-              outline: "none",
-              boxSizing: "border-box",
-            }}
+            style={textareaStyle}
           />
         </div>
 
@@ -123,40 +88,14 @@ export function RateEmployeeModal({
         )}
 
         <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
-          <button
-            onClick={onClose}
-            disabled={pending}
-            style={{
-              padding: "9px 20px",
-              borderRadius: 8,
-              border: "1px solid #1F2937",
-              background: "transparent",
-              color: "#6B7280",
-              fontSize: 13,
-              cursor: "pointer",
-            }}
-          >
+          <Btn variant="ghost" onClick={onClose} disabled={pending}>
             {t("cancel")}
-          </button>
-          <button
-            onClick={handleSubmit}
-            disabled={pending || rating === 0}
-            style={{
-              padding: "9px 20px",
-              borderRadius: 8,
-              border: "none",
-              background: rating === 0 || pending ? "#1F2937" : "#1D4ED8",
-              color: rating === 0 || pending ? "#4B5563" : "#E8EDF5",
-              fontSize: 13,
-              fontWeight: 600,
-              cursor: rating === 0 || pending ? "not-allowed" : "pointer",
-              transition: "background 0.1s",
-            }}
-          >
+          </Btn>
+          <Btn onClick={handleSubmit} disabled={pending || rating === 0}>
             {pending ? t("saving") : isEdit ? t("submitEdit") : t("submit")}
-          </button>
+          </Btn>
         </div>
       </div>
-    </div>
+    </Modal>
   );
 }

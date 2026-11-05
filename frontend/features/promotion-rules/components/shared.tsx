@@ -2,26 +2,11 @@
 
 import type { CSSProperties, ReactNode } from "react";
 import { X } from "lucide-react";
+import { inputStyle, labelStyle } from "@/components/ui/fieldStyles";
 
-export const inputStyle: CSSProperties = {
-  width: "100%",
-  background: "#0D1117",
-  border: "1px solid #374151",
-  borderRadius: 8,
-  padding: "9px 12px",
-  color: "#E8EDF5",
-  fontSize: 13,
-  outline: "none",
-  boxSizing: "border-box",
-};
+export { inputStyle, labelStyle };
 
-export const labelStyle: CSSProperties = {
-  display: "block",
-  color: "#9CA3AF",
-  fontSize: 12,
-  fontWeight: 500,
-  marginBottom: 6,
-};
+
 
 export const helpStyle: CSSProperties = { color: "#6B7280", fontSize: 12, marginTop: 6, lineHeight: 1.5 };
 

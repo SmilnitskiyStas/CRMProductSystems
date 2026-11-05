@@ -108,6 +108,9 @@ public sealed class RegisterFlowIntegrationTests : IAsyncLifetime
         _sp?.Dispose();
         if (!_dbAvailable) return;
         await using var db = NewContext();
+        // Keep immutable accepted evidence; the explicit disposable harness removes this database as a whole.
+        if (await db.Set<ShelfGuard.Domain.Entities.Erp.PosPricingSnapshot>().AnyAsync(a => a.TenantId == _tenantId)) return;
+
         foreach (var sql in new[]
         {
             "DELETE FROM pos_transaction_items WHERE \"TransactionId\" IN (SELECT \"Id\" FROM pos_transactions WHERE \"TenantId\" = {0})",

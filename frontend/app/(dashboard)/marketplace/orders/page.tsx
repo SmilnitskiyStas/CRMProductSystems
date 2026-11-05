@@ -28,10 +28,15 @@ import { TENANT_ROLES, type AppRole } from "@/lib/roles";
 import { Btn } from "@/components/ui/Btn";
 import { ReasonModal } from "@/components/ui/ReasonModal";
 import { Table, type TableColumn } from "@/components/ui/Table";
+import { PageContainer } from "@/components/ui/PageContainer";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { Tabs } from "@/components/ui/Tabs";
 import type {
   CooperationAgreementDto,
   MarketplaceOrderDto,
+  MarketplaceOrderItemDto,
   MarketplaceOrderReceiptDto,
+  MarketplaceOrderReceiptItemDto,
 } from "@/features/marketplace/types";
 
 type ActiveTab = "orders" | "cooperation";
@@ -53,27 +58,6 @@ function formatDate(iso: string, locale: string): string {
     minute: "2-digit",
   });
 }
-
-// Inline styles for the nested item tables rendered inside an expanded order row
-// (these stay plain markup per the migration brief — only the outer order list
-// becomes a shared `Table`).
-const headerCellStyle: React.CSSProperties = {
-  padding: "10px 14px",
-  color: "#4B5563",
-  fontSize: 11,
-  fontWeight: 600,
-  textTransform: "uppercase",
-  letterSpacing: "0.05em",
-  textAlign: "left",
-  borderBottom: "1px solid #1F2937",
-};
-
-const cellStyle: React.CSSProperties = {
-  padding: "12px 14px",
-  color: "#E8EDF5",
-  fontSize: 13,
-  borderBottom: "1px solid #1A2235",
-};
 
 // ─── Orders tab ────────────────────────────────────────────────────────────────
 
@@ -196,6 +180,49 @@ function OrderExpandedContent({
   intlLocale: string;
 }) {
   const t = useTranslations("Dashboard.marketplace.ordersPage.ordersTab");
+  const itemColumns: TableColumn<MarketplaceOrderItemDto>[] = [
+    {
+      key: "product",
+      header: t("headerProduct"),
+      render: (item) => (
+        <>
+          {item.itemName}
+          {item.unit && <span style={{ color: "#4B5563", fontSize: 11 }}> · {item.unit}</span>}
+          {item.batches.length > 0 && (
+            <div style={{ marginTop: 4, fontSize: 11, color: "#6B7280" }}>
+              <span style={{ color: "#9CA3AF", fontWeight: 600 }}>{t("batchesLabel")}</span>
+              {item.batches.map((b) => (
+                <div key={b.id}>
+                  {new Date(`${b.expiryDate}T12:00:00`).toLocaleDateString(intlLocale)} ·{" "}
+                  {b.batchNumber || "—"} · {b.qty}
+                </div>
+              ))}
+            </div>
+          )}
+        </>
+      ),
+    },
+    {
+      key: "price",
+      header: t("headerPrice"),
+      align: "right",
+      cellStyle: { whiteSpace: "nowrap" },
+      render: (item) => money(item.price, intlLocale),
+    },
+    {
+      key: "qty",
+      header: t("headerQty"),
+      align: "right",
+      render: (item) => item.qty,
+    },
+    {
+      key: "lineTotal",
+      header: t("headerLineTotal"),
+      align: "right",
+      cellStyle: { whiteSpace: "nowrap", color: "#E8EDF5" },
+      render: (item) => money(item.lineTotal, intlLocale),
+    },
+  ];
   return (
     <div style={{ background: "#0D1117", padding: "12px 24px 16px 44px" }}>
       {order.comment && (
@@ -238,48 +265,12 @@ function OrderExpandedContent({
           ))}
         </div>
       )}
-      <table style={{ width: "100%", borderCollapse: "collapse" }}>
-        <thead>
-          <tr>
-            <th style={headerCellStyle}>{t("headerProduct")}</th>
-            <th style={{ ...headerCellStyle, textAlign: "right" }}>{t("headerPrice")}</th>
-            <th style={{ ...headerCellStyle, textAlign: "right" }}>{t("headerQty")}</th>
-            <th style={{ ...headerCellStyle, textAlign: "right" }}>{t("headerLineTotal")}</th>
-          </tr>
-        </thead>
-        <tbody>
-          {order.items.map((item) => (
-            <tr key={item.id}>
-              <td style={cellStyle}>
-                {item.itemName}
-                {item.unit && (
-                  <span style={{ color: "#4B5563", fontSize: 11 }}> · {item.unit}</span>
-                )}
-                {item.batches.length > 0 && (
-                  <div style={{ marginTop: 4, fontSize: 11, color: "#6B7280" }}>
-                    <span style={{ color: "#9CA3AF", fontWeight: 600 }}>{t("batchesLabel")}</span>
-                    {item.batches.map((b) => (
-                      <div key={b.id}>
-                        {new Date(`${b.expiryDate}T12:00:00`).toLocaleDateString(intlLocale)} ·{" "}
-                        {b.batchNumber || "—"} · {b.qty}
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </td>
-              <td style={{ ...cellStyle, textAlign: "right", color: "#9CA3AF", whiteSpace: "nowrap" }}>
-                {money(item.price, intlLocale)}
-              </td>
-              <td style={{ ...cellStyle, textAlign: "right", color: "#9CA3AF" }}>
-                {item.qty}
-              </td>
-              <td style={{ ...cellStyle, textAlign: "right", whiteSpace: "nowrap" }}>
-                {money(item.lineTotal, intlLocale)}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      <Table
+        density="compact"
+        columns={itemColumns}
+        rows={order.items}
+        rowKey={(item) => item.id}
+      />
     </div>
   );
 }
@@ -413,39 +404,56 @@ function ReceiptItemsTable({
   t: ReturnType<typeof useTranslations>;
   intlLocale: string;
 }) {
+  const columns: TableColumn<MarketplaceOrderReceiptItemDto>[] = [
+    {
+      key: "product",
+      header: t("headerProduct"),
+      cellStyle: { color: "#E8EDF5" },
+      render: (item) => item.productName ?? item.itemNameSnapshot,
+    },
+    {
+      key: "ordered",
+      header: t("receiptHeaderOrdered"),
+      align: "right",
+      render: (item) => item.quantityOrdered,
+    },
+    {
+      key: "received",
+      header: t("receiptHeaderReceived"),
+      align: "right",
+      cellStyle: { color: "#E8EDF5" },
+      render: (item) => item.quantityReceived ?? "—",
+    },
+    {
+      key: "batch",
+      header: t("receiptHeaderBatch"),
+      align: "left",
+      render: (item) => item.batchNumber ?? "—",
+    },
+    {
+      key: "expiry",
+      header: t("receiptHeaderExpiry"),
+      align: "left",
+      cellStyle: { whiteSpace: "nowrap" },
+      render: (item) =>
+        item.expiryDate ? new Date(item.expiryDate).toLocaleDateString(intlLocale) : "—",
+    },
+    {
+      key: "discrepancy",
+      header: t("receiptHeaderDiscrepancy"),
+      align: "left",
+      render: (item) => (
+        <span style={{ color: item.discrepancyNotes ? "#F87171" : "#4B5563" }}>
+          {item.discrepancyNotes ?? "—"}
+        </span>
+      ),
+    },
+  ];
+
   return (
-    <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: 12 }}>
-      <thead>
-        <tr>
-          <th style={headerCellStyle}>{t("headerProduct")}</th>
-          <th style={{ ...headerCellStyle, textAlign: "right" }}>{t("receiptHeaderOrdered")}</th>
-          <th style={{ ...headerCellStyle, textAlign: "right" }}>{t("receiptHeaderReceived")}</th>
-          <th style={headerCellStyle}>{t("receiptHeaderBatch")}</th>
-          <th style={headerCellStyle}>{t("receiptHeaderExpiry")}</th>
-          <th style={headerCellStyle}>{t("receiptHeaderDiscrepancy")}</th>
-        </tr>
-      </thead>
-      <tbody>
-        {receipt.items.map((item) => (
-          <tr key={item.id}>
-            <td style={cellStyle}>{item.productName ?? item.itemNameSnapshot}</td>
-            <td style={{ ...cellStyle, textAlign: "right", color: "#9CA3AF" }}>
-              {item.quantityOrdered}
-            </td>
-            <td style={{ ...cellStyle, textAlign: "right" }}>
-              {item.quantityReceived ?? "—"}
-            </td>
-            <td style={{ ...cellStyle, color: "#9CA3AF" }}>{item.batchNumber ?? "—"}</td>
-            <td style={{ ...cellStyle, color: "#9CA3AF", whiteSpace: "nowrap" }}>
-              {item.expiryDate ? new Date(item.expiryDate).toLocaleDateString(intlLocale) : "—"}
-            </td>
-            <td style={{ ...cellStyle, color: item.discrepancyNotes ? "#F87171" : "#4B5563" }}>
-              {item.discrepancyNotes ?? "—"}
-            </td>
-          </tr>
-        ))}
-      </tbody>
-    </table>
+    <div style={{ marginBottom: 12 }}>
+      <Table density="compact" columns={columns} rows={receipt.items} rowKey={(item) => item.id} />
+    </div>
   );
 }
 
@@ -480,20 +488,9 @@ function ManagerRatingRow({ order }: { order: MarketplaceOrderDto }) {
       {rating ? (
         <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
           <StarRating value={rating.rating} size={13} />
-          <button
-            onClick={() => setModalOpen(true)}
-            style={{
-              background: "none",
-              border: "none",
-              padding: 0,
-              color: "#60A5FA",
-              fontSize: 12,
-              cursor: "pointer",
-              textDecoration: "underline",
-            }}
-          >
+          <Btn size="sm" variant="link" onClick={() => setModalOpen(true)}>
             {t("editRating")}
-          </button>
+          </Btn>
         </span>
       ) : (
         <Btn size="sm" variant="ghost" onClick={() => setModalOpen(true)}>
@@ -617,47 +614,27 @@ export default function MarketplaceOrdersPage() {
 
   if (me && !TENANT_ROLES.has(me.role as AppRole)) {
     return (
-      <div style={{ padding: "28px 32px", color: "#F87171", fontSize: 14 }}>
-        {t("roleGate")}
-      </div>
+      <PageContainer>
+        <div style={{ color: "#F87171", fontSize: 14 }}>{t("roleGate")}</div>
+      </PageContainer>
     );
   }
 
-  const tabStyle = (tab: ActiveTab): React.CSSProperties => ({
-    padding: "10px 20px",
-    background: "transparent",
-    border: "none",
-    borderBottom: activeTab === tab ? "2px solid #3B82F6" : "2px solid transparent",
-    color: activeTab === tab ? "#3B82F6" : "#6B7280",
-    fontSize: 13,
-    fontWeight: activeTab === tab ? 600 : 400,
-    cursor: "pointer",
-    marginBottom: -1,
-    transition: "color 0.15s",
-  });
-
   return (
-    <div style={{ padding: "28px 32px" }}>
-      <div style={{ marginBottom: 24 }}>
-        <h1 style={{ color: "#E8EDF5", fontSize: 22, fontWeight: 700, margin: 0 }}>
-          {t("title")}
-        </h1>
-        <p style={{ color: "#4B5563", fontSize: 14, marginTop: 6 }}>
-          {t("subtitle")}
-        </p>
-      </div>
+    <PageContainer>
+      <PageHeader title={t("title")} subtitle={t("subtitle")} />
 
-      <div style={{ borderBottom: "1px solid #1F2937", marginBottom: 24, display: "flex" }}>
-        <button style={tabStyle("orders")} onClick={() => setActiveTab("orders")}>
-          {t("tabOrders")}
-        </button>
-        <button style={tabStyle("cooperation")} onClick={() => setActiveTab("cooperation")}>
-          {t("tabCooperation")}
-        </button>
-      </div>
+      <Tabs<ActiveTab>
+        value={activeTab}
+        onChange={setActiveTab}
+        items={[
+          { key: "orders", label: t("tabOrders") },
+          { key: "cooperation", label: t("tabCooperation") },
+        ]}
+      />
 
       {activeTab === "orders" && <OrdersTab />}
       {activeTab === "cooperation" && <CooperationTab />}
-    </div>
+    </PageContainer>
   );
 }

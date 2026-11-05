@@ -2,6 +2,7 @@
 
 import { useTranslations } from "next-intl";
 import { AlertCircle } from "lucide-react";
+import { Btn } from "@/components/ui/Btn";
 
 /**
  * "Є незастосовані зміни аудиторії" — the source doc's single most-important UX finding
@@ -35,23 +36,9 @@ export function DraftAnalyzedBanner({ onAnalyzeClick }: { onAnalyzeClick: () => 
           <p style={{ color: "#D1B26B", fontSize: 12, lineHeight: 1.5, margin: "2px 0 0" }}>{t("body")}</p>
         </div>
       </div>
-      <button
-        type="button"
-        onClick={onAnalyzeClick}
-        style={{
-          background: "#92400E",
-          border: "1px solid #B45309",
-          borderRadius: 7,
-          color: "#FEF3C7",
-          fontSize: 12,
-          fontWeight: 600,
-          padding: "7px 14px",
-          cursor: "pointer",
-          whiteSpace: "nowrap",
-        }}
-      >
+      <Btn variant="primary" onClick={onAnalyzeClick}>
         {t("cta")}
-      </button>
+      </Btn>
     </div>
   );
 }

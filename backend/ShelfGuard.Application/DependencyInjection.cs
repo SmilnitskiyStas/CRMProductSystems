@@ -1,6 +1,7 @@
 using ShelfGuard.Application.Features.Auth;
 using ShelfGuard.Application.Features.Catalog;
 using ShelfGuard.Application.Features.Stock;
+using ShelfGuard.Application.Features.Erp.Posting;
 using ShelfGuard.Application.Features.Locations;
 using ShelfGuard.Application.Features.Suppliers;
 using ShelfGuard.Application.Features.Receipts;
@@ -34,6 +35,17 @@ public static class DependencyInjection
     public static IServiceCollection AddApplication(this IServiceCollection services)
     {
 services.AddScoped<IAuthService, AuthService>();
+        services.AddScoped<WorkerAuthService>();
+        services.AddScoped<IInventoryAdjustmentPosting, InventoryAdjustmentPostingService>();
+        services.AddScoped<IReceiptPosting, ReceiptPostingService>();
+        services.AddScoped<ITransferPosting, TransferPostingService>();
+        services.AddScoped<IWriteOffPosting, WriteOffPostingService>();
+        services.AddScoped<IPosReturnPosting, PosReturnPostingService>();
+        services.AddScoped<IProductionPostingPreview, ProductionPostingPreviewService>();
+        services.AddScoped<IProductionPosting, ProductionPostingService>();
+        services.AddScoped<IInventoryPostingStatusService, InventoryPostingStatusService>();
+        services.AddScoped<IPasswordRecoveryService, PasswordRecoveryService>();
+        services.AddSingleton(TimeProvider.System);
         services.AddScoped<IItemService, ItemService>();
         services.AddScoped<IItemImageService, ItemImageService>();
         services.AddScoped<ICategoryService, CategoryService>();
@@ -139,6 +151,11 @@ services.AddScoped<IAuthService, AuthService>();
 
         // v4 Phase 5 - Production Module (TASK-241)
         services.AddScoped<IProductionService, ProductionService>();
+        services.AddScoped<IProductionOrderSyncService, ProductionOrderSyncService>();
+        services.AddScoped<IProductionRequestService, ProductionRequestService>();
+        services.AddScoped<IProductionDemandService, ProductionDemandService>();
+        services.AddScoped<IProductionInsightsService, ProductionInsightsService>();
+        services.AddScoped<IAutoReplenishmentService, AutoReplenishmentService>();
 
         // v4 Phase 6 - AI Business Assistant (TASK-250)
         services.AddScoped<IAiAssistantService, AiAssistantService>();

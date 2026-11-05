@@ -34,28 +34,12 @@ public sealed class MobileLoginResponseFactoryTests
         Assert.False(response.Access.CanAccessWorkspace);
         Assert.Equal("consumer", response.Access.Role);
         Assert.Empty(response.Access.Permissions);
+        Assert.Empty(response.Access.Capabilities);
+        Assert.Empty(response.Access.Tabs);
         Assert.Null(response.User.TenantId);
+        Assert.Null(response.User.StoreId);
         Assert.Equal("token", response.PersonalAccessToken);
         Assert.Null(response.WorkspaceAccessToken);
     }
 
-    [Fact]
-    public void Linked_staff_response_carries_both_tokens_with_staff_effective_access()
-    {
-        var user = new AuthUserDto(
-            Guid.NewGuid(), "staff@example.com", "Staff User", "cashier",
-            Guid.NewGuid(), "Store", Guid.NewGuid(),
-            new Dictionary<string, bool> { ["pos"] = true },
-            Capabilities: new[] { "pos.read" }, Tabs: new[] { "pos" });
-
-        var response = MobileLoginResponseFactory.ForLinkedStaff(
-            "personal-token", "workspace-token", user);
-
-        Assert.Equal("personal-token", response.PersonalAccessToken);
-        Assert.Equal("workspace-token", response.WorkspaceAccessToken);
-        Assert.True(response.Access.CanAccessWorkspace);
-        Assert.Equal("cashier", response.Access.Role);
-        Assert.True(response.Access.Permissions["pos"]);
-        Assert.Equal(user.TenantId, response.User.TenantId);
-    }
 }

@@ -2,6 +2,7 @@
 
 import { useTranslations } from "next-intl";
 import { BarChart2, Clock, MessageSquare, Ticket, CheckCircle2 } from "lucide-react";
+import { StatusPill } from "@/components/ui/StatusPill";
 import { Table, type TableColumn } from "@/components/ui/Table";
 import { useProviderStats } from "../hooks/useProviderStats";
 import type { ProviderMemberStatsDto } from "../api/providerStatsApi";
@@ -42,14 +43,13 @@ export function StatsTab() {
           <div style={{ opacity: m.isActive ? 1 : 0.5 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
               <span style={{ color: "#E8EDF5", fontSize: 14, fontWeight: 500 }}>{m.fullName}</span>
-              <span style={{
-                padding: "1px 8px", borderRadius: 20, fontSize: 10, fontWeight: 600,
-                background: `${ROLE_COLORS[m.role] ?? "#6B7280"}22`,
-                border: `1px solid ${ROLE_COLORS[m.role] ?? "#6B7280"}55`,
-                color: ROLE_COLORS[m.role] ?? "#6B7280",
-              }}>
+              <StatusPill
+                bg={`${ROLE_COLORS[m.role] ?? "#6B7280"}22`}
+                text={ROLE_COLORS[m.role] ?? "#6B7280"}
+                style={{ fontSize: 10, padding: "1px 8px" }}
+              >
                 {tRoleLabels.has(m.role) ? tRoleLabels(m.role) : m.role}
-              </span>
+              </StatusPill>
               {!m.isActive && (
                 <span style={{ color: "#4B5563", fontSize: 10 }}>{t("inactiveLabel")}</span>
               )}

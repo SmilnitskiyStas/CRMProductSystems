@@ -5,6 +5,7 @@ using NSubstitute.ExceptionExtensions;
 using NSubstitute.ReturnsExtensions;
 using ShelfGuard.Application.Features.Loyalty;
 using ShelfGuard.Application.Features.Loyalty.Dtos;
+using ShelfGuard.Application.Common;
 using ShelfGuard.Application.Features.MobileConfig;
 using ShelfGuard.Application.Services;
 using ShelfGuard.Domain.Entities;
@@ -109,6 +110,124 @@ public sealed class LoyaltyServiceTests
         // _locations.GetAllAsync above.
         _loyalty.GetTierLadderAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>())
             .Returns(new List<LoyaltyTierDefinition>());
+    }
+
+    [Fact]
+    public async Task GetPurchasesAsync_non_member_never_enters_tenant_scope()
+    {
+        var (purchases, _, status) = await _sut.GetPurchasesAsync(Guid.NewGuid(), Guid.NewGuid(), null, 1, 50);
+        Assert.Null(purchases);
+        Assert.Equal(404, status);
+        Assert.Empty(_tenantScope.ReceivedCalls());
+    }
+
+    [Fact]
+    public async Task GetPurchasesAsync_groups_bonuses_per_purchase_and_clamps_pagination()
+    {
+        var consumer = Guid.NewGuid();
+        var tenant = Guid.NewGuid();
+        var store = new Location { TenantId = tenant, Name = "М4", Address = "Адреса" };
+        var membership = new LoyaltyMembership { TenantId = tenant, ConsumerAccountId = consumer };
+        var purchase = new PosTransaction { TenantId = tenant, StoreId = store.Id, Store = store,
+            TotalAmount = 90m, ReceiptNumber = "test-1", LoyaltyMembershipId = membership.Id };
+        _loyalty.GetMembershipByTenantConsumerAsync(tenant, consumer, default).Returns(membership);
+        _tenantScope.ExecuteAsync(tenant, Arg.Any<Func<Task<PagedResult<ConsumerPurchaseDto>>>>(), default)
+            .Returns(ci => ci.Arg<Func<Task<PagedResult<ConsumerPurchaseDto>>>>()());
+        _loyalty.GetPurchasesPagedAsync(tenant, membership.Id, store.Id, 1, 200, default)
+            .Returns((new List<PosTransaction> { purchase }, 1));
+        _loyalty.GetLedgerEntriesForTransactionsAsync(tenant, Arg.Any<IReadOnlyCollection<Guid>>(), default)
+            .Returns(new List<LoyaltyLedgerEntry>
+            {
+                new() { TenantId = tenant, MembershipId = membership.Id, PosTransactionId = purchase.Id,
+                    EntryType = "accrual", Amount = 1.80m },
+                new() { TenantId = tenant, MembershipId = membership.Id, PosTransactionId = purchase.Id,
+                    EntryType = "redemption", Amount = -10m },
+                new() { TenantId = tenant, MembershipId = Guid.NewGuid(), PosTransactionId = purchase.Id,
+                    EntryType = "accrual", Amount = 999m },
+            });
+        var (result, error, _) = await _sut.GetPurchasesAsync(consumer, tenant, store.Id, -1, 999);
+        Assert.Null(error);
+        var row = Assert.Single(result!.Items);
+        Assert.Equal("М4", row.StoreName);
+        Assert.Equal(90m, row.AmountPaid);
+        Assert.Equal(1.80m, row.BonusesAccrued);
+        Assert.Equal(10m, row.BonusesRedeemed);
+        Assert.True(row.CanReview);
+        Assert.Equal(1, result.TotalCount);
+        Assert.Equal(200, result.PageSize);
+    }
+
+    [Fact]
+    public async Task GetReceiptAsync_non_member_cannot_enter_tenant_scope()
+    {
+        var (receipt, _, status) = await _sut.GetReceiptAsync(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid());
+        Assert.Null(receipt);
+        Assert.Equal(404, status);
+        Assert.Empty(_tenantScope.ReceivedCalls());
+    }
+
+    [Fact]
+    public async Task GetReceiptAsync_unknown_or_unowned_purchase_returns_404()
+    {
+        var member = new LoyaltyMembership { TenantId = Guid.NewGuid(), ConsumerAccountId = Guid.NewGuid() };
+        _loyalty.GetMembershipByTenantConsumerAsync(member.TenantId, member.ConsumerAccountId, default).Returns(member);
+        _tenantScope.ExecuteAsync(Arg.Any<Guid>(), Arg.Any<Func<Task<ConsumerReceiptDto?>>>(), default)
+            .Returns(ci => ci.Arg<Func<Task<ConsumerReceiptDto?>>>()());
+        var (receipt, _, status) = await _sut.GetReceiptAsync(member.ConsumerAccountId, member.TenantId, Guid.NewGuid());
+        Assert.Null(receipt);
+        Assert.Equal(404, status);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task GetReceiptAsync_uses_saved_prices_discounts_and_does_not_invent_missing_lines(bool withItems)
+    {
+        var member = new LoyaltyMembership { TenantId = Guid.NewGuid(), ConsumerAccountId = Guid.NewGuid() };
+        var purchase = new PosTransaction { TenantId = member.TenantId, StoreId = Guid.NewGuid(),
+            TotalAmount = 200, ReceiptNumber = "TEST-RECEIPT", Items = withItems ? new List<PosTransactionItem>
+            {
+                new() { Product = new Item { Name = "Кава", Unit = "шт", PriceRetail = 9999 },
+                    Quantity = 2, PriceRetail = 120, DiscountAmount = 20, PriceFinal = 100, PromotionLabel = "Акція" },
+                new() { Product = new Item { Name = "Сир", Unit = "кг" },
+                    Quantity = 0.125m, PriceRetail = 199.99m, DiscountAmount = 0, PriceFinal = 199.99m },
+            } : new List<PosTransactionItem>() };
+        _loyalty.GetMembershipByTenantConsumerAsync(member.TenantId, member.ConsumerAccountId, default).Returns(member);
+        _tenantScope.ExecuteAsync(Arg.Any<Guid>(), Arg.Any<Func<Task<ConsumerReceiptDto?>>>(), default)
+            .Returns(ci => ci.Arg<Func<Task<ConsumerReceiptDto?>>>()());
+        _loyalty.GetPurchaseByIdAsync(member.TenantId, member.Id, purchase.Id, default).Returns(purchase);
+        _loyalty.GetLedgerEntriesForTransactionsAsync(member.TenantId, Arg.Any<IReadOnlyCollection<Guid>>(), default)
+            .Returns(new List<LoyaltyLedgerEntry> {
+                new() { TenantId = member.TenantId, MembershipId = member.Id, EntryType = "accrual", Amount = 4 },
+                new() { TenantId = member.TenantId, MembershipId = member.Id, EntryType = "redemption", Amount = -500 },
+                new() { TenantId = member.TenantId, MembershipId = Guid.NewGuid(), EntryType = "accrual", Amount = 999 },
+            });
+        var (receipt, error, _) = await _sut.GetReceiptAsync(member.ConsumerAccountId, member.TenantId, purchase.Id);
+        Assert.Null(error);
+        Assert.NotNull(receipt);
+        Assert.Equal(200, receipt.AmountPaid);
+        Assert.Equal(4, receipt.BonusesAccrued);
+        Assert.Equal(500, receipt.BonusesRedeemed);
+        if (withItems)
+        {
+            Assert.Equal(265m, receipt.TotalBeforeDiscount);
+            Assert.Equal(40m, receipt.DiscountTotal);
+            Assert.Equal(225m, receipt.TotalAfterDiscount);
+            Assert.Equal(25m, receipt.BonusPaymentAmount);
+            var coffee = Assert.Single(receipt.Items, i => i.ProductName == "Кава");
+            Assert.Equal(120m, coffee.UnitPrice);
+            Assert.Equal(40m, coffee.DiscountTotal);
+            Assert.Equal(200m, coffee.LineTotal);
+            Assert.Equal("Акція", coffee.PromotionLabel);
+        }
+        else
+        {
+            Assert.Empty(receipt.Items);
+            Assert.Null(receipt.TotalBeforeDiscount);
+            Assert.Null(receipt.DiscountTotal);
+            Assert.Null(receipt.TotalAfterDiscount);
+            Assert.Null(receipt.BonusPaymentAmount);
+        }
     }
 
     private static Tenant MakeTenant(params string[] modules)

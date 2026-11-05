@@ -8,34 +8,11 @@ import { usePostCampaignStore } from "../store/usePostCampaignStore";
 import { useImportPostCampaignSegment } from "../hooks/usePostCampaign";
 import { ColumnPreviewPicker } from "./ColumnPreviewPicker";
 import type { PostCampaignImportMode } from "../types";
+import { filterInputStyle, textareaStyle } from "@/components/ui/fieldStyles";
 
 const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024; // mirrors PostCampaignController.MaxImportFileSizeBytes
 const ACCEPTED_EXTENSIONS = [".csv", ".xlsx", ".txt"];
 
-const textareaStyle: React.CSSProperties = {
-  background: "#0D1117",
-  border: "1px solid #1F2937",
-  borderRadius: 8,
-  color: "#E8EDF5",
-  fontSize: 13,
-  padding: "10px 12px",
-  outline: "none",
-  width: "100%",
-  minHeight: 120,
-  fontFamily: "monospace",
-  resize: "vertical",
-};
-const inputStyle: React.CSSProperties = {
-  background: "#0D1117",
-  border: "1px solid #1F2937",
-  borderRadius: 6,
-  color: "#E8EDF5",
-  fontSize: 13,
-  padding: "8px 10px",
-  outline: "none",
-  width: "100%",
-  maxWidth: 320,
-};
 
 function modeBtnStyle(active: boolean): React.CSSProperties {
   return {
@@ -170,7 +147,7 @@ export function ImportPanel() {
             value={rawText}
             onChange={(e) => setRawText(e.target.value)}
             placeholder={t("listPlaceholder")}
-            style={textareaStyle}
+            style={{ ...textareaStyle, minHeight: 120, fontFamily: "monospace" }}
           />
           <p style={{ color: "#4B5563", fontSize: 11.5, margin: "6px 0 0", lineHeight: 1.5 }}>{t("listHint")}</p>
         </div>
@@ -238,7 +215,7 @@ export function ImportPanel() {
 
       <div>
         <label style={{ display: "block", color: "#4B5563", fontSize: 12, marginBottom: 4 }}>{t("nameLabel")}</label>
-        <input value={name} onChange={(e) => setName(e.target.value)} placeholder={t("namePlaceholder")} style={inputStyle} />
+        <input value={name} onChange={(e) => setName(e.target.value)} placeholder={t("namePlaceholder")} style={{ ...filterInputStyle, width: "100%", maxWidth: 320 }} />
       </div>
 
       {(localError || error) && <div style={{ color: "#F87171", fontSize: 12.5 }}>{localError ?? errorMessage(error)}</div>}

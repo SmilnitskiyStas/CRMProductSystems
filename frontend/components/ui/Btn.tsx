@@ -1,12 +1,12 @@
 "use client";
 
 import { useState } from "react";
-import type { CSSProperties, ReactNode } from "react";
+import type { CSSProperties, MouseEvent, ReactNode } from "react";
 
 /** Variant → base styles */
 const VARIANT_STYLES: Record<
   string,
-  { background: string; border: string; color: string; hoverBackground: string }
+  { background: string; border: string; color: string; hoverBackground: string; underlineOnHover?: boolean }
 > = {
   /** Primary action — matches "Запросити" style across all pages */
   primary: {
@@ -29,6 +29,21 @@ const VARIANT_STYLES: Record<
     color: "#4ADE80",
     hoverBackground: "#1e4a38",
   },
+  /** Destructive, low emphasis (transparent until hover) */
+  dangerOutline: {
+    background: "transparent",
+    border: "1px solid #7F1D1D",
+    color: "#F87171",
+    hoverBackground: "#2d0a0a",
+  },
+  /** Text action — no chrome, underline on hover */
+  link: {
+    background: "transparent",
+    border: "none",
+    color: "#60A5FA",
+    hoverBackground: "transparent",
+    underlineOnHover: true,
+  },
   /** Neutral / secondary */
   ghost: {
     background: "transparent",
@@ -40,11 +55,11 @@ const VARIANT_STYLES: Record<
 
 interface BtnProps {
   /** Visual variant — defaults to "primary" */
-  variant?: "primary" | "danger" | "success" | "ghost";
+  variant?: "primary" | "danger" | "dangerOutline" | "success" | "ghost" | "link";
   /** Size — "md" (default) for page header buttons, "sm" for table inline actions */
-  size?: "sm" | "md";
+  size?: "xs" | "sm" | "md";
   children: ReactNode;
-  onClick?: () => void;
+  onClick?: (e: MouseEvent<HTMLButtonElement>) => void;
   disabled?: boolean;
   type?: "button" | "submit" | "reset";
   style?: CSSProperties;
@@ -52,6 +67,13 @@ interface BtnProps {
   icon?: ReactNode;
   /** Focus the button on mount (dialogs). */
   autoFocus?: boolean;
+  title?: string;
+  "aria-label"?: string;
+  className?: string;
+  /** Stretch to the container width */
+  fullWidth?: boolean;
+  /** Associates a submit button with a form by id */
+  form?: string;
 }
 
 export function Btn({
@@ -64,15 +86,21 @@ export function Btn({
   style,
   icon,
   autoFocus,
+  title,
+  "aria-label": ariaLabel,
+  className,
+  fullWidth,
+  form,
 }: BtnProps) {
   const [hovered, setHovered] = useState(false);
   const v = VARIANT_STYLES[variant];
 
-  const padding = size === "sm" ? "4px 10px" : "9px 18px";
-  const fontSize = size === "sm" ? 11 : 13;
+  const isLink = variant === "link";
+  const padding = isLink ? 0 : size === "xs" ? "2px 8px" : size === "sm" ? "4px 10px" : "9px 18px";
+  const fontSize = size === "md" ? 13 : 11;
 
   const background = disabled
-    ? "#111827"
+    ? isLink ? "transparent" : "#111827"
     : hovered
     ? v.hoverBackground
     : v.background;
@@ -80,6 +108,10 @@ export function Btn({
   return (
     <button
       type={type}
+      form={form}
+      title={title}
+      aria-label={ariaLabel}
+      className={className}
       onClick={onClick}
       disabled={disabled}
       autoFocus={autoFocus}
@@ -92,7 +124,7 @@ export function Btn({
         padding,
         borderRadius: 8,
         background,
-        border: disabled ? "1px solid #1F2937" : v.border,
+        border: disabled ? (isLink ? "none" : "1px solid #1F2937") : v.border,
         color: disabled ? "#374151" : v.color,
         fontSize,
         fontWeight: 600,
@@ -100,6 +132,8 @@ export function Btn({
         transition: "background 0.15s ease, opacity 0.15s",
         opacity: disabled ? 0.6 : 1,
         whiteSpace: "nowrap",
+        ...(fullWidth ? { width: "100%", justifyContent: "center" } : null),
+        ...(v.underlineOnHover && hovered && !disabled ? { textDecoration: "underline" } : null),
         ...style,
       }}
     >

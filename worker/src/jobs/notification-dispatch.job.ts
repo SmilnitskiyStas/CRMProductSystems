@@ -26,6 +26,7 @@ import type { PoolClient } from "pg";
 import { sendTelegramMessage } from "../services/telegram";
 import { sendEmail } from "../services/email";
 import { deliver, logNotifications, type DeliveryOutcome } from "../services/notification-log";
+import { PASSWORD_RECOVERY_EVENT, formatPasswordRecoveryEmail, recoveryExpired, redactedTargetedPayload } from "../services/password-recovery-notification";
 
 const BATCH_LIMIT = 50;
 
@@ -34,8 +35,38 @@ const BATCH_LIMIT = 50;
 // the shape of EXPIRY_EVENT_ROLES in notification.job.ts. Revisit if product wants a
 // narrower/broader audience per event.
 const DISPATCH_EVENT_ROLES: Record<string, { roles: string[]; channels: string[] }> = {
+  "iot.temp_alert": {
+    roles: ["store_manager", "network_manager", "enterprise_admin"],
+    channels: ["telegram"],
+  },
   "receipt.created": {
     roles: ["merchandiser", "store_manager", "network_manager", "enterprise_admin"],
+    channels: ["telegram", "push"],
+  },
+  // Store -> production request submitted (ProductionRequestService.SubmitAsync). StoreId on the
+  // outbox row = the production location. storekeeper is included: it is the warehouse/production
+  // staff role that can review and ship requests (CanReceiveStock).
+  "production_request.submitted": {
+    roles: ["storekeeper", "store_manager", "network_manager", "enterprise_admin"],
+    channels: ["telegram", "push"],
+  },
+  // TASK-761: every production order of a store request is Done -> ready to ship. StoreId on the outbox
+  // row = the requesting store; its managers collect/accept the goods.
+  "production_request.ready": {
+    roles: ["store_manager", "network_manager", "enterprise_admin"],
+    channels: ["telegram", "push"],
+  },
+  // TASK-752: auto DRAFT created by ProductionDemandService. StoreId on the outbox row = the
+  // requesting store; the store manager must review and submit the draft (never auto-submitted).
+  "production_request.auto_draft": {
+    roles: ["store_manager", "network_manager", "enterprise_admin"],
+    channels: ["telegram", "push"],
+  },
+  // TASK-755: auto DRAFT supplier order created by AutoReplenishmentService (daily 07:00).
+  // StoreId on the outbox row = the destination store; managers take it into work, correct
+  // quantities and confirm it on /orders.
+  "order.auto_draft": {
+    roles: ["store_manager", "network_manager", "enterprise_admin"],
     channels: ["telegram", "push"],
   },
   "supplier.message": {
@@ -97,6 +128,7 @@ const TARGETED_EVENT_CHANNELS: Record<string, string[]> = {
   // (push delivery isn't implemented at all yet; email/Telegram are the only channels that can
   // actually carry a temporary password today).
   "auth.password_reset_requested": ["email", "telegram"],
+  [PASSWORD_RECOVERY_EVENT]: ["email"],
 };
 
 // TASK-465: shape of the outbox row's Payload jsonb for auth.password_reset_requested — `pg`
@@ -116,6 +148,7 @@ type PendingIntentRow = {
 };
 
 function formatText(row: PendingIntentRow): string {
+  if (row.event_type === PASSWORD_RECOVERY_EVENT) return "Відновлення пароля доступне лише через email.";
   if (row.event_type === "auth.password_reset_requested") {
     const payload = row.payload as TempPasswordPayload | null;
     const tempPassword = payload?.tempPassword ?? "";
@@ -130,7 +163,12 @@ function formatText(row: PendingIntentRow): string {
   }
 
   const icons: Record<string, string> = {
+    "iot.temp_alert": "🌡",
     "receipt.created": "📦",
+    "production_request.submitted": "🏭",
+    "production_request.auto_draft": "📝",
+    "production_request.ready": "✅",
+    "order.auto_draft": "🛒",
     "supplier.message": "💬",
     "supplier_agreement.signed": "✍️",
     "supplier_support_ticket.opened": "⚠️",
@@ -142,10 +180,14 @@ function formatText(row: PendingIntentRow): string {
     "marketplace_order.delivery_rescheduled": "📅",
   };
   const icon = icons[row.event_type] ?? "🔔";
-  return `${icon} <b>ShelfGuard</b>\n\n${row.title ?? "Нове сповіщення"}`;
+  const title = row.title ?? "Нове сповіщення";
+  const safeTitle = row.event_type === "iot.temp_alert"
+    ? title.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;") : title;
+  return `${icon} <b>ShelfGuard</b>\n\n${safeTitle}`;
 }
 
 function formatEmail(row: PendingIntentRow): { subject: string; html: string } {
+  if (row.event_type === PASSWORD_RECOVERY_EVENT) return formatPasswordRecoveryEmail(row.payload);
   if (row.event_type === "auth.password_reset_requested") {
     const payload = row.payload as TempPasswordPayload | null;
     const tempPassword = payload?.tempPassword ?? "";
@@ -175,16 +217,29 @@ function formatEmail(row: PendingIntentRow): { subject: string; html: string } {
 // recipient (UserId), so skip the role matrix and deliver straight to them. Their own
 // notification_settings for the event type still gate each channel, same as the
 // role-broadcast path; no settings row → fall back to TARGETED_EVENT_CHANNELS defaults.
+async function markTargetedDispatched(client: PoolClient, row: PendingIntentRow): Promise<void> {
+  if (row.event_type === PASSWORD_RECOVERY_EVENT) {
+    await client.query(`UPDATE notification_queue SET "Status" = 'dispatched', "Payload" = $2::jsonb WHERE "Id" = $1`,
+      [row.id, JSON.stringify(redactedTargetedPayload(row.event_type, row.payload))]);
+  } else {
+    await client.query(`UPDATE notification_queue SET "Status" = 'dispatched' WHERE "Id" = $1`, [row.id]);
+  }
+}
+
 async function dispatchTargeted(
   client: PoolClient,
   row: PendingIntentRow & { user_id: string }
 ): Promise<void> {
+  if (row.event_type === PASSWORD_RECOVERY_EVENT && recoveryExpired(row.payload)) {
+    await markTargetedDispatched(client, row);
+    return;
+  }
   const defaultChannels = TARGETED_EVENT_CHANNELS[row.event_type];
   if (!defaultChannels) {
     console.warn(
       `[notification-dispatch] targeted intent ${row.id}: unknown eventType ${row.event_type} — marking dispatched`
     );
-    await client.query(`UPDATE notification_queue SET "Status" = 'dispatched' WHERE "Id" = $1`, [row.id]);
+    await markTargetedDispatched(client, row);
     return;
   }
 
@@ -202,7 +257,7 @@ async function dispatchTargeted(
 
   const user = userRes.rows[0];
   if (!user) {
-    await client.query(`UPDATE notification_queue SET "Status" = 'dispatched' WHERE "Id" = $1`, [row.id]);
+    await markTargetedDispatched(client, row);
     return;
   }
 
@@ -221,7 +276,7 @@ async function dispatchTargeted(
   const activeChannels = Array.from(userChannels).filter((c) => defaultChannels.includes(c));
 
   if (activeChannels.length === 0) {
-    await client.query(`UPDATE notification_queue SET "Status" = 'dispatched' WHERE "Id" = $1`, [row.id]);
+    await markTargetedDispatched(client, row);
     return;
   }
 
@@ -249,33 +304,25 @@ async function dispatchTargeted(
 
   for (const o of outcomes) {
     if (o.status === "failed") {
-      console.error(`[notification-dispatch] targeted ${o.channel} send failed for user ${user.id}: ${o.error}`);
+      console.error(`[notification-dispatch] targeted ${o.channel} send failed for user ${user.id}: ${row.event_type === PASSWORD_RECOVERY_EVENT ? "recovery email delivery failed" : o.error}`);
     }
   }
 
-  // TASK-460 (HIGH, TASK-458 security review), carried forward by TASK-465: logNotifications()
-  // persists `payload` verbatim into notification_queue rows that GET
-  // /api/notifications/history returns to ANY authenticated same-tenant user (no per-user
-  // scoping there) — for auth.password_reset_requested that payload is now the temporary
-  // password itself (an immediately-usable live credential, arguably worse than the superseded
-  // design's single-use link token), so logging it verbatim would turn a routine history read
-  // into an account-takeover primitive. Redact before logging only; the real tempPassword was
-  // already used above (formatText/formatEmail) for the actual send. Any future targeted event
-  // whose payload carries a bearer secret should redact the same way here.
-  const logPayload =
-    row.event_type === "auth.password_reset_requested"
-      ? { expiresInMinutes: (row.payload as TempPasswordPayload | null)?.expiresInMinutes ?? 180 }
-      : row.payload;
+  // History is visible within the tenant. Neither new reset proofs nor legacy temporary
+  // passwords may enter history payloads or provider error details.
+  const logPayload = redactedTargetedPayload(row.event_type, row.payload);
 
   await logNotifications(client, {
     tenantId: row.tenant_id,
     userId: user.id,
     eventType: row.event_type,
     payload: logPayload,
-    outcomes,
+    outcomes: row.event_type === PASSWORD_RECOVERY_EVENT
+      ? outcomes.map(outcome => ({ ...outcome, error: outcome.error ? "recovery email delivery failed" : undefined }))
+      : outcomes,
   });
 
-  await client.query(`UPDATE notification_queue SET "Status" = 'dispatched' WHERE "Id" = $1`, [row.id]);
+  await markTargetedDispatched(client, row);
 }
 
 async function dispatchOne(row: PendingIntentRow): Promise<void> {
@@ -424,7 +471,7 @@ async function runNotificationDispatch(): Promise<void> {
     try {
       await dispatchOne(row);
     } catch (e) {
-      console.error(`[notification-dispatch] intent ${row.id} failed: ${(e as Error).message}`);
+      console.error(`[notification-dispatch] intent ${row.id} failed: ${row.event_type === PASSWORD_RECOVERY_EVENT ? "recovery delivery processing failed" : (e as Error).message}`);
     }
   }
 }

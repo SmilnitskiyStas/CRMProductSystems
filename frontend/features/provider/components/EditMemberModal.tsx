@@ -2,7 +2,6 @@
 
 import { useState, useMemo } from "react";
 import { useTranslations } from "next-intl";
-import { X } from "lucide-react";
 import { useUpdateMember } from "../hooks/useProviderTeam";
 import { useProviderRoles } from "../hooks/useProviderRoles";
 import type { ProviderTeamMemberDto } from "../api/providerTeamApi";
@@ -11,6 +10,9 @@ import {
   SYSTEM_ROLE_PERMISSIONS,
   resolvePermissions,
 } from "@/lib/providerPermissions";
+import { Btn } from "@/components/ui/Btn";
+import { Modal } from "@/components/ui/Modal";
+import { inputStyle } from "@/components/ui/fieldStyles";
 
 interface Props {
   member: ProviderTeamMemberDto;
@@ -101,30 +103,7 @@ export function EditMemberModal({ member, onClose }: Props) {
   }
 
   return (
-    <div
-      style={{
-        position: "fixed", inset: 0, zIndex: 999,
-        background: "rgba(0,0,0,0.6)",
-        display: "flex", alignItems: "center", justifyContent: "center",
-        padding: "20px",
-      }}
-      onClick={onClose}
-    >
-      <div
-        style={{
-          background: "#111827", border: "1px solid #1F2937",
-          borderRadius: 14, padding: "28px 32px",
-          width: "100%", maxWidth: 500,
-          maxHeight: "90vh", overflowY: "auto",
-        }}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
-          <h2 style={{ color: "#E8EDF5", fontSize: 17, fontWeight: 700, margin: 0 }}>{t("title")}</h2>
-          <button onClick={onClose} style={{ background: "none", border: "none", color: "#6B7280", cursor: "pointer" }}>
-            <X size={18} />
-          </button>
-        </div>
+    <Modal title={t("title")} onClose={onClose} width={500}>
 
         <div style={{ color: "#4B5563", fontSize: 12, marginBottom: 16 }}>{member.email}</div>
 
@@ -209,32 +188,10 @@ export function EditMemberModal({ member, onClose }: Props) {
             </div>
           )}
 
-          <button
-            type="submit"
-            disabled={update.isPending}
-            style={{
-              padding: "11px 0", borderRadius: 9,
-              background: update.isPending ? "#1D3461" : "linear-gradient(135deg, #3B82F6, #6366F1)",
-              border: "none", color: "#fff", fontSize: 14, fontWeight: 600,
-              cursor: update.isPending ? "not-allowed" : "pointer", marginTop: 4,
-            }}
-          >
+          <Btn type="submit" fullWidth disabled={update.isPending} style={{ marginTop: 4 }}>
             {update.isPending ? t("saving") : t("saveButton")}
-          </button>
+          </Btn>
         </form>
-      </div>
-    </div>
+    </Modal>
   );
 }
-
-const inputStyle: React.CSSProperties = {
-  background: "#0D1117",
-  border: "1px solid #1F2937",
-  borderRadius: 8,
-  padding: "10px 14px",
-  color: "#E8EDF5",
-  fontSize: 13,
-  outline: "none",
-  width: "100%",
-  boxSizing: "border-box",
-};

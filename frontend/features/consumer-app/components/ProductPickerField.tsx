@@ -1,4 +1,5 @@
 "use client";
+import { inputStyle as baseInputStyle, labelStyle } from "@/components/ui/fieldStyles";
 
 import { useEffect, useMemo, useState } from "react";
 import { Search, X } from "lucide-react";
@@ -9,25 +10,7 @@ import type { FieldProps } from "./BlockPropertyEditor";
 // style constants rather than importing shared ones, see AppPreviewPanel.tsx's own banner comment
 // on the same pattern; BlockPropertyEditor.tsx's constants aren't exported shared infrastructure). ─
 
-const inputStyle: React.CSSProperties = {
-  width: "100%",
-  background: "#0D1117",
-  border: "1px solid #374151",
-  borderRadius: 8,
-  padding: "9px 12px 9px 30px",
-  color: "#E8EDF5",
-  fontSize: 13,
-  outline: "none",
-  boxSizing: "border-box",
-};
-
-const labelStyle: React.CSSProperties = {
-  display: "block",
-  color: "#9CA3AF",
-  fontSize: 12,
-  fontWeight: 500,
-  marginBottom: 6,
-};
+const inputStyle: React.CSSProperties = { ...baseInputStyle, padding: "9px 12px 9px 30px" };
 
 const hintStyle: React.CSSProperties = { color: "#4B5563", fontSize: 11, marginTop: 4 };
 const errorStyle: React.CSSProperties = { ...hintStyle, color: "#EF4444" };

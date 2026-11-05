@@ -9,6 +9,27 @@ public sealed class MovementService : IMovementService
 
     public MovementService(IMovementRepository repo) => _repo = repo;
 
+    public async Task<StockHistoryDto> GetStockHistoryAsync(
+        Guid tenantId, Guid productId, Guid? storeId, DateOnly from, DateOnly to, CancellationToken ct = default)
+    {
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        if (productId == Guid.Empty || from > to || to > today || from < today.AddDays(-365))
+            throw new ArgumentException("Provide a product and a date range within the last 366 days.");
+        var snapshot = await _repo.GetStockHistoryAsync(tenantId, productId, storeId, from, ct);
+        // Rewind the actual current balance. Changes AFTER the selected window matter too:
+        // otherwise an old period would incorrectly end at today's balance.
+        var balance = snapshot.CurrentStock;
+        var points = new List<StockHistoryPointDto>();
+        for (var day = snapshot.AsOfDate; day >= from; day = day.AddDays(-1))
+        {
+            if (day <= to) points.Add(new StockHistoryPointDto(day, balance));
+            balance -= snapshot.DailyChanges.GetValueOrDefault(day);
+            if (day == from) break;
+        }
+        points.Reverse();
+        return new StockHistoryDto(snapshot.CurrentStock, points);
+    }
+
     public async Task<IReadOnlyList<IncomingSupplyDto>> GetIncomingAsync(
         Guid tenantId, Guid productId, Guid? storeId, CancellationToken ct = default)
     {

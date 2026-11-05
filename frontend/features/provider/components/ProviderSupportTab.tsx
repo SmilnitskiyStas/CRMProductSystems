@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { toast } from "sonner";
 import { useTranslations, useLocale } from "next-intl";
-import { MessageSquare, Plus, ChevronLeft, Building2, User, X, Send } from "lucide-react";
+import { MessageSquare, Plus, ChevronLeft, Building2, User, Send } from "lucide-react";
 import {
   useProviderTickets,
   useCreateProviderTicket,
@@ -26,6 +26,8 @@ import {
 import { TicketStatusBadge } from "@/features/service-desk/components/TicketStatusBadge";
 import { PriorityBadge } from "@/features/service-desk/components/PriorityBadge";
 import { Btn } from "@/components/ui/Btn";
+import { Modal } from "@/components/ui/Modal";
+import { filterInputStyle, inputStyle, labelStyle, selectStyle, textareaStyle } from "@/components/ui/fieldStyles";
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 // NOTE: getTicketStatusLabel / getTicketPriorityLabel / getTicketCategoryLabel and the
@@ -366,19 +368,7 @@ function TicketDetailPanel({
             onChange={(e) => setCommentBody(e.target.value)}
             placeholder={t("replyPlaceholder")}
             rows={3}
-            style={{
-              background: "#0D1117",
-              border: "1px solid #1F2937",
-              borderRadius: 6,
-              color: "#E8EDF5",
-              fontSize: 13,
-              padding: "8px 10px",
-              outline: "none",
-              resize: "vertical",
-              width: "100%",
-              boxSizing: "border-box",
-              fontFamily: "inherit",
-            }}
+            style={textareaStyle}
           />
           <Btn
             icon={<Send size={14} />}
@@ -430,65 +420,12 @@ function CreateTicketModal({ onClose }: { onClose: () => void }) {
     }
   }
 
-  const inputStyle: React.CSSProperties = {
-    width: "100%",
-    background: "#111827",
-    border: "1px solid #1F2937",
-    borderRadius: 8,
-    color: "#E8EDF5",
-    fontSize: 13,
-    padding: "9px 12px",
-    outline: "none",
-    boxSizing: "border-box",
-  };
-
-  const selectStyle: React.CSSProperties = {
-    ...inputStyle,
-    cursor: "pointer",
-  };
-
   return (
-    <div
-      style={{
-        position: "fixed",
-        inset: 0,
-        background: "rgba(0,0,0,0.7)",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        zIndex: 50,
-      }}
-      onClick={(e) => e.target === e.currentTarget && onClose()}
-    >
-      <div
-        style={{
-          background: "#0D1117",
-          border: "1px solid #1F2937",
-          borderRadius: 14,
-          padding: "24px 28px",
-          width: "100%",
-          maxWidth: 520,
-          display: "flex",
-          flexDirection: "column",
-          gap: 16,
-        }}
-      >
-        {/* Header */}
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-          <div style={{ color: "#E8EDF5", fontSize: 16, fontWeight: 600 }}>
-            {t("createModalTitle")}
-          </div>
-          <button
-            onClick={onClose}
-            style={{ background: "none", border: "none", color: "#6B7280", cursor: "pointer" }}
-          >
-            <X size={18} />
-          </button>
-        </div>
-
+    <Modal title={t("createModalTitle")} onClose={onClose} width={520}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
         {/* Client selector */}
         <div>
-          <label style={{ color: "#9CA3AF", fontSize: 12, marginBottom: 6, display: "block" }}>
+          <label style={labelStyle}>
             {t("clientFieldLabel")}
           </label>
           <select
@@ -507,7 +444,7 @@ function CreateTicketModal({ onClose }: { onClose: () => void }) {
 
         {/* Title */}
         <div>
-          <label style={{ color: "#9CA3AF", fontSize: 12, marginBottom: 6, display: "block" }}>
+          <label style={labelStyle}>
             {t("titleFieldLabel")}
           </label>
           <input
@@ -520,7 +457,7 @@ function CreateTicketModal({ onClose }: { onClose: () => void }) {
 
         {/* Description */}
         <div>
-          <label style={{ color: "#9CA3AF", fontSize: 12, marginBottom: 6, display: "block" }}>
+          <label style={labelStyle}>
             {t("descriptionFieldLabel")}
           </label>
           <textarea
@@ -528,14 +465,14 @@ function CreateTicketModal({ onClose }: { onClose: () => void }) {
             onChange={(e) => setDescription(e.target.value)}
             placeholder={t("descriptionPlaceholder")}
             rows={4}
-            style={{ ...inputStyle, resize: "vertical", lineHeight: 1.5 }}
+            style={{ ...textareaStyle, lineHeight: 1.5 }}
           />
         </div>
 
         {/* Category + Priority */}
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
           <div>
-            <label style={{ color: "#9CA3AF", fontSize: 12, marginBottom: 6, display: "block" }}>
+            <label style={labelStyle}>
               {t("metaCategory")}
             </label>
             <select
@@ -549,7 +486,7 @@ function CreateTicketModal({ onClose }: { onClose: () => void }) {
             </select>
           </div>
           <div>
-            <label style={{ color: "#9CA3AF", fontSize: 12, marginBottom: 6, display: "block" }}>
+            <label style={labelStyle}>
               {t("metaPriority")}
             </label>
             <select
@@ -570,26 +507,15 @@ function CreateTicketModal({ onClose }: { onClose: () => void }) {
 
         {/* Actions */}
         <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 4 }}>
-          <button
-            onClick={onClose}
-            style={{
-              background: "transparent",
-              border: "1px solid #1F2937",
-              borderRadius: 8,
-              color: "#6B7280",
-              fontSize: 13,
-              padding: "9px 18px",
-              cursor: "pointer",
-            }}
-          >
+          <Btn variant="ghost" onClick={onClose}>
             {t("cancelButton")}
-          </button>
+          </Btn>
           <Btn onClick={handleSubmit} disabled={!canSubmit}>
             {create.isPending ? t("saving") : t("createButton")}
           </Btn>
         </div>
       </div>
-    </div>
+    </Modal>
   );
 }
 
@@ -690,16 +616,7 @@ export function ProviderSupportTab() {
         <select
           value={tenantFilter}
           onChange={(e) => setTenantFilter(e.target.value)}
-          style={{
-            background: "#111827",
-            border: "1px solid #1F2937",
-            borderRadius: 7,
-            color: "#9CA3AF",
-            fontSize: 12,
-            padding: "6px 10px",
-            cursor: "pointer",
-            outline: "none",
-          }}
+          style={{ ...filterInputStyle, cursor: "pointer" }}
         >
           <option value="">{t("allClientsOption")}</option>
           {(tenants ?? []).map((tenant) => (

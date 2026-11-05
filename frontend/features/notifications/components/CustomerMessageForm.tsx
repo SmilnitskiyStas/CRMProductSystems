@@ -14,17 +14,7 @@ import { useBanners } from "@/features/consumer-app/hooks/useBanners";
 import { useMobileCatalogSettings } from "@/features/consumer-app/hooks/useMobileCatalogSettings";
 import { useAudienceOverview } from "@/features/marketing-analytics/audience-builder/hooks/useAudienceBuilder";
 import type { AudienceBuildRequest, AudienceCombineMode } from "@/features/marketing-analytics/audience-builder/types";
-
-const inputStyle = {
-  width: "100%",
-  boxSizing: "border-box" as const,
-  border: "1px solid #263244",
-  background: "#0D1117",
-  color: "#E8EDF5",
-  borderRadius: 8,
-  padding: "10px 12px",
-  fontSize: 13,
-};
+import { inputStyle } from "@/components/ui/fieldStyles";
 
 const sectionStyle = {
   background: "#0D1117",
@@ -190,7 +180,7 @@ export function CustomerMessageForm() {
           <p style={{ color: "#6B7280", fontSize: 12, margin: "0 0 18px" }}>Можна вибрати один або декілька каналів.</p>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 10 }}>
             {([{ id: "push", label: "Push", icon: <Smartphone size={18}/> }, { id: "messenger", label: "Месенджер", icon: <MessageCircle size={18}/> }, { id: "sms", label: "SMS", icon: <Send size={18}/> }] as const).map((item) => (
-              <button type="button" key={item.id} onClick={() => toggle(item.id)} style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 7, padding: 12, borderRadius: 8, cursor: "pointer", fontWeight: 600, border: `1px solid ${channels.includes(item.id) ? "#3B82F6" : "#374151"}`, background: channels.includes(item.id) ? "#1D3461" : "transparent", color: channels.includes(item.id) ? "#93C5FD" : "#9CA3AF" }}>{item.icon}{item.label}</button>
+              <Btn key={item.id} variant={channels.includes(item.id) ? "primary" : "ghost"} icon={item.icon} onClick={() => toggle(item.id)} style={{ justifyContent: "center", padding: 12 }}>{item.label}</Btn>
             ))}
           </div>
           {channels.includes("messenger") && <label style={{ display: "block", color: "#CBD5E1", fontSize: 13, marginTop: 16 }}>Месенджер
@@ -202,7 +192,7 @@ export function CustomerMessageForm() {
           <h2 style={{ color: "#E8EDF5", fontSize: 15, margin: "0 0 4px" }}>Час відправлення</h2>
           <p style={{ color: "#6B7280", fontSize: 12, margin: "0 0 18px" }}>Провайдери ще не підключені: кампанія збереже готовий стан і не буде фактично відправлена до підключення інтеграції.</p>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 10 }}>
-            {([{ id: "draft", label: "Зберегти чернетку" }, { id: "send_now", label: "Відправити зараз" }, { id: "scheduled", label: "Запланувати" }] as const).map((item) => <button type="button" key={item.id} onClick={() => setDeliveryMode(item.id)} style={{ padding: 12, borderRadius: 8, cursor: "pointer", fontWeight: 600, border: `1px solid ${deliveryMode === item.id ? "#3B82F6" : "#374151"}`, background: deliveryMode === item.id ? "#1D3461" : "transparent", color: deliveryMode === item.id ? "#93C5FD" : "#9CA3AF" }}>{item.label}</button>)}
+            {([{ id: "draft", label: "Зберегти чернетку" }, { id: "send_now", label: "Відправити зараз" }, { id: "scheduled", label: "Запланувати" }] as const).map((item) => <Btn key={item.id} variant={deliveryMode === item.id ? "primary" : "ghost"} onClick={() => setDeliveryMode(item.id)} style={{ justifyContent: "center", padding: 12 }}>{item.label}</Btn>)}
           </div>
           {deliveryMode === "scheduled" && <label style={{ display: "block", color: "#CBD5E1", fontSize: 13, marginTop: 16 }}>Дата і час<input type="datetime-local" value={scheduledAt} min={new Date(Date.now() + 60_000).toISOString().slice(0, 16)} onChange={(e) => setScheduledAt(e.target.value)} style={{ ...inputStyle, marginTop: 7 }}/></label>}
         </section>

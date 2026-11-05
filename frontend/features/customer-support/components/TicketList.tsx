@@ -7,6 +7,9 @@ import { useCustomerSupportTickets } from "../hooks/useCustomerSupportTickets";
 import type { ConsumerSupportTicketDto, TicketStatus } from "../types";
 import { TICKET_STATUSES, getTicketStatusLabel } from "../types";
 import { TicketStatusBadge } from "./TicketStatusBadge";
+import { Btn } from "@/components/ui/Btn";
+import { Pagination } from "@/components/ui/Pagination";
+import { filterInputStyle } from "@/components/ui/fieldStyles";
 
 const PAGE_SIZE = 30;
 // GetInboxAsync (TASK-616) has no customerId filter param — when a `?customerId=` deep link is
@@ -43,17 +46,6 @@ export function TicketList({ selectedId, onSelect, customerIdFilter, onClearCust
   const totalPages = customerIdFilter ? 1 : data?.totalPages ?? 1;
   const totalCount = customerIdFilter ? tickets.length : data?.totalCount ?? 0;
 
-  const selectStyle = {
-    background: "#111827",
-    border: "1px solid #1F2937",
-    borderRadius: 6,
-    color: "#9CA3AF",
-    fontSize: 13,
-    padding: "7px 10px",
-    cursor: "pointer",
-    outline: "none",
-  };
-
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
       {customerIdFilter && (
@@ -72,23 +64,15 @@ export function TicketList({ selectedId, onSelect, customerIdFilter, onClearCust
         >
           {t("customerFilterActive")}
           {onClearCustomerFilter && (
-            <button
+            <Btn
+              size="sm"
+              variant="link"
+              icon={<X size={12} />}
               onClick={onClearCustomerFilter}
-              style={{
-                marginLeft: "auto",
-                background: "transparent",
-                border: "none",
-                color: "#60A5FA",
-                cursor: "pointer",
-                display: "flex",
-                alignItems: "center",
-                gap: 4,
-                fontSize: 12,
-              }}
+              style={{ marginLeft: "auto" }}
             >
-              <X size={12} />
               {t("clearFilter")}
-            </button>
+            </Btn>
           )}
         </div>
       )}
@@ -98,7 +82,7 @@ export function TicketList({ selectedId, onSelect, customerIdFilter, onClearCust
         <select
           value={status}
           onChange={(e) => { setStatus(e.target.value as TicketStatus | ""); setPage(1); }}
-          style={selectStyle}
+          style={filterInputStyle}
         >
           <option value="">{t("allStatusesOption")}</option>
           {TICKET_STATUSES.map((s) => (
@@ -165,39 +149,7 @@ export function TicketList({ selectedId, onSelect, customerIdFilter, onClearCust
 
       {/* Pagination */}
       {totalPages > 1 && (
-        <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 4 }}>
-          <button
-            onClick={() => setPage((p) => Math.max(1, p - 1))}
-            disabled={page === 1}
-            style={{
-              background: "#111827",
-              border: "1px solid #1F2937",
-              borderRadius: 6,
-              color: page === 1 ? "#374151" : "#9CA3AF",
-              fontSize: 12,
-              padding: "5px 12px",
-              cursor: page === 1 ? "not-allowed" : "pointer",
-            }}
-          >
-            {t("prevButton")}
-          </button>
-          <span style={{ color: "#4B5563", fontSize: 12 }}>{page} / {totalPages}</span>
-          <button
-            onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-            disabled={page === totalPages}
-            style={{
-              background: "#111827",
-              border: "1px solid #1F2937",
-              borderRadius: 6,
-              color: page === totalPages ? "#374151" : "#9CA3AF",
-              fontSize: 12,
-              padding: "5px 12px",
-              cursor: page === totalPages ? "not-allowed" : "pointer",
-            }}
-          >
-            {t("nextButton")}
-          </button>
-        </div>
+        <Pagination page={page} totalPages={totalPages} totalCount={totalCount} onPageChange={setPage} />
       )}
     </div>
   );

@@ -15,6 +15,10 @@ import { Btn } from "@/components/ui/Btn";
 import { hasRole, AT_LEAST_ENTERPRISE_ADMIN } from "@/lib/roles";
 import { TenantRoleBadge } from "@/features/tenant-roles/components/TenantRoleBadge";
 import { TenantRoleSelector } from "@/features/tenant-roles/components/TenantRoleSelector";
+import { DetailDrawer } from "@/components/ui/DetailDrawer";
+import { StatusPill } from "@/components/ui/StatusPill";
+import { Tabs } from "@/components/ui/Tabs";
+import { inputStyle, labelStyle } from "@/components/ui/fieldStyles";
 
 const EDITABLE_ROLES = [
   "store_manager",
@@ -22,28 +26,6 @@ const EDITABLE_ROLES = [
   "storekeeper",
   "cashier",
 ];
-
-const inputStyle: React.CSSProperties = {
-  width: "100%",
-  background: "#0D1117",
-  border: "1px solid #374151",
-  borderRadius: 8,
-  padding: "9px 12px",
-  color: "#E8EDF5",
-  fontSize: 13,
-  outline: "none",
-  boxSizing: "border-box",
-};
-
-const labelStyle: React.CSSProperties = {
-  display: "block",
-  color: "#6B7280",
-  fontSize: 11,
-  fontWeight: 500,
-  marginBottom: 5,
-  textTransform: "uppercase",
-  letterSpacing: "0.05em",
-};
 
 type PanelTab = "info" | "access" | "activity";
 
@@ -126,56 +108,10 @@ export function UserDetailPanel({ user, onClose }: Props) {
     onClose();
   }
 
-  const tabBtnStyle = (active: boolean): React.CSSProperties => ({
-    padding: "8px 16px",
-    background: "transparent",
-    border: "none",
-    borderBottom: active ? "2px solid #3B82F6" : "2px solid transparent",
-    color: active ? "#3B82F6" : "#4B5563",
-    fontSize: 13,
-    fontWeight: active ? 600 : 400,
-    cursor: "pointer",
-    marginBottom: -1,
-  });
-
   return (
-    <>
-      {/* Backdrop */}
-      <div
-        onClick={onClose}
-        style={{
-          position: "fixed", inset: 0,
-          background: "rgba(0,0,0,0.5)",
-          zIndex: 200,
-          backdropFilter: "blur(2px)",
-        }}
-      />
-
-      {/* Panel */}
-      <div
-        style={{
-          position: "fixed",
-          top: 0, right: 0, bottom: 0,
-          width: "min(480px, 100vw)",
-          background: "#0D1117",
-          borderLeft: "1px solid #1F2937",
-          zIndex: 201,
-          display: "flex",
-          flexDirection: "column",
-          overflowY: "auto",
-        }}
-      >
-        {/* Header */}
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 14,
-            padding: "20px 24px",
-            borderBottom: "1px solid #1F2937",
-            flexShrink: 0,
-          }}
-        >
+    <DetailDrawer isOpen onClose={onClose} title={user.fullName} width={480}>
+        {/* Identity */}
+        <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 16 }}>
           {/* Avatar */}
           <div
             style={{
@@ -189,64 +125,31 @@ export function UserDetailPanel({ user, onClose }: Props) {
           >
             {initials}
           </div>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ color: "#E8EDF5", fontSize: 15, fontWeight: 700 }}>
-              {user.fullName}
-            </div>
-            <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 4 }}>
-              <span
-                style={{
-                  background: "#1A2235", border: "1px solid #1F2937",
-                  borderRadius: 20, padding: "2px 10px",
-                  color: "#3B82F6", fontSize: 11, fontWeight: 600,
-                }}
-              >
-                {getRoleLabel(tRoles, user.role)}
-              </span>
-              <TenantRoleBadge tenantRoleId={user.tenantRoleId} />
-              {!user.isActive && (
-                <span
-                  style={{
-                    background: "#2d0a0a", border: "1px solid #7f1d1d",
-                    borderRadius: 20, padding: "2px 8px",
-                    color: "#F87171", fontSize: 11,
-                  }}
-                >
-                  {t("deactivatedBadge")}
-                </span>
-              )}
-            </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+            <StatusPill bg="#1A2235" text="#3B82F6" style={{ border: "1px solid #1F2937" }}>
+              {getRoleLabel(tRoles, user.role)}
+            </StatusPill>
+            <TenantRoleBadge tenantRoleId={user.tenantRoleId} />
+            {!user.isActive && (
+              <StatusPill bg="#2d0a0a" text="#F87171" style={{ border: "1px solid #7f1d1d" }}>
+                {t("deactivatedBadge")}
+              </StatusPill>
+            )}
           </div>
-          <button
-            onClick={onClose}
-            style={{
-              background: "transparent", border: "1px solid #1F2937",
-              borderRadius: 8, padding: "5px 9px",
-              color: "#4B5563", fontSize: 16, cursor: "pointer",
-            }}
-          >
-            ✕
-          </button>
         </div>
 
-        {/* Tabs */}
-        <div
-          style={{
-            display: "flex",
-            borderBottom: "1px solid #1F2937",
-            padding: "0 24px",
-            flexShrink: 0,
-          }}
-        >
-          <button style={tabBtnStyle(tab === "info")}     onClick={() => setTab("info")}>{t("tabInfo")}</button>
-          {showAccessTab && (
-            <button style={tabBtnStyle(tab === "access")} onClick={() => setTab("access")}>{t("tabAccess")}</button>
-          )}
-          <button style={tabBtnStyle(tab === "activity")} onClick={() => setTab("activity")}>{t("tabActivity")}</button>
-        </div>
+        <Tabs<PanelTab>
+          value={tab}
+          onChange={setTab}
+          items={[
+            { key: "info", label: t("tabInfo") },
+            ...(showAccessTab ? [{ key: "access" as const, label: t("tabAccess") }] : []),
+            { key: "activity", label: t("tabActivity") },
+          ]}
+        />
 
         {/* Content */}
-        <div style={{ padding: 24, flex: 1 }}>
+        <div style={{ paddingTop: 20, flex: 1 }}>
           {tab === "info" && (
             <div>
               {/* Read-only fields */}
@@ -336,28 +239,18 @@ export function UserDetailPanel({ user, onClose }: Props) {
                     {saved && (
                       <div style={{ color: "#4ADE80", fontSize: 13 }}>{t("savedMessage")}</div>
                     )}
-                    <button
-                      onClick={() => setEditing(true)}
-                      style={{
-                        width: "100%", padding: "9px 0", borderRadius: 8,
-                        background: "transparent", border: "1px solid #374151",
-                        color: "#6B7280", fontSize: 13, cursor: "pointer",
-                      }}
-                    >
+                    <Btn variant="ghost" fullWidth onClick={() => setEditing(true)}>
                       {t("editButton")}
-                    </button>
+                    </Btn>
                     {canDeactivate && (
-                      <button
+                      <Btn
+                        variant="dangerOutline"
+                        fullWidth
                         onClick={handleDeactivate}
                         disabled={deactivate.isPending}
-                        style={{
-                          width: "100%", padding: "9px 0", borderRadius: 8,
-                          background: "transparent", border: "1px solid #7f1d1d",
-                          color: "#F87171", fontSize: 13, cursor: "pointer",
-                        }}
                       >
                         {deactivate.isPending ? t("deactivatingButton") : t("deactivateButton")}
-                      </button>
+                      </Btn>
                     )}
                   </div>
                 )
@@ -377,7 +270,6 @@ export function UserDetailPanel({ user, onClose }: Props) {
             <UserActivityLog userId={user.id} />
           )}
         </div>
-      </div>
-    </>
+    </DetailDrawer>
   );
 }

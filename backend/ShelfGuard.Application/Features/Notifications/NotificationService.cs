@@ -353,6 +353,10 @@ public sealed class NotificationService : INotificationService
         "iot.offline",
         "receipt.created",
         "order.replenishment_suggested",
+        // TASK-755: daily auto supplier-order drafts (AutoReplenishmentService).
+        "order.auto_draft",
+        // TASK-761: all production orders of a store request are Done -> ready to ship (ProductionOrderSyncService).
+        "production_request.ready",
         "supplier.message",
         "supplier_agreement.signed",
         // Supplier-portal expansion (plan 1-partitioned-book.md, Phase 1): supplier gets
@@ -367,6 +371,7 @@ public sealed class NotificationService : INotificationService
         "access.temporary_expiring_soon",
         "access.temporary_expired",
         "auth.password_reset_requested",
+        "auth.password_reset_link_requested",
         // AI shelf-photo check found missing/low items (worker sends the alert from shelf_scans.AlertPending).
         "shelf.empty",
         // Promo item is running but does not sell while the store holds stock (worker promo-no-sales job).

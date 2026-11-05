@@ -98,19 +98,15 @@ export function TasksCalendar({ tasks, onAddTask }: Props) {
       {/* Header: month nav */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <button onClick={goPrevMonth} style={navBtnStyle}>
-            <ChevronLeft size={16} />
-          </button>
+          <Btn variant="ghost" size="sm" onClick={goPrevMonth} aria-label="prev" icon={<ChevronLeft size={16} />}>{null}</Btn>
           <span style={{ color: "#E8EDF5", fontSize: 14, fontWeight: 600, minWidth: 140, textAlign: "center", textTransform: "capitalize" }}>
             {monthLabel}
           </span>
-          <button onClick={goNextMonth} style={navBtnStyle}>
-            <ChevronRight size={16} />
-          </button>
+          <Btn variant="ghost" size="sm" onClick={goNextMonth} aria-label="next" icon={<ChevronRight size={16} />}>{null}</Btn>
         </div>
-        <button onClick={goToday} style={{ ...navBtnStyle, width: "auto", padding: "6px 12px", fontSize: 12 }}>
+        <Btn variant="ghost" size="sm" onClick={goToday}>
           {t("todayButton")}
-        </button>
+        </Btn>
       </div>
 
       {/* Weekday labels */}
@@ -224,15 +220,3 @@ export function TasksCalendar({ tasks, onAddTask }: Props) {
   );
 }
 
-const navBtnStyle: React.CSSProperties = {
-  width: 30,
-  height: 30,
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  background: "#0D1117",
-  border: "1px solid #1F2937",
-  borderRadius: 7,
-  color: "#9CA3AF",
-  cursor: "pointer",
-};

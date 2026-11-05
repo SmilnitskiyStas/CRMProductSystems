@@ -5,9 +5,12 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLocale, useTranslations } from "next-intl";
-import { ArrowLeft } from "lucide-react";
 import { toast } from "sonner";
 import { Btn } from "@/components/ui/Btn";
+import { PageContainer } from "@/components/ui/PageContainer";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { BackLink } from "@/components/ui/BackLink";
+import { filterInputStyle } from "@/components/ui/fieldStyles";
 import { Table, type TableColumn } from "@/components/ui/Table";
 import { useMe } from "@/features/auth/hooks/useAuth";
 import { useLocation } from "@/features/locations/hooks/useLocations";
@@ -17,11 +20,6 @@ import { LocationsMultiSelectDropdown } from "@/features/users/components/Locati
 import { isLocationScopedRole, type UserDto } from "@/features/users/types";
 import { getRoleLabel, ROLE_KEYS } from "@/features/profile/types";
 import { hasRole, AT_LEAST_ENTERPRISE_ADMIN, AT_LEAST_STORE_MANAGER } from "@/lib/roles";
-
-const inputStyle = {
-  background: "#111827", border: "1px solid #1F2937", borderRadius: 8,
-  color: "#E8EDF5", fontSize: 13, padding: "7px 12px", outline: "none",
-} as const;
 
 /**
  * Staff of one location — the location-side view of `user_locations`. No per-location endpoint
@@ -142,16 +140,9 @@ export default function LocationStaffPage() {
   const loading = usersLoading || assignedLoading;
 
   return (
-    <div style={{ padding: "28px 32px", display: "flex", flexDirection: "column", gap: 20 }}>
-      <div>
-        <Link href="/locations" style={{ color: "#60A5FA", fontSize: 12, textDecoration: "none", display: "inline-flex", alignItems: "center", gap: 4 }}>
-          <ArrowLeft size={13} /> {t("back")}
-        </Link>
-        <h1 style={{ color: "#E8EDF5", fontSize: 22, fontWeight: 700, margin: "8px 0 0" }}>
-          {t("title", { name: location?.name ?? "…" })}
-        </h1>
-        <p style={{ color: "#4B5563", fontSize: 13, margin: "6px 0 0" }}>{t("hint")}</p>
-      </div>
+    <PageContainer>
+      <BackLink href="/locations">{t("back")}</BackLink>
+      <PageHeader title={t("title", { name: location?.name ?? "…" })} subtitle={t("hint")} />
 
       {!canView ? (
         <div style={{ color: "#6B7280", fontSize: 13 }}>{t("noAccess")}</div>
@@ -163,9 +154,9 @@ export default function LocationStaffPage() {
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder={t("searchPlaceholder")}
-              style={{ ...inputStyle, width: 260 }}
+              style={{ ...filterInputStyle, width: 260 }}
             />
-            <select value={roleFilter} onChange={(e) => setRoleFilter(e.target.value)} style={inputStyle}>
+            <select value={roleFilter} onChange={(e) => setRoleFilter(e.target.value)} style={filterInputStyle}>
               <option value="">{t("allRoles")}</option>
               {ROLE_KEYS.filter(isLocationScopedRole).map((r) => (
                 <option key={r} value={r}>{getRoleLabel(tRoles, r)}</option>
@@ -206,6 +197,6 @@ export default function LocationStaffPage() {
           />
         </>
       )}
-    </div>
+    </PageContainer>
   );
 }

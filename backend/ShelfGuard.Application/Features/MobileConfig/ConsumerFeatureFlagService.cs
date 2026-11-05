@@ -1,4 +1,4 @@
-using System.Text.Json;
+using System.Text.Json.Nodes;
 
 namespace ShelfGuard.Application.Features.MobileConfig;
 
@@ -44,19 +44,15 @@ public sealed class ConsumerFeatureFlagService : IConsumerFeatureFlagService
         if (documentJson is null)
             return true;
 
-        using var doc = JsonDocument.Parse(documentJson);
-        if (!doc.RootElement.TryGetProperty("features", out var featuresEl) ||
-            featuresEl.ValueKind != JsonValueKind.Object)
-        {
-            return true;
-        }
-
-        if (!featuresEl.TryGetProperty(flagKey, out var flagEl))
-            return true; // present document, but this key isn't mentioned — opt-out, not opt-in.
+        var document = JsonNode.Parse(documentJson) as JsonObject;
+        if (document is null) return true;
+        ConsumerNavigationAvailability.Apply(document);
 
         // A validator-approved published document (TASK-532) always stores a boolean here;
         // treating "anything that isn't literally false" as enabled keeps this fail-open even
         // against an unexpected stored type, matching the rest of this default's posture.
-        return flagEl.ValueKind != JsonValueKind.False;
+        return document["features"] is not JsonObject features ||
+            features[flagKey] is not JsonValue flag ||
+            !flag.TryGetValue<bool>(out var enabled) || enabled;
     }
 }

@@ -2,11 +2,14 @@
 
 import { useState } from "react";
 import { useTranslations } from "next-intl";
-import { Calendar, Plus, Trash2, X } from "lucide-react";
+import { Calendar, Plus, Trash2 } from "lucide-react";
 import { useProviderSchedule, useCreateScheduleSlot, useDeleteScheduleSlot } from "../hooks/useProviderSchedule";
 import { useProviderTeam } from "../hooks/useProviderTeam";
 import type { ProviderScheduleSlotDto } from "../api/providerScheduleApi";
 import { Btn } from "@/components/ui/Btn";
+import { Modal } from "@/components/ui/Modal";
+import { StatusPill } from "@/components/ui/StatusPill";
+import { inputStyle } from "@/components/ui/fieldStyles";
 
 // Day-of-week ordering (Mon..Sun) — display labels come from i18n
 // (Dashboard.provider.scheduleTab.dayShort/.dayFull, `useTranslations`).
@@ -58,21 +61,7 @@ function AddSlotModal({ onClose }: AddSlotModalProps) {
   }
 
   return (
-    <div
-      style={{ position: "fixed", inset: 0, zIndex: 999, background: "rgba(0,0,0,0.6)", display: "flex", alignItems: "center", justifyContent: "center" }}
-      onClick={onClose}
-    >
-      <div
-        style={{ background: "#111827", border: "1px solid #1F2937", borderRadius: 14, padding: "28px 32px", width: "100%", maxWidth: 440 }}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
-          <h2 style={{ color: "#E8EDF5", fontSize: 17, fontWeight: 700, margin: 0 }}>{t("addShiftButton")}</h2>
-          <button onClick={onClose} style={{ background: "none", border: "none", color: "#6B7280", cursor: "pointer" }}>
-            <X size={18} />
-          </button>
-        </div>
-
+    <Modal title={t("addShiftButton")} onClose={onClose} width={440}>
         <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 14 }}>
           <select
             value={form.userId}
@@ -158,29 +147,13 @@ function AddSlotModal({ onClose }: AddSlotModalProps) {
             </div>
           )}
 
-          <button
-            type="submit"
-            disabled={create.isPending}
-            style={{
-              padding: "11px 0", borderRadius: 9,
-              background: create.isPending ? "#1D3461" : "linear-gradient(135deg, #3B82F6, #6366F1)",
-              border: "none", color: "#fff", fontSize: 14, fontWeight: 600,
-              cursor: create.isPending ? "not-allowed" : "pointer", marginTop: 4,
-            }}
-          >
+          <Btn type="submit" fullWidth disabled={create.isPending} style={{ marginTop: 4 }}>
             {create.isPending ? t("saving") : t("addShiftButton")}
-          </button>
+          </Btn>
         </form>
-      </div>
-    </div>
+    </Modal>
   );
 }
-
-const inputStyle: React.CSSProperties = {
-  background: "#0D1117", border: "1px solid #1F2937", borderRadius: 8,
-  padding: "10px 14px", color: "#E8EDF5", fontSize: 13, outline: "none",
-  width: "100%", boxSizing: "border-box",
-};
 
 function SlotPill({ slot, onDelete }: { slot: ProviderScheduleSlotDto; onDelete: () => void }) {
   const t = useTranslations("Dashboard.provider.scheduleTab");
@@ -231,9 +204,9 @@ export function ScheduleTab() {
             {t("title")}
           </h2>
           {slots && (
-            <span style={{ padding: "2px 8px", borderRadius: 10, background: "#1F2937", color: "#9CA3AF", fontSize: 11 }}>
+            <StatusPill bg="#1F2937" text="#9CA3AF">
               {t("shiftsCountLabel", { count: slots.length })}
-            </span>
+            </StatusPill>
           )}
         </div>
         <Btn icon={<Plus size={14} />} onClick={() => setShowAdd(true)}>

@@ -17,6 +17,10 @@ public sealed class ProductionOrder
     /// <summary>User who created this order. Nullable — may be created by system/automation.</summary>
     public Guid? CreatedBy { get; set; }
     public string? Notes { get; set; }
+    /// <summary>Earliest "needed by" date among the linked store requests (or set manually).</summary>
+    public DateOnly? NeededBy { get; set; }
+    /// <summary>Day production is planned for.</summary>
+    public DateOnly? PlannedDate { get; set; }
     public DateTimeOffset CreatedAt { get; init; } = DateTimeOffset.UtcNow;
     public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;
 
@@ -25,4 +29,5 @@ public sealed class ProductionOrder
     public Location? Location { get; init; }
     public User? Creator { get; init; }
     public ICollection<ProductionOrderConsumption> Consumptions { get; init; } = new List<ProductionOrderConsumption>();
+    public ICollection<ProductionOrderRequestLine> RequestLines { get; init; } = new List<ProductionOrderRequestLine>();
 }

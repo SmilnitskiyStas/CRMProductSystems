@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { Camera } from "lucide-react";
 import { Modal } from "@/components/ui/Modal";
 import { Btn } from "@/components/ui/Btn";
+import { PrivateImage } from "@/components/ui/PrivateImage";
 import { API_BASE, ApiError } from "@/lib/api";
 import { useCreateShelfScan } from "../hooks/useShelves";
 import type { ShelfRecommendationDto, ShelfScanDto, ShelfScanItemDto, ShelfScanItemStatus } from "../types";
@@ -157,8 +158,8 @@ export function ShelfScanPanel({ onClose, locationId, zoneId, sections, scans, a
                   }}
                 >
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={resolveScanImageUrl(s.imageUrl)}
+                  <PrivateImage
+                    src={s.imageUrl}
                     alt=""
                     style={{ width: 48, height: 48, objectFit: "cover", borderRadius: 6, background: "#161B26" }}
                   />
@@ -196,8 +197,8 @@ function ScanResult({ scan }: { scan: ShelfScanDto }) {
       )}
       <div style={{ display: "flex", gap: 12 }}>
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={resolveScanImageUrl(scan.imageUrl)}
+        <PrivateImage
+          src={scan.imageUrl}
           alt=""
           style={{ width: 120, height: 120, objectFit: "cover", borderRadius: 8, background: "#0B0E14" }}
         />

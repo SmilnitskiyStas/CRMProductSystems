@@ -8,8 +8,11 @@
 
 import { useMemo, useState } from "react";
 import { useTranslations, useLocale } from "next-intl";
+import { filterInputStyle, labelStyle } from "@/components/ui/fieldStyles";
 import { Table, type TableColumn } from "@/components/ui/Table";
 import { Btn } from "@/components/ui/Btn";
+import { Modal } from "@/components/ui/Modal";
+import { StatusPill } from "@/components/ui/StatusPill";
 import { StarRating } from "@/features/marketplace/components/StarRating";
 import {
   useSupplierTeamPerformance,
@@ -19,24 +22,6 @@ import type {
   SupplierEmployeePerformance,
   SupplierPeriodMetric,
 } from "../types";
-
-const dateInputStyle: React.CSSProperties = {
-  background: "#0D1117",
-  border: "1px solid #374151",
-  borderRadius: 8,
-  color: "#E8EDF5",
-  fontSize: 13,
-  padding: "8px 10px",
-  outline: "none",
-};
-
-const labelStyle: React.CSSProperties = {
-  color: "#9CA3AF",
-  fontSize: 12,
-  fontWeight: 500,
-  marginBottom: 6,
-  display: "block",
-};
 
 function isoDaysAgo(days: number): string {
   const d = new Date();
@@ -216,7 +201,7 @@ export function TeamPerformanceView() {
             value={from}
             max={to}
             onChange={(e) => e.target.value && setFrom(e.target.value)}
-            style={dateInputStyle}
+            style={filterInputStyle}
           />
         </div>
         <div>
@@ -227,31 +212,22 @@ export function TeamPerformanceView() {
             min={from}
             max={todayIso()}
             onChange={(e) => e.target.value && setTo(e.target.value)}
-            style={dateInputStyle}
+            style={filterInputStyle}
           />
         </div>
         <div style={{ display: "flex", gap: 8 }}>
           {[30, 90, 365].map((d) => (
-            <button
+            <Btn
               key={d}
-              type="button"
+              variant="ghost"
+              size="sm"
               onClick={() => {
                 setFrom(isoDaysAgo(d - 1));
                 setTo(todayIso());
               }}
-              style={{
-                background: "transparent",
-                border: "1px solid #374151",
-                borderRadius: 8,
-                color: "#9CA3AF",
-                fontSize: 12,
-                fontWeight: 600,
-                padding: "8px 12px",
-                cursor: "pointer",
-              }}
             >
               {t("presetDays", { n: d })}
-            </button>
+            </Btn>
           ))}
         </div>
       </div>
@@ -296,39 +272,9 @@ function EmployeeReviewsModal({
   const { data: reviews, isLoading } = useEmployeeReviews(userId);
 
   return (
-    <div
-      style={{
-        position: "fixed",
-        inset: 0,
-        background: "rgba(0,0,0,0.6)",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        zIndex: 1000,
-      }}
-      onClick={(e) => {
-        if (e.target === e.currentTarget) onClose();
-      }}
-    >
-      <div
-        style={{
-          background: "#111827",
-          border: "1px solid #1F2937",
-          borderRadius: 14,
-          padding: "24px 28px",
-          width: 520,
-          maxWidth: "calc(100vw - 32px)",
-          maxHeight: "calc(100vh - 80px)",
-          display: "flex",
-          flexDirection: "column",
-          gap: 16,
-        }}
-      >
-        <h2 style={{ color: "#E8EDF5", fontSize: 16, fontWeight: 700, margin: 0 }}>
-          {t("reviewsModalTitle", { name: userName })}
-        </h2>
-
-        <div style={{ overflowY: "auto", display: "flex", flexDirection: "column", gap: 12 }}>
+    <Modal title={t("reviewsModalTitle", { name: userName })} onClose={onClose}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
           {isLoading ? (
             <div style={{ color: "#4B5563", fontSize: 13 }}>{t("reviewsLoading")}</div>
           ) : !reviews || reviews.length === 0 ? (
@@ -349,21 +295,9 @@ function EmployeeReviewsModal({
               >
                 <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
                   <StarRating value={r.rating} size={14} />
-                  <span
-                    style={{
-                      fontSize: 10,
-                      fontWeight: 600,
-                      textTransform: "uppercase",
-                      letterSpacing: "0.04em",
-                      color: "#9CA3AF",
-                      background: "#1F2937",
-                      border: "1px solid #374151",
-                      borderRadius: 6,
-                      padding: "1px 7px",
-                    }}
-                  >
+                  <StatusPill bg="#1F2937" text="#9CA3AF">
                     {r.source === "order" ? t("sourceOrder") : t("sourceChat")}
-                  </span>
+                  </StatusPill>
                   <span style={{ color: "#4B5563", fontSize: 11, marginLeft: "auto" }}>
                     {new Date(r.createdAt).toLocaleDateString(intlLocale, {
                       day: "2-digit",
@@ -393,6 +327,6 @@ function EmployeeReviewsModal({
           </Btn>
         </div>
       </div>
-    </div>
+    </Modal>
   );
 }

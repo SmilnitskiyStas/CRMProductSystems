@@ -8,7 +8,9 @@ import { useTranslations } from "next-intl";
 import { ImageOff, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { Btn } from "@/components/ui/Btn";
+import { inputStyle, labelStyle } from "@/components/ui/fieldStyles";
 import { API_BASE } from "@/lib/api";
+import { PrivateImage } from "@/components/ui/PrivateImage";
 import {
   useContractSettings,
   useUpsertContractSettings,
@@ -16,32 +18,8 @@ import {
 } from "../hooks/useCabinetCooperation";
 import type { UpsertContractSettingsRequest } from "../types";
 
-const inputStyle: React.CSSProperties = {
-  width: "100%",
-  boxSizing: "border-box",
-  background: "#1F2937",
-  border: "1px solid #374151",
-  borderRadius: 8,
-  color: "#E8EDF5",
-  fontSize: 13,
-  padding: "9px 12px",
-  outline: "none",
-  fontFamily: "inherit",
-};
-
-const labelStyle: React.CSSProperties = {
-  display: "block",
-  color: "#9CA3AF",
-  fontSize: 12,
-  marginBottom: 6,
-};
-
 function Req() {
   return <span style={{ color: "#F87171" }}> *</span>;
-}
-
-function resolveImageUrl(url: string): string {
-  return url.startsWith("http") ? url : `${API_BASE}${url}`;
 }
 
 interface FormState {
@@ -118,8 +96,8 @@ function ImageUploadField({
         >
           {imageUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={resolveImageUrl(imageUrl)}
+            <PrivateImage
+              src={imageUrl}
               alt={label}
               style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain" }}
             />

@@ -1,5 +1,6 @@
 "use client";
 
+import { canWorkPermission } from "@/lib/workPermissions";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
@@ -27,6 +28,7 @@ import {
   ChevronRight,
   Calculator,
   Truck,
+  Factory,
   Store,
   Wrench,
   Car,
@@ -197,6 +199,8 @@ export function buildNavGroups(t: SidebarGroupsT): NavGroup[] {
     items: [
       { href: "/orders",    label: t("procurement.orders"),   icon: <Calculator size={16} />, roles: AT_LEAST_STORE_MANAGER, exact: true },
       { href: "/orders/tracking", label: t("procurement.tracking"), icon: <Truck size={16} />, roles: AT_LEAST_STORE_MANAGER },
+      // Store -> own production requests (item-level gate: only tenants with the production module).
+      { href: "/orders/production", label: t("procurement.productionRequests"), icon: <Factory size={16} />, roles: AT_LEAST_STORE_MANAGER, moduleKey: "production" },
       { href: "/ai-orders", label: t("procurement.aiOrders"), icon: <Sparkles size={16} />,   roles: AT_LEAST_STORE_MANAGER },
     ],
   },
@@ -229,8 +233,15 @@ export function buildNavGroups(t: SidebarGroupsT): NavGroup[] {
     icon: <FlaskConical size={18} />,
     moduleKey: "production",
     items: [
-      { href: "/production/recipes", label: t("production.recipes"), icon: <FlaskConical size={16} />, roles: AT_LEAST_STORE_MANAGER },
-      { href: "/production/orders",  label: t("production.orders"),  icon: <ListOrdered size={16} />,  roles: AT_LEAST_STORE_MANAGER },
+      { href: "/production/overview",  label: t("production.overview"),  icon: <LayoutDashboard size={16} />, roles: AT_LEAST_STORE_MANAGER },
+      // Store -> production requests (backend: stores order, production module reviews/ships).
+      { href: "/production/requests",  label: t("production.requests"),  icon: <ClipboardList size={16} />, roles: AT_LEAST_STORE_MANAGER },
+      { href: "/production/plan",      label: t("production.plan"),      icon: <Calculator size={16} />, roles: AT_LEAST_STORE_MANAGER },
+      { href: "/production/orders",    label: t("production.orders"),    icon: <ListOrdered size={16} />, roles: AT_LEAST_STORE_MANAGER },
+      { href: "/production/shipments", label: t("production.shipments"), icon: <Truck size={16} />, roles: AT_LEAST_STORE_MANAGER },
+      { href: "/production/warehouse", label: t("production.warehouse"), icon: <Warehouse size={16} />, roles: AT_LEAST_STORE_MANAGER },
+      { href: "/production/analytics", label: t("production.analytics"), icon: <BarChart3 size={16} />, roles: AT_LEAST_STORE_MANAGER },
+      { href: "/production/recipes",   label: t("production.recipes"),   icon: <FlaskConical size={16} />, roles: AT_LEAST_STORE_MANAGER },
     ],
   },
   {
@@ -1029,6 +1040,7 @@ export function Sidebar({ collapsed, onToggle }: Props) {
     .map((group) => ({
       group,
       visibleItems: group.items.filter((item) => {
+        if (group.key === "production") return canWorkPermission(me, "production.view") && (!tabsSet || tabsSet.has(item.href) || tabsSet.has(group.key));
         // Legal Entities (TASK-323): role check OR the `legal_entities.manage`
         // per-user override — same OR-logic as backend LegalEntityAuthorization.CanManage.
         // Independent of tabsSet in both directions (deliberately not part of the

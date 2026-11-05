@@ -3,6 +3,7 @@
 import { useRef } from "react";
 import { ImagePlus, Plus, Trash2 } from "lucide-react";
 import { useTranslations } from "next-intl";
+import { Btn } from "@/components/ui/Btn";
 import type { FloorPlanLayout, LocationZoneDto, ZoneStatusCounts } from "../types";
 import { PLAN_ACCEPT } from "../lib/floorPlanBackground";
 import { ZONE_PALETTE_TYPES, zoneTypeMeta } from "../lib/zoneTypes";
@@ -57,40 +58,12 @@ export function FloorPlanSidePanel({
             <div style={{ color: "#E8EDF5", fontSize: 13, fontWeight: 600 }}>
               {ZONE_TYPE_ICONS[selected.type] ?? "🗂️"} {selected.name}
             </div>
-            <button
-              onClick={() => onRemove(selected.id)}
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 6,
-                background: "#2a0a0a",
-                border: "1px solid #991b1b",
-                color: "#ef4444",
-                borderRadius: 8,
-                padding: "7px 12px",
-                fontSize: 12,
-                cursor: "pointer",
-              }}
-            >
-              <Trash2 size={14} /> {t("removeFromPlan")}
-            </button>
-            <button
-              onClick={() => onOpenShelves(selected.id)}
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 6,
-                background: "transparent",
-                border: "1px solid #3B82F6",
-                color: "#3B82F6",
-                borderRadius: 8,
-                padding: "7px 12px",
-                fontSize: 12,
-                cursor: "pointer",
-              }}
-            >
+            <Btn variant="dangerOutline" size="sm" icon={<Trash2 size={14} />} onClick={() => onRemove(selected.id)} style={{ alignSelf: "flex-start" }}>
+              {t("removeFromPlan")}
+            </Btn>
+            <Btn variant="link" size="sm" onClick={() => onOpenShelves(selected.id)} style={{ alignSelf: "flex-start" }}>
               {t("shelfBuilderLink")}
-            </button>
+            </Btn>
           </div>
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
@@ -98,36 +71,12 @@ export function FloorPlanSidePanel({
               {t("toolsHint")}
             </p>
             <div style={{ display: "flex", gap: 8 }}>
-              <button
-                onClick={() => onResizeCanvas(layout.canvasW + 200, layout.canvasH)}
-                style={{
-                  flex: 1,
-                  background: "#0B0E14",
-                  border: "1px solid #1F2937",
-                  color: "#9CA3AF",
-                  borderRadius: 8,
-                  padding: "6px 8px",
-                  fontSize: 12,
-                  cursor: "pointer",
-                }}
-              >
+              <Btn variant="ghost" size="sm" onClick={() => onResizeCanvas(layout.canvasW + 200, layout.canvasH)} style={{ flex: 1, justifyContent: "center" }}>
                 {t("addWidth")}
-              </button>
-              <button
-                onClick={() => onResizeCanvas(layout.canvasW, layout.canvasH + 200)}
-                style={{
-                  flex: 1,
-                  background: "#0B0E14",
-                  border: "1px solid #1F2937",
-                  color: "#9CA3AF",
-                  borderRadius: 8,
-                  padding: "6px 8px",
-                  fontSize: 12,
-                  cursor: "pointer",
-                }}
-              >
+              </Btn>
+              <Btn variant="ghost" size="sm" onClick={() => onResizeCanvas(layout.canvasW, layout.canvasH + 200)} style={{ flex: 1, justifyContent: "center" }}>
                 {t("addHeight")}
-              </button>
+              </Btn>
             </div>
           </div>
         )}
@@ -147,26 +96,15 @@ export function FloorPlanSidePanel({
               e.target.value = "";
             }}
           />
-          <button
+          <Btn
+            size="sm"
+            fullWidth
+            icon={<ImagePlus size={14} />}
             onClick={() => fileRef.current?.click()}
             disabled={uploadingBackground}
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              gap: 6,
-              background: "#0d1f3a",
-              border: "1px solid #1D4ED8",
-              color: "#60A5FA",
-              borderRadius: 8,
-              padding: "8px 10px",
-              fontSize: 12,
-              fontWeight: 600,
-              cursor: uploadingBackground ? "default" : "pointer",
-            }}
           >
-            <ImagePlus size={14} /> {uploadingBackground ? t("backgroundUploading") : t("backgroundUpload")}
-          </button>
+            {uploadingBackground ? t("backgroundUploading") : t("backgroundUpload")}
+          </Btn>
           {bg ? (
             <>
               <label style={{ color: "#9CA3AF", fontSize: 12 }}>
@@ -181,24 +119,9 @@ export function FloorPlanSidePanel({
                   style={{ width: "100%" }}
                 />
               </label>
-              <button
-                onClick={onRemoveBackground}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  gap: 6,
-                  background: "#2a0a0a",
-                  border: "1px solid #991b1b",
-                  color: "#ef4444",
-                  borderRadius: 8,
-                  padding: "6px 10px",
-                  fontSize: 12,
-                  cursor: "pointer",
-                }}
-              >
-                <Trash2 size={14} /> {t("backgroundRemove")}
-              </button>
+              <Btn variant="dangerOutline" size="sm" fullWidth icon={<Trash2 size={14} />} onClick={onRemoveBackground}>
+                {t("backgroundRemove")}
+              </Btn>
             </>
           ) : (
             <p style={{ color: "#6B7280", fontSize: 12, margin: 0, lineHeight: 1.5 }}>{t("backgroundHint")}</p>
@@ -242,25 +165,9 @@ export function FloorPlanSidePanel({
       {/* Unplaced zones */}
       <Panel title={t("unplacedTitle", { count: unplaced.length })}>
         <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-          <button
-            onClick={() => onCreateZone()}
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              gap: 6,
-              background: "#0d1f3a",
-              border: "1px solid #1D4ED8",
-              color: "#60A5FA",
-              borderRadius: 8,
-              padding: "8px 10px",
-              fontSize: 12,
-              fontWeight: 600,
-              cursor: "pointer",
-            }}
-          >
-            <Plus size={14} /> {t("newZone")}
-          </button>
+          <Btn size="sm" fullWidth icon={<Plus size={14} />} onClick={() => onCreateZone()}>
+            {t("newZone")}
+          </Btn>
           {unplaced.length === 0 ? (
             <p style={{ color: "#6B7280", fontSize: 12, margin: 0 }}>{t("allZonesPlaced")}</p>
           ) : (

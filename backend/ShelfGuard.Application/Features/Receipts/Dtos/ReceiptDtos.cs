@@ -16,7 +16,20 @@ public sealed record ReceiptDto(
     int PostponeCount = 0,
     DateOnly? OriginalExpectedAt = null,
     DateTime? PostponedAt = null,
-    string? DelayReason = null
+    string? DelayReason = null,
+    // TASK-755: "manual" | "auto_replenishment"; taken-by lock of an auto draft (null = untaken).
+    string Source = "manual",
+    Guid? TakenByUserId = null,
+    string? TakenByName = null,
+    DateTime? TakenAt = null,
+    // TASK-757: set when the draft was confirmed and marked as sent to the supplier (status "ordered").
+    DateTime? OrderedAt = null,
+    string? OrderedByName = null,
+    string? ReceivingFingerprint = null,
+    Guid? ErpDocumentId = null,
+    Guid? ErpPostingId = null,
+    bool ErpReplayed = false,
+    ReceiptWorkDto? ReceivingWork = null
 );
 
 public sealed record ReceiptItemDto(
@@ -30,7 +43,8 @@ public sealed record ReceiptItemDto(
     DateOnly? ExpiryDate,
     string? BatchNumber,
     string? DiscrepancyNotes,
-    bool IsProcessed
+    bool IsProcessed,
+    string? Unit = null
 );
 
 /// <summary>Move the expected delivery date of an open (not yet received) receipt to a later day.</summary>
@@ -62,7 +76,8 @@ public sealed record UpdateReceiptItemRequest(
 );
 
 public sealed record UpdateItemsRequest(
-    List<UpdateItemPayload> Items
+    List<UpdateItemPayload> Items,
+    string? ExpectedFingerprint = null
 );
 
 public sealed record UpdateItemPayload(
@@ -71,5 +86,20 @@ public sealed record UpdateItemPayload(
     decimal? PricePurchase,
     DateOnly? ExpiryDate,
     string? BatchNumber,
-    string? DiscrepancyNotes
+    string? DiscrepancyNotes,
+    // TASK-755: correct the ORDERED quantity of a draft (must be > 0). Null = leave unchanged.
+    decimal? QuantityOrdered = null
 );
+
+/// <summary>
+/// TASK-757: body of PUT /api/receipts/{id}/header. Absent/null field = unchanged; Notes "" clears;
+/// ClearExpectedAt = true removes the expected date.
+/// </summary>
+public sealed record UpdateReceiptHeaderRequest(
+    Guid? SupplierId, string? Notes, DateOnly? ExpectedAt, bool ClearExpectedAt = false);
+
+/// <summary>TASK-757: body of POST /api/receipts/{id}/items. PricePurchase defaults to Item.PricePurchase.</summary>
+public sealed record AddReceiptItemRequest(Guid ProductId, decimal QuantityOrdered, decimal? PricePurchase);
+
+/// <summary>Body of POST /api/receipts/auto-generate (TASK-755). Null/empty = every store the caller can see.</summary>
+public sealed record AutoReplenishmentRequest(Guid? StoreLocationId);

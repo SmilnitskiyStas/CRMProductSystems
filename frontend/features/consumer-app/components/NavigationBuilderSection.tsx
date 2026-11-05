@@ -1,4 +1,5 @@
 "use client";
+import { inputStyle as baseInputStyle } from "@/components/ui/fieldStyles";
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
@@ -82,17 +83,7 @@ const sectionLabelStyle: React.CSSProperties = {
   margin: "0 0 10px",
 };
 
-const inputStyle: React.CSSProperties = {
-  width: "100%",
-  background: "#0D1117",
-  border: "1px solid #374151",
-  borderRadius: 8,
-  padding: "7px 10px",
-  color: "#E8EDF5",
-  fontSize: 13,
-  outline: "none",
-  boxSizing: "border-box",
-};
+const inputStyle: React.CSSProperties = { ...baseInputStyle, padding: "7px 10px" };
 
 const selectStyle: React.CSSProperties = {
   ...inputStyle,

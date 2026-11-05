@@ -14,6 +14,8 @@ import { Table, type TableColumn } from "@/components/ui/Table";
 import { useStores } from "@/features/stores/hooks/useStores";
 import { useCreateMarketplaceOrder, useCheckOrderConflicts } from "../hooks/useCooperation";
 import type { SupplierItemDto, BarcodeConflict, CreateMarketplaceOrderItem } from "../types";
+import { Modal } from "@/components/ui/Modal";
+import { selectStyle, textareaStyle, labelStyle } from "@/components/ui/fieldStyles";
 
 export interface CartLine {
   item: SupplierItemDto;
@@ -259,54 +261,12 @@ export function SupplierOrderCart({ supplierId, cart, onUpdateQty, onRemove, onC
 
       {/* Order modal */}
       {modalOpen && (
-        <div
-          style={{
-            position: "fixed",
-            inset: 0,
-            background: "rgba(0,0,0,0.6)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            zIndex: 999,
-            padding: 20,
-          }}
-          onClick={closeModal}
+        <Modal
+          title={step === "cart" ? t("modalTitle") : t("conflictStepTitle")}
+          onClose={closeModal}
+          width={640}
         >
-          <div
-            style={{
-              background: "#0F1623",
-              border: "1px solid #1F2937",
-              borderRadius: 12,
-              width: "100%",
-              maxWidth: 640,
-              maxHeight: "88vh",
-              display: "flex",
-              flexDirection: "column",
-              overflow: "hidden",
-            }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div
-              style={{
-                padding: "14px 18px",
-                borderBottom: "1px solid #1F2937",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-              }}
-            >
-              <span style={{ color: "#E8EDF5", fontWeight: 700, fontSize: 15 }}>
-                {step === "cart" ? t("modalTitle") : t("conflictStepTitle")}
-              </span>
-              <button
-                onClick={closeModal}
-                style={{ background: "none", border: "none", cursor: "pointer", color: "#4B5563", padding: 4 }}
-              >
-                <X size={18} />
-              </button>
-            </div>
-
-            <div style={{ flex: 1, overflowY: "auto", padding: 18 }}>
+            <div>
               {step === "conflicts" ? (
               <div>
                 <div style={{ color: "#9CA3AF", fontSize: 13, marginBottom: 16 }}>
@@ -374,7 +334,10 @@ export function SupplierOrderCart({ supplierId, cart, onUpdateQty, onRemove, onC
                       </div>
 
                       <div style={{ display: "flex", gap: 8 }}>
-                        <button
+                        <Btn
+                          size="sm"
+                          variant={chosen?.catalogAction === "link" ? "success" : "ghost"}
+                          style={{ flex: 1, justifyContent: "center" }}
                           onClick={() =>
                             setResolutions((r) => ({
                               ...r,
@@ -384,41 +347,22 @@ export function SupplierOrderCart({ supplierId, cart, onUpdateQty, onRemove, onC
                               },
                             }))
                           }
-                          style={{
-                            flex: 1,
-                            padding: "8px 10px",
-                            borderRadius: 8,
-                            fontSize: 12,
-                            fontWeight: 600,
-                            cursor: "pointer",
-                            border: chosen?.catalogAction === "link" ? "1px solid #22C55E" : "1px solid #374151",
-                            background: chosen?.catalogAction === "link" ? "#052e16" : "#1F2937",
-                            color: chosen?.catalogAction === "link" ? "#4ADE80" : "#9CA3AF",
-                          }}
                         >
                           {t("conflictLinkAction")}
-                        </button>
-                        <button
+                        </Btn>
+                        <Btn
+                          size="sm"
+                          variant={chosen?.catalogAction === "create_new" ? "primary" : "ghost"}
+                          style={{ flex: 1, justifyContent: "center" }}
                           onClick={() =>
                             setResolutions((r) => ({
                               ...r,
                               [conflict.supplierItemId]: { catalogAction: "create_new" },
                             }))
                           }
-                          style={{
-                            flex: 1,
-                            padding: "8px 10px",
-                            borderRadius: 8,
-                            fontSize: 12,
-                            fontWeight: 600,
-                            cursor: "pointer",
-                            border: chosen?.catalogAction === "create_new" ? "1px solid #3B82F6" : "1px solid #374151",
-                            background: chosen?.catalogAction === "create_new" ? "#0c1e3d" : "#1F2937",
-                            color: chosen?.catalogAction === "create_new" ? "#60A5FA" : "#9CA3AF",
-                          }}
                         >
                           {t("conflictCreateNewAction")}
-                        </button>
+                        </Btn>
                       </div>
                     </div>
                   );
@@ -429,7 +373,7 @@ export function SupplierOrderCart({ supplierId, cart, onUpdateQty, onRemove, onC
               <Table columns={cartColumns} rows={cart} rowKey={(line) => line.item.id} />
 
               <div style={{ marginTop: 16 }}>
-                <label style={{ display: "block", color: "#9CA3AF", fontSize: 12, marginBottom: 6 }}>
+                <label style={labelStyle}>
                   {t("destinationStoreLabel")}
                 </label>
                 {storesLoading ? (
@@ -439,19 +383,7 @@ export function SupplierOrderCart({ supplierId, cart, onUpdateQty, onRemove, onC
                     value={storeId}
                     onChange={(e) => setStoreId(e.target.value)}
                     required
-                    style={{
-                      width: "100%",
-                      boxSizing: "border-box",
-                      background: "#1F2937",
-                      border: "1px solid #374151",
-                      borderRadius: 8,
-                      color: "#E8EDF5",
-                      fontSize: 13,
-                      padding: "9px 12px",
-                      outline: "none",
-                      appearance: "none",
-                      cursor: "pointer",
-                    }}
+                    style={{ ...selectStyle, cursor: "pointer" }}
                   >
                     <option value="">{t("destinationStorePlaceholder")}</option>
                     {stores?.map((s) => (
@@ -470,7 +402,7 @@ export function SupplierOrderCart({ supplierId, cart, onUpdateQty, onRemove, onC
               </div>
 
               <div style={{ marginTop: 16 }}>
-                <label style={{ display: "block", color: "#9CA3AF", fontSize: 12, marginBottom: 6 }}>
+                <label style={labelStyle}>
                   {t("commentLabel")}
                 </label>
                 <textarea
@@ -478,19 +410,7 @@ export function SupplierOrderCart({ supplierId, cart, onUpdateQty, onRemove, onC
                   onChange={(e) => setComment(e.target.value)}
                   placeholder={t("commentPlaceholder")}
                   rows={3}
-                  style={{
-                    width: "100%",
-                    boxSizing: "border-box",
-                    background: "#1F2937",
-                    border: "1px solid #374151",
-                    borderRadius: 8,
-                    color: "#E8EDF5",
-                    fontSize: 13,
-                    padding: "9px 12px",
-                    outline: "none",
-                    resize: "vertical",
-                    fontFamily: "inherit",
-                  }}
+                  style={textareaStyle}
                 />
               </div>
               </>
@@ -499,7 +419,8 @@ export function SupplierOrderCart({ supplierId, cart, onUpdateQty, onRemove, onC
 
             <div
               style={{
-                padding: "14px 18px",
+                marginTop: 16,
+                paddingTop: 14,
                 borderTop: "1px solid #1F2937",
                 display: "flex",
                 alignItems: "center",
@@ -543,8 +464,7 @@ export function SupplierOrderCart({ supplierId, cart, onUpdateQty, onRemove, onC
                 )}
               </div>
             </div>
-          </div>
-        </div>
+        </Modal>
       )}
     </>
   );

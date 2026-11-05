@@ -68,10 +68,8 @@ export function useTwoFactorDisable() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: authApi.disableTwoFactor,
-    onSuccess: () => {
-      qc.setQueryData<AuthUserDto>(ME_KEY, (prev) =>
-        prev ? { ...prev, twoFactorEnabled: false } : prev,
-      );
+    onSuccess: (response) => {
+      qc.setQueryData(ME_KEY, response.user);
       qc.invalidateQueries({ queryKey: ME_KEY });
     },
   });

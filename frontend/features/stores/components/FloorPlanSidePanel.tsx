@@ -2,6 +2,7 @@
 
 import { Plus, Trash2 } from "lucide-react";
 import { useTranslations } from "next-intl";
+import { Btn } from "@/components/ui/Btn";
 import type { FloorPlanLayout, StoreZoneDto, ZoneStatusCounts } from "../types";
 import { STATUS_CONFIG, ZONE_TYPE_ICONS, worstStatus } from "./FloorPlanCanvas";
 
@@ -30,23 +31,9 @@ export function FloorPlanSidePanel({ zones, layout, counts, selectedZoneId, onAd
             <div style={{ color: "#E8EDF5", fontSize: 13, fontWeight: 600 }}>
               {ZONE_TYPE_ICONS[selected.type] ?? "🗂️"} {selected.name}
             </div>
-            <button
-              onClick={() => onRemove(selected.id)}
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 6,
-                background: "#2a0a0a",
-                border: "1px solid #991b1b",
-                color: "#ef4444",
-                borderRadius: 8,
-                padding: "7px 12px",
-                fontSize: 12,
-                cursor: "pointer",
-              }}
-            >
-              <Trash2 size={14} /> {t("removeFromPlan")}
-            </button>
+            <Btn variant="dangerOutline" size="sm" icon={<Trash2 size={14} />} onClick={() => onRemove(selected.id)} style={{ alignSelf: "flex-start" }}>
+              {t("removeFromPlan")}
+            </Btn>
           </div>
         ) : (
           <p style={{ color: "#6B7280", fontSize: 12, margin: 0, lineHeight: 1.5 }}>

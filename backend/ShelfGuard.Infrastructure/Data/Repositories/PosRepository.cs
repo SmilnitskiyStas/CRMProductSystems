@@ -9,7 +9,8 @@ public sealed class PosRepository : IPosRepository
 {
     private readonly AppDbContext _db;
 
-    public PosRepository(AppDbContext db) => _db = db;
+    private readonly PosInventoryPostingBridge? _inventory;
+    public PosRepository(AppDbContext db, PosInventoryPostingBridge? inventory = null) { _db = db; _inventory = inventory; }
 
     // ── Shifts ──────────────────────────────────────────────────────────────
 
@@ -70,15 +71,17 @@ public sealed class PosRepository : IPosRepository
             .OrderByDescending(t => t.CreatedAt)
             .ToListAsync(ct);
 
-    public Task<decimal> GetCashSalesTotalForShiftAsync(Guid shiftId, CancellationToken ct = default) =>
-        _db.PosTransactions
+    public async Task<decimal> GetCashSalesTotalForShiftAsync(Guid shiftId, CancellationToken ct = default) =>
+        await _db.PosTransactions
             .Where(t => t.ShiftId == shiftId && t.PaymentType == "cash")
-            .SumAsync(t => t.TotalAmount, ct);
+            .SumAsync(t => t.TotalAmount, ct)
+        - await _db.Set<ShelfGuard.Domain.Entities.Erp.PosReturnFiscalization>()
+            .Where(r => r.ShiftId == shiftId && r.PaymentType == "cash").SumAsync(r => r.Amount, ct);
 
     public Task AddTransactionAsync(PosTransaction tx, CancellationToken ct = default) =>
         _db.PosTransactions.AddAsync(tx, ct).AsTask();
 
-    public void UpdateTransaction(PosTransaction tx) => _db.PosTransactions.Update(tx);
+    public void UpdateTransaction(PosTransaction tx) => _db.Entry(tx).State = EntityState.Modified;
 
     public Task<List<PosTransaction>> GetPendingFiscalizationAsync(
         int maxRetries,
@@ -104,6 +107,7 @@ public sealed class PosRepository : IPosRepository
     {
         try
         {
+            if (_inventory != null && await _inventory.TrySaveAsync(ct)) return;
             await _db.SaveChangesAsync(ct);
         }
         catch (DbUpdateConcurrencyException ex)
@@ -122,6 +126,12 @@ public sealed class PosRepository : IPosRepository
             // Same offline sale (ClientTransactionId) submitted twice concurrently.
             throw new DuplicateClientTransactionException(
                 "A sale with this ClientTransactionId already exists.", ex);
+        }
+        catch (Exception ex) when ((ex as Npgsql.PostgresException ?? ex.InnerException as Npgsql.PostgresException)?.SqlState is "55P03" or "40001" or "40P01" or "P4F01"
+            || !ct.IsCancellationRequested && (ex as Npgsql.PostgresException ?? ex.InnerException as Npgsql.PostgresException)?.SqlState == "57014")
+        {
+            _db.ChangeTracker.Clear();
+            throw new ConcurrencyConflictException("Inventory posting requires reconciliation or retry.", ex);
         }
     }
 

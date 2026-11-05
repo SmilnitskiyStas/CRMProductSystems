@@ -1,6 +1,8 @@
 "use client";
 
 import { useTranslations } from "next-intl";
+import { PageContainer } from "@/components/ui/PageContainer";
+import { PageHeader } from "@/components/ui/PageHeader";
 import { useMe } from "@/features/auth/hooks/useAuth";
 import { AccessDenied } from "@/components/AccessDenied";
 import { AT_LEAST_ENTERPRISE_ADMIN, hasRole } from "@/lib/roles";
@@ -27,17 +29,9 @@ export default function ConsumerAppNavigationPage() {
   }
 
   return (
-    <div style={{ padding: "28px 32px", width: "100%", boxSizing: "border-box", display: "flex", flexDirection: "column", gap: 20 }}>
-      <div>
-        <h1 style={{ color: "#E8EDF5", fontSize: 22, fontWeight: 700, margin: 0 }}>
-          {t("title")}
-        </h1>
-        <p style={{ color: "#4B5563", fontSize: 13, marginTop: 6 }}>
-          {t("subtitle")}
-        </p>
-      </div>
-
+    <PageContainer>
+      <PageHeader title={t("title")} subtitle={t("subtitle")} />
       <NavigationBuilderSection />
-    </div>
+    </PageContainer>
   );
 }

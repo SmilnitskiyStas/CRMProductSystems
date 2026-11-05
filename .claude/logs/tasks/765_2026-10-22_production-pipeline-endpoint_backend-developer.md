@@ -1,0 +1,5 @@
+# TASK-765 — GET /api/production/pipeline (backend)
+- New read endpoint in ProductionInsightsController (same auth + RequireModule("production")); `ProductionInsightsService.GetPipelineAsync`, new repo method `GetPipelineRequestsAsync` (one query: open requests OR Submitted/Reviewed/Shipped in period; lines+items+store+transfer; split query) + one links query. DTOs `ProductionPipelineDto` etc. in ProductionInsightsDtos.cs. No migration, no writes.
+- Stages 1-3 current snapshot; stage 4 + stats for period. Period = inclusive local dates in zone of scoped production location(s) (single distinct Location.TimeZone, else Europe/Kyiv; tz lookup fallbacks, UTC last). 400 on from>to or >366 days (service throws ArgumentException, controller maps).
+- Stats: accepted counts ReviewedAt in period with status accepted/partial/fulfilled.
+- Tests: 7 added to ProductionInsightsTests.cs (stage bucketing, tz day boundary, stats, perDay zero-fill, aggregations, validation, location filter). Release build OK; Production tests 167 passed.

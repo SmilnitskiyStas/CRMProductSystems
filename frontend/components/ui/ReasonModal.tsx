@@ -3,10 +3,11 @@
 // Small confirm modal with an optional/required reason textarea (TASK-318).
 // Used for order cancellation, request rejection and agreement termination.
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
 import { X } from "lucide-react";
 import { Btn } from "./Btn";
+import { labelStyle, textareaStyle } from "./fieldStyles";
 
 interface Props {
   title: string;
@@ -41,23 +42,31 @@ export function ReasonModal({
   const resolvedConfirmLabel = confirmLabel ?? tCommon("confirm");
   const [reason, setReason] = useState("");
 
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") onClose();
+    }
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
   return (
     <div
       style={{
         position: "fixed",
         inset: 0,
-        background: "rgba(0,0,0,0.6)",
+        background: "rgba(0,0,0,0.7)",
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
-        zIndex: 999,
+        zIndex: 1000,
         padding: 20,
       }}
       onClick={onClose}
     >
       <div
         style={{
-          background: "#0F1623",
+          background: "#0D1117",
           border: "1px solid #1F2937",
           borderRadius: 12,
           width: "100%",
@@ -85,7 +94,7 @@ export function ReasonModal({
           </button>
         </div>
 
-        <label style={{ display: "block", color: "#9CA3AF", fontSize: 12, marginBottom: 6 }}>
+        <label style={labelStyle}>
           {resolvedLabel}
           {required && <span style={{ color: "#F87171" }}> *</span>}
         </label>
@@ -94,19 +103,7 @@ export function ReasonModal({
           onChange={(e) => setReason(e.target.value)}
           placeholder={resolvedPlaceholder}
           rows={3}
-          style={{
-            width: "100%",
-            boxSizing: "border-box",
-            background: "#1F2937",
-            border: "1px solid #374151",
-            borderRadius: 8,
-            color: "#E8EDF5",
-            fontSize: 13,
-            padding: "9px 12px",
-            outline: "none",
-            resize: "vertical",
-            fontFamily: "inherit",
-          }}
+          style={textareaStyle}
         />
 
         <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 16 }}>

@@ -32,6 +32,9 @@ import { RfmActivityCards } from "@/features/marketing-analytics/post-campaign/c
 import { MigrationTab } from "@/features/marketing-analytics/post-campaign/components/MigrationTab";
 import { CustomerTable } from "@/features/marketing-analytics/post-campaign/components/CustomerTable";
 import type { PostCampaignCustomerSortBy, PostCampaignReportTab } from "@/features/marketing-analytics/post-campaign/types";
+import { PageContainer } from "@/components/ui/PageContainer";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { Btn } from "@/components/ui/Btn";
 
 function errorMessage(e: unknown): string {
   return e instanceof Error ? e.message : String(e);
@@ -170,37 +173,25 @@ export default function PostCampaignPage() {
   }
 
   return (
-    <div style={{ padding: "28px 32px", display: "flex", flexDirection: "column", gap: 24, width: "100%" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 12 }}>
-        <div>
-          <h1 style={{ color: "#E8EDF5", fontSize: 22, fontWeight: 700, margin: 0 }}>{t("title")}</h1>
-          <p style={{ color: "#4B5563", fontSize: 13, marginTop: 6, marginBottom: 0 }}>{t("subtitle")}</p>
-        </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <SegmentsList segments={segments} isLoading={segmentsLoading} selectedSegmentId={draftSegmentId} onSelect={handleSelectSegment} />
-          <button
-            type="button"
-            onClick={handleClear}
-            disabled={!draftSegmentId && !importResult}
-            title={t("clearButton")}
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 6,
-              background: "transparent",
-              border: "1px solid #1F2937",
-              borderRadius: 8,
-              padding: "8px 12px",
-              color: !draftSegmentId && !importResult ? "#374151" : "#9CA3AF",
-              fontSize: 13,
-              cursor: !draftSegmentId && !importResult ? "default" : "pointer",
-            }}
-          >
-            <Trash2 size={14} />
-            {t("clearButton")}
-          </button>
-        </div>
-      </div>
+    <PageContainer>
+      <PageHeader
+        title={t("title")}
+        subtitle={t("subtitle")}
+        actions={
+          <>
+            <SegmentsList segments={segments} isLoading={segmentsLoading} selectedSegmentId={draftSegmentId} onSelect={handleSelectSegment} />
+            <Btn
+              variant="ghost"
+              onClick={handleClear}
+              disabled={!draftSegmentId && !importResult}
+              title={t("clearButton")}
+              icon={<Trash2 size={14} />}
+            >
+              {t("clearButton")}
+            </Btn>
+          </>
+        }
+      />
 
       {/* Same historical-data caveat as every sibling MarketingAnalytics page. */}
       <div style={{ background: "#0F1F3D", border: "1px solid #1D4ED8", borderRadius: 10, padding: "12px 16px", display: "flex", gap: 10, alignItems: "flex-start" }}>
@@ -265,6 +256,6 @@ export default function PostCampaignPage() {
           />
         </>
       )}
-    </div>
+    </PageContainer>
   );
 }

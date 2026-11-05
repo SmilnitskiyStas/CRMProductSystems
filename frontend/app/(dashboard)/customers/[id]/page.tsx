@@ -1,13 +1,17 @@
 "use client";
 
-import { Fragment, useState } from "react";
+import { useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useTranslations, useLocale } from "next-intl";
-import { ArrowLeft, Loader2 } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from "recharts";
 import { Btn } from "@/components/ui/Btn";
+import { PageContainer } from "@/components/ui/PageContainer";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { BackLink } from "@/components/ui/BackLink";
+import { Tabs } from "@/components/ui/Tabs";
 import { Table, type TableColumn } from "@/components/ui/Table";
 import {
   useCustomer,
@@ -130,6 +134,14 @@ export default function CustomerProfilePage() {
     { key: "last", header: t("products.last"), cellStyle: { whiteSpace: "nowrap" }, render: (p) => date(p.lastAt) },
   ];
 
+  const lineColumns: TableColumn<CustomerReceipt["lines"][number]>[] = [
+    { key: "name", header: t("receipts.line.name"), cellStyle: { color: "#E8EDF5" }, render: (l) => l.name },
+    { key: "quantity", header: t("receipts.line.quantity"), align: "right", cellStyle: { fontFamily: "monospace" }, render: (l) => num(l.quantity, 3) },
+    { key: "price", header: t("receipts.line.price"), align: "right", cellStyle: { fontFamily: "monospace" }, render: (l) => money2(l.unitPrice) },
+    { key: "discount", header: t("receipts.line.discount"), align: "right", cellStyle: { fontFamily: "monospace" }, render: (l) => (l.discount ? money2(l.discount) : "—") },
+    { key: "total", header: t("receipts.line.total"), align: "right", cellStyle: { fontFamily: "monospace", color: "#E8EDF5" }, render: (l) => money2(l.total) },
+  ];
+
   const receiptColumns: TableColumn<CustomerReceipt>[] = [
     { key: "date", header: t("receipts.date"), cellStyle: { whiteSpace: "nowrap", color: "#E8EDF5" }, render: (r) => dateTime(r.createdAt) },
     { key: "store", header: t("receipts.store"), render: (r) => r.storeName },
@@ -139,52 +151,39 @@ export default function CustomerProfilePage() {
     { key: "total", header: t("receipts.total"), cellStyle: { fontFamily: "monospace", color: "#E8EDF5", fontWeight: 600 }, render: (r) => money2(r.total) },
   ];
 
-  const tabBtn = (key: SectionTab): React.CSSProperties => ({
-    background: "transparent", border: "none", cursor: "pointer", padding: "9px 14px", fontSize: 13, fontWeight: 600,
-    color: tab === key ? "#E8EDF5" : "#6B7280",
-    borderBottom: `2px solid ${tab === key ? "#3B82F6" : "transparent"}`,
-  });
-
   return (
-    <div style={{ padding: "24px 32px", display: "flex", flexDirection: "column", gap: 20, maxWidth: 1280 }}>
-      {/* Header */}
-      <div style={{ display: "flex", alignItems: "flex-start", gap: 14, flexWrap: "wrap" }}>
-        <button
-          onClick={() => router.push("/customers")}
-          style={{ background: "transparent", border: "none", color: "#6B7280", cursor: "pointer", display: "flex", alignItems: "center", gap: 4, fontSize: 13, padding: "4px 0" }}
-        >
-          <ArrowLeft size={15} /> {t("back")}
-        </button>
+    <PageContainer style={{ maxWidth: 1280 }}>
+      <BackLink onClick={() => router.push("/customers")}>{t("back")}</BackLink>
+      <PageHeader
+        title={detail.name}
+        actions={<Btn size="sm" onClick={() => router.push("/customers")}>{t("toList")}</Btn>}
+      />
 
-        <div style={{ flex: 1, minWidth: 260 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-            <h1 style={{ color: "#E8EDF5", fontSize: 22, fontWeight: 700, margin: 0 }}>{detail.name}</h1>
-            {detail.currentTierName && (
-              <span style={{
-                background: "#1D3461", color: "#93C5FD", border: "1px solid #1D4ED8",
-                borderRadius: 999, padding: "2px 12px", fontSize: 12, fontWeight: 700,
-              }}>
-                {t("rank")}: {detail.currentTierName}
-              </span>
-            )}
-            {detail.tags.map((tag) => (
-              <span key={tag} style={{ background: "#0A1628", color: "#60A5FA", border: "1px solid #1D4ED8", borderRadius: 999, padding: "1px 9px", fontSize: 11 }}>
-                {tag}
-              </span>
-            ))}
-          </div>
-          <div style={{ display: "flex", gap: 18, flexWrap: "wrap", marginTop: 8, color: "#9CA3AF", fontSize: 13 }}>
-            <span>{t("phone")}: <span style={{ color: "#E8EDF5" }}>{detail.phone ?? "—"}</span></span>
-            <span>{t("email")}: <span style={{ color: "#E8EDF5" }}>{detail.email ?? "—"}</span></span>
-            <span>
-              {t("customerSince")}: <span style={{ color: "#E8EDF5" }}>{date(detail.createdAt)}</span>
-              {stats && <span style={{ color: "#4B5563" }}> · {t("daysAgo", { days: stats.daysSinceRegistered })}</span>}
+      <div>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+          {detail.currentTierName && (
+            <span style={{
+              background: "#1D3461", color: "#93C5FD", border: "1px solid #1D4ED8",
+              borderRadius: 999, padding: "2px 12px", fontSize: 12, fontWeight: 700,
+            }}>
+              {t("rank")}: {detail.currentTierName}
             </span>
-          </div>
-          {detail.notes && <p style={{ color: "#6B7280", fontSize: 12, margin: "8px 0 0" }}>{detail.notes}</p>}
+          )}
+          {detail.tags.map((tag) => (
+            <span key={tag} style={{ background: "#0A1628", color: "#60A5FA", border: "1px solid #1D4ED8", borderRadius: 999, padding: "1px 9px", fontSize: 11 }}>
+              {tag}
+            </span>
+          ))}
         </div>
-
-        <Btn size="sm" onClick={() => router.push("/customers")}>{t("toList")}</Btn>
+        <div style={{ display: "flex", gap: 18, flexWrap: "wrap", marginTop: 8, color: "#9CA3AF", fontSize: 13 }}>
+          <span>{t("phone")}: <span style={{ color: "#E8EDF5" }}>{detail.phone ?? "—"}</span></span>
+          <span>{t("email")}: <span style={{ color: "#E8EDF5" }}>{detail.email ?? "—"}</span></span>
+          <span>
+            {t("customerSince")}: <span style={{ color: "#E8EDF5" }}>{date(detail.createdAt)}</span>
+            {stats && <span style={{ color: "#4B5563" }}> · {t("daysAgo", { days: stats.daysSinceRegistered })}</span>}
+          </span>
+        </div>
+        {detail.notes && <p style={{ color: "#6B7280", fontSize: 12, margin: "8px 0 0" }}>{detail.notes}</p>}
       </div>
 
       {/* KPIs */}
@@ -281,30 +280,13 @@ export default function CustomerProfilePage() {
             expandedRowKey={expandedId}
             renderExpanded={(r) => (
               <div style={{ padding: "10px 16px 14px 24px", background: "#0A0F1A" }}>
-                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
-                  <thead>
-                    <tr style={{ color: "#4B5563", textAlign: "left" }}>
-                      <th style={{ padding: "4px 8px" }}>{t("receipts.line.name")}</th>
-                      <th style={{ padding: "4px 8px", textAlign: "right" }}>{t("receipts.line.quantity")}</th>
-                      <th style={{ padding: "4px 8px", textAlign: "right" }}>{t("receipts.line.price")}</th>
-                      <th style={{ padding: "4px 8px", textAlign: "right" }}>{t("receipts.line.discount")}</th>
-                      <th style={{ padding: "4px 8px", textAlign: "right" }}>{t("receipts.line.total")}</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {r.lines.map((l, i) => (
-                      <Fragment key={`${l.productId}-${i}`}>
-                        <tr style={{ color: "#9CA3AF", borderTop: "1px solid #1F2937" }}>
-                          <td style={{ padding: "5px 8px", color: "#E8EDF5" }}>{l.name}</td>
-                          <td style={{ padding: "5px 8px", textAlign: "right", fontFamily: "monospace" }}>{num(l.quantity, 3)}</td>
-                          <td style={{ padding: "5px 8px", textAlign: "right", fontFamily: "monospace" }}>{money2(l.unitPrice)}</td>
-                          <td style={{ padding: "5px 8px", textAlign: "right", fontFamily: "monospace" }}>{l.discount ? money2(l.discount) : "—"}</td>
-                          <td style={{ padding: "5px 8px", textAlign: "right", fontFamily: "monospace", color: "#E8EDF5" }}>{money2(l.total)}</td>
-                        </tr>
-                      </Fragment>
-                    ))}
-                  </tbody>
-                </table>
+                <Table
+                  columns={lineColumns}
+                  rows={r.lines}
+                  rowKey={(l) => `${l.productId}-${r.lines.indexOf(l)}`}
+                  density="compact"
+                  minWidth={520}
+                />
               </div>
             )}
             page={page}
@@ -318,19 +300,23 @@ export default function CustomerProfilePage() {
 
       {/* Loyalty / support */}
       <div style={card}>
-        <div style={{ display: "flex", gap: 2, borderBottom: "1px solid #1F2937", marginBottom: 16, overflowX: "auto" }}>
-          <button style={tabBtn("loyalty")} onClick={() => setTab("loyalty")}>{tTabs("loyalty")}</button>
-          <button style={tabBtn("tickets")} onClick={() => setTab("tickets")}>
-            {tTabs("tickets")}{detail.openTicketCount > 0 ? ` (${detail.openTicketCount})` : ""}
-          </button>
-          <button style={tabBtn("reviews")} onClick={() => setTab("reviews")}>{tTabs("reviews")}</button>
-          <button style={tabBtn("history")} onClick={() => setTab("history")}>{tTabs("history")}</button>
+        <div style={{ marginBottom: 16 }}>
+          <Tabs
+            items={[
+              { key: "loyalty", label: tTabs("loyalty") },
+              { key: "tickets", label: `${tTabs("tickets")}${detail.openTicketCount > 0 ? ` (${detail.openTicketCount})` : ""}` },
+              { key: "reviews", label: tTabs("reviews") },
+              { key: "history", label: tTabs("history") },
+            ]}
+            value={tab}
+            onChange={setTab}
+          />
         </div>
         {tab === "loyalty" && <CustomerTierCard detail={detail} />}
         {tab === "tickets" && <CustomerTicketsTab customerId={detail.id} openTicketCount={detail.openTicketCount} />}
         {tab === "reviews" && <CustomerReviewsTab reviews={detail.recentReviews} />}
         {tab === "history" && <CustomerProfileHistoryTab customerId={detail.id} active={tab === "history"} />}
       </div>
-    </div>
+    </PageContainer>
   );
 }

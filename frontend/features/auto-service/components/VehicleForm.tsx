@@ -1,9 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import { X } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useCreateVehicle, useUpdateVehicle } from "../hooks/useAutoService";
+import { Modal } from "@/components/ui/Modal";
+import { Btn } from "@/components/ui/Btn";
+import { inputStyle, labelStyle } from "@/components/ui/fieldStyles";
 import type { VehicleDto, CreateVehicleRequest, UpdateVehicleRequest } from "../types";
 
 interface Props {
@@ -66,37 +68,7 @@ export function VehicleForm({ customerId, vehicle, onClose }: Props) {
   }
 
   return (
-    <div
-      style={{
-        position: "fixed",
-        inset: 0,
-        background: "rgba(0,0,0,0.7)",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        zIndex: 1000,
-      }}
-      onClick={(e) => e.target === e.currentTarget && onClose()}
-    >
-      <div
-        style={{
-          background: "#111827",
-          border: "1px solid #1F2937",
-          borderRadius: 12,
-          padding: "24px",
-          width: "100%",
-          maxWidth: 480,
-        }}
-      >
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
-          <h2 style={{ color: "#E8EDF5", fontSize: 16, fontWeight: 700, margin: 0 }}>
-            {isEdit ? t("titleEdit") : t("titleNew")}
-          </h2>
-          <button onClick={onClose} style={{ background: "transparent", border: "none", color: "#6B7280", cursor: "pointer", padding: 4 }}>
-            <X size={18} />
-          </button>
-        </div>
-
+    <Modal title={isEdit ? t("titleEdit") : t("titleNew")} onClose={onClose} width={480}>
         <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 14 }}>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
             <div>
@@ -152,28 +124,12 @@ export function VehicleForm({ customerId, vehicle, onClose }: Props) {
           )}
 
           <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 4 }}>
-            <button type="button" onClick={onClose} style={btnSecondaryStyle}>{t("cancel")}</button>
-            <button type="submit" disabled={isPending} style={btnPrimaryStyle}>
+            <Btn variant="ghost" onClick={onClose}>{t("cancel")}</Btn>
+            <Btn type="submit" disabled={isPending}>
               {isPending ? t("saving") : isEdit ? t("save") : t("add")}
-            </button>
+            </Btn>
           </div>
         </form>
-      </div>
-    </div>
+    </Modal>
   );
 }
-
-const labelStyle: React.CSSProperties = { color: "#9CA3AF", fontSize: 12, marginBottom: 6, display: "block" };
-const inputStyle: React.CSSProperties = {
-  width: "100%",
-  padding: "9px 12px",
-  background: "#0D1117",
-  border: "1px solid #1F2937",
-  borderRadius: 8,
-  color: "#E8EDF5",
-  fontSize: 13,
-  outline: "none",
-  boxSizing: "border-box",
-};
-const btnPrimaryStyle: React.CSSProperties = { padding: "9px 20px", borderRadius: 8, border: "none", background: "#1D4ED8", color: "#E8EDF5", fontSize: 13, fontWeight: 600, cursor: "pointer" };
-const btnSecondaryStyle: React.CSSProperties = { padding: "9px 16px", borderRadius: 8, border: "1px solid #1F2937", background: "transparent", color: "#6B7280", fontSize: 13, cursor: "pointer" };

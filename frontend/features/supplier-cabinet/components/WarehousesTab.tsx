@@ -4,6 +4,8 @@ import { useState } from "react";
 import { useTranslations } from "next-intl";
 import { Pencil, Plus, PowerOff } from "lucide-react";
 import { Btn } from "@/components/ui/Btn";
+import { Modal } from "@/components/ui/Modal";
+import { inputStyle, labelStyle } from "@/components/ui/fieldStyles";
 import { Table, type TableColumn } from "@/components/ui/Table";
 import { RegionSelect } from "@/features/geo/components/RegionSelect";
 import { useRegionLabel } from "@/features/geo/hooks/useRegions";
@@ -14,26 +16,6 @@ import {
   useDeactivateWarehouse,
 } from "../hooks/useSupplierWarehouses";
 import type { SupplierWarehouse } from "../types";
-
-const inputStyle: React.CSSProperties = {
-  width: "100%",
-  background: "#0D1117",
-  border: "1px solid #374151",
-  borderRadius: 8,
-  padding: "9px 12px",
-  color: "#E8EDF5",
-  fontSize: 13,
-  outline: "none",
-  boxSizing: "border-box",
-};
-
-const labelStyle: React.CSSProperties = {
-  display: "block",
-  color: "#9CA3AF",
-  fontSize: 12,
-  fontWeight: 500,
-  marginBottom: 6,
-};
 
 interface FormModalProps {
   /** null = create; otherwise edit that warehouse. */
@@ -86,53 +68,8 @@ function WarehouseFormModal({ warehouse, onClose }: FormModalProps) {
   }
 
   return (
-    <>
-      <div
-        onClick={onClose}
-        style={{
-          position: "fixed", inset: 0,
-          background: "rgba(0,0,0,0.6)",
-          zIndex: 300,
-          backdropFilter: "blur(2px)",
-        }}
-      />
-      <div
-        style={{
-          position: "fixed",
-          top: "50%", left: "50%",
-          transform: "translate(-50%, -50%)",
-          width: "min(460px, 95vw)",
-          background: "#0D1117",
-          border: "1px solid #1F2937",
-          borderRadius: 14,
-          zIndex: 301,
-        }}
-      >
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            padding: "18px 22px",
-            borderBottom: "1px solid #1F2937",
-          }}
-        >
-          <h2 style={{ color: "#E8EDF5", fontSize: 15, fontWeight: 700, margin: 0 }}>
-            {isEdit ? t("editTitle") : t("createTitle")}
-          </h2>
-          <button
-            onClick={onClose}
-            style={{
-              background: "transparent", border: "1px solid #1F2937",
-              borderRadius: 8, padding: "5px 9px",
-              color: "#4B5563", fontSize: 16, cursor: "pointer",
-            }}
-          >
-            ✕
-          </button>
-        </div>
-
-        <form onSubmit={handleSubmit} style={{ padding: 22 }}>
+    <Modal title={isEdit ? t("editTitle") : t("createTitle")} onClose={onClose} width={460}>
+        <form onSubmit={handleSubmit}>
           <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
             <div>
               <label style={labelStyle}>{t("nameLabel")}</label>
@@ -175,8 +112,7 @@ function WarehouseFormModal({ warehouse, onClose }: FormModalProps) {
             <p style={{ color: "#F87171", fontSize: 12, marginTop: 10 }}>{error}</p>
           )}
         </form>
-      </div>
-    </>
+    </Modal>
   );
 }
 

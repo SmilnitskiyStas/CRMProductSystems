@@ -1,5 +1,6 @@
 "use client";
 
+import { inputStyle } from "@/components/ui/fieldStyles";
 import { useEffect, useState } from "react";
 import { Search } from "lucide-react";
 import { useTranslations } from "next-intl";
@@ -13,18 +14,6 @@ interface Props {
   /** Fires when a result row is clicked. Parent owns whatever the pick actually does. */
   onPick: (product: Product) => void;
 }
-
-const inputStyle: React.CSSProperties = {
-  width: "100%",
-  background: "#111827",
-  border: "1px solid #1F2937",
-  borderRadius: 8,
-  color: "#E8EDF5",
-  fontSize: 13,
-  padding: "8px 12px 8px 30px",
-  outline: "none",
-  boxSizing: "border-box",
-};
 
 const rowStyle: React.CSSProperties = {
   display: "flex",
@@ -77,7 +66,7 @@ export function ProductSearchPicker({ excludeIds, onPick }: Props) {
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder={t("placeholder")}
-          style={inputStyle}
+          style={{ ...inputStyle, paddingLeft: 30 }}
         />
       </div>
 

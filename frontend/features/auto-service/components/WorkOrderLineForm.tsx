@@ -1,10 +1,12 @@
 "use client";
 
 import { useState } from "react";
-import { X } from "lucide-react";
 import { useTranslations, useLocale } from "next-intl";
 import { useAddWorkOrderLine } from "../hooks/useAutoService";
 import { useServiceCatalog } from "../hooks/useAutoService";
+import { Modal } from "@/components/ui/Modal";
+import { Btn } from "@/components/ui/Btn";
+import { inputStyle, labelStyle, selectStyle } from "@/components/ui/fieldStyles";
 import type { AddWorkOrderLineRequest, WorkOrderLineType } from "../types";
 
 // We fetch spare parts from /api/items?item_type=spare_part
@@ -78,38 +80,7 @@ export function WorkOrderLineForm({ workOrderId, onClose }: Props) {
   }
 
   return (
-    <div
-      style={{
-        position: "fixed",
-        inset: 0,
-        background: "rgba(0,0,0,0.7)",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        zIndex: 1000,
-      }}
-      onClick={(e) => e.target === e.currentTarget && onClose()}
-    >
-      <div
-        style={{
-          background: "#111827",
-          border: "1px solid #1F2937",
-          borderRadius: 12,
-          padding: "24px",
-          width: "100%",
-          maxWidth: 480,
-        }}
-      >
-        {/* Header */}
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
-          <h2 style={{ color: "#E8EDF5", fontSize: 16, fontWeight: 700, margin: 0 }}>
-            {t("title")}
-          </h2>
-          <button onClick={onClose} style={{ background: "transparent", border: "none", color: "#6B7280", cursor: "pointer", padding: 4 }}>
-            <X size={18} />
-          </button>
-        </div>
-
+    <Modal title={t("title")} onClose={onClose} width={480}>
         <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 14 }}>
           {/* Type selector */}
           <div>
@@ -125,8 +96,8 @@ export function WorkOrderLineForm({ workOrderId, onClose }: Props) {
                     padding: "8px 12px",
                     borderRadius: 8,
                     border: `1px solid ${type === opt ? "#3B82F6" : "#1F2937"}`,
-                    background: type === opt ? "#1E3A5F" : "transparent",
-                    color: type === opt ? "#60A5FA" : "#6B7280",
+                    background: type === opt ? "#1D3461" : "transparent",
+                    color: type === opt ? "#93C5FD" : "#6B7280",
                     fontSize: 13,
                     cursor: "pointer",
                   }}
@@ -240,54 +211,10 @@ export function WorkOrderLineForm({ workOrderId, onClose }: Props) {
           )}
 
           <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 4 }}>
-            <button type="button" onClick={onClose} style={btnSecondaryStyle}>
-              {t("cancel")}
-            </button>
-            <button type="submit" disabled={addLine.isPending} style={btnPrimaryStyle}>
-              {addLine.isPending ? t("saving") : t("add")}
-            </button>
+            <Btn variant="ghost" onClick={onClose}>{t("cancel")}</Btn>
+            <Btn type="submit" disabled={addLine.isPending}>{addLine.isPending ? t("saving") : t("add")}</Btn>
           </div>
         </form>
-      </div>
-    </div>
+    </Modal>
   );
 }
-
-// ─── Shared micro-styles ──────────────────────────────────────────────────────
-
-const labelStyle: React.CSSProperties = { color: "#9CA3AF", fontSize: 12, marginBottom: 6, display: "block" };
-
-const inputStyle: React.CSSProperties = {
-  width: "100%",
-  padding: "9px 12px",
-  background: "#0D1117",
-  border: "1px solid #1F2937",
-  borderRadius: 8,
-  color: "#E8EDF5",
-  fontSize: 13,
-  outline: "none",
-  boxSizing: "border-box",
-};
-
-const selectStyle: React.CSSProperties = { ...inputStyle, appearance: "auto" };
-
-const btnPrimaryStyle: React.CSSProperties = {
-  padding: "9px 20px",
-  borderRadius: 8,
-  border: "none",
-  background: "#1D4ED8",
-  color: "#E8EDF5",
-  fontSize: 13,
-  fontWeight: 600,
-  cursor: "pointer",
-};
-
-const btnSecondaryStyle: React.CSSProperties = {
-  padding: "9px 16px",
-  borderRadius: 8,
-  border: "1px solid #1F2937",
-  background: "transparent",
-  color: "#6B7280",
-  fontSize: 13,
-  cursor: "pointer",
-};

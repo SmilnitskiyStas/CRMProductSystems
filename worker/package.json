@@ -7,7 +7,8 @@
     "dev": "tsx watch src/index.ts",
     "build": "tsc",
     "start": "node dist/index.js",
-    "lint": "eslint src"
+    "lint": "eslint src",
+    "iot:simulate": "tsx src/tools/iot-simulator.ts"
   },
   "dependencies": {
     "@types/pg": "^8.20.0",

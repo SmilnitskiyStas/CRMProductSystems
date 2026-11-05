@@ -4,6 +4,11 @@ import { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { useTranslations, useLocale } from "next-intl";
 import { Check, Loader2 } from "lucide-react";
+import { Btn } from "@/components/ui/Btn";
+import { PageContainer } from "@/components/ui/PageContainer";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { StatusPill } from "@/components/ui/StatusPill";
+import { filterInputStyle } from "@/components/ui/fieldStyles";
 import { Table, type TableColumn } from "@/components/ui/Table";
 import { usePrimaryStoreId } from "@/lib/useStoreContext";
 import { useOrderTracking, useOrderTrackingSummary } from "@/features/order-tracking/hooks/useOrderTracking";
@@ -89,12 +94,9 @@ export default function OrderTrackingPage() {
   function StatusBadge({ status }: { status: TrackedOrderStatus }) {
     const c = STATUS_COLOR[status];
     return (
-      <span style={{
-        background: `${c}1A`, color: c, border: `1px solid ${c}55`, borderRadius: 999,
-        padding: "2px 10px", fontSize: 11, fontWeight: 700, whiteSpace: "nowrap",
-      }}>
+      <StatusPill bg={`${c}1A`} text={c} style={{ border: `1px solid ${c}55`, fontWeight: 700 }}>
         {t(`status.${status}`)}
-      </span>
+      </StatusPill>
     );
   }
 
@@ -132,6 +134,32 @@ export default function OrderTrackingPage() {
       </div>
     );
   }
+
+  type TrackedLine = TrackedOrder["lines"][number] & { _i: number };
+  const lineColumns: TableColumn<TrackedLine>[] = [
+    { key: "name", header: t("lines.name"), cellStyle: { color: "#E8EDF5" }, render: (l) => l.name },
+    {
+      key: "quantity",
+      header: t("lines.quantity"),
+      align: "right",
+      cellStyle: { fontFamily: "monospace" },
+      render: (l) => `${num(l.quantity)}${l.unit ? ` ${l.unit}` : ""}`,
+    },
+    {
+      key: "received",
+      header: t("lines.received"),
+      align: "right",
+      cellStyle: { fontFamily: "monospace" },
+      render: (l) => (l.quantityReceived != null ? num(l.quantityReceived) : "—"),
+    },
+    {
+      key: "amount",
+      header: t("lines.amount"),
+      align: "right",
+      cellStyle: { fontFamily: "monospace" },
+      render: (l) => (l.amount != null ? money(l.amount) : "—"),
+    },
+  ];
 
   const columns: TableColumn<TrackedOrder>[] = [
     {
@@ -176,17 +204,14 @@ export default function OrderTrackingPage() {
       render: (o) => (
         <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
           {o.postponeCount > 0 && (
-            <span style={{ background: "#FBBF241A", color: "#FBBF24", border: "1px solid #FBBF2455", borderRadius: 999, padding: "1px 8px", fontSize: 11, fontWeight: 700, whiteSpace: "nowrap" }}>
+            <StatusPill bg="#FBBF241A" text="#FBBF24" style={{ border: "1px solid #FBBF2455", fontWeight: 700 }}>
               {t("postponedBadge", { count: o.postponeCount })}
-            </span>
+            </StatusPill>
           )}
           {o.canPostpone && (o.isOverdue || o.postponeCount > 0) && (
-            <button
-              onClick={(e) => { e.stopPropagation(); setPostponing(o); }}
-              style={{ background: "transparent", border: "none", color: "#60A5FA", cursor: "pointer", fontSize: 12, padding: 0, whiteSpace: "nowrap" }}
-            >
+            <Btn variant="link" size="sm" onClick={(e) => { e.stopPropagation(); setPostponing(o); }}>
               {t("postponeAction")}
-            </button>
+            </Btn>
           )}
         </div>
       ),
@@ -201,14 +226,11 @@ export default function OrderTrackingPage() {
   ];
 
   return (
-    <div style={{ padding: "28px 32px" }}>
-      <div style={{ marginBottom: 20 }}>
-        <h1 style={{ color: "#E8EDF5", fontSize: 22, fontWeight: 700, margin: 0 }}>{t("title")}</h1>
-        <p style={{ color: "#4B5563", fontSize: 13, margin: "6px 0 0" }}>{t("subtitle")}</p>
-      </div>
+    <PageContainer>
+      <PageHeader title={t("title")} subtitle={t("subtitle")} />
 
       {/* KPI / quick status filters */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 12, marginBottom: 18 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 12 }}>
         <div style={card}>
           <div style={{ color: "#6B7280", fontSize: 11, textTransform: "uppercase" }}>{t("kpi.open")}</div>
           <div style={{ color: "#E8EDF5", fontSize: 22, fontWeight: 700 }}>{summary?.open ?? "—"}</div>
@@ -245,26 +267,26 @@ export default function OrderTrackingPage() {
       </div>
 
       {/* Filters */}
-      <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center", marginBottom: 14 }}>
+      <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
         <input
           value={searchInput}
           onChange={(e) => setSearchInput(e.target.value)}
           placeholder={t("searchPlaceholder")}
-          style={{ ...field, width: 280 }}
+          style={{ ...filterInputStyle, width: 280 }}
         />
         <select
           value={source}
           onChange={(e) => { setSource(e.target.value as TrackedOrderSource | ""); setPage(1); }}
-          style={{ ...field, cursor: "pointer" }}
+          style={{ ...filterInputStyle, cursor: "pointer" }}
         >
           <option value="">{t("source.all")}</option>
           <option value="receipt">{t("source.receipt")}</option>
           <option value="marketplace">{t("source.marketplace")}</option>
         </select>
         {(statuses.length > 0 || overdueOnly) && (
-          <button onClick={() => { setStatuses([]); setOverdueOnly(false); setPage(1); }} style={{ background: "transparent", border: "none", color: "#60A5FA", cursor: "pointer", fontSize: 13 }}>
+          <Btn variant="link" onClick={() => { setStatuses([]); setOverdueOnly(false); setPage(1); }}>
             {t("resetStatuses")}
-          </button>
+          </Btn>
         )}
         {isFetching && <Loader2 size={15} color="#60A5FA" style={{ animation: "spin 1s linear infinite" }} />}
         <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
@@ -299,42 +321,14 @@ export default function OrderTrackingPage() {
             )}
             {o.canPostpone ? (
               <div style={{ marginBottom: 12 }}>
-                <button
-                  onClick={() => setPostponing(o)}
-                  style={{ background: "#1D3461", border: "1px solid #3B82F6", color: "#93C5FD", borderRadius: 8, padding: "6px 14px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}
-                >
+                <Btn size="sm" onClick={() => setPostponing(o)}>
                   {t("postponeAction")}
-                </button>
+                </Btn>
               </div>
             ) : o.isOverdue && o.source === "marketplace" ? (
               <div style={{ color: "#6B7280", fontSize: 12, marginBottom: 12 }}>{t("supplierDateHint")}</div>
             ) : null}
-            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
-              <thead>
-                <tr style={{ color: "#4B5563", textAlign: "left" }}>
-                  <th style={{ padding: "4px 8px" }}>{t("lines.name")}</th>
-                  <th style={{ padding: "4px 8px", textAlign: "right" }}>{t("lines.quantity")}</th>
-                  <th style={{ padding: "4px 8px", textAlign: "right" }}>{t("lines.received")}</th>
-                  <th style={{ padding: "4px 8px", textAlign: "right" }}>{t("lines.amount")}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {o.lines.map((l, i) => (
-                  <tr key={i} style={{ color: "#9CA3AF", borderTop: "1px solid #1F2937" }}>
-                    <td style={{ padding: "5px 8px", color: "#E8EDF5" }}>{l.name}</td>
-                    <td style={{ padding: "5px 8px", textAlign: "right", fontFamily: "monospace" }}>
-                      {num(l.quantity)}{l.unit ? ` ${l.unit}` : ""}
-                    </td>
-                    <td style={{ padding: "5px 8px", textAlign: "right", fontFamily: "monospace" }}>
-                      {l.quantityReceived != null ? num(l.quantityReceived) : "—"}
-                    </td>
-                    <td style={{ padding: "5px 8px", textAlign: "right", fontFamily: "monospace" }}>
-                      {l.amount != null ? money(l.amount) : "—"}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <Table columns={lineColumns} rows={o.lines.map((l, i) => ({ ...l, _i: i }))} rowKey={(l) => String(l._i)} />
           </div>
         )}
         page={data?.page ?? 1}
@@ -343,16 +337,6 @@ export default function OrderTrackingPage() {
         onPageChange={(p) => { setPage(p); setExpandedKey(null); window.scrollTo(0, 0); }}
         emptyMessage={isLoading ? t("loading") : t("empty")}
       />
-    </div>
+    </PageContainer>
   );
 }
-
-const field: React.CSSProperties = {
-  background: "#0D1117",
-  border: "1px solid #1F2937",
-  borderRadius: 8,
-  color: "#E8EDF5",
-  fontSize: 13,
-  padding: "8px 12px",
-  outline: "none",
-};

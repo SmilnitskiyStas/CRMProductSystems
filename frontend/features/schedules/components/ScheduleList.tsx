@@ -13,31 +13,21 @@ import {
   useDeleteSchedule,
 } from "../hooks/useSchedules";
 import { Btn } from "@/components/ui/Btn";
+import { StatusPill } from "@/components/ui/StatusPill";
 
 const STATUS_STYLE: Record<ScheduleStatus, { bg: string; color: string; border: string; i18nKey: string }> = {
-  draft:     { bg: "#111827", color: "#6B7280", border: "#374151", i18nKey: "statusDraft"     },
+  draft:     { bg: "#111827", color: "#6B7280", border: "#1F2937", i18nKey: "statusDraft"     },
   published: { bg: "#052e16", color: "#4ADE80", border: "#16A34A", i18nKey: "statusPublished" },
-  archived:  { bg: "#1F2937", color: "#4B5563", border: "#374151", i18nKey: "statusArchived"  },
+  archived:  { bg: "#1F2937", color: "#4B5563", border: "#1F2937", i18nKey: "statusArchived"  },
 };
 
 function StatusBadge({ status }: { status: ScheduleStatus }) {
   const t = useTranslations("Dashboard.schedules.list");
   const s = STATUS_STYLE[status];
   return (
-    <span
-      style={{
-        background: s.bg,
-        color: s.color,
-        border: `1px solid ${s.border}`,
-        borderRadius: 20,
-        padding: "2px 10px",
-        fontSize: 11,
-        fontWeight: 600,
-        whiteSpace: "nowrap",
-      }}
-    >
+    <StatusPill bg={s.bg} text={s.color} style={{ border: `1px solid ${s.border}` }}>
       {t(s.i18nKey)}
-    </span>
+    </StatusPill>
   );
 }
 

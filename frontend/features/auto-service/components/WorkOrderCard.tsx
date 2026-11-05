@@ -2,6 +2,8 @@
 
 import { useRouter } from "next/navigation";
 import { useTranslations, useLocale } from "next-intl";
+import { Btn } from "@/components/ui/Btn";
+import { StatusPill } from "@/components/ui/StatusPill";
 import type { WorkOrderSummaryDto, WorkOrderStatus } from "../types";
 import { useUpdateWorkOrder } from "../hooks/useAutoService";
 
@@ -31,19 +33,9 @@ export function StatusBadge({ status }: { status: WorkOrderStatus }) {
   const t = useTranslations("Dashboard.autoService.workOrderStatus");
   const colors = STATUS_COLORS[status];
   return (
-    <span
-      style={{
-        display: "inline-block",
-        padding: "2px 8px",
-        borderRadius: 12,
-        fontSize: 11,
-        fontWeight: 600,
-        background: colors.bg,
-        color: colors.color,
-      }}
-    >
+    <StatusPill bg={colors.bg} text={colors.color}>
       {t(status)}
-    </span>
+    </StatusPill>
   );
 }
 
@@ -146,34 +138,15 @@ export function WorkOrderCard({ order }: Props) {
 
       {/* Move button */}
       {nextStatus && (
-        <button
+        <Btn
+          variant="ghost"
+          size="xs"
+          fullWidth
           onClick={handleMoveNext}
           disabled={updateWorkOrder.isPending}
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            gap: 4,
-            padding: "5px 10px",
-            borderRadius: 6,
-            border: "1px solid #1F2937",
-            background: "transparent",
-            color: "#6B7280",
-            fontSize: 11,
-            cursor: "pointer",
-            transition: "border-color 0.1s, color 0.1s",
-          }}
-          onMouseEnter={(e) => {
-            (e.currentTarget as HTMLElement).style.borderColor = "#3B82F6";
-            (e.currentTarget as HTMLElement).style.color = "#60A5FA";
-          }}
-          onMouseLeave={(e) => {
-            (e.currentTarget as HTMLElement).style.borderColor = "#1F2937";
-            (e.currentTarget as HTMLElement).style.color = "#6B7280";
-          }}
         >
           {updateWorkOrder.isPending ? "…" : t("moveTo", { status: tStatus(nextStatus) })}
-        </button>
+        </Btn>
       )}
     </div>
   );

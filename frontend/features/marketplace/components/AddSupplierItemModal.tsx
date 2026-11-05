@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { X } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useAddSupplierItem, useItemCategories } from "../hooks/useMarketplace";
 import { ItemCategoryFields, findMissingRequiredField } from "./ItemCategoryFields";
@@ -12,6 +11,8 @@ import {
 } from "./SupplierItemExtraFields";
 import type { AddSupplierItemRequest } from "../types";
 import { Btn } from "@/components/ui/Btn";
+import { Modal } from "@/components/ui/Modal";
+import { inputStyle, labelStyle } from "@/components/ui/fieldStyles";
 
 interface Props {
   supplierId: string;
@@ -97,76 +98,8 @@ export function AddSupplierItemModal({ supplierId, onClose }: Props) {
     });
   }
 
-  const inputStyle: React.CSSProperties = {
-    width: "100%",
-    padding: "9px 12px",
-    background: "#0D1117",
-    border: "1px solid #1F2937",
-    borderRadius: 8,
-    color: "#E8EDF5",
-    fontSize: 13,
-    outline: "none",
-    boxSizing: "border-box",
-  };
-
-  const labelStyle: React.CSSProperties = {
-    color: "#9CA3AF",
-    fontSize: 12,
-    fontWeight: 500,
-    marginBottom: 6,
-    display: "block",
-  };
-
   return (
-    <div
-      style={{
-        position: "fixed",
-        inset: 0,
-        background: "rgba(0,0,0,0.6)",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        zIndex: 1000,
-      }}
-      onClick={(e) => {
-        if (e.target === e.currentTarget) onClose();
-      }}
-    >
-      <div
-        style={{
-          background: "#111827",
-          border: "1px solid #1F2937",
-          borderRadius: 12,
-          padding: 28,
-          width: "100%",
-          maxWidth: 560,
-          maxHeight: "90vh",
-          overflowY: "auto",
-          display: "flex",
-          flexDirection: "column",
-          gap: 20,
-        }}
-      >
-        {/* Header */}
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-          <h2 style={{ color: "#E8EDF5", fontSize: 17, fontWeight: 700, margin: 0 }}>
-            {t("title")}
-          </h2>
-          <button
-            onClick={onClose}
-            style={{
-              background: "transparent",
-              border: "none",
-              color: "#6B7280",
-              cursor: "pointer",
-              padding: 4,
-            }}
-          >
-            <X size={18} />
-          </button>
-        </div>
-
-        {/* Form */}
+    <Modal title={t("title")} onClose={onClose} width={560}>
         <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 14 }}>
           <div>
             <label style={labelStyle}>
@@ -258,7 +191,6 @@ export function AddSupplierItemModal({ supplierId, onClose }: Props) {
             </Btn>
           </div>
         </form>
-      </div>
-    </div>
+    </Modal>
   );
 }

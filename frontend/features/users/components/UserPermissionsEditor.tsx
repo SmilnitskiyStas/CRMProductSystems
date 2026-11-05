@@ -372,23 +372,15 @@ export function UserPermissionsEditor({ user, editorRole }: Props) {
                     </div>
                   </div>
                   {canEdit && (
-                    <button
+                    <Btn
+                      size="xs"
+                      variant="dangerOutline"
                       onClick={() => handleRevokeTemp(grant.id)}
                       disabled={revokeTemp.isPending}
-                      style={{
-                        flexShrink: 0,
-                        padding: "5px 10px",
-                        borderRadius: 6,
-                        background: "transparent",
-                        border: "1px solid #7f1d1d",
-                        color: "#F87171",
-                        fontSize: 11,
-                        fontWeight: 600,
-                        cursor: "pointer",
-                      }}
+                      style={{ flexShrink: 0 }}
                     >
                       {t("revokeButton")}
-                    </button>
+                    </Btn>
                   )}
                 </div>
               );

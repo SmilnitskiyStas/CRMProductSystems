@@ -5,6 +5,10 @@ import { useQueries } from "@tanstack/react-query";
 import { BarChart3, Download, Eye, FileSpreadsheet, MapPin, MousePointerClick, ScanLine, ShoppingBag, Smartphone, Target, Users } from "lucide-react";
 import { CartesianGrid, Legend, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { toast } from "sonner";
+import { Btn } from "@/components/ui/Btn";
+import { DetailDrawer } from "@/components/ui/DetailDrawer";
+import { StatusPill } from "@/components/ui/StatusPill";
+import { Table } from "@/components/ui/Table";
 import { DateRangePicker, computePreviousPeriod, toDateInputValue, type SimpleDateRange } from "@/components/ui/DateRangePicker";
 import { useStoreContext, useStoreScopeReady } from "@/lib/useStoreContext";
 import { useBanners } from "../hooks/useBanners";
@@ -252,8 +256,8 @@ export function ConsumerAppAnalyticsSection() {
         <DateRangePicker range={range} onRangeChange={(next) => { setRange(next); if (compareEnabled) setCompareRange(computePreviousPeriod(next.from, next.to)); }} compareEnabled={compareEnabled} onCompareToggle={(enabled) => { setCompareEnabled(enabled); if (enabled) setCompareRange(computePreviousPeriod(range.from, range.to)); }} compareRange={compareRange} onCompareRangeChange={setCompareRange} />
         <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8, color: "#94A3B8", background: "#10151D", border: "1px solid #1F2937", borderRadius: 8, padding: "8px 11px", fontSize: 12 }}><MapPin size={15} color="#60A5FA" /><span>{selectedStoreIds.length === 0 ? "Усі магазини" : `Обрано магазинів: ${selectedStoreIds.length}`}</span></div>
-          <button type="button" onClick={() => { exportAnalyticsCsv(exportPayload); toast.success("Звіт CSV сформовано"); }} disabled={isLoading} style={exportButtonStyle}><Download size={14} />CSV</button>
-          <button type="button" onClick={handleXlsxExport} disabled={isLoading || isExportingXlsx} style={exportButtonStyle}><FileSpreadsheet size={14} />{isExportingXlsx ? "Формування…" : "Excel"}</button>
+          <Btn variant="ghost" onClick={() => { exportAnalyticsCsv(exportPayload); toast.success("Звіт CSV сформовано"); }} disabled={isLoading} icon={<Download size={14} />}>CSV</Btn>
+          <Btn variant="ghost" onClick={handleXlsxExport} disabled={isLoading || isExportingXlsx} icon={<FileSpreadsheet size={14} />}>{isExportingXlsx ? "Формування…" : "Excel"}</Btn>
         </div>
       </div>
       <SectionTabs
@@ -361,21 +365,30 @@ function AnalyticsDetailPanel({ detail, onClose }: { detail: Detail; onClose: ()
       : (detail.analytics?.daily ?? []).map((row) => ({ date: row.date, primary: row.views, secondary: row.clicks, purchases: 0 }));
   const stores = detail.analytics?.stores ?? [];
   const products = detail.kind === "catalog" ? detail.analytics?.products ?? [] : detail.kind === "promotion" ? detail.analytics?.products ?? [] : [];
-  return <div style={{ position: "fixed", inset: 0, zIndex: 80, background: "rgba(2,6,12,.72)", display: "flex", justifyContent: "flex-end" }} onClick={onClose}>
-    <aside onClick={(event) => event.stopPropagation()} style={{ width: "min(760px, 94vw)", height: "100%", overflowY: "auto", background: "#0B1017", borderLeft: "1px solid #253044", padding: 22, boxSizing: "border-box", boxShadow: "-18px 0 45px rgba(0,0,0,.35)" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 16, marginBottom: 18 }}><div><span style={{ color: "#60A5FA", fontSize: 11, fontWeight: 700, textTransform: "uppercase" }}>Детальний звіт</span><h2 style={{ color: "#E8EDF5", fontSize: 19, margin: "5px 0 0" }}>{detail.title}</h2></div><button type="button" onClick={onClose} style={{ background: "transparent", border: "1px solid #263244", borderRadius: 8, color: "#94A3B8", padding: "7px 10px", cursor: "pointer" }}>✕</button></div>
+  return <DetailDrawer isOpen onClose={onClose} title={detail.title} subtitle="Детальний звіт" width={760}>
+    <>
       {detail.kind === "banner" ? <><div style={{ ...panel, marginBottom: 14 }}><div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 10 }}><SmallStat label="Перегляди" value={number(detail.analytics?.viewCount ?? 0)} /><SmallStat label="Кліки" value={number(detail.analytics?.clickCount ?? 0)} /><SmallStat label="CTR" value={`${number((detail.analytics?.ctr ?? 0) * 100)}%`} /></div></div><div style={{ ...panel, height: 300, marginBottom: 14 }}><h3 style={{ color: "#E8EDF5", fontSize: 13, margin: "0 0 14px" }}>Динаміка за днями</h3>{daily.length === 0 ? <EmptyMetricNotice>За цей період подій немає.</EmptyMetricNotice> : <ResponsiveContainer width="100%" height="85%"><LineChart data={daily}><CartesianGrid stroke="#1F2937" strokeDasharray="3 3" /><XAxis dataKey="date" tick={{ fill: "#64748B", fontSize: 10 }} /><YAxis tick={{ fill: "#64748B", fontSize: 10 }} /><Tooltip contentStyle={{ background: "#111827", border: "1px solid #334155", borderRadius: 8 }} /><Legend /><Line type="monotone" dataKey="primary" name="Перегляди" stroke="#3B82F6" strokeWidth={2} /><Line type="monotone" dataKey="secondary" name="Кліки" stroke="#A78BFA" strokeWidth={2} /></LineChart></ResponsiveContainer>}</div><BreakdownTable title="За магазинами" rows={stores.map((row) => ({ name: row.storeName, activity: "clicks" in row ? row.clicks : 0, purchases: 0, revenue: 0 }))} /><p style={{ ...muted, lineHeight: 1.6 }}>Події, записані до оновлення трекінгу, враховуються в загальному підсумку, але не приписуються магазину.</p></> : <>
         <div style={{ ...panel, height: 300, marginBottom: 14 }}><h3 style={{ color: "#E8EDF5", fontSize: 13, margin: "0 0 14px" }}>Динаміка за днями</h3>{daily.length === 0 ? <EmptyMetricNotice>За цей період подій немає.</EmptyMetricNotice> : <ResponsiveContainer width="100%" height="85%"><LineChart data={daily}><CartesianGrid stroke="#1F2937" strokeDasharray="3 3" /><XAxis dataKey="date" tick={{ fill: "#64748B", fontSize: 10 }} tickFormatter={(value) => new Date(value).toLocaleDateString("uk-UA", { day: "2-digit", month: "2-digit" })} /><YAxis tick={{ fill: "#64748B", fontSize: 10 }} /><Tooltip contentStyle={{ background: "#111827", border: "1px solid #334155", borderRadius: 8, color: "#E5E7EB" }} /><Legend /><Line type="monotone" dataKey="primary" name="Покази" stroke="#3B82F6" strokeWidth={2} /><Line type="monotone" dataKey="secondary" name={detail.kind === "catalog" ? "Сканування" : "Відкриття"} stroke="#A78BFA" strokeWidth={2} /><Line type="monotone" dataKey="purchases" name="Покупки" stroke="#22C55E" strokeWidth={2} /></LineChart></ResponsiveContainer>}</div>
         <BreakdownTable title="За магазинами" rows={stores.map((row) => ({ name: row.storeName, activity: detail.kind === "catalog" && "scans" in row ? row.scans : "opens" in row ? row.opens : 0, purchases: detail.kind === "catalog" && "purchases" in row ? row.purchases : "usedReceipts" in row ? row.usedReceipts : 0, revenue: "revenue" in row ? row.revenue : 0 }))} />
         <BreakdownTable title="За товарами" rows={products.map((row) => ({ name: "productName" in row ? row.productName : "Товар", activity: "views" in row ? row.views : 0, purchases: "purchases" in row ? row.purchases : "purchasedUnits" in row ? row.purchasedUnits : 0, revenue: row.revenue }))} />
         <AttributionPolicyCard policy={detail.analytics?.attributionPolicy} />
       </>}
-    </aside>
-  </div>;
+    </>
+  </DetailDrawer>;
 }
 
 function BreakdownTable({ title, rows }: { title: string; rows: Array<{ name: string; activity: number; purchases: number; revenue: number }> }) {
-  return <div style={{ ...panel, marginBottom: 14 }}><h3 style={{ color: "#E8EDF5", fontSize: 13, margin: "0 0 12px" }}>{title}</h3>{rows.length === 0 ? <p style={muted}>Даних поки немає.</p> : <div style={{ overflowX: "auto" }}><table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}><thead><tr style={{ color: "#64748B", textAlign: "left" }}><th style={{ padding: "8px 6px" }}>Назва</th><th>Взаємодії</th><th>Покупки</th><th style={{ textAlign: "right" }}>Дохід</th></tr></thead><tbody>{rows.map((row) => <tr key={row.name} style={{ borderTop: "1px solid #1F2937", color: "#CBD5E1" }}><td style={{ padding: "10px 6px", fontWeight: 600 }}>{row.name}</td><td>{number(row.activity)}</td><td>{number(row.purchases)}</td><td style={{ textAlign: "right" }}>{money(row.revenue)}</td></tr>)}</tbody></table></div>}</div>;
+  return <div style={{ ...panel, marginBottom: 14 }}><h3 style={{ color: "#E8EDF5", fontSize: 13, margin: "0 0 12px" }}>{title}</h3>{rows.length === 0 ? <p style={muted}>Даних поки немає.</p> : <Table
+    rowKey={(row) => row.name}
+    rows={rows}
+    density="compact"
+    columns={[
+      { key: "name", header: "Назва", render: (row) => row.name },
+      { key: "activity", header: "Взаємодії", render: (row) => number(row.activity) },
+      { key: "purchases", header: "Покупки", render: (row) => number(row.purchases) },
+      { key: "revenue", header: "Дохід", align: "right", render: (row) => money(row.revenue) },
+    ]}
+  />}</div>;
 }
 
 function CampaignComparisonTable({ rows, type, onTypeChange, sort, onSortChange, onOpen }: {
@@ -387,7 +400,22 @@ function CampaignComparisonTable({ rows, type, onTypeChange, sort, onSortChange,
   const typeLabel = { banner: "Банер", catalog: "Каталог", promotion: "Акція" } as const;
   return <div style={panel}>
     <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 14, flexWrap: "wrap", marginBottom: 16 }}><div><h2 style={{ color: "#E8EDF5", fontSize: 15, margin: 0 }}>Ефективність мобільного контенту</h2><p style={{ ...muted, marginTop: 5 }}>Показники розраховано за вибраний зверху період і магазини</p></div><div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}><label style={{ color: "#64748B", fontSize: 11 }}>Тип<select value={type} onChange={(event) => onTypeChange(event.target.value as ComparisonType)} style={comparisonSelect}><option value="all">Усі</option><option value="promotion">Акції</option><option value="catalog">Каталоги</option><option value="banner">Банери</option></select></label><label style={{ color: "#64748B", fontSize: 11 }}>Сортування<select value={sort} onChange={(event) => onSortChange(event.target.value as typeof sort)} style={comparisonSelect}><option value="revenue">За доходом</option><option value="conversion">За конверсією</option><option value="reach">За охопленням</option></select></label></div></div>
-    {rows.length === 0 ? <EmptyMetricNotice>За вибраними умовами кампаній немає.</EmptyMetricNotice> : <div style={{ overflowX: "auto" }}><table style={{ width: "100%", minWidth: 760, borderCollapse: "collapse", fontSize: 12 }}><thead><tr style={{ color: "#64748B", textAlign: "left", borderBottom: "1px solid #263244" }}><th style={comparisonHead}>Контент</th><th style={comparisonHead}>Тип</th><th style={comparisonHead}>Охоплення</th><th style={comparisonHead}>Взаємодії</th><th style={comparisonHead}>Покупки/чеки</th><th style={comparisonHead}>Конверсія</th><th style={{ ...comparisonHead, textAlign: "right" }}>Дохід</th></tr></thead><tbody>{rows.map((row, index) => <tr key={`${row.type}-${row.id}`} onClick={() => onOpen(row.detail)} style={{ borderBottom: "1px solid #182130", color: "#CBD5E1", cursor: "pointer", background: index === 0 ? "rgba(59,130,246,.055)" : "transparent" }}><td style={{ padding: "12px 8px", fontWeight: 650 }}><span style={{ color: "#64748B", marginRight: 8 }}>#{index + 1}</span>{row.title}</td><td><span style={{ color: "#93C5FD", background: "rgba(59,130,246,.12)", borderRadius: 999, padding: "4px 8px", fontSize: 10 }}>{typeLabel[row.type]}</span></td><td>{number(row.reach)}</td><td>{number(row.interactions)}</td><td>{row.purchases === null ? "—" : number(row.purchases)}</td><td><strong style={{ color: row.conversion >= 10 ? "#4ADE80" : "#FBBF24" }}>{number(row.conversion)}%</strong></td><td style={{ textAlign: "right", fontWeight: 650 }}>{row.revenue === null ? "—" : money(row.revenue)}</td></tr>)}</tbody></table></div>}
+    {rows.length === 0 ? <EmptyMetricNotice>За вибраними умовами кампаній немає.</EmptyMetricNotice> : <Table
+      rowKey={(row) => `${row.type}-${row.id}`}
+      rows={rows}
+      minWidth={760}
+      onRowClick={(row) => onOpen(row.detail)}
+      rowStyle={(row) => (row === rows[0] ? { background: "rgba(59,130,246,.055)" } : {})}
+      columns={[
+        { key: "title", header: "Контент", render: (row, index) => <span style={{ fontWeight: 650 }}><span style={{ color: "#64748B", marginRight: 8 }}>#{index + 1}</span>{row.title}</span> },
+        { key: "type", header: "Тип", render: (row) => <StatusPill bg="rgba(59,130,246,.12)" text="#93C5FD">{typeLabel[row.type]}</StatusPill> },
+        { key: "reach", header: "Охоплення", render: (row) => number(row.reach) },
+        { key: "interactions", header: "Взаємодії", render: (row) => number(row.interactions) },
+        { key: "purchases", header: "Покупки/чеки", render: (row) => (row.purchases === null ? "—" : number(row.purchases)) },
+        { key: "conversion", header: "Конверсія", render: (row) => <strong style={{ color: row.conversion >= 10 ? "#4ADE80" : "#FBBF24" }}>{number(row.conversion)}%</strong> },
+        { key: "revenue", header: "Дохід", align: "right", render: (row) => <span style={{ fontWeight: 650 }}>{row.revenue === null ? "—" : money(row.revenue)}</span> },
+      ]}
+    />}
     <p style={{ ...muted, marginTop: 13 }}>Для банерів покупки й дохід не визначаються, оскільки банер може вести на різні типи контенту. Натисніть рядок, щоб відкрити детальний звіт.</p>
   </div>;
 }
@@ -404,15 +432,23 @@ function AudienceAnalyticsTable({ rows }: { rows: Array<{ key: string; label: st
     </div>
     <div style={panel}>
       <div style={{ marginBottom: 14 }}><h2 style={{ color: "#E8EDF5", fontSize: 15, margin: 0 }}>Ефективність за аудиторіями</h2><p style={{ ...muted, marginTop: 5 }}>Охоплення та взаємодії підсумовуються по каталогах і акціях; покупки й дохід надходять тільки з реальних POS-чеків.</p></div>
-      {rows.length === 0 ? <EmptyMetricNotice>За вибраний період даних для сегментації ще немає.</EmptyMetricNotice> : <div style={{ overflowX: "auto" }}><table style={{ width: "100%", minWidth: 720, borderCollapse: "collapse", fontSize: 12 }}><thead><tr style={{ color: "#64748B", textAlign: "left", borderBottom: "1px solid #263244" }}><th style={comparisonHead}>Сегмент</th><th style={comparisonHead}>Тип</th><th style={comparisonHead}>Охоплення</th><th style={comparisonHead}>Взаємодії</th><th style={comparisonHead}>Покупки/чеки</th><th style={comparisonHead}>Конверсія</th><th style={{ ...comparisonHead, textAlign: "right" }}>Дохід</th></tr></thead><tbody>{rows.map((row) => {
-        const conversion = row.interactions > 0 ? row.purchases / row.interactions * 100 : 0;
-        return <tr key={row.key} style={{ borderBottom: "1px solid #182130", color: "#CBD5E1" }}><td style={{ padding: "12px 8px", fontWeight: 650 }}>{row.label}</td><td><span style={{ color: row.tierId ? "#C4B5FD" : "#93C5FD", background: row.tierId ? "rgba(139,92,246,.12)" : "rgba(59,130,246,.12)", borderRadius: 999, padding: "4px 8px", fontSize: 10 }}>{row.tierId ? "Рівень" : "Сегмент"}</span></td><td>{number(row.reach)}</td><td>{number(row.interactions)}</td><td>{number(row.purchases)}</td><td>{number(conversion)}%</td><td style={{ textAlign: "right", fontWeight: 650 }}>{money(row.revenue)}</td></tr>;
-      })}</tbody></table></div>}
+      {rows.length === 0 ? <EmptyMetricNotice>За вибраний період даних для сегментації ще немає.</EmptyMetricNotice> : <Table
+        rowKey={(row) => row.key}
+        rows={rows}
+        minWidth={720}
+        columns={[
+          { key: "label", header: "Сегмент", render: (row) => <span style={{ fontWeight: 650 }}>{row.label}</span> },
+          { key: "type", header: "Тип", render: (row) => <StatusPill bg={row.tierId ? "rgba(139,92,246,.12)" : "rgba(59,130,246,.12)"} text={row.tierId ? "#C4B5FD" : "#93C5FD"}>{row.tierId ? "Рівень" : "Сегмент"}</StatusPill> },
+          { key: "reach", header: "Охоплення", render: (row) => number(row.reach) },
+          { key: "interactions", header: "Взаємодії", render: (row) => number(row.interactions) },
+          { key: "purchases", header: "Покупки/чеки", render: (row) => number(row.purchases) },
+          { key: "conversion", header: "Конверсія", render: (row) => `${number(row.interactions > 0 ? row.purchases / row.interactions * 100 : 0)}%` },
+          { key: "revenue", header: "Дохід", align: "right", render: (row) => <span style={{ fontWeight: 650 }}>{money(row.revenue)}</span> },
+        ]}
+      />}
       <p style={{ ...muted, marginTop: 13 }}>Один клієнт одночасно входить до загального сегмента, програми лояльності та свого рівня. Тому рядки не потрібно складати між собою.</p>
     </div>
   </div>;
 }
 
 const comparisonSelect: CSSProperties = { display: "block", marginTop: 4, minWidth: 145, background: "#10151D", border: "1px solid #263244", borderRadius: 7, color: "#CBD5E1", padding: "7px 9px", fontSize: 12, outline: "none" };
-const comparisonHead: CSSProperties = { padding: "9px 8px", fontWeight: 600, whiteSpace: "nowrap" };
-const exportButtonStyle: CSSProperties = { display: "inline-flex", alignItems: "center", gap: 6, minHeight: 35, padding: "7px 11px", borderRadius: 8, border: "1px solid #2B3A50", background: "#101722", color: "#BFDBFE", fontSize: 12, fontWeight: 650, cursor: "pointer" };

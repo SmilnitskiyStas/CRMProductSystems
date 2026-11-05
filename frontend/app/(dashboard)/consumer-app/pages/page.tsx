@@ -5,6 +5,8 @@ import { useMe } from "@/features/auth/hooks/useAuth";
 import { AccessDenied } from "@/components/AccessDenied";
 import { AT_LEAST_ENTERPRISE_ADMIN, hasRole } from "@/lib/roles";
 import { AppBuilderCanvas } from "@/features/consumer-app/components/AppBuilderCanvas";
+import { PageContainer } from "@/components/ui/PageContainer";
+import { PageHeader } from "@/components/ui/PageHeader";
 
 /**
  * TASK-539: replaces TASK-535's placeholder with the real App Builder — a drag & drop canvas for
@@ -36,17 +38,10 @@ export default function ConsumerAppPagesPage() {
     // outside this now-too-narrow cap. 1360 gives the row's combined basis (1260) headroom to fit
     // without shrinking once the browser window is wide enough (see `AppBuilderCanvas.tsx`'s
     // `canFitThreeColumns` remarks for the matching breakpoint).
-    <div style={{ padding: "28px 32px", maxWidth: 1360, display: "flex", flexDirection: "column", gap: 20 }}>
-      <div>
-        <h1 style={{ color: "#E8EDF5", fontSize: 22, fontWeight: 700, margin: 0 }}>
-          {t("title")}
-        </h1>
-        <p style={{ color: "#4B5563", fontSize: 13, marginTop: 6 }}>
-          {t("subtitle")}
-        </p>
-      </div>
+    <PageContainer style={{ maxWidth: 1360 }}>
+      <PageHeader title={t("title")} subtitle={t("subtitle")} />
 
       <AppBuilderCanvas />
-    </div>
+    </PageContainer>
   );
 }

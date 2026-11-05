@@ -4,6 +4,9 @@ import { useState, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { LayoutDashboard, Bell, Link as LinkIcon, Blocks, Store } from "lucide-react";
+import { PageContainer } from "@/components/ui/PageContainer";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { Tabs } from "@/components/ui/Tabs";
 import { OverviewTab } from "@/features/settings/components/OverviewTab";
 import { NotificationsTab } from "@/features/settings/components/NotificationsTab";
 import { IntegrationsTab } from "@/features/settings/components/IntegrationsTab";
@@ -65,54 +68,22 @@ export default function SettingsPage() {
   if (!me || !allowed) return null;
 
   return (
-    <div style={{ padding: "28px 32px", maxWidth: 900 }}>
-      {/* Header */}
-      <div style={{ marginBottom: 28 }}>
-        <h1 style={{ color: "#E8EDF5", fontSize: 22, fontWeight: 700, margin: 0 }}>
-          {t("title")}
-        </h1>
-        <p style={{ color: "#4B5563", fontSize: 14, marginTop: 6 }}>
-          {t("subtitle")}
-        </p>
-      </div>
+    <PageContainer style={{ maxWidth: 900 }}>
+      <PageHeader title={t("title")} subtitle={t("subtitle")} />
 
-      {/* Tabs */}
-      <div
-        style={{
-          display: "flex",
-          gap: 4,
-          borderBottom: "1px solid #1F2937",
-          marginBottom: 28,
-        }}
-      >
-        {TABS.map((tab) => {
-          const active = activeTab === tab.id;
-          return (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 6,
-                padding: "10px 18px",
-                background: "transparent",
-                border: "none",
-                borderBottom: active ? "2px solid #3B82F6" : "2px solid transparent",
-                color: active ? "#3B82F6" : "#6B7280",
-                fontSize: 13,
-                fontWeight: active ? 600 : 400,
-                cursor: "pointer",
-                marginBottom: -1,
-                transition: "color 0.15s",
-              }}
-            >
+      <Tabs<Tab>
+        items={TABS.map((tab) => ({
+          key: tab.id,
+          label: (
+            <>
               {tab.icon}
               {tab.label}
-            </button>
-          );
-        })}
-      </div>
+            </>
+          ),
+        }))}
+        value={activeTab}
+        onChange={setActiveTab}
+      />
 
       {/* Content */}
       <div
@@ -129,6 +100,6 @@ export default function SettingsPage() {
         {activeTab === "modules" && showModules              && <ModulesTab />}
         {activeTab === "marketplace-profile" && isSupplier   && <MarketplaceProfileTab />}
       </div>
-    </div>
+    </PageContainer>
   );
 }

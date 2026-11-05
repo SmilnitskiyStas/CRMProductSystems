@@ -3,6 +3,8 @@
 import { useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import { API_BASE } from "@/lib/api";
+import { Btn } from "@/components/ui/Btn";
+import { inputStyle } from "@/components/ui/fieldStyles";
 import {
   useAddItemImage,
   useDeleteItemImage,
@@ -42,18 +44,6 @@ async function downscale(file: File): Promise<File> {
   return new File([blob], file.name.replace(/\.[^.]+$/, "") + ".jpg", { type: "image/jpeg" });
 }
 
-const inputStyle: React.CSSProperties = {
-  width: "100%",
-  background: "#111827",
-  border: "1px solid #1F2937",
-  borderRadius: 6,
-  color: "#E8EDF5",
-  fontSize: 12,
-  padding: "5px 8px",
-  outline: "none",
-  boxSizing: "border-box",
-};
-
 const chipStyle: React.CSSProperties = {
   padding: "3px 8px",
   borderRadius: 6,
@@ -61,14 +51,6 @@ const chipStyle: React.CSSProperties = {
   background: "#0F1F3D",
   border: "1px solid #1E3A5F",
   color: "#93C5FD",
-  fontSize: 11,
-};
-
-const smallBtn: React.CSSProperties = {
-  background: "none",
-  border: "none",
-  cursor: "pointer",
-  padding: 0,
   fontSize: 11,
 };
 
@@ -134,27 +116,22 @@ function ImageCard({
               style={inputStyle}
             />
             {dirty && (
-              <button
-                type="button"
-                title={t("labelSave")}
-                onClick={() => onSaveLabel(label.trim())}
-                style={{ ...smallBtn, color: "#4ADE80", fontSize: 14 }}
-              >
+              <Btn variant="success" size="xs" title={t("labelSave")} onClick={() => onSaveLabel(label.trim())}>
                 ✓
-              </button>
+              </Btn>
             )}
           </div>
           <div style={{ display: "flex", justifyContent: "space-between", gap: 6 }}>
             {image.isPrimary ? (
               <span />
             ) : (
-              <button type="button" onClick={onMakePrimary} disabled={busy} style={{ ...smallBtn, color: "#60A5FA" }}>
+              <Btn variant="link" size="xs" onClick={onMakePrimary} disabled={busy}>
                 ☆ {t("makePrimary")}
-              </button>
+              </Btn>
             )}
-            <button type="button" onClick={onDelete} disabled={busy} style={{ ...smallBtn, color: "#EF4444" }}>
+            <Btn variant="dangerOutline" size="xs" onClick={onDelete} disabled={busy}>
               {t("delete")}
-            </button>
+            </Btn>
           </div>
         </>
       ) : (

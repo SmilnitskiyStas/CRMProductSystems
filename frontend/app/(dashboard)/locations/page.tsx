@@ -7,6 +7,10 @@ import { Plus, Map } from "lucide-react";
 import { toast } from "sonner";
 import { useTranslations } from "next-intl";
 import { Btn } from "@/components/ui/Btn";
+import { PageContainer } from "@/components/ui/PageContainer";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { StatusPill } from "@/components/ui/StatusPill";
+import { filterInputStyle } from "@/components/ui/fieldStyles";
 import {
   useLocations,
   useCreateLocation,
@@ -155,18 +159,9 @@ export default function LocationsPage() {
       header: t("headers.type"),
       sortKey: "type",
       render: (loc) => (
-        <span
-          style={{
-            background: "#1D2D4A",
-            color: "#60A5FA",
-            borderRadius: 6,
-            padding: "2px 8px",
-            fontSize: 11,
-            fontWeight: 600,
-          }}
-        >
+        <StatusPill bg="#1D2D4A" text="#60A5FA">
           {tTypes(loc.locationType)}
-        </span>
+        </StatusPill>
       ),
     },
     {
@@ -233,21 +228,18 @@ export default function LocationsPage() {
   ];
 
   return (
-    <div style={{ padding: "28px 32px", display: "flex", flexDirection: "column", gap: 20 }}>
-      {/* Header */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16 }}>
-        <div>
-          <h1 style={{ color: "#E8EDF5", fontSize: 22, fontWeight: 700, margin: 0 }}>{t("title")}</h1>
-          <p style={{ color: "#4B5563", fontSize: 13, marginTop: 6, marginBottom: 0 }}>
-            {t("subtitle")}
-          </p>
-        </div>
-        {canManageLocations && (
-          <Btn icon={<Plus size={15} />} onClick={() => setDialog("create")}>
-            {t("newLocation")}
-          </Btn>
-        )}
-      </div>
+    <PageContainer>
+      <PageHeader
+        title={t("title")}
+        subtitle={t("subtitle")}
+        actions={
+          canManageLocations ? (
+            <Btn icon={<Plus size={15} />} onClick={() => setDialog("create")}>
+              {t("newLocation")}
+            </Btn>
+          ) : undefined
+        }
+      />
 
       {/* Search */}
       <input
@@ -255,16 +247,7 @@ export default function LocationsPage() {
         value={searchText}
         onChange={(e) => setSearchText(e.target.value)}
         placeholder={t("searchPlaceholder")}
-        style={{
-          background: "#111827",
-          border: "1px solid #1F2937",
-          borderRadius: 8,
-          color: "#E8EDF5",
-          fontSize: 13,
-          padding: "7px 12px",
-          outline: "none",
-          width: 260,
-        }}
+        style={{ ...filterInputStyle, width: 260, alignSelf: "flex-start" }}
       />
 
       {/* Table — no pagination here on purpose: Locations fetches its full list and both
@@ -290,6 +273,6 @@ export default function LocationsPage() {
           onSubmit={handleSubmit}
         />
       )}
-    </div>
+    </PageContainer>
   );
 }

@@ -7,6 +7,8 @@ import { z } from "zod";
 import { useTranslations } from "next-intl";
 import { toast } from "sonner";
 import { Btn } from "@/components/ui/Btn";
+import { Modal } from "@/components/ui/Modal";
+import { inputStyle } from "@/components/ui/fieldStyles";
 import { useModules } from "@/features/modules/hooks/useModules";
 import { useLegalEntities } from "@/features/legal-entities/hooks/useLegalEntities";
 import { RegionSelect } from "@/features/geo/components/RegionSelect";
@@ -85,7 +87,13 @@ export function LocationFormDialog({ location, isPending, onClose, onSubmit }: P
 
   const { data: modules } = useModules();
   const businessType = modules?.businessType ?? "retail";
-  const allowedTypes = TYPES_FOR_BUSINESS[businessType] ?? LOCATION_TYPE_VALUES;
+  const baseTypes = TYPES_FOR_BUSINESS[businessType] ?? LOCATION_TYPE_VALUES;
+  // A tenant with the own-production module (e.g. a retail chain with its own workshop) must be able
+  // to create a production location whatever its business type is.
+  const allowedTypes =
+    modules?.modules.includes("production") && !baseTypes.includes("production")
+      ? [...baseTypes, "production" as LocationType]
+      : baseTypes;
   const locationTypes = allowedTypes.map((k) => [k, tTypes(k)] as [LocationType, string]);
 
   const { data: legalEntities } = useLegalEntities();
@@ -182,37 +190,7 @@ export function LocationFormDialog({ location, isPending, onClose, onSubmit }: P
   const addressValue = (watch("address") ?? "").trim();
 
   return (
-    <div
-      style={{
-        position: "fixed",
-        inset: 0,
-        background: "rgba(0,0,0,0.55)",
-        zIndex: 50,
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-      }}
-      onClick={onClose}
-    >
-      <div
-        style={{
-          background: "#161B26",
-          border: "1px solid #1F2937",
-          borderRadius: 12,
-          padding: "24px 28px",
-          width: 460,
-          maxWidth: "90vw",
-          display: "flex",
-          flexDirection: "column",
-          gap: 18,
-        }}
-        onClick={(e) => e.stopPropagation()}
-      >
-        {/* Title */}
-        <h2 style={{ color: "#E8EDF5", fontSize: 18, fontWeight: 700, margin: 0 }}>
-          {isEdit ? t("titleEdit") : t("titleCreate")}
-        </h2>
-
+    <Modal title={isEdit ? t("titleEdit") : t("titleCreate")} onClose={onClose} width={460}>
         <form
           onSubmit={handleSubmit(onValid)}
           style={{ display: "flex", flexDirection: "column", gap: 14 }}
@@ -346,8 +324,7 @@ export function LocationFormDialog({ location, isPending, onClose, onSubmit }: P
             </Btn>
           </div>
         </form>
-      </div>
-    </div>
+    </Modal>
   );
 }
 
@@ -377,15 +354,3 @@ function toNullableNumber(v: unknown): number | null {
   const n = Number(v);
   return Number.isNaN(n) ? null : n;
 }
-
-const inputStyle: React.CSSProperties = {
-  width: "100%",
-  background: "#111827",
-  border: "1px solid #1F2937",
-  borderRadius: 8,
-  color: "#E8EDF5",
-  fontSize: 13,
-  padding: "8px 12px",
-  outline: "none",
-  boxSizing: "border-box",
-};

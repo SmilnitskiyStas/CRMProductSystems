@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { receiptsApi } from "../api/receipts";
+import type { ReceivingConfirmation } from "../api/receipt-receiving";
 import { useStoreScopeReady } from "@/lib/useStoreContext";
 import type { CreateReceiptRequest, UpdateItemPayload } from "../types";
 
@@ -13,6 +14,7 @@ export function useReceipts(
     page?: number;
     pageSize?: number;
     search?: string;
+    source?: string;
     sortBy?: string;
     sortDescending?: boolean;
   },
@@ -57,10 +59,14 @@ export function useUpdateReceiptItems(id: string) {
 export function useReceiveReceipt() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (id: string) => receiptsApi.receive(id),
+    mutationFn: (input: string | { id: string; confirmation: ReceivingConfirmation }) => typeof input === "string"
+      ? receiptsApi.receive(input) : receiptsApi.receive(input.id, input.confirmation),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["receipts"] });
       qc.invalidateQueries({ queryKey: ["stock"] });
+      qc.invalidateQueries({ queryKey: ["product-movements"] });
+      qc.invalidateQueries({ queryKey: ["product-stock-history"] });
+      qc.invalidateQueries({ queryKey: ["dashboard"] });
     },
   });
 }

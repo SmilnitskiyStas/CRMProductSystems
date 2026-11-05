@@ -9,6 +9,8 @@ import { AT_LEAST_ENTERPRISE_ADMIN, hasRole } from "@/lib/roles";
 import { BonusProgramSection } from "@/features/consumer-app/components/BonusProgramSection";
 import { TierLadderSection } from "@/features/consumer-app/components/TierLadderSection";
 import { SectionTabs } from "@/features/consumer-app/components/SectionTabs";
+import { PageContainer } from "@/components/ui/PageContainer";
+import { PageHeader } from "@/components/ui/PageHeader";
 
 /**
  * TASK-500: standalone "Consumer App" management area (product decision — deliberately its own
@@ -37,15 +39,8 @@ export default function ConsumerAppPage() {
   }
 
   return (
-    <div style={{ padding: "28px 32px", width: "100%", boxSizing: "border-box", display: "flex", flexDirection: "column", gap: 20 }}>
-      <div>
-        <h1 style={{ color: "#E8EDF5", fontSize: 22, fontWeight: 700, margin: 0 }}>
-          {t("title")}
-        </h1>
-        <p style={{ color: "#4B5563", fontSize: 13, marginTop: 6 }}>
-          {t("subtitle")}
-        </p>
-      </div>
+    <PageContainer>
+      <PageHeader title={t("title")} subtitle={t("subtitle")} />
 
       <SectionTabs items={[
         { key: "general", label: "Загальні правила", icon: <Gift size={15} /> },
@@ -62,6 +57,6 @@ export default function ConsumerAppPage() {
       <div role="tabpanel" hidden={activeSection !== "tiers"}>
         <TierLadderSection />
       </div>
-    </div>
+    </PageContainer>
   );
 }

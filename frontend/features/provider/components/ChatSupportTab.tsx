@@ -16,6 +16,7 @@ import {
   useProviderSendMessage,
   useProviderCloseChat,
 } from "@/features/chat/hooks/useChat";
+import { Btn } from "@/components/ui/Btn";
 import { useMe } from "@/features/auth/hooks/useAuth";
 import type { ChatSessionDto } from "@/features/chat/types";
 
@@ -249,21 +250,14 @@ function ChatPanel({
 
         <div style={{ display: "flex", gap: 8 }}>
           {session.status === "open" && (
-            <button
+            <Btn
+              variant="ghost"
+              size="sm"
               onClick={() => closeChat.mutateAsync(session.id)}
               disabled={closeChat.isPending}
-              style={{
-                background: "transparent",
-                border: "1px solid #1F2937",
-                borderRadius: 6,
-                padding: "5px 12px",
-                color: "#6B7280",
-                fontSize: 12,
-                cursor: "pointer",
-              }}
             >
               {t("closeChatButton")}
-            </button>
+            </Btn>
           )}
           <button
             onClick={onClose}
@@ -378,27 +372,14 @@ function ChatPanel({
               fontFamily: "inherit",
             }}
           />
-          <button
+          <Btn
+            icon={<Send size={14} />}
             onClick={handleSend}
             disabled={!text.trim() || sendMessage.isPending}
-            style={{
-              background: text.trim() ? "#1D3461" : "#111827",
-              border: `1px solid ${text.trim() ? "#3B82F6" : "#1F2937"}`,
-              borderRadius: 8,
-              padding: "10px 14px",
-              color: text.trim() ? "#93C5FD" : "#374151",
-              cursor: text.trim() ? "pointer" : "not-allowed",
-              display: "flex",
-              alignItems: "center",
-              gap: 6,
-              fontSize: 13,
-              fontWeight: 600,
-              flexShrink: 0,
-            }}
+            style={{ flexShrink: 0 }}
           >
-            <Send size={14} />
             {t("sendButton")}
-          </button>
+          </Btn>
         </div>
       )}
     </div>

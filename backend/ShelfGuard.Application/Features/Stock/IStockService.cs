@@ -49,6 +49,7 @@ public interface IStockService
 
     Task<(ProductStockDto? Stock, string? Error)> UpdateAsync(
         Guid id,
+        Guid performedBy,
         UpdateStockRequest request,
         CancellationToken ct = default);
 

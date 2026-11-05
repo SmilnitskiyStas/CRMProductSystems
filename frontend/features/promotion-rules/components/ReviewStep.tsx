@@ -45,13 +45,9 @@ function IssueList({
             <div style={{ fontSize: 11.5, opacity: 0.85, marginTop: 2 }}>
               {fk ? t(`fields.${fk}`) : i.field}
               {i.field && " · "}
-              <button
-                type="button"
-                onClick={() => onGoToStep(stepOfField(i.field))}
-                style={{ background: "none", border: "none", color: "inherit", textDecoration: "underline", cursor: "pointer", padding: 0, fontSize: 11.5 }}
-              >
+              <Btn variant="link" size="xs" onClick={() => onGoToStep(stepOfField(i.field))}>
                 {t("review.goFix")}
-              </button>
+              </Btn>
             </div>
           </li>
         );

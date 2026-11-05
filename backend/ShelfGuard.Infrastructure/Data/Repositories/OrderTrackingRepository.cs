@@ -12,8 +12,8 @@ public sealed class OrderTrackingRepository : IOrderTrackingRepository
     // unified status -> raw statuses per source
     private static readonly Dictionary<string, string[]> ReceiptStatuses = new()
     {
-        ["new"] = ["draft", "ordered"],
-        ["confirmed"] = [],
+        ["new"] = ["draft"],
+        ["confirmed"] = ["ordered"],
         ["in_transit"] = ["in_transit"],
         ["delivered"] = ["received"],
         ["cancelled"] = ["cancelled"],
@@ -30,7 +30,8 @@ public sealed class OrderTrackingRepository : IOrderTrackingRepository
 
     private static string UnifyReceipt(string s) => s switch
     {
-        "draft" or "ordered" => "new",
+        "draft" => "new",
+        "ordered" => "confirmed",
         "in_transit" => "in_transit",
         "received" => "delivered",
         "cancelled" => "cancelled",

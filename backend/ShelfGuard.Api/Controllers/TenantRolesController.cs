@@ -58,6 +58,7 @@ public sealed class TenantRolesController : ControllerBase
     }
 
     [HttpPost]
+    [RequireRecentMfa]
     [ProducesResponseType(typeof(TenantRoleDto), StatusCodes.Status201Created)]
     [ProducesResponseType(typeof(object), StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> Create([FromBody] CreateTenantRoleRequest request, CancellationToken ct)
@@ -72,6 +73,7 @@ public sealed class TenantRolesController : ControllerBase
     }
 
     [HttpPut("{id:guid}")]
+    [RequireRecentMfa]
     [ProducesResponseType(typeof(TenantRoleDto), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(object), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -89,6 +91,7 @@ public sealed class TenantRolesController : ControllerBase
 
     /// <summary>Archives the template (soft delete — never a hard delete).</summary>
     [HttpDelete("{id:guid}")]
+    [RequireRecentMfa]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> Deactivate(Guid id, CancellationToken ct)

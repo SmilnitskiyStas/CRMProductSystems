@@ -2,6 +2,10 @@
 
 import { useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
+import { Modal } from "@/components/ui/Modal";
+import { Btn } from "@/components/ui/Btn";
+import { Tabs } from "@/components/ui/Tabs";
+import { inputStyle, labelStyle } from "@/components/ui/fieldStyles";
 import {
   CHECKBOX_BASE_URLS,
   detectCheckboxEnv,
@@ -13,27 +17,7 @@ import {
   useTestPrroConnection,
 } from "../hooks/usePrroSettings";
 
-// ── Style constants (consistent with the rest of the settings UI) ──────────
-
-const inputStyle: React.CSSProperties = {
-  width: "100%",
-  background: "#0D1117",
-  border: "1px solid #374151",
-  borderRadius: 8,
-  padding: "9px 12px",
-  color: "#E8EDF5",
-  fontSize: 13,
-  outline: "none",
-  boxSizing: "border-box",
-};
-
-const labelStyle: React.CSSProperties = {
-  display: "block",
-  color: "#9CA3AF",
-  fontSize: 12,
-  fontWeight: 500,
-  marginBottom: 6,
-};
+// ── Style constants ────────────────────────────────────────────────────────
 
 const hintStyle: React.CSSProperties = {
   color: "#4B5563",
@@ -190,62 +174,10 @@ export function PrroConfigModal({ onClose }: Props) {
   const isTesting = testConn.isPending;
 
   return (
-    <>
-      {/* Backdrop */}
-      <div
-        onClick={onClose}
-        style={{
-          position: "fixed",
-          inset: 0,
-          background: "rgba(0,0,0,0.6)",
-          zIndex: 40,
-          backdropFilter: "blur(2px)",
-        }}
-      />
-
-      {/* Modal */}
-      <div
-        style={{
-          position: "fixed",
-          top: "50%",
-          left: "50%",
-          transform: "translate(-50%, -50%)",
-          zIndex: 50,
-          background: "#111827",
-          border: "1px solid #1F2937",
-          borderRadius: 14,
-          padding: 28,
-          width: "min(560px, calc(100vw - 32px))",
-          maxHeight: "90vh",
-          overflowY: "auto",
-        }}
-      >
-        {/* Header */}
+    <Modal title={t("title")} onClose={onClose} width={560}>
         <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 24 }}>
           <span style={{ fontSize: 28 }}>🖨️</span>
-          <div>
-            <h2 style={{ color: "#E8EDF5", fontSize: 16, fontWeight: 700, margin: 0 }}>
-              {t("title")}
-            </h2>
-            <p style={{ color: "#4B5563", fontSize: 12, margin: 0, marginTop: 3 }}>
-              {t("description")}
-            </p>
-          </div>
-          <button
-            onClick={onClose}
-            style={{
-              marginLeft: "auto",
-              background: "transparent",
-              border: "none",
-              color: "#4B5563",
-              fontSize: 20,
-              cursor: "pointer",
-              lineHeight: 1,
-              padding: "4px 8px",
-            }}
-          >
-            ✕
-          </button>
+          <p style={{ color: "#4B5563", fontSize: 12, margin: 0 }}>{t("description")}</p>
         </div>
 
         {isLoading ? (
@@ -333,7 +265,7 @@ export function PrroConfigModal({ onClose }: Props) {
                     }}
                     style={{
                       ...inputStyle,
-                      borderColor: errors.licenseKey ? "#EF4444" : "#374151",
+                      borderColor: errors.licenseKey ? "#EF4444" : "#1F2937",
                     }}
                     autoComplete="new-password"
                   />
@@ -348,30 +280,17 @@ export function PrroConfigModal({ onClose }: Props) {
                 {/* Cashier auth mode toggle */}
                 <div style={sectionStyle}>
                   <label style={labelStyle}>{t("cashierAuthLabel")}</label>
-                  <div style={{ display: "flex", gap: 0, borderRadius: 8, overflow: "hidden", border: "1px solid #374151", width: "fit-content" }}>
-                    {(["pin", "loginPassword"] as CashierAuthMode[]).map((mode) => (
-                      <button
-                        key={mode}
-                        type="button"
-                        onClick={() => {
-                          setCashierAuthMode(mode);
-                          setErrors({});
-                        }}
-                        style={{
-                          padding: "7px 16px",
-                          background: cashierAuthMode === mode ? "#1D3461" : "transparent",
-                          border: "none",
-                          color: cashierAuthMode === mode ? "#93C5FD" : "#6B7280",
-                          fontSize: 13,
-                          cursor: "pointer",
-                          fontWeight: cashierAuthMode === mode ? 600 : 400,
-                          transition: "all 0.15s",
-                        }}
-                      >
-                        {mode === "pin" ? t("cashierAuthPin") : t("cashierAuthLoginPassword")}
-                      </button>
-                    ))}
-                  </div>
+                  <Tabs<CashierAuthMode>
+                    items={[
+                      { key: "pin", label: t("cashierAuthPin") },
+                      { key: "loginPassword", label: t("cashierAuthLoginPassword") },
+                    ]}
+                    value={cashierAuthMode}
+                    onChange={(mode) => {
+                      setCashierAuthMode(mode);
+                      setErrors({});
+                    }}
+                  />
                 </div>
 
                 {/* PIN mode */}
@@ -390,7 +309,7 @@ export function PrroConfigModal({ onClose }: Props) {
                       }}
                       style={{
                         ...inputStyle,
-                        borderColor: errors.cashierPin ? "#EF4444" : "#374151",
+                        borderColor: errors.cashierPin ? "#EF4444" : "#1F2937",
                       }}
                       autoComplete="new-password"
                     />
@@ -417,7 +336,7 @@ export function PrroConfigModal({ onClose }: Props) {
                         }}
                         style={{
                           ...inputStyle,
-                          borderColor: errors.cashierLogin ? "#EF4444" : "#374151",
+                          borderColor: errors.cashierLogin ? "#EF4444" : "#1F2937",
                         }}
                         autoComplete="new-password"
                       />
@@ -439,7 +358,7 @@ export function PrroConfigModal({ onClose }: Props) {
                         }}
                         style={{
                           ...inputStyle,
-                          borderColor: errors.cashierPassword ? "#EF4444" : "#374151",
+                          borderColor: errors.cashierPassword ? "#EF4444" : "#1F2937",
                         }}
                         autoComplete="new-password"
                       />
@@ -453,24 +372,9 @@ export function PrroConfigModal({ onClose }: Props) {
                 {/* Test connection button + result */}
                 <div style={{ marginTop: 20, padding: 16, background: "#0D1117", borderRadius: 10, border: "1px solid #1F2937" }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-                    <button
-                      type="button"
-                      onClick={handleTest}
-                      disabled={isTesting}
-                      style={{
-                        padding: "7px 16px",
-                        borderRadius: 8,
-                        background: "transparent",
-                        border: "1px solid #374151",
-                        color: "#9CA3AF",
-                        fontSize: 13,
-                        cursor: isTesting ? "not-allowed" : "pointer",
-                        opacity: isTesting ? 0.6 : 1,
-                        whiteSpace: "nowrap",
-                      }}
-                    >
+                    <Btn variant="ghost" onClick={handleTest} disabled={isTesting}>
                       {isTesting ? t("testingButton") : t("testButton")}
-                    </button>
+                    </Btn>
 
                     {/* Success result */}
                     {testResult && testResult.ok && (
@@ -555,43 +459,15 @@ export function PrroConfigModal({ onClose }: Props) {
                 borderTop: "1px solid #1F2937",
               }}
             >
-              <button
-                type="button"
-                onClick={onClose}
-                disabled={isBusy}
-                style={{
-                  padding: "8px 16px",
-                  borderRadius: 8,
-                  background: "transparent",
-                  border: "1px solid #374151",
-                  color: "#6B7280",
-                  fontSize: 13,
-                  cursor: "pointer",
-                }}
-              >
+              <Btn variant="ghost" onClick={onClose} disabled={isBusy}>
                 {t("cancelButton")}
-              </button>
-              <button
-                type="submit"
-                disabled={isBusy}
-                style={{
-                  padding: "8px 20px",
-                  borderRadius: 8,
-                  background: isBusy ? "#1e3a5f" : "#1D3461",
-                  border: "1px solid #3B82F6",
-                  color: "#93C5FD",
-                  fontSize: 13,
-                  fontWeight: 600,
-                  cursor: isBusy ? "not-allowed" : "pointer",
-                  opacity: isBusy ? 0.7 : 1,
-                }}
-              >
+              </Btn>
+              <Btn type="submit" disabled={isBusy}>
                 {isBusy ? t("savingButton") : t("saveButton")}
-              </button>
+              </Btn>
             </div>
           </form>
         )}
-      </div>
-    </>
+    </Modal>
   );
 }

@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useTranslations, useLocale } from "next-intl";
 import { Pencil, Trash2, Plus, ImageOff } from "lucide-react";
 import { Btn } from "@/components/ui/Btn";
+import { StatusPill } from "@/components/ui/StatusPill";
 import { Table, type TableColumn } from "@/components/ui/Table";
 import { useCabinetItems, useDeleteCabinetItem } from "../hooks/useSupplierCabinet";
 import { useItemCategories } from "@/features/marketplace/hooks/useMarketplace";
@@ -99,20 +100,9 @@ export function CabinetItemsTable() {
         <>
           {item.customName ?? item.itemName ?? "—"}
           {item.category && (
-            <span
-              style={{
-                marginLeft: 8,
-                display: "inline-block",
-                padding: "2px 8px",
-                borderRadius: 4,
-                fontSize: 11,
-                fontWeight: 600,
-                background: "#1E293B",
-                color: "#93C5FD",
-              }}
-            >
+            <StatusPill bg="#1E293B" text="#93C5FD" style={{ marginLeft: 8 }}>
               {categories.find((c) => c.key === item.category)?.labelUa ?? item.category}
-            </span>
+            </StatusPill>
           )}
         </>
       ),
@@ -150,19 +140,9 @@ export function CabinetItemsTable() {
       key: "availability",
       header: t("headerAvailability"),
       render: (item) => (
-        <span
-          style={{
-            display: "inline-block",
-            padding: "2px 8px",
-            borderRadius: 4,
-            fontSize: 11,
-            fontWeight: 600,
-            background: item.isAvailable ? "#052e16" : "#1c1917",
-            color: item.isAvailable ? "#4ADE80" : "#6B7280",
-          }}
-        >
+        <StatusPill bg={item.isAvailable ? "#052e16" : "#1c1917"} text={item.isAvailable ? "#4ADE80" : "#6B7280"}>
           {item.isAvailable ? t("available") : t("unavailable")}
-        </span>
+        </StatusPill>
       ),
     },
     {
@@ -171,23 +151,9 @@ export function CabinetItemsTable() {
       cellStyle: { whiteSpace: "nowrap" },
       render: (item) => (
         <>
-          <button
-            title={t("detailsTitle")}
-            onClick={() => setDetailItem(item as unknown as SupplierItemDto)}
-            style={{
-              background: "transparent",
-              border: "1px solid #374151",
-              borderRadius: 7,
-              color: "#9CA3AF",
-              fontSize: 11,
-              fontWeight: 600,
-              padding: "4px 8px",
-              cursor: "pointer",
-              marginRight: 6,
-            }}
-          >
+          <Btn variant="ghost" size="sm" title={t("detailsTitle")} onClick={() => setDetailItem(item as unknown as SupplierItemDto)} style={{ marginRight: 6 }}>
             {t("detailsButton")}
-          </button>
+          </Btn>
           <button
             title={t("editTitle")}
             onClick={() => setModal({ open: true, item })}
@@ -204,37 +170,12 @@ export function CabinetItemsTable() {
           </button>
           {confirmDeleteId === item.id ? (
             <>
-              <button
-                onClick={() => handleDelete(item.id)}
-                disabled={deleteItem.isPending}
-                style={{
-                  background: "#2d0a0a",
-                  border: "1px solid #7F1D1D",
-                  borderRadius: 6,
-                  color: "#F87171",
-                  cursor: "pointer",
-                  padding: "2px 8px",
-                  fontSize: 11,
-                  fontWeight: 600,
-                  marginRight: 4,
-                }}
-              >
+              <Btn variant="danger" size="xs" onClick={() => handleDelete(item.id)} disabled={deleteItem.isPending} style={{ marginRight: 4 }}>
                 {deleteItem.isPending ? t("deletePending") : t("confirmYes")}
-              </button>
-              <button
-                onClick={() => setConfirmDeleteId(null)}
-                style={{
-                  background: "transparent",
-                  border: "1px solid #374151",
-                  borderRadius: 6,
-                  color: "#9CA3AF",
-                  cursor: "pointer",
-                  padding: "2px 8px",
-                  fontSize: 11,
-                }}
-              >
+              </Btn>
+              <Btn variant="ghost" size="xs" onClick={() => setConfirmDeleteId(null)}>
                 {t("confirmNo")}
-              </button>
+              </Btn>
             </>
           ) : (
             <button

@@ -2,7 +2,7 @@
 
 import { Suspense, useEffect, useState, useMemo, useRef } from "react";
 import { useSearchParams } from "next/navigation";
-import { Plus } from "lucide-react";
+import { Plus, Trash2 } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useStock, useVerifyStock } from "@/features/shelf/hooks/useStock";
 import { usePrimaryStoreId } from "@/lib/useStoreContext";
@@ -14,6 +14,11 @@ import { AddBatchForm } from "@/features/shelf/components/AddBatchForm";
 import { Modal } from "@/components/ui/Modal";
 import { Btn } from "@/components/ui/Btn";
 import { Pagination } from "@/components/ui/Pagination";
+import { useMe } from "@/features/auth/hooks/useAuth";
+import { CAN_RECEIVE_STOCK, AT_LEAST_STORE_MANAGER, hasRole } from "@/lib/roles";
+import { canWriteOffBatch, getWriteOffBatches, shareWriteOffStore } from "@/features/shelf/lib/stockWriteOff";
+import { StockWriteOffDialog } from "@/features/shelf/components/StockWriteOffDialog";
+import type { ProductStockDto } from "@/features/shelf/types";
 import type { StockSortBy } from "@/features/shelf/types";
 
 interface Filters {
@@ -30,6 +35,9 @@ function StockPageContent() {
   const t = useTranslations("Dashboard.stock");
   const searchParams = useSearchParams();
   const primaryStoreId = usePrimaryStoreId();
+  const { data: me } = useMe();
+  const canCreateWriteOff = hasRole(me?.role, CAN_RECEIVE_STOCK);
+  const canApproveWriteOff = hasRole(me?.role, AT_LEAST_STORE_MANAGER);
   const [filters, setFilters] = useState<Filters>({
     status: searchParams.get("status") ?? "",
     search: "",
@@ -41,6 +49,8 @@ function StockPageContent() {
   });
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [showAddModal, setShowAddModal] = useState(false);
+  const [writeOffBatches, setWriteOffBatches] = useState<ProductStockDto[] | null>(null);
+  const [writeOffCompleted, setWriteOffCompleted] = useState(false);
 
   // If the user hasn't explicitly picked a store filter, fall back to the store
   // selected in the header StoreSelector so stock changes when the user switches stores.
@@ -76,7 +86,7 @@ function StockPageContent() {
 
   const [page, setPage] = useState(1);
   const PAGE_SIZE = 50;
-  const { data, isLoading } = useStock({
+  const { data, isLoading, isPlaceholderData } = useStock({
     status: filters.status || undefined,
     store_id: effectiveStoreId,
     zone_id: filters.zone_id || undefined,
@@ -96,6 +106,7 @@ function StockPageContent() {
   // Reset to page 1 whenever a filter changes underneath the current page.
   useEffect(() => {
     setPage(1);
+    setSelectedIds(new Set());
   }, [
     filters.status,
     effectiveStoreId,
@@ -112,6 +123,8 @@ function StockPageContent() {
   const { data: products = [] } = useCatalogProducts();
   const verify = useVerifyStock();
 
+  useEffect(() => { setSelectedIds(new Set()); }, [page]);
+
   function handleSelectId(id: string, checked: boolean) {
     setSelectedIds((prev) => {
       const next = new Set(prev);
@@ -122,7 +135,7 @@ function StockPageContent() {
   }
 
   function handleSelectAll(checked: boolean) {
-    if (checked) setSelectedIds(new Set(batches.map((b) => b.id)));
+    if (checked) setSelectedIds(new Set(batches.filter(canWriteOffBatch).map((b) => b.id)));
     else setSelectedIds(new Set());
   }
 
@@ -142,6 +155,13 @@ function StockPageContent() {
   }));
 
   const countLabel = String(batches.length);
+  const selectedBatches = isPlaceholderData ? [] : getWriteOffBatches(batches, selectedIds);
+  const canWriteOffSelection = shareWriteOffStore(selectedBatches);
+  function openWriteOff(batchesToWriteOff: ProductStockDto[]) {
+    if (!canCreateWriteOff || !shareWriteOffStore(batchesToWriteOff)) return;
+    setWriteOffCompleted(false);
+    setWriteOffBatches(batchesToWriteOff);
+  }
 
   const chipStyle: React.CSSProperties = {
     background: "#1D3461",
@@ -236,6 +256,8 @@ function StockPageContent() {
           <span style={{ color: "#93C5FD", fontSize: 13, fontWeight: 600 }}>
             {t("selectedCount", { count: selectedIds.size })}
           </span>
+          {canCreateWriteOff && <Btn size="sm" variant="danger" icon={<Trash2 size={13} />} disabled={!canWriteOffSelection} onClick={() => openWriteOff(selectedBatches)}>{t("writeOff.selected")}</Btn>}
+          {canCreateWriteOff && selectedBatches.length > 0 && !canWriteOffSelection && <span style={{ color: "#FBBF24", fontSize: 12 }}>{t("writeOff.singleStore")}</span>}
           <button
             onClick={() => setSelectedIds(new Set())}
             style={{
@@ -260,13 +282,19 @@ function StockPageContent() {
         </span>
       </div>
 
+      <p style={{ color: "#8A94A8", fontSize: 12, margin: 0 }}>
+        {t("batchExplanation", { products: new Set(batches.map(batch => batch.productId)).size })}
+      </p>
+      {writeOffCompleted && <p role="status" style={{ color: "#4ADE80", margin: 0 }}>{t("writeOff.completed")}</p>}
+
       <StockTable
         items={batches}
-        isLoading={isLoading}
+        isLoading={isLoading || isPlaceholderData}
         selectedIds={selectedIds}
         onSelectId={handleSelectId}
         onSelectAll={handleSelectAll}
         onVerify={(id) => verify.mutate(id)}
+        onWriteOff={canCreateWriteOff ? batch => openWriteOff([batch]) : undefined}
         sortBy={sortBy}
         sortDescending={sortDescending}
         onSort={handleSort}
@@ -274,6 +302,15 @@ function StockPageContent() {
 
       {!isLoading && batches.length > 0 && (
         <Pagination page={page} totalPages={totalPages} totalCount={totalCount} onPageChange={setPage} />
+      )}
+
+      {writeOffBatches && (
+        <StockWriteOffDialog
+          batches={writeOffBatches}
+          canApprove={canApproveWriteOff}
+          onClose={() => setWriteOffBatches(null)}
+          onCompleted={() => { setWriteOffBatches(null); setSelectedIds(new Set()); setWriteOffCompleted(true); }}
+        />
       )}
 
       {/* Add batch modal */}

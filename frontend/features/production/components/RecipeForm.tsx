@@ -1,8 +1,11 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { X, Plus, Trash2 } from "lucide-react";
+import { Plus, Trash2 } from "lucide-react";
 import { useTranslations } from "next-intl";
+import { Btn } from "@/components/ui/Btn";
+import { Modal } from "@/components/ui/Modal";
+import { inputStyle, labelStyle, textareaStyle } from "@/components/ui/fieldStyles";
 import {
   useRecipe,
   useCreateRecipe,
@@ -143,314 +146,185 @@ export function RecipeForm({ recipeId, onClose }: Props) {
   const isPending = createRecipe.isPending || updateRecipe.isPending;
 
   return (
-    <div
-      style={{
-        position: "fixed",
-        inset: 0,
-        background: "rgba(0,0,0,0.7)",
-        zIndex: 50,
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        padding: 16,
-      }}
-      onClick={(e) => {
-        if (e.target === e.currentTarget) onClose();
-      }}
-    >
+    <Modal title={isEdit ? t("titleEdit") : t("titleNew")} onClose={onClose} width={640}>
+    <form onSubmit={handleSubmit}>
+      {/* Name */}
+      <div style={{ marginBottom: 16 }}>
+        <label style={labelStyle}>{t("nameLabel")}</label>
+        <input
+          type="text"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          placeholder={t("namePlaceholder")}
+          style={inputStyle}
+        />
+      </div>
+
+      {/* Output item + qty + unit */}
       <div
-        style={{
-          background: "#111827",
-          border: "1px solid #1F2937",
-          borderRadius: 12,
-          width: "100%",
-          maxWidth: 640,
-          maxHeight: "90vh",
-          overflow: "auto",
-          boxShadow: "0 25px 50px rgba(0,0,0,0.6)",
-        }}
+        style={{ display: "grid", gridTemplateColumns: "1fr 120px 100px", gap: 12, marginBottom: 16 }}
       >
-        {/* Header */}
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            padding: "20px 24px 16px",
-            borderBottom: "1px solid #1F2937",
-          }}
-        >
-          <h2 style={{ color: "#E8EDF5", fontSize: 16, fontWeight: 700, margin: 0 }}>
-            {isEdit ? t("titleEdit") : t("titleNew")}
-          </h2>
-          <button
-            onClick={onClose}
+        <div>
+          <label style={labelStyle}>{t("outputItemLabel")}</label>
+          <select
+            value={outputItemId}
+            onChange={(e) => setOutputItemId(e.target.value)}
+            style={inputStyle}
+            disabled={isEdit}
+          >
+            <option value="">{t("selectItemPlaceholder")}</option>
+            {items.map((item) => (
+              <option key={item.id} value={item.id}>
+                {item.name}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label style={labelStyle}>{t("outputQtyLabel")}</label>
+          <input
+            type="number"
+            value={outputQty}
+            onChange={(e) => setOutputQty(e.target.value)}
+            placeholder="1"
+            min={0}
+            step="0.001"
+            style={inputStyle}
+            disabled={isEdit}
+          />
+        </div>
+        <div>
+          <label style={labelStyle}>{t("unitLabel")}</label>
+          <input
+            type="text"
+            value={unit}
+            onChange={(e) => setUnit(e.target.value)}
+            placeholder={t("unitPlaceholder")}
+            style={inputStyle}
+            disabled={isEdit}
+          />
+        </div>
+      </div>
+
+      {/* Notes */}
+      <div style={{ marginBottom: 20 }}>
+        <label style={labelStyle}>{t("notesLabel")}</label>
+        <textarea
+          value={notes}
+          onChange={(e) => setNotes(e.target.value)}
+          rows={2}
+          placeholder={t("notesPlaceholder")}
+          style={textareaStyle}
+        />
+      </div>
+
+      {/* Ingredients — shown only on create */}
+      {!isEdit && (
+        <div style={{ marginBottom: 20 }}>
+          <div
             style={{
-              background: "transparent",
-              border: "none",
-              color: "#6B7280",
-              cursor: "pointer",
-              padding: 4,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              marginBottom: 10,
             }}
           >
-            <X size={18} />
-          </button>
-        </div>
-
-        {/* Form */}
-        <form onSubmit={handleSubmit} style={{ padding: "20px 24px" }}>
-          {/* Name */}
-          <div style={{ marginBottom: 16 }}>
-            <label style={labelStyle}>{t("nameLabel")}</label>
-            <input
-              type="text"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder={t("namePlaceholder")}
-              style={inputStyle}
-            />
+            <label style={{ ...labelStyle, margin: 0 }}>
+              {t("ingredientsLabel")}
+            </label>
+            <Btn variant="ghost" size="sm" icon={<Plus size={13} />} onClick={addIngredient}>
+              {t("addIngredient")}
+            </Btn>
           </div>
 
-          {/* Output item + qty + unit */}
-          <div
-            style={{ display: "grid", gridTemplateColumns: "1fr 120px 100px", gap: 12, marginBottom: 16 }}
-          >
-            <div>
-              <label style={labelStyle}>{t("outputItemLabel")}</label>
-              <select
-                value={outputItemId}
-                onChange={(e) => setOutputItemId(e.target.value)}
-                style={inputStyle}
-                disabled={isEdit}
-              >
-                <option value="">{t("selectItemPlaceholder")}</option>
-                {items.map((item) => (
-                  <option key={item.id} value={item.id}>
-                    {item.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label style={labelStyle}>{t("outputQtyLabel")}</label>
-              <input
-                type="number"
-                value={outputQty}
-                onChange={(e) => setOutputQty(e.target.value)}
-                placeholder="1"
-                min={0}
-                step="0.001"
-                style={inputStyle}
-                disabled={isEdit}
-              />
-            </div>
-            <div>
-              <label style={labelStyle}>{t("unitLabel")}</label>
-              <input
-                type="text"
-                value={unit}
-                onChange={(e) => setUnit(e.target.value)}
-                placeholder={t("unitPlaceholder")}
-                style={inputStyle}
-                disabled={isEdit}
-              />
-            </div>
-          </div>
-
-          {/* Notes */}
-          <div style={{ marginBottom: 20 }}>
-            <label style={labelStyle}>{t("notesLabel")}</label>
-            <textarea
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              rows={2}
-              placeholder={t("notesPlaceholder")}
-              style={{ ...inputStyle, resize: "vertical" }}
-            />
-          </div>
-
-          {/* Ingredients — shown only on create */}
-          {!isEdit && (
-            <div style={{ marginBottom: 20 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {ingredients.map((ing, idx) => (
               <div
+                key={idx}
                 style={{
-                  display: "flex",
+                  display: "grid",
+                  gridTemplateColumns: "1fr 100px 80px 32px",
+                  gap: 8,
                   alignItems: "center",
-                  justifyContent: "space-between",
-                  marginBottom: 10,
                 }}
               >
-                <label style={{ ...labelStyle, margin: 0 }}>
-                  {t("ingredientsLabel")}
-                </label>
-                <button
-                  type="button"
-                  onClick={addIngredient}
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 4,
-                    padding: "4px 10px",
-                    borderRadius: 6,
-                    border: "1px solid #1F2937",
-                    background: "transparent",
-                    color: "#9CA3AF",
-                    fontSize: 12,
-                    cursor: "pointer",
-                  }}
+                <select
+                  value={ing.itemId}
+                  onChange={(e) =>
+                    updateIngredient(idx, "itemId", e.target.value)
+                  }
+                  style={inputStyle}
                 >
-                  <Plus size={13} />
-                  {t("addIngredient")}
-                </button>
+                  <option value="">{t("ingredientItemPlaceholder")}</option>
+                  {items.map((item) => (
+                    <option key={item.id} value={item.id}>
+                      {item.name}
+                    </option>
+                  ))}
+                </select>
+                <input
+                  type="number"
+                  value={ing.qty}
+                  onChange={(e) =>
+                    updateIngredient(idx, "qty", e.target.value)
+                  }
+                  placeholder={t("ingredientQtyPlaceholder")}
+                  min={0}
+                  step="0.001"
+                  style={inputStyle}
+                />
+                <input
+                  type="text"
+                  value={ing.unit}
+                  onChange={(e) =>
+                    updateIngredient(idx, "unit", e.target.value)
+                  }
+                  placeholder={t("ingredientUnitPlaceholder")}
+                  style={inputStyle}
+                />
+                <Btn
+                  variant="dangerOutline"
+                  size="xs"
+                  icon={<Trash2 size={13} />}
+                  onClick={() => removeIngredient(idx)}
+                  disabled={ingredients.length === 1}
+                  title={t("removeIngredientTitle")}
+                >
+                  {null}
+                </Btn>
               </div>
-
-              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                {ingredients.map((ing, idx) => (
-                  <div
-                    key={idx}
-                    style={{
-                      display: "grid",
-                      gridTemplateColumns: "1fr 100px 80px 32px",
-                      gap: 8,
-                      alignItems: "center",
-                    }}
-                  >
-                    <select
-                      value={ing.itemId}
-                      onChange={(e) =>
-                        updateIngredient(idx, "itemId", e.target.value)
-                      }
-                      style={inputStyle}
-                    >
-                      <option value="">{t("ingredientItemPlaceholder")}</option>
-                      {items.map((item) => (
-                        <option key={item.id} value={item.id}>
-                          {item.name}
-                        </option>
-                      ))}
-                    </select>
-                    <input
-                      type="number"
-                      value={ing.qty}
-                      onChange={(e) =>
-                        updateIngredient(idx, "qty", e.target.value)
-                      }
-                      placeholder={t("ingredientQtyPlaceholder")}
-                      min={0}
-                      step="0.001"
-                      style={inputStyle}
-                    />
-                    <input
-                      type="text"
-                      value={ing.unit}
-                      onChange={(e) =>
-                        updateIngredient(idx, "unit", e.target.value)
-                      }
-                      placeholder={t("ingredientUnitPlaceholder")}
-                      style={inputStyle}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => removeIngredient(idx)}
-                      disabled={ingredients.length === 1}
-                      title={t("removeIngredientTitle")}
-                      style={{
-                        background: "transparent",
-                        border: "1px solid #1F2937",
-                        borderRadius: 6,
-                        color:
-                          ingredients.length === 1 ? "#374151" : "#F87171",
-                        cursor:
-                          ingredients.length === 1 ? "not-allowed" : "pointer",
-                        padding: "5px",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                      }}
-                    >
-                      <Trash2 size={13} />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Error */}
-          {error && (
-            <div
-              style={{
-                marginBottom: 16,
-                padding: "10px 14px",
-                background: "#1F1010",
-                border: "1px solid #7F1D1D",
-                borderRadius: 8,
-                color: "#F87171",
-                fontSize: 13,
-              }}
-            >
-              {error}
-            </div>
-          )}
-
-          {/* Actions */}
-          <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
-            <button
-              type="button"
-              onClick={onClose}
-              style={{
-                padding: "8px 18px",
-                borderRadius: 8,
-                border: "1px solid #1F2937",
-                background: "transparent",
-                color: "#9CA3AF",
-                fontSize: 13,
-                cursor: "pointer",
-              }}
-            >
-              {t("cancel")}
-            </button>
-            <button
-              type="submit"
-              disabled={isPending}
-              style={{
-                padding: "8px 18px",
-                borderRadius: 8,
-                border: "none",
-                background: isPending ? "#1D3461" : "#3B82F6",
-                color: "#fff",
-                fontSize: 13,
-                fontWeight: 600,
-                cursor: isPending ? "not-allowed" : "pointer",
-              }}
-            >
-              {isPending ? t("saving") : isEdit ? t("save") : t("create")}
-            </button>
+            ))}
           </div>
-        </form>
+        </div>
+      )}
+
+      {/* Error */}
+      {error && (
+        <div
+          style={{
+            marginBottom: 16,
+            padding: "10px 14px",
+            background: "#1F1010",
+            border: "1px solid #7F1D1D",
+            borderRadius: 8,
+            color: "#F87171",
+            fontSize: 13,
+          }}
+        >
+          {error}
+        </div>
+      )}
+
+      {/* Actions */}
+      <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
+        <Btn variant="ghost" type="button" onClick={onClose}>
+          {t("cancel")}
+        </Btn>
+        <Btn type="submit" disabled={isPending}>
+          {isPending ? t("saving") : isEdit ? t("save") : t("create")}
+        </Btn>
       </div>
-    </div>
+    </form>
+    </Modal>
   );
 }
-
-// ── Styles ─────────────────────────────────────────────────────────────────────
-
-const labelStyle: React.CSSProperties = {
-  display: "block",
-  color: "#9CA3AF",
-  fontSize: 12,
-  fontWeight: 500,
-  marginBottom: 6,
-};
-
-const inputStyle: React.CSSProperties = {
-  width: "100%",
-  padding: "8px 10px",
-  background: "#0D1117",
-  border: "1px solid #374151",
-  borderRadius: 6,
-  color: "#E8EDF5",
-  fontSize: 13,
-  outline: "none",
-  boxSizing: "border-box",
-};

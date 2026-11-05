@@ -40,6 +40,9 @@ public sealed class PosTransaction
     /// </summary>
     public Guid? ClientTransactionId { get; init; }
 
+    public bool PricingArchiveRequired { get; init; }
+    public Erp.PosPricingSnapshot? PricingSnapshot { get; set; }
+
     public ICollection<PosTransactionItem> Items { get; init; } = new List<PosTransactionItem>();
 
     // Navigation properties

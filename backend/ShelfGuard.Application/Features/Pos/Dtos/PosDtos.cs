@@ -43,7 +43,16 @@ public sealed record CreateSaleRequest(
     // register at OccurredAt. On POST /sales a CashierId different from the token is a 400 and
     // OccurredAt is ignored.
     Guid? CashierId = null,
-    DateTime? OccurredAt = null);
+    DateTime? OccurredAt = null,
+    decimal? ExpectedTotal = null,
+    // pr1: authenticated whole promotion set, paired with the renderer-independent local basket.
+    // Omitted on pre-existing outbox rows; those retain the legacy protocol.
+    string? PromotionSnapshot = null,
+    IReadOnlyList<ExpectedPriceSegment>? ExpectedPriceSegments = null,
+    string? LoyaltySnapshot = null);
+
+public sealed record ExpectedPriceSegment(int Line, decimal Quantity, decimal UnitPrice,
+    Guid? RuleId = null, Guid? VersionId = null);
 
 /// <summary>Offline sync: queued sales (max 100) submitted together; each item is idempotent.</summary>
 public sealed record BatchSalesRequest(IReadOnlyList<CreateSaleRequest> Sales);
@@ -60,7 +69,8 @@ public sealed record BatchSalesResultDto(IReadOnlyList<BatchSaleItemResultDto> R
 
 public sealed record SaleItemRequest(
     string Barcode,
-    decimal Quantity);
+    decimal Quantity,
+    string? PriceSnapshot = null);
 
 // ── Response DTOs ──────────────────────────────────────────────────────────
 
@@ -120,7 +130,10 @@ public sealed record SaleItemDto(
     decimal Total,
     // Promotion rule that priced this (sub-)line, with its receipt label; null otherwise.
     Guid? PromotionRuleId = null,
-    string? PromotionLabel = null);
+    string? PromotionLabel = null,
+    decimal? VatRate = null,
+    decimal? VatAmount = null,
+    decimal? TaxableAmount = null);
 
 public sealed record SalesListDto(
     IReadOnlyList<SaleDto> Items,

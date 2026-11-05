@@ -2,7 +2,9 @@
 
 import { useState } from "react";
 import { useTranslations } from "next-intl";
-import { X } from "lucide-react";
+import { Modal } from "@/components/ui/Modal";
+import { Btn } from "@/components/ui/Btn";
+import { inputStyle, labelStyle } from "@/components/ui/fieldStyles";
 import { useAddCabinetItem, useUpdateCabinetItem } from "../hooks/useSupplierCabinet";
 import { useItemCategories } from "@/features/marketplace/hooks/useMarketplace";
 import { ItemCategoryFields, findMissingRequiredField } from "@/features/marketplace/components/ItemCategoryFields";
@@ -25,26 +27,6 @@ interface Props {
   item?: CabinetItem;
   onClose: () => void;
 }
-
-const INPUT_STYLE: React.CSSProperties = {
-  width: "100%",
-  padding: "9px 12px",
-  background: "#0D1117",
-  border: "1px solid #1F2937",
-  borderRadius: 8,
-  color: "#E8EDF5",
-  fontSize: 13,
-  outline: "none",
-  boxSizing: "border-box",
-};
-
-const LABEL_STYLE: React.CSSProperties = {
-  color: "#9CA3AF",
-  fontSize: 12,
-  fontWeight: 500,
-  marginBottom: 6,
-  display: "block",
-};
 
 export function CabinetItemModal({ item, onClose }: Props) {
   const t = useTranslations("Dashboard.supplierCabinet.itemModal");
@@ -179,56 +161,10 @@ export function CabinetItemModal({ item, onClose }: Props) {
   }
 
   return (
-    <div
-      style={{
-        position: "fixed",
-        inset: 0,
-        background: "rgba(0,0,0,0.6)",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        zIndex: 1000,
-      }}
-      onClick={(e) => {
-        if (e.target === e.currentTarget) onClose();
-      }}
-    >
-      <div
-        style={{
-          background: "#111827",
-          border: "1px solid #1F2937",
-          borderRadius: 12,
-          padding: 28,
-          width: "100%",
-          maxWidth: 560,
-          maxHeight: "90vh",
-          overflowY: "auto",
-          display: "flex",
-          flexDirection: "column",
-          gap: 20,
-        }}
-      >
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-          <h2 style={{ color: "#E8EDF5", fontSize: 17, fontWeight: 700, margin: 0 }}>
-            {isEdit ? t("titleEdit") : t("titleAdd")}
-          </h2>
-          <button
-            onClick={onClose}
-            style={{
-              background: "transparent",
-              border: "none",
-              color: "#6B7280",
-              cursor: "pointer",
-              padding: 4,
-            }}
-          >
-            <X size={18} />
-          </button>
-        </div>
-
+    <Modal title={isEdit ? t("titleEdit") : t("titleAdd")} onClose={onClose} width={560}>
         <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 14 }}>
           <div>
-            <label style={LABEL_STYLE}>
+            <label style={labelStyle}>
               {t("nameLabel")} <span style={{ color: "#F87171" }}>*</span>
             </label>
             <input
@@ -236,7 +172,7 @@ export function CabinetItemModal({ item, onClose }: Props) {
               value={customName}
               onChange={(e) => setCustomName(e.target.value)}
               placeholder={t("namePlaceholder")}
-              style={INPUT_STYLE}
+              style={inputStyle}
               required
             />
           </div>
@@ -249,7 +185,7 @@ export function CabinetItemModal({ item, onClose }: Props) {
           />
 
           <div>
-            <label style={LABEL_STYLE} htmlFor="cabinetItemPlatformCategory">
+            <label style={labelStyle} htmlFor="cabinetItemPlatformCategory">
               {t("platformCategoryLabel")}
             </label>
             <CategoryTypeahead
@@ -265,7 +201,7 @@ export function CabinetItemModal({ item, onClose }: Props) {
 
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
             <div>
-              <label style={LABEL_STYLE}>{t("priceLabel")}</label>
+              <label style={labelStyle}>{t("priceLabel")}</label>
               <input
                 type="number"
                 min="0"
@@ -273,11 +209,11 @@ export function CabinetItemModal({ item, onClose }: Props) {
                 value={priceRaw}
                 onChange={(e) => setPriceRaw(e.target.value)}
                 placeholder="0.00"
-                style={INPUT_STYLE}
+                style={inputStyle}
               />
             </div>
             <div>
-              <label style={LABEL_STYLE}>{t("minQtyLabel")}</label>
+              <label style={labelStyle}>{t("minQtyLabel")}</label>
               <input
                 type="number"
                 min="1"
@@ -285,19 +221,19 @@ export function CabinetItemModal({ item, onClose }: Props) {
                 value={minQtyRaw}
                 onChange={(e) => setMinQtyRaw(e.target.value)}
                 placeholder="1"
-                style={INPUT_STYLE}
+                style={inputStyle}
               />
             </div>
           </div>
 
           <div>
-            <label style={LABEL_STYLE}>{t("unitLabel")}</label>
+            <label style={labelStyle}>{t("unitLabel")}</label>
             <input
               type="text"
               value={unit}
               onChange={(e) => setUnit(e.target.value)}
               placeholder={t("unitPlaceholder")}
-              style={INPUT_STYLE}
+              style={inputStyle}
             />
           </div>
 
@@ -322,41 +258,14 @@ export function CabinetItemModal({ item, onClose }: Props) {
           {error && <div style={{ color: "#F87171", fontSize: 13 }}>{error}</div>}
 
           <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 4 }}>
-            <button
-              type="button"
-              onClick={onClose}
-              style={{
-                padding: "9px 20px",
-                borderRadius: 8,
-                border: "1px solid #1F2937",
-                background: "transparent",
-                color: "#6B7280",
-                fontSize: 13,
-                cursor: "pointer",
-              }}
-            >
+            <Btn variant="ghost" onClick={onClose}>
               {t("cancel")}
-            </button>
-            <button
-              type="submit"
-              disabled={isPending}
-              style={{
-                padding: "9px 20px",
-                borderRadius: 8,
-                border: "none",
-                background: "#1D4ED8",
-                color: "#E8EDF5",
-                fontSize: 13,
-                fontWeight: 600,
-                cursor: isPending ? "not-allowed" : "pointer",
-                opacity: isPending ? 0.7 : 1,
-              }}
-            >
+            </Btn>
+            <Btn type="submit" disabled={isPending}>
               {isPending ? t("saving") : isEdit ? t("save") : t("add")}
-            </button>
+            </Btn>
           </div>
         </form>
-      </div>
-    </div>
+    </Modal>
   );
 }

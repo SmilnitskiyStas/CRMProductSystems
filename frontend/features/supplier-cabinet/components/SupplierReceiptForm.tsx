@@ -5,6 +5,9 @@ import { useTranslations, useLocale } from "next-intl";
 import { toast } from "sonner";
 import { Plus, X } from "lucide-react";
 import { Btn } from "@/components/ui/Btn";
+import { Modal } from "@/components/ui/Modal";
+import { StatusPill } from "@/components/ui/StatusPill";
+import { inputStyle, labelStyle } from "@/components/ui/fieldStyles";
 import { useCabinetItems } from "../hooks/useSupplierCabinet";
 import {
   useSupplierReceipt,
@@ -37,18 +40,6 @@ interface PendingRow {
   rowError?: string;
 }
 
-const inputStyle: React.CSSProperties = {
-  width: "100%",
-  background: "#0D1117",
-  border: "1px solid #374151",
-  borderRadius: 8,
-  padding: "9px 12px",
-  color: "#E8EDF5",
-  fontSize: 13,
-  outline: "none",
-  boxSizing: "border-box",
-};
-
 const compactInputStyle: React.CSSProperties = {
   width: "100%",
   background: "#0A0F1A",
@@ -59,14 +50,6 @@ const compactInputStyle: React.CSSProperties = {
   padding: "6px 8px",
   outline: "none",
   boxSizing: "border-box",
-};
-
-const labelStyle: React.CSSProperties = {
-  display: "block",
-  color: "#9CA3AF",
-  fontSize: 12,
-  fontWeight: 500,
-  marginBottom: 6,
 };
 
 const miniLabelStyle: React.CSSProperties = {
@@ -82,24 +65,10 @@ const STATUS_COLOR: Record<SupplierStockReceiptStatus, { bg: string; text: strin
   cancelled: { bg: "#2D0F0F", text: "#F87171" },
 };
 
-function StatusPill({ status }: { status: SupplierStockReceiptStatus }) {
+function ReceiptStatusPill({ status }: { status: SupplierStockReceiptStatus }) {
   const t = useTranslations("Dashboard.supplierCabinet.receiptsList.status");
   const c = STATUS_COLOR[status] ?? STATUS_COLOR.draft;
-  return (
-    <span
-      style={{
-        padding: "3px 9px",
-        borderRadius: 20,
-        background: c.bg,
-        color: c.text,
-        fontSize: 11,
-        fontWeight: 600,
-        whiteSpace: "nowrap",
-      }}
-    >
-      {t.has(status) ? t(status) : status}
-    </span>
-  );
+  return <StatusPill bg={c.bg} text={c.text}>{t.has(status) ? t(status) : status}</StatusPill>;
 }
 
 export function SupplierReceiptForm({ warehouseId, warehouseName, receiptId = null, onClose }: Props) {
@@ -270,61 +239,13 @@ export function SupplierReceiptForm({ warehouseId, warehouseName, receiptId = nu
   const num = (v: number) => v.toLocaleString(intlLocale, { maximumFractionDigits: 3 });
 
   return (
-    <>
-      <div
-        onClick={onClose}
-        style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", zIndex: 300, backdropFilter: "blur(2px)" }}
-      />
-      <div
-        style={{
-          position: "fixed",
-          top: "50%",
-          left: "50%",
-          transform: "translate(-50%, -50%)",
-          width: "min(780px, 96vw)",
-          maxHeight: "90vh",
-          overflowY: "auto",
-          background: "#0D1117",
-          border: "1px solid #1F2937",
-          borderRadius: 14,
-          zIndex: 301,
-        }}
-      >
-        <div
-          style={{
-            position: "sticky",
-            top: 0,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            padding: "18px 22px",
-            borderBottom: "1px solid #1F2937",
-            background: "#0D1117",
-          }}
-        >
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <h2 style={{ color: "#E8EDF5", fontSize: 15, fontWeight: 700, margin: 0 }}>
-              {draftId ? t("editTitle") : t("createTitle")}
-            </h2>
-            {receipt && <StatusPill status={receipt.status} />}
-          </div>
-          <button
-            onClick={onClose}
-            style={{
-              background: "transparent",
-              border: "1px solid #1F2937",
-              borderRadius: 8,
-              padding: "5px 9px",
-              color: "#4B5563",
-              fontSize: 16,
-              cursor: "pointer",
-            }}
-          >
-            ✕
-          </button>
-        </div>
-
-        <div style={{ padding: 22, display: "flex", flexDirection: "column", gap: 16 }}>
+    <Modal title={draftId ? t("editTitle") : t("createTitle")} onClose={onClose} width={780}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+          {receipt && (
+            <div>
+              <ReceiptStatusPill status={receipt.status} />
+            </div>
+          )}
           <div style={{ color: "#6B7280", fontSize: 12 }}>
             {t("warehouseLabel", { name: receipt?.warehouseName || warehouseName })}
           </div>
@@ -540,21 +461,9 @@ export function SupplierReceiptForm({ warehouseId, warehouseName, receiptId = nu
                               {row.supplierItemName}
                             </span>
                             <div style={{ display: "flex", gap: 6 }}>
-                              <button
-                                type="button"
-                                onClick={() => addPendingRow(row.supplierItemId, row.supplierItemName)}
-                                style={{
-                                  background: "transparent",
-                                  border: "1px solid #1F2937",
-                                  borderRadius: 6,
-                                  color: "#6B7280",
-                                  fontSize: 11,
-                                  cursor: "pointer",
-                                  padding: "3px 8px",
-                                }}
-                              >
+                              <Btn variant="ghost" size="xs" onClick={() => addPendingRow(row.supplierItemId, row.supplierItemName)}>
                                 {t("addBatchButton")}
-                              </button>
+                              </Btn>
                               <button
                                 type="button"
                                 onClick={() => dropPendingRow(row.rowId)}
@@ -675,7 +584,6 @@ export function SupplierReceiptForm({ warehouseId, warehouseName, receiptId = nu
             </>
           )}
         </div>
-      </div>
-    </>
+    </Modal>
   );
 }

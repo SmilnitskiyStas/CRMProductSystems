@@ -90,6 +90,7 @@ public sealed class MobileConfigPublishedReadService : IMobileConfigPublishedRea
         var features = document["features"] as JsonObject ?? new JsonObject();
         features["loyalty"] = await _loyalty.IsEnabledAsync(tenantId, ct);
         document["features"] = features;
+        ConsumerNavigationAvailability.Apply(document);
         var documentJson = document.ToJsonString();
         var etag = ComputeETag(documentJson);
 

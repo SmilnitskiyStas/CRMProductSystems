@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { AuthLogo } from "./AuthLogo";
 import { ForgotPasswordForm } from "./ForgotPasswordForm";
+import { ResetPasswordForm } from "./ResetPasswordForm";
 
 const linkBtnStyle: React.CSSProperties = {
   background: "none",
@@ -21,7 +22,7 @@ const linkBtnStyle: React.CSSProperties = {
  * Visual chrome for `/forgot-password` — mirrors LoginCard.tsx's card/footer shell so both
  * public auth surfaces (login, forgot-password) look identical.
  */
-export function ForgotPasswordCard() {
+export function ForgotPasswordCard({ mode = "request" }: { mode?: "request" | "confirm" }) {
   const t = useTranslations("Dashboard.auth");
 
   return (
@@ -46,14 +47,14 @@ export function ForgotPasswordCard() {
               fontFamily: '"Inter", sans-serif',
             }}
           >
-            {t("forgotPasswordTitle")}
+            {t(mode === "confirm" ? "resetPasswordTitle" : "forgotPasswordTitle")}
           </p>
         </div>
 
         {/* Divider */}
         <div style={{ borderTop: "1px solid #2A3347", marginBottom: 24 }} />
 
-        <ForgotPasswordForm />
+        {mode === "confirm" ? <ResetPasswordForm /> : <ForgotPasswordForm />}
 
         <div style={{ marginTop: 20, textAlign: "center" }}>
           <Link href="/login" style={linkBtnStyle}>

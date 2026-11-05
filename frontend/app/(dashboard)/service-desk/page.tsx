@@ -15,6 +15,9 @@ import { ProviderSupportTab } from "@/features/provider/components/ProviderSuppo
 import { ChatSupportTab } from "@/features/provider/components/ChatSupportTab";
 import { ClientChatPanel } from "@/features/chat/components/ClientChatPanel";
 import { Btn } from "@/components/ui/Btn";
+import { PageContainer } from "@/components/ui/PageContainer";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { Tabs } from "@/components/ui/Tabs";
 
 type TenantTab = "all" | "my" | "chat";
 type ProviderTab = "tickets" | "chat";
@@ -32,127 +35,87 @@ export default function ServiceDeskPage() {
   const [selectedTicket, setSelectedTicket] = useState<TicketDto | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
 
-  const tabStyle = (active: boolean) => ({
-    background: "transparent",
-    border: "none",
-    borderBottom: `2px solid ${active ? "#3B82F6" : "transparent"}`,
-    color: active ? "#93C5FD" : "#4B5563",
-    fontSize: 13,
-    fontWeight: active ? 600 : 400,
-    padding: "10px 16px",
-    cursor: "pointer",
-    transition: "color 0.15s, border-color 0.15s",
-    display: "flex",
-    alignItems: "center",
-    gap: 6,
-  });
-
   // ── Provider view ────────────────────────────────────────────────────────────
   if (isProvider) {
     return (
-      <div style={{ padding: "28px 32px" }}>
-        <div style={{ marginBottom: 24 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <Ticket size={22} style={{ color: "#3B82F6" }} />
-            <h1 style={{ color: "#E8EDF5", fontSize: 22, fontWeight: 700, margin: 0 }}>
+      <PageContainer>
+        <PageHeader
+          title={
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 10 }}>
+              <Ticket size={22} style={{ color: "#3B82F6" }} />
               {t("providerTitle")}
-            </h1>
-          </div>
-          <p style={{ color: "#4B5563", fontSize: 13, marginTop: 6, marginBottom: 0 }}>
-            {t("providerSubtitle")}
-          </p>
-        </div>
+            </span>
+          }
+          subtitle={t("providerSubtitle")}
+        />
 
         {/* Provider tabs */}
-        <div
-          style={{
-            borderBottom: "1px solid #1F2937",
-            marginBottom: 20,
-            display: "flex",
-            gap: 4,
-          }}
-        >
-          <button
-            style={tabStyle(providerTab === "tickets")}
-            onClick={() => setProviderTab("tickets")}
-          >
-            <Ticket size={14} />
-            {t("tabTickets")}
-          </button>
-          <button
-            style={tabStyle(providerTab === "chat")}
-            onClick={() => setProviderTab("chat")}
-          >
-            <MessageCircle size={14} />
-            {t("tabChat")}
-          </button>
-        </div>
+        <Tabs<ProviderTab>
+          value={providerTab}
+          onChange={setProviderTab}
+          items={[
+            {
+              key: "tickets",
+              label: (
+                <>
+                  <Ticket size={14} />
+                  {t("tabTickets")}
+                </>
+              ),
+            },
+            {
+              key: "chat",
+              label: (
+                <>
+                  <MessageCircle size={14} />
+                  {t("tabChat")}
+                </>
+              ),
+            },
+          ]}
+        />
 
         {providerTab === "tickets" ? <ProviderSupportTab /> : <ChatSupportTab />}
-      </div>
+      </PageContainer>
     );
   }
 
   // ── Tenant view ──────────────────────────────────────────────────────────────
   return (
-    <div style={{ padding: "28px 32px", minHeight: "100vh" }}>
-      {/* Header */}
-      <div
-        style={{
-          display: "flex",
-          alignItems: "flex-start",
-          justifyContent: "space-between",
-          marginBottom: 24,
-        }}
-      >
-        <div>
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+    <PageContainer>
+      <PageHeader
+        title={
+          <span style={{ display: "inline-flex", alignItems: "center", gap: 10 }}>
             <Ticket size={22} style={{ color: "#3B82F6" }} />
-            <h1 style={{ color: "#E8EDF5", fontSize: 22, fontWeight: 700, margin: 0 }}>
-              {t("tenantTitle")}
-            </h1>
-          </div>
-          <p style={{ color: "#4B5563", fontSize: 13, marginTop: 6, marginBottom: 0 }}>
-            {t("tenantSubtitle")}
-          </p>
-        </div>
-
-        <Btn icon={<Plus size={15} />} onClick={() => setCreateOpen(true)}>
-          {t("newTicketButton")}
-        </Btn>
-      </div>
+            {t("tenantTitle")}
+          </span>
+        }
+        subtitle={t("tenantSubtitle")}
+        actions={
+          <Btn icon={<Plus size={15} />} onClick={() => setCreateOpen(true)}>
+            {t("newTicketButton")}
+          </Btn>
+        }
+      />
 
       {/* Tabs */}
-      <div
-        style={{
-          borderBottom: "1px solid #1F2937",
-          marginBottom: 20,
-          display: "flex",
-          gap: 4,
-        }}
-      >
-        {isManager && (
-          <button
-            style={tabStyle(tenantTab === "all")}
-            onClick={() => setTenantTab("all")}
-          >
-            {t("tabAllTickets")}
-          </button>
-        )}
-        <button
-          style={tabStyle(tenantTab === "my")}
-          onClick={() => setTenantTab("my")}
-        >
-          {t("tabMyTickets")}
-        </button>
-        <button
-          style={tabStyle(tenantTab === "chat")}
-          onClick={() => setTenantTab("chat")}
-        >
-          <MessageCircle size={14} />
-          {t("tabChat")}
-        </button>
-      </div>
+      <Tabs<TenantTab>
+        value={tenantTab}
+        onChange={setTenantTab}
+        items={[
+          ...(isManager ? [{ key: "all" as const, label: t("tabAllTickets") }] : []),
+          { key: "my" as const, label: t("tabMyTickets") },
+          {
+            key: "chat" as const,
+            label: (
+              <>
+                <MessageCircle size={14} />
+                {t("tabChat")}
+              </>
+            ),
+          },
+        ]}
+      />
 
       {/* Content */}
       {tenantTab === "chat" ? (
@@ -182,6 +145,6 @@ export default function ServiceDeskPage() {
       {createOpen && (
         <CreateTicketForm onClose={() => setCreateOpen(false)} />
       )}
-    </div>
+    </PageContainer>
   );
 }

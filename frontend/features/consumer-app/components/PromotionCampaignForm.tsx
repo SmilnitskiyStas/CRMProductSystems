@@ -1,4 +1,5 @@
 "use client";
+import { inputStyle, labelStyle, textareaStyle } from "@/components/ui/fieldStyles";
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -13,9 +14,6 @@ import { useLoyaltyTiers } from "../hooks/useLoyaltyTiers";
 import { usePromotionCampaign, useSavePromotionCampaign, useUploadPromotionCampaignImage } from "../hooks/usePromotionCampaigns";
 import type { PromotionAudienceType } from "../types";
 
-const inputStyle: React.CSSProperties = { width: "100%", boxSizing: "border-box", background: "#0D1117", border: "1px solid #374151", borderRadius: 8, padding: "9px 12px", color: "#E8EDF5", fontSize: 13, outline: "none" };
-const textareaStyle: React.CSSProperties = { ...inputStyle, resize: "vertical", fontFamily: "inherit" };
-const labelStyle: React.CSSProperties = { display: "block", color: "#9CA3AF", fontSize: 12, fontWeight: 500, marginBottom: 6 };
 const hintStyle: React.CSSProperties = { color: "#4B5563", fontSize: 11, marginTop: 4 };
 const sectionStyle: React.CSSProperties = { width: "100%", boxSizing: "border-box", background: "#10151D", border: "1px solid #202938", borderRadius: 10, padding: 16, display: "flex", flexDirection: "column", gap: 14 };
 const sectionTitleStyle: React.CSSProperties = { color: "#E8EDF5", fontSize: 13, fontWeight: 700, margin: 0 };
@@ -105,7 +103,7 @@ export function PromotionCampaignForm({ campaignId }: { campaignId: string | nul
           <div><label style={labelStyle}>Фото / банер акції</label><div style={{ display: "flex", alignItems: "center", gap: 12 }}>
             {imagePreview && <div role="img" aria-label="Фото акції" style={{ width: 60, height: 60, flexShrink: 0, backgroundImage: `url("${imagePreview}")`, backgroundSize: "cover", backgroundPosition: "center", borderRadius: 8, border: "1px solid #1F2937" }} />}
             <label style={{ padding: "8px 14px", borderRadius: 8, cursor: "pointer", background: "#111827", border: "1px solid #374151", color: "#9CA3AF", fontSize: 12 }}>{imagePreview ? "Замінити" : "Завантажити"}<input type="file" accept="image/jpeg,image/png,image/webp" style={{ display: "none" }} onChange={(e) => { const file = e.target.files?.[0]; if (file) { setImage(file); setImagePreview(URL.createObjectURL(file)); } }} /></label>
-            {imagePreview && <button type="button" onClick={() => { setImage(null); setImagePreview(null); }} style={{ background: "none", border: 0, color: "#EF4444", cursor: "pointer", fontSize: 12 }}>Видалити</button>}
+            {imagePreview && <Btn type="button" variant="dangerOutline" size="xs" onClick={() => { setImage(null); setImagePreview(null); }}>Видалити</Btn>}
           </div><p style={hintStyle}>JPG, PNG або WEBP, до 5 МБ.</p></div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}><div><label style={labelStyle}>Колір фону</label><input type="color" style={{ ...inputStyle, height: 38, padding: 4, cursor: "pointer" }} value={backgroundColor} onChange={(e) => setBackgroundColor(e.target.value)} /></div><div><label style={labelStyle}>Акцентний колір</label><input type="color" style={{ ...inputStyle, height: 38, padding: 4, cursor: "pointer" }} value={accentColor} onChange={(e) => setAccentColor(e.target.value)} /></div></div>
         </section>

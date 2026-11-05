@@ -17,6 +17,7 @@ import {
   useSupportTicket,
 } from "../hooks/useCooperation";
 import { TicketStatusBadge } from "./CooperationBadges";
+import { inputStyle } from "@/components/ui/fieldStyles";
 
 interface Props {
   supplierId: string;
@@ -74,19 +75,6 @@ export function SupportTicketsPanel({ supplierId, supplierName, onClose }: Props
       onError: (err) => toast.error(err.message),
     });
   }
-
-  const inputStyle: React.CSSProperties = {
-    width: "100%",
-    boxSizing: "border-box",
-    background: "#1F2937",
-    border: "1px solid #374151",
-    borderRadius: 8,
-    color: "#E8EDF5",
-    fontSize: 13,
-    padding: "9px 12px",
-    outline: "none",
-    fontFamily: "inherit",
-  };
 
   return (
     <div

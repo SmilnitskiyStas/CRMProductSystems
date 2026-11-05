@@ -11,6 +11,8 @@ import {
   useItemCategories,
 } from "../hooks/useMarketplace";
 import type { SupplierProfileUpdateRequest, SupplierPlan } from "../types";
+import { Btn } from "@/components/ui/Btn";
+import { inputStyle, labelStyle } from "@/components/ui/fieldStyles";
 
 // ─── Main form ────────────────────────────────────────────────────────────────
 
@@ -40,29 +42,10 @@ export function SupplierProfileForm() {
     if (data) setForm(data);
   }, [data]);
 
-  const labelStyle: React.CSSProperties = {
-    color: "#9CA3AF",
-    fontSize: 12,
-    marginBottom: 6,
-    display: "block",
-  };
-
   const hintStyle: React.CSSProperties = {
     color: "#6B7280",
     fontSize: 11,
     margin: "-2px 0 6px",
-  };
-
-  const inputStyle: React.CSSProperties = {
-    width: "100%",
-    padding: "9px 12px",
-    background: "#0D1117",
-    border: "1px solid #1F2937",
-    borderRadius: 8,
-    color: "#E8EDF5",
-    fontSize: 13,
-    outline: "none",
-    boxSizing: "border-box",
   };
 
   const fieldStyle: React.CSSProperties = {
@@ -263,25 +246,14 @@ export function SupplierProfileForm() {
           {(["free", "premium"] as SupplierPlan[]).map((plan) => {
             const active = form.plan === plan;
             return (
-              <button
+              <Btn
                 key={plan}
-                type="button"
+                variant={active ? "primary" : "ghost"}
                 onClick={() => setForm({ ...form, plan })}
-                style={{
-                  flex: 1,
-                  padding: "10px 0",
-                  borderRadius: 8,
-                  border: `1px solid ${active ? "#3B82F6" : "#1F2937"}`,
-                  background: active ? "#1D3461" : "transparent",
-                  color: active ? "#93C5FD" : "#6B7280",
-                  fontSize: 13,
-                  fontWeight: active ? 600 : 400,
-                  cursor: "pointer",
-                  transition: "all 0.1s",
-                }}
+                style={{ flex: 1, justifyContent: "center", padding: "10px 0", fontWeight: active ? 600 : 400 }}
               >
                 {tPlan(plan)}
-              </button>
+              </Btn>
             );
           })}
         </div>
@@ -318,25 +290,9 @@ export function SupplierProfileForm() {
       )}
 
       {/* Save */}
-      <button
-        type="button"
-        onClick={handleSave}
-        disabled={isPending}
-        style={{
-          alignSelf: "flex-start",
-          padding: "10px 24px",
-          borderRadius: 8,
-          border: "none",
-          background: isPending ? "#1F2937" : "#1D4ED8",
-          color: isPending ? "#4B5563" : "#E8EDF5",
-          fontSize: 13,
-          fontWeight: 600,
-          cursor: isPending ? "not-allowed" : "pointer",
-          transition: "background 0.1s",
-        }}
-      >
+      <Btn onClick={handleSave} disabled={isPending} style={{ alignSelf: "flex-start", padding: "10px 24px" }}>
         {isPending ? t("saving") : t("save")}
-      </button>
+      </Btn>
     </div>
   );
 }

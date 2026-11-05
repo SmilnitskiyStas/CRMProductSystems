@@ -33,8 +33,6 @@ export default function ProductionOrdersPage() {
   }
 
   return (
-    <div style={{ padding: "28px 32px" }}>
-      <ProductionOrderTable />
-    </div>
+    <ProductionOrderTable />
   );
 }
