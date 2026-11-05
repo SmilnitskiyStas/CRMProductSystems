@@ -6,7 +6,7 @@ def out(a):return subprocess.check_output(a,text=True,stderr=subprocess.PIPE).st
 names=['shelfguard_'+x for x in ['api_core','api_consumer','api_provider','web','worker','gateway','postgres','redis','mosquitto']]
 rows=json.loads(out(['docker','inspect',*names]));(R/'before-private.json').write_text(json.dumps(rows))
 for c in rows:assert c['State']['Running'],c['Name']
-assert {c['Image'] for c in rows if c['Name'].startswith('/shelfguard_api_')}=={'sha256:06e4a8ecd5a8b1e8fac28750707859180e3cb3b20c62e31265aaf73d061e39ef'}
+assert {c['Image'] for c in rows if c['Name'].startswith('/shelfguard_api_')}=={'sha256:c2991e011b720ae879ea06deb943ba4d15b193713cdd216eea7dc29f2d085aba'}
 web=next(c for c in rows if c['Name']=='/shelfguard_web');env=dict(x.split('=',1)for x in web['Config']['Env'])
 # Only public build-time settings can leave the server.
 public={k:env[k] for k in ['NEXT_PUBLIC_API_URL','NEXT_PUBLIC_GA_ID'] if k in env}
