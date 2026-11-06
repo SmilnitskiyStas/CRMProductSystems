@@ -258,7 +258,10 @@ jobs:
     concurrency:
       group: shelfguard-production
       cancel-in-progress: false
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    # Автодеплой вимкнено: скрипти scripts/deploy/receipts-* прив'язані до одного релізу
+    # (receipts-20261102) і не придатні для нових релізів. Реліз виконується вручну за runbook
+    # до впровадження універсального пайплайну (docs/architecture/ADR-040).
+    if: ${{ false }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
