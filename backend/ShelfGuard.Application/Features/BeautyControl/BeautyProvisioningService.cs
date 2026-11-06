@@ -95,7 +95,14 @@ public sealed partial class BeautyProvisioningService(
         var data = result.Data!;
         var now = clock.GetUtcNow().UtcDateTime;
         var status = data.Status ?? "active";
-        var link = await Upsert(tenantId, data.TenantId, data.Slug ?? slug, status, now, ct);
+        var linkSlug = data.Slug ?? slug;
+        if (!IsValidRemote(linkSlug, status))
+        {
+            // The tenant already exists in Beauty (re-running create replays idempotently); never persist unvalidated values.
+            logger.LogWarning("Beauty create response rejected: invalid slug/status shape.");
+            return BeautyResult<BeautyTenantCreatedDto>.Fail(BeautyErrorKind.Unknown, "beauty_bad_response", result.HttpStatus);
+        }
+        var link = await Upsert(tenantId, data.TenantId, linkSlug, status, now, ct);
 
         await Audit(tenantId, actorUserId, result.Replayed ? "beauty.tenant.create_replayed" : "beauty.tenant.created",
             $"slug={link.BeautySlug}", ct);
@@ -117,6 +124,11 @@ public sealed partial class BeautyProvisioningService(
         if (!result.Ok) return BeautyResult<BeautyTenantDto>.Fail(result.Error, result.Code ?? "beauty_error", result.HttpStatus);
 
         var d = result.Data!;
+        if (!IsValidRemote(d.Slug, d.Status ?? link.BeautyStatus))
+        {
+            logger.LogWarning("Beauty get response rejected: invalid slug/status shape.");
+            return BeautyResult<BeautyTenantDto>.Fail(BeautyErrorKind.Unknown, "beauty_bad_response", result.HttpStatus);
+        }
         link.Sync(d.TenantId, d.Slug, d.Status ?? link.BeautyStatus, clock.GetUtcNow().UtcDateTime);
         await links.SaveChangesAsync(ct);
 
@@ -230,6 +242,10 @@ public sealed partial class BeautyProvisioningService(
             logger.LogError("Beauty audit write failed for {Action}: {ErrorType}", action, ex.GetType().Name);
         }
     }
+
+    /// <summary>Slug (null = keep current) must match SlugRegex; status must be in the allow-list.</summary>
+    internal static bool IsValidRemote(string? slug, string status) =>
+        (slug is null || SlugRegex().IsMatch(slug)) && status is "active" or "suspended";
 
     private static BeautyTenantDto NotLinked(Guid tenantId) =>
         new(false, tenantId, null, null, null, null, null, null, null, null, null, null, null);
