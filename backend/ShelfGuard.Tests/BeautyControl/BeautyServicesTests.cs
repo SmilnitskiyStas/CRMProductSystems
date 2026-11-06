@@ -129,9 +129,51 @@ public sealed class BeautyProvisioningServiceTests
 
     public BeautyProvisioningServiceTests()
     {
-        _tenants.GetByIdAsync(_tenantId, Arg.Any<CancellationToken>()).Returns(Tenant.Create("Acme", "acme"));
+        _tenants.GetByIdAsync(_tenantId, Arg.Any<CancellationToken>()).Returns(NewTenant("beauty", true));
+        _links.TryAddAsync(Arg.Any<BeautyTenantLink>(), Arg.Any<CancellationToken>()).Returns(true);
         _logs.LogAsync(Arg.Do<ActivityLog>(_logged.Add), Arg.Any<CancellationToken>()).Returns(Task.CompletedTask);
         _sut = new(_client, _links, _tenants, _logs, TimeProvider.System, NullLogger<BeautyProvisioningService>.Instance);
+    }
+
+    private static Tenant NewTenant(string businessType, bool active)
+    {
+        var t = Tenant.Create("Acme", "acme");
+        Assert.Null(t.UpdateBusinessType(businessType));
+        if (!active) t.Deactivate();
+        return t;
+    }
+
+    [Theory]
+    [InlineData("retail", true)]
+    [InlineData("beauty", false)]
+    public async Task Create_Rejects_NonBeauty_Or_Inactive_ShelfGuard_Tenant(string type, bool active)
+    {
+        _tenants.GetByIdAsync(_tenantId, Arg.Any<CancellationToken>()).Returns(NewTenant(type, active));
+
+        var result = await _sut.CreateAsync(
+            new(_tenantId, "Salon X", "salon-x", "o@x.test", null, null, null), Actor, null, CancellationToken.None);
+
+        Assert.False(result.Ok);
+        Assert.Equal(BeautyErrorKind.Validation, result.Error);
+        Assert.Equal("invalid_shelfguard_tenant", result.Code);
+        await _client.DidNotReceiveWithAnyArgs().CreateTenantAsync(default!, default);
+    }
+
+    [Fact]
+    public async Task Create_Concurrent_Link_Insert_Falls_Back_To_Sync()
+    {
+        var existing = BeautyTenantLink.Create(_tenantId, null, "salon-x", "active", DateTime.UtcNow);
+        _links.TryAddAsync(Arg.Any<BeautyTenantLink>(), Arg.Any<CancellationToken>()).Returns(false);
+        _links.GetByTenantIdAsync(_tenantId, Arg.Any<CancellationToken>()).Returns(existing);
+        _client.CreateTenantAsync(Arg.Any<BeautyCreateTenantCommand>(), Arg.Any<CancellationToken>())
+            .Returns(new BeautyResult<BeautyCreatedTenant>(new BeautyCreatedTenant(
+                Guid.NewGuid(), _tenantId.ToString(), "salon-x", "active", ["beauty_booking"], null, null), HttpStatus: 201));
+
+        var result = await _sut.CreateAsync(
+            new(_tenantId, "Salon X", "salon-x", "o@x.test", null, null, null), Actor, null, CancellationToken.None);
+
+        Assert.True(result.Ok);
+        await _links.Received(1).SaveChangesAsync(Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -156,7 +198,7 @@ public sealed class BeautyProvisioningServiceTests
         Assert.Equal(_tenantId, entry.TenantId);
         Assert.DoesNotContain("SECRET-TOKEN-VALUE", entry.Meta ?? "");
         Assert.DoesNotContain("invite", entry.Meta ?? "", StringComparison.OrdinalIgnoreCase);
-        await _links.Received(1).AddAsync(Arg.Any<BeautyTenantLink>(), Arg.Any<CancellationToken>());
+        await _links.Received(1).TryAddAsync(Arg.Any<BeautyTenantLink>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]

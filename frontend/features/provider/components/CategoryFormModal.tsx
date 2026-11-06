@@ -181,7 +181,7 @@ export function CategoryFormModal({ category, presetParentId, allCategories, onC
               padding: 10,
             }}
           >
-            {ALL_BUSINESS_TYPES.map((bt) => (
+            {ALL_BUSINESS_TYPES.filter((bt) => bt !== "beauty").map((bt) => (
               <label
                 key={bt}
                 style={{

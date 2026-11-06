@@ -11,6 +11,14 @@ public sealed class Tenant
     public string BusinessType { get; private set; } = "retail";
     public bool IsActive { get; private set; } = true;
 
+    /// <summary>Business type of Beauty CRM tenants (live in Beauty; ShelfGuard modules are always empty).</summary>
+    public const string BeautyBusinessType = "beauty";
+
+    public static bool IsBeautyType(string? businessType) =>
+        string.Equals(businessType?.Trim(), BeautyBusinessType, StringComparison.OrdinalIgnoreCase);
+
+    public bool IsBeauty => IsBeautyType(BusinessType);
+
     /// <summary>Consumer/admin-app branding logo (spec's minimal Tenant shape, TASK-527). Null = no logo uploaded yet.</summary>
     public string? LogoUrl { get; private set; }
 
@@ -94,7 +102,7 @@ public sealed class Tenant
     /// <summary>Sets the business type (provider-only, determines default module set).</summary>
     public string? UpdateBusinessType(string businessType)
     {
-        var valid = new[] { "retail", "auto_service", "warehouse", "restaurant", "production", "distribution", "pharmacy", "floristry", "supplier" };
+        var valid = new[] { "retail", "auto_service", "warehouse", "restaurant", "production", "distribution", "pharmacy", "floristry", "supplier", BeautyBusinessType };
         if (!valid.Contains(businessType, StringComparer.OrdinalIgnoreCase))
             return $"Unknown business type '{businessType}'. Valid: {string.Join(", ", valid)}.";
         BusinessType = businessType.ToLowerInvariant();
@@ -138,6 +146,8 @@ public sealed class Tenant
             // supplier tenant (reverses the 2026-09-02 default-off). BackfillSupplierModules
             // merges the two keys into existing supplier tenants.
             "supplier"     => ["marketplace_supplier", "supplier_inventory", "supplier_workforce"],
+            // Beauty tenants live in Beauty CRM; ShelfGuard modules are intentionally empty.
+            BeautyBusinessType => [],
             _              => ["inventory"],
         };
 

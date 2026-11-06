@@ -20,6 +20,9 @@ public sealed class ProviderService : IProviderService
     private readonly IUserRepository        _users;
     private readonly IPasswordHasher        _hasher;
 
+    private static readonly System.Text.RegularExpressions.Regex BeautySlugRegex =
+        new("^[a-z0-9][a-z0-9-]{0,62}$", System.Text.RegularExpressions.RegexOptions.CultureInvariant);
+
     public ProviderService(
         ITenantRepository tenants,
         IActivityLogRepository logs,
@@ -99,6 +102,12 @@ public sealed class ProviderService : IProviderService
             return (null, "Slug is required.");
 
         var slug = request.Slug.ToLowerInvariant().Trim();
+        if (Tenant.IsBeautyType(request.BusinessType))
+        {
+            // Beauty slug/name end up in Beauty CRM (same rules as BeautyProvisioningService).
+            if (!BeautySlugRegex.IsMatch(slug)) return (null, "Invalid slug for a beauty tenant: use a-z, 0-9 and '-' (max 63 chars, must start with a letter or digit).");
+            if (request.Name.Trim().Length > 150) return (null, "Name must be at most 150 characters for a beauty tenant.");
+        }
         if (await _tenants.SlugExistsAsync(slug, ct))
             return (null, $"Slug '{slug}' is already taken.");
 
@@ -113,12 +122,17 @@ public sealed class ProviderService : IProviderService
         // TASK-665: a supplier tenant's primary marketplace category is fixed at creation time.
         // Validate it here (only for supplier tenants; ignored for every other business type).
         var isSupplierTenant = SupplierOnboarding.IsSupplierBusinessType(tenant.BusinessType);
+        var isBeautyTenant = tenant.IsBeauty;
         var primaryCategory = isSupplierTenant ? request.SupplierCategory?.Trim() : null;
         if (isSupplierTenant && !string.IsNullOrEmpty(primaryCategory) &&
             SupplierItemCategories.Find(primaryCategory) is null)
             return (null, $"Unknown supplier category: '{primaryCategory}'.");
 
-        var modules = request.Modules ?? [.. Tenant.DefaultModulesForBusinessType(request.BusinessType)];
+        // Beauty tenants never get ShelfGuard modules (even if the request lists some).
+        // For other types, an explicit empty list is kept as-is; only null falls back to defaults.
+        var modules = isBeautyTenant
+            ? []
+            : request.Modules ?? [.. Tenant.DefaultModulesForBusinessType(request.BusinessType)];
         var modError = tenant.UpdateModules(modules);
         if (modError is not null) return (null, modError);
 
@@ -166,6 +180,10 @@ public sealed class ProviderService : IProviderService
     {
         var tenant = await _tenants.GetByIdAsync(tenantId, ct);
         if (tenant is null) return "Tenant not found.";
+
+        // Beauty tenants have no ShelfGuard modules: only an empty list is accepted.
+        if (tenant.IsBeauty && modules.Length > 0)
+            return "Beauty tenants cannot have ShelfGuard modules.";
 
         var error = tenant.UpdateModules(modules);
         if (error is not null) return error;
@@ -235,6 +253,8 @@ public sealed class ProviderService : IProviderService
         var tenant = await _tenants.GetByIdAsync(targetTenantId, ct);
         if (tenant is null) return (null, "Tenant not found.");
         if (!tenant.IsActive)  return (null, "Tenant is deactivated.");
+        if (tenant.IsBeauty)
+            return (null, "Impersonation is not available for beauty tenants.");
 
         // Generate a short-lived JWT scoped to the target tenant (enterprise_admin role).
         // This token includes an "impersonated=true" claim so audit logs can detect it.
@@ -335,6 +355,10 @@ public sealed class ProviderService : IProviderService
         var tenant = await _tenants.GetByIdAsync(tenantId, ct);
         if (tenant is null)
             return (null, "Tenant not found.");
+
+        // Beauty owners live only in Beauty CRM (invite flow); no ShelfGuard login/password.
+        if (tenant.IsBeauty)
+            return (null, "Users for beauty tenants are managed in Beauty CRM.");
 
         // BUG-014: an inactive tenant (e.g. the internal platform-marketplace system
         // tenant used by BUG-012) must never get a real login-capable user — it would

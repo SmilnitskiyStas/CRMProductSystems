@@ -81,8 +81,12 @@ public sealed partial class BeautyProvisioningService(
             if (modules.Count == 0 || modules.Any(m => m.Length > 64)) return Invalid<BeautyTenantCreatedDto>("unknown_module");
         }
 
-        if (await tenants.GetByIdAsync(tenantId, ct) is null)
+        var sgTenant = await tenants.GetByIdAsync(tenantId, ct);
+        if (sgTenant is null)
             return BeautyResult<BeautyTenantCreatedDto>.Fail(BeautyErrorKind.NotFound, "shelfguard_tenant_not_found");
+        // Only an active ShelfGuard tenant of business type beauty may be provisioned in Beauty.
+        if (!sgTenant.IsActive || !sgTenant.IsBeauty)
+            return Invalid<BeautyTenantCreatedDto>("invalid_shelfguard_tenant");
 
         var result = await beauty.CreateTenantAsync(
             new BeautyCreateTenantCommand(ExternalRef(tenantId), name, slug, modules, email!, ownerName, actor), ct);
@@ -91,7 +95,14 @@ public sealed partial class BeautyProvisioningService(
         var data = result.Data!;
         var now = clock.GetUtcNow().UtcDateTime;
         var status = data.Status ?? "active";
-        var link = await Upsert(tenantId, data.TenantId, data.Slug ?? slug, status, now, ct);
+        var linkSlug = data.Slug ?? slug;
+        if (!IsValidRemote(linkSlug, status))
+        {
+            // The tenant already exists in Beauty (re-running create replays idempotently); never persist unvalidated values.
+            logger.LogWarning("Beauty create response rejected: invalid slug/status shape.");
+            return BeautyResult<BeautyTenantCreatedDto>.Fail(BeautyErrorKind.Unknown, "beauty_bad_response", result.HttpStatus);
+        }
+        var link = await Upsert(tenantId, data.TenantId, linkSlug, status, now, ct);
 
         await Audit(tenantId, actorUserId, result.Replayed ? "beauty.tenant.create_replayed" : "beauty.tenant.created",
             $"slug={link.BeautySlug}", ct);
@@ -113,6 +124,11 @@ public sealed partial class BeautyProvisioningService(
         if (!result.Ok) return BeautyResult<BeautyTenantDto>.Fail(result.Error, result.Code ?? "beauty_error", result.HttpStatus);
 
         var d = result.Data!;
+        if (!IsValidRemote(d.Slug, d.Status ?? link.BeautyStatus))
+        {
+            logger.LogWarning("Beauty get response rejected: invalid slug/status shape.");
+            return BeautyResult<BeautyTenantDto>.Fail(BeautyErrorKind.Unknown, "beauty_bad_response", result.HttpStatus);
+        }
         link.Sync(d.TenantId, d.Slug, d.Status ?? link.BeautyStatus, clock.GetUtcNow().UtcDateTime);
         await links.SaveChangesAsync(ct);
 
@@ -194,9 +210,12 @@ public sealed partial class BeautyProvisioningService(
         if (link is null)
         {
             link = BeautyTenantLink.Create(tenantId, beautyTenantId, slug, status, now);
-            await links.AddAsync(link, ct);
+            // A parallel create may win the unique index: re-read the winner's row and sync it instead of a 500.
+            if (await links.TryAddAsync(link, ct)) return link;
+            link = await links.GetByTenantIdAsync(tenantId, ct)
+                   ?? throw new InvalidOperationException("Beauty link insert failed and no link exists.");
         }
-        else link.Sync(beautyTenantId, slug, status, now);
+        link.Sync(beautyTenantId, slug, status, now);
         await links.SaveChangesAsync(ct);
         return link;
     }
@@ -223,6 +242,10 @@ public sealed partial class BeautyProvisioningService(
             logger.LogError("Beauty audit write failed for {Action}: {ErrorType}", action, ex.GetType().Name);
         }
     }
+
+    /// <summary>Slug (null = keep current) must match SlugRegex; status must be in the allow-list.</summary>
+    internal static bool IsValidRemote(string? slug, string status) =>
+        (slug is null || SlugRegex().IsMatch(slug)) && status is "active" or "suspended";
 
     private static BeautyTenantDto NotLinked(Guid tenantId) =>
         new(false, tenantId, null, null, null, null, null, null, null, null, null, null, null);

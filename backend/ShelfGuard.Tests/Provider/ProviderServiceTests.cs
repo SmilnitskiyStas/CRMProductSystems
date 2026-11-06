@@ -83,6 +83,165 @@ public sealed class ProviderServiceTests
     // ── CreateTenantAsync — primary supplier category (TASK-665) ───────────────
 
     [Fact]
+    public async Task CreateTenant_Beauty_EmptyModules_IgnoresSupplierCategory()
+    {
+        var req = new CreateTenantRequest(
+            "Salon", "salon-beauty", "beauty", "basic", Array.Empty<string>(),
+            SupplierCategory: "not_even_valid");
+
+        var (tenant, error) = await _sut.CreateTenantAsync(req, default);
+
+        Assert.Null(error);
+        Assert.NotNull(tenant);
+        Assert.Equal("beauty", tenant!.BusinessType);
+        Assert.Empty(tenant.Modules);
+        await _tenants.DidNotReceive().AddSupplierAsync(Arg.Any<Supplier>(), Arg.Any<CancellationToken>());
+        await _tenants.DidNotReceive().AddSupplierProfileAsync(Arg.Any<SupplierProfile>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task CreateTenant_Beauty_NullOrNonEmptyModules_StillEmpty()
+    {
+        var req = new CreateTenantRequest(
+            "Salon", "salon-beauty-2", "beauty", "basic", new[] { "inventory" });
+
+        var (tenant, error) = await _sut.CreateTenantAsync(req, default);
+
+        Assert.Null(error);
+        Assert.Empty(tenant!.Modules);
+    }
+
+    [Fact]
+    public async Task Impersonate_BeautyTenant_ReturnsError_NoToken()
+    {
+        var beauty = Tenant.Create("Salon", "salon-imp");
+        beauty.UpdateBusinessType("beauty");
+        _tenants.GetByIdAsync(beauty.Id, Arg.Any<CancellationToken>()).Returns(beauty);
+
+        var (response, error) = await _sut.ImpersonateAsync(Guid.NewGuid(), "p@x.com", beauty.Id, default);
+
+        Assert.Null(response);
+        Assert.Equal("Impersonation is not available for beauty tenants.", error);
+        _jwt.DidNotReceiveWithAnyArgs().GenerateImpersonationToken(default, default!, default, default, default, default);
+    }
+
+    private Tenant StubTenant(string type, bool active = true)
+    {
+        var t = Tenant.Create("Salon", "salon-" + Guid.NewGuid().ToString("N")[..8]);
+        Assert.Null(t.UpdateBusinessType(type));
+        if (!active) t.Deactivate();
+        _tenants.GetByIdAsync(t.Id, Arg.Any<CancellationToken>()).Returns(t);
+        return t;
+    }
+
+    [Fact]
+    public async Task Impersonate_Beauty_WritesNoActivityLog()
+    {
+        var beauty = StubTenant("beauty");
+        await _sut.ImpersonateAsync(Guid.NewGuid(), "p@x.com", beauty.Id, default);
+        await _logs.DidNotReceiveWithAnyArgs().LogAsync(default!, default);
+        await _logs.DidNotReceiveWithAnyArgs().SaveChangesAsync(default);
+    }
+
+    [Fact]
+    public async Task Impersonate_NotFound_And_Deactivated_Win_Over_Beauty()
+    {
+        var (_, nf) = await _sut.ImpersonateAsync(Guid.NewGuid(), "p@x.com", Guid.NewGuid(), default);
+        Assert.Equal("Tenant not found.", nf);
+
+        var inactiveBeauty = StubTenant("beauty", active: false);
+        var (_, deact) = await _sut.ImpersonateAsync(Guid.NewGuid(), "p@x.com", inactiveBeauty.Id, default);
+        Assert.Equal("Tenant is deactivated.", deact);
+    }
+
+    [Fact]
+    public async Task Impersonate_UppercaseBeautyFromDb_IsBlocked()
+    {
+        // Legacy/raw value: the guard must be case-insensitive, not rely on UpdateBusinessType lowercasing.
+        var beauty = StubTenant("beauty");
+        typeof(Tenant).GetProperty(nameof(Tenant.BusinessType))!.SetValue(beauty, "Beauty");
+        var (response, error) = await _sut.ImpersonateAsync(Guid.NewGuid(), "p@x.com", beauty.Id, default);
+        Assert.Null(response);
+        Assert.Equal("Impersonation is not available for beauty tenants.", error);
+    }
+
+    [Fact]
+    public async Task CreateTenantUser_Beauty_IsRejected_NoUserCreated()
+    {
+        var beauty = StubTenant("beauty");
+        var (user, error) = await _sut.CreateTenantUserAsync(
+            beauty.Id, new CreateTenantUserRequest("Owner", "o@salon.test", "SecurePass123!x", AppRoles.EnterpriseAdmin), default);
+
+        Assert.Null(user);
+        Assert.Equal("Users for beauty tenants are managed in Beauty CRM.", error);
+        await _users.DidNotReceiveWithAnyArgs().AddAsync(default!, default);
+    }
+
+    [Fact]
+    public async Task UpdateModules_Beauty_OnlyEmptyAccepted()
+    {
+        var beauty = StubTenant("beauty");
+
+        var bad = await _sut.UpdateModulesAsync(beauty.Id, ["inventory"], default);
+        Assert.Equal("Beauty tenants cannot have ShelfGuard modules.", bad);
+        await _tenants.DidNotReceive().SaveChangesAsync(Arg.Any<CancellationToken>());
+
+        var ok = await _sut.UpdateModulesAsync(beauty.Id, [], default);
+        Assert.Null(ok);
+        Assert.Empty(beauty.GetModules());
+    }
+
+    [Fact]
+    public async Task CreateTenant_UppercaseBeauty_TreatedAsBeauty_ModulesEmpty()
+    {
+        var (tenant, error) = await _sut.CreateTenantAsync(
+            new CreateTenantRequest("Salon", "salon-upper", "Beauty", "basic", ["inventory"]), default);
+        Assert.Null(error);
+        Assert.Equal("beauty", tenant!.BusinessType);
+        Assert.Empty(tenant.Modules);
+    }
+
+    [Theory]
+    [InlineData("-bad")]
+    [InlineData("has_underscore")]
+    [InlineData("with space")]
+    public async Task CreateTenant_Beauty_InvalidSlug_Rejected(string slug)
+    {
+        var (tenant, error) = await _sut.CreateTenantAsync(
+            new CreateTenantRequest("Salon", slug, "beauty", "basic", null), default);
+        Assert.Null(tenant);
+        Assert.StartsWith("Invalid slug for a beauty tenant", error);
+    }
+
+    [Fact]
+    public async Task CreateTenant_Beauty_LongSlugOrName_Rejected()
+    {
+        var (t1, e1) = await _sut.CreateTenantAsync(
+            new CreateTenantRequest("Salon", new string('a', 64), "beauty", "basic", null), default);
+        Assert.Null(t1);
+        Assert.StartsWith("Invalid slug", e1);
+
+        var (t2, e2) = await _sut.CreateTenantAsync(
+            new CreateTenantRequest(new string('n', 151), "salon-long", "beauty", "basic", null), default);
+        Assert.Null(t2);
+        Assert.StartsWith("Name must be at most 150", e2);
+    }
+
+    [Fact]
+    public async Task CreateTenant_NonBeauty_NullModules_UseDefaults_ExplicitEmpty_StaysEmpty()
+    {
+        var (def, e1) = await _sut.CreateTenantAsync(
+            new CreateTenantRequest("Shop", "shop-defaults", "retail", "basic", null), default);
+        Assert.Null(e1);
+        Assert.NotEmpty(def!.Modules);
+
+        var (empty, e2) = await _sut.CreateTenantAsync(
+            new CreateTenantRequest("Shop", "shop-empty", "retail", "basic", []), default);
+        Assert.Null(e2);
+        Assert.Empty(empty!.Modules);
+    }
+
+    [Fact]
     public async Task CreateTenant_SupplierWithValidCategory_SeedsSingleCategoryOnProfile()
     {
         SupplierProfile? persistedProfile = null;
