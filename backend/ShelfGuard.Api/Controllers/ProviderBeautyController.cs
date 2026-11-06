@@ -17,7 +17,7 @@ namespace ShelfGuard.Api.Controllers;
 public sealed class ProviderBeautyController(IBeautyProvisioningService beauty) : ControllerBase
 {
     [HttpPost]
-    [RequireRecentMfa]
+    [RequireRecentMfaIfEnrolled]
     public async Task<IActionResult> Create([FromBody] CreateBeautyTenantRequest request, CancellationToken ct)
     {
         var (actor, userId) = Actor();
@@ -29,7 +29,7 @@ public sealed class ProviderBeautyController(IBeautyProvisioningService beauty) 
         Map(await beauty.GetAsync(shelfGuardTenantId, ct));
 
     [HttpPost("{shelfGuardTenantId:guid}/suspend")]
-    [RequireRecentMfa]
+    [RequireRecentMfaIfEnrolled]
     public async Task<IActionResult> Suspend(
         Guid shelfGuardTenantId, [FromBody] SuspendBeautyTenantRequest? request, CancellationToken ct)
     {
@@ -38,7 +38,7 @@ public sealed class ProviderBeautyController(IBeautyProvisioningService beauty) 
     }
 
     [HttpPost("{shelfGuardTenantId:guid}/resume")]
-    [RequireRecentMfa]
+    [RequireRecentMfaIfEnrolled]
     public async Task<IActionResult> Resume(Guid shelfGuardTenantId, CancellationToken ct)
     {
         var (actor, userId) = Actor();
@@ -47,7 +47,7 @@ public sealed class ProviderBeautyController(IBeautyProvisioningService beauty) 
 
     /// <summary>Re-issues the owner invite. The URL is returned once and is neither stored nor logged.</summary>
     [HttpPost("{shelfGuardTenantId:guid}/owner-invite")]
-    [RequireRecentMfa]
+    [RequireRecentMfaIfEnrolled]
     public async Task<IActionResult> OwnerInvite(Guid shelfGuardTenantId, CancellationToken ct)
     {
         var (actor, userId) = Actor();
@@ -55,7 +55,7 @@ public sealed class ProviderBeautyController(IBeautyProvisioningService beauty) 
     }
 
     [HttpPut("{shelfGuardTenantId:guid}/modules")]
-    [RequireRecentMfa]
+    [RequireRecentMfaIfEnrolled]
     public async Task<IActionResult> SetModules(
         Guid shelfGuardTenantId, [FromBody] SetBeautyModulesRequest request, CancellationToken ct)
     {

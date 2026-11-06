@@ -136,9 +136,9 @@ public sealed class ProviderBeautyControllerGuardTests
     [InlineData("OwnerInvite")]
     [InlineData("SetModules")]
     public void Mutating_Actions_Require_Recent_Mfa(string action) =>
-        Assert.NotEmpty(typeof(ProviderBeautyController).GetMethod(action)!.GetCustomAttributes(typeof(RequireRecentMfaAttribute), true));
+        Assert.NotEmpty(typeof(ProviderBeautyController).GetMethod(action)!.GetCustomAttributes(typeof(RequireRecentMfaIfEnrolledAttribute), true));
 
     [Fact]
     public void Get_Does_Not_Require_Mfa() =>
-        Assert.Empty(typeof(ProviderBeautyController).GetMethod("Get")!.GetCustomAttributes(typeof(RequireRecentMfaAttribute), true));
+        Assert.Empty(typeof(ProviderBeautyController).GetMethod("Get")!.GetCustomAttributes(typeof(RequireRecentMfaIfEnrolledAttribute), true));
 }
