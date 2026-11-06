@@ -1,0 +1,2 @@
+# Релізні SQL/скрипти/хеші мають лишатися з LF (хеші SHA-256 і psql чутливі до CRLF)
+docs/deploy/release-2026-11-beauty-control-plane/** text eol=lf
