@@ -68,6 +68,9 @@ public sealed class TenantAdminService : ITenantAdminService
             return (null, planError);
 
         var businessType = string.IsNullOrWhiteSpace(req.BusinessType) ? "retail" : req.BusinessType.Trim();
+        // Beauty is provider-panel only (ShelfGuard has no modules for it).
+        if (Tenant.IsBeautyType(businessType))
+            return (null, "Business type 'beauty' can only be created from the provider panel.");
         var businessTypeError = tenant.UpdateBusinessType(businessType);
         if (businessTypeError is not null)
             return (null, businessTypeError);
@@ -137,6 +140,10 @@ public sealed class TenantAdminService : ITenantAdminService
     {
         var tenant = await _repo.GetTenantByIdAsync(id, ct);
         if (tenant is null) return (null, "Tenant not found.");
+
+        // Beauty tenants have no ShelfGuard modules: only an empty list is accepted.
+        if (tenant.IsBeauty && modules.Count > 0)
+            return (null, "Beauty tenants cannot have ShelfGuard modules.");
 
         var error = tenant.UpdateModules(modules);
         if (error is not null) return (null, error);

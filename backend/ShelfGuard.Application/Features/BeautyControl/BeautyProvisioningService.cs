@@ -81,8 +81,12 @@ public sealed partial class BeautyProvisioningService(
             if (modules.Count == 0 || modules.Any(m => m.Length > 64)) return Invalid<BeautyTenantCreatedDto>("unknown_module");
         }
 
-        if (await tenants.GetByIdAsync(tenantId, ct) is null)
+        var sgTenant = await tenants.GetByIdAsync(tenantId, ct);
+        if (sgTenant is null)
             return BeautyResult<BeautyTenantCreatedDto>.Fail(BeautyErrorKind.NotFound, "shelfguard_tenant_not_found");
+        // Only an active ShelfGuard tenant of business type beauty may be provisioned in Beauty.
+        if (!sgTenant.IsActive || !sgTenant.IsBeauty)
+            return Invalid<BeautyTenantCreatedDto>("invalid_shelfguard_tenant");
 
         var result = await beauty.CreateTenantAsync(
             new BeautyCreateTenantCommand(ExternalRef(tenantId), name, slug, modules, email!, ownerName, actor), ct);
@@ -194,9 +198,12 @@ public sealed partial class BeautyProvisioningService(
         if (link is null)
         {
             link = BeautyTenantLink.Create(tenantId, beautyTenantId, slug, status, now);
-            await links.AddAsync(link, ct);
+            // A parallel create may win the unique index: re-read the winner's row and sync it instead of a 500.
+            if (await links.TryAddAsync(link, ct)) return link;
+            link = await links.GetByTenantIdAsync(tenantId, ct)
+                   ?? throw new InvalidOperationException("Beauty link insert failed and no link exists.");
         }
-        else link.Sync(beautyTenantId, slug, status, now);
+        link.Sync(beautyTenantId, slug, status, now);
         await links.SaveChangesAsync(ct);
         return link;
     }

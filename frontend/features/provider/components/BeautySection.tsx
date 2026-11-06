@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import type { CSSProperties } from "react";
 import { useTranslations, useLocale } from "next-intl";
 import { Copy, Check } from "lucide-react";
@@ -17,7 +17,7 @@ import {
 import { BEAUTY_DEFAULT_MODULES, BEAUTY_MODULES } from "../types";
 
 const SLUG_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+export const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 const inputStyle: CSSProperties = {
   width: "100%",
@@ -34,7 +34,7 @@ const labelStyle: CSSProperties = { display: "block", color: "#9CA3AF", fontSize
 const errStyle: CSSProperties = { color: "#F87171", fontSize: 11, marginTop: 4 };
 
 /** One-time secret returned by create / owner-invite. Lives only in the open dialog's state. */
-interface Invite {
+export interface Invite {
   url: string;
   expiresAt: string;
 }
@@ -78,12 +78,19 @@ export function BeautyInviteDialog({ invite, onClose }: { invite: Invite; onClos
   const [copied, setCopied] = useState(false);
   const [copyFailed, setCopyFailed] = useState(false);
   const inputId = useId();
+  const copiedTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => () => {
+    if (copiedTimer.current) clearTimeout(copiedTimer.current);
+  }, []);
 
   async function copy() {
     try {
       await navigator.clipboard.writeText(invite.url);
       setCopied(true);
       setCopyFailed(false);
+      if (copiedTimer.current) clearTimeout(copiedTimer.current);
+      copiedTimer.current = setTimeout(() => setCopied(false), 2500);
     } catch {
       setCopied(false);
       setCopyFailed(true);
@@ -121,10 +128,11 @@ export function BeautyInviteDialog({ invite, onClose }: { invite: Invite; onClos
             </Btn>
           </div>
           <div aria-live="polite" style={{ minHeight: 16, marginTop: 4 }}>
+            {copied && <span style={{ color: "#4ADE80", fontSize: 11 }}>{t("copied")}</span>}
             {copyFailed && <span style={errStyle}>{t("copyFailed")}</span>}
           </div>
         </div>
-        <div style={{ color: "#6B7280", fontSize: 12 }}>{t("inviteExpires", { date: expires })}</div>
+        <div style={{ color: "#9CA3AF", fontSize: 12 }}>{t("inviteExpires", { date: expires })}</div>
         <Btn type="button" variant="ghost" onClick={onClose} style={{ justifyContent: "center" }}>
           {t("close")}
         </Btn>
@@ -135,7 +143,7 @@ export function BeautyInviteDialog({ invite, onClose }: { invite: Invite; onClos
 
 // ── Modules checkboxes ───────────────────────────────────────────────────────
 
-function ModuleChecklist({ selected, onToggle, disabled }: { selected: string[]; onToggle: (m: string) => void; disabled?: boolean }) {
+export function ModuleChecklist({ selected, onToggle, disabled }: { selected: string[]; onToggle: (m: string) => void; disabled?: boolean }) {
   const t = useTranslations("Dashboard.provider.beauty");
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
@@ -179,10 +187,10 @@ export function CreateBeautyDialog({
   defaultName: string;
   defaultSlug: string;
   onClose: () => void;
-  onCreated: (invite: Invite) => void;
+  onCreated: (invite: Invite | null) => void;
 }) {
   const t = useTranslations("Dashboard.provider.beauty");
-  const create = useCreateBeautyTenant(tenantId);
+  const create = useCreateBeautyTenant();
   const [name, setName] = useState(defaultName);
   const [slug, setSlug] = useState(defaultSlug.toLowerCase().replace(/[^a-z0-9-]+/g, "-").replace(/^-+|-+$/g, ""));
   const [ownerEmail, setOwnerEmail] = useState("");
@@ -213,7 +221,7 @@ export function CreateBeautyDialog({
         modules,
       });
       create.reset(); // drop the one-time inviteUrl from the mutation cache
-      onCreated({ url: res.inviteUrl, expiresAt: res.inviteExpiresAt });
+      onCreated(res.inviteUrl && res.inviteExpiresAt ? { url: res.inviteUrl, expiresAt: res.inviteExpiresAt } : null);
     } catch (err) {
       setServerError(t(`errors.${beautyErrorKey(err)}`));
     }
@@ -345,6 +353,7 @@ export function BeautySection({ tenantId, tenantName, tenantSlug }: { tenantId: 
   const ownerInvite = useBeautyOwnerInvite(tenantId);
   const [dialog, setDialog] = useState<Dlg>(null);
   const [invite, setInvite] = useState<Invite | null>(null);
+  const [noInvite, setNoInvite] = useState(false);
   const [actionError, setActionError] = useState("");
 
   const exists = data?.exists === true;
@@ -365,12 +374,17 @@ export function BeautySection({ tenantId, tenantName, tenantSlug }: { tenantId: 
     }
   }
 
+  function showInvite(inv: Invite | null) {
+    if (inv) setInvite(inv);
+    else setNoInvite(true);
+  }
+
   async function reissueInvite() {
     setActionError("");
     try {
       const res = await ownerInvite.mutateAsync();
       ownerInvite.reset();
-      setInvite({ url: res.inviteUrl, expiresAt: res.expiresAt });
+      showInvite(res.inviteUrl && res.expiresAt ? { url: res.inviteUrl, expiresAt: res.expiresAt } : null);
     } catch (err) {
       setActionError(t(`errors.${beautyErrorKey(err)}`));
     }
@@ -407,7 +421,7 @@ export function BeautySection({ tenantId, tenantName, tenantSlug }: { tenantId: 
 
       {!isLoading && !isError && !exists && (
         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-          <div style={{ color: "#4B5563", fontSize: 12 }}>{t("noneHint")}</div>
+          <div style={{ color: "#9CA3AF", fontSize: 12 }}>{t("noneHint")}</div>
           <div>
             <Btn type="button" onClick={() => setDialog("create")}>{t("createButton")}</Btn>
           </div>
@@ -455,7 +469,7 @@ export function BeautySection({ tenantId, tenantName, tenantSlug }: { tenantId: 
             )}
           </div>
           {(suspended || data.ownerState === "active") && (
-            <div style={{ color: "#4B5563", fontSize: 11 }}>
+            <div style={{ color: "#9CA3AF", fontSize: 11 }}>
               {suspended ? t("inviteDisabledSuspended") : t("inviteDisabledActive")}
             </div>
           )}
@@ -470,7 +484,7 @@ export function BeautySection({ tenantId, tenantName, tenantSlug }: { tenantId: 
           onClose={closeDialog}
           onCreated={(inv) => {
             setDialog(null);
-            setInvite(inv);
+            showInvite(inv);
           }}
         />
       )}
@@ -501,6 +515,18 @@ export function BeautySection({ tenantId, tenantName, tenantSlug }: { tenantId: 
         />
       )}
       {invite && <BeautyInviteDialog invite={invite} onClose={() => setInvite(null)} />}
+      {noInvite && (
+        <BeautyDialog title={t("inviteTitle")} onClose={() => setNoInvite(false)} closeLabel={t("close")} width={480}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+            <div role="note" style={{ color: "#FCD34D", fontSize: 13, background: "#451A03", border: "1px solid #92400E", borderRadius: 8, padding: "10px 14px" }}>
+              {t("inviteAlreadyIssued")}
+            </div>
+            <Btn type="button" variant="ghost" onClick={() => setNoInvite(false)} style={{ justifyContent: "center" }}>
+              {t("close")}
+            </Btn>
+          </div>
+        </BeautyDialog>
+      )}
     </section>
   );
 }

@@ -18,12 +18,12 @@ export function useBeautyTenant(id: string) {
 
 // Mutations that return a one-time inviteUrl use gcTime 0, so the secret is not kept in the
 // mutation cache; callers additionally call reset() right after reading the result.
-export function useCreateBeautyTenant(id: string) {
+export function useCreateBeautyTenant() {
   const qc = useQueryClient();
   return useMutation({
     gcTime: 0,
     mutationFn: (req: CreateBeautyTenantRequest) => providerBeautyApi.create(req),
-    onSuccess: () => qc.invalidateQueries({ queryKey: beautyKey(id) }),
+    onSuccess: (_res, req) => qc.invalidateQueries({ queryKey: beautyKey(req.shelfGuardTenantId) }),
   });
 }
 

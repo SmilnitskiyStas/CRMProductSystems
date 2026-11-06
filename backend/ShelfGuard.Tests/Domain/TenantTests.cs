@@ -20,6 +20,24 @@ public sealed class TenantTests
     }
 
     [Fact]
+    public void DefaultModulesForBusinessType_Beauty_ReturnsEmptySet()
+    {
+        Assert.Empty(Tenant.DefaultModulesForBusinessType("beauty"));
+        Assert.Empty(Tenant.DefaultModulesForBusinessType("BEAUTY"));
+    }
+
+    [Fact]
+    public void UpdateBusinessType_Beauty_Succeeds()
+    {
+        var tenant = Tenant.Create("Salon", "salon");
+
+        var error = tenant.UpdateBusinessType("Beauty");
+
+        Assert.Null(error);
+        Assert.Equal("beauty", tenant.BusinessType);
+    }
+
+    [Fact]
     public void DefaultModulesForBusinessType_UnknownType_FallsBackToInventory()
     {
         var modules = Tenant.DefaultModulesForBusinessType("not_a_real_type");

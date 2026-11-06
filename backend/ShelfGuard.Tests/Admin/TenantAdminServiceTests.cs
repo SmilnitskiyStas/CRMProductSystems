@@ -121,6 +121,54 @@ public sealed class TenantAdminServiceTests
     }
 
     [Fact]
+    public async Task CreateTenant_Beauty_IsRejected_PersistsNothing()
+    {
+        _hasher.Hash(Arg.Any<string>()).Returns("hashed");
+
+        var req = new CreateTenantRequest(
+            Name:          "Salon",
+            Slug:          "salon-admin",
+            Plan:          "basic",
+            AdminEmail:    "admin@salon.com",
+            AdminFullName: "Admin User",
+            AdminPassword: "SecurePass123",
+            BusinessType:  "beauty");
+
+        var (tenant, error) = await _sut.CreateTenantAsync(req, default);
+
+        Assert.Null(tenant);
+        Assert.Contains("provider panel", error);
+        await _repo.DidNotReceive().AddTenantAsync(Arg.Any<Tenant>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task CreateTenant_UppercaseBeauty_IsRejected()
+    {
+        var req = new CreateTenantRequest(
+            "Salon", "salon-up", "basic", "a@salon.com", "Admin User", "SecurePass123", BusinessType: "Beauty");
+        var (tenant, error) = await _sut.CreateTenantAsync(req, default);
+        Assert.Null(tenant);
+        Assert.Contains("provider panel", error);
+    }
+
+    [Fact]
+    public async Task UpdateModules_Beauty_NonEmptyRejected_EmptyAccepted()
+    {
+        var beauty = Tenant.Create("Salon", "salon-mod");
+        beauty.UpdateBusinessType("beauty");
+        _repo.GetTenantByIdAsync(beauty.Id, Arg.Any<CancellationToken>()).Returns(beauty);
+
+        var (t1, e1) = await _sut.UpdateModulesAsync(beauty.Id, ["inventory"], default);
+        Assert.Null(t1);
+        Assert.Equal("Beauty tenants cannot have ShelfGuard modules.", e1);
+        await _repo.DidNotReceive().SaveChangesAsync(Arg.Any<CancellationToken>());
+
+        var (t2, e2) = await _sut.UpdateModulesAsync(beauty.Id, [], default);
+        Assert.Null(e2);
+        Assert.NotNull(t2);
+    }
+
+    [Fact]
     public async Task CreateTenant_InvalidBusinessType_ReturnsError()
     {
         _hasher.Hash(Arg.Any<string>()).Returns("hashed");

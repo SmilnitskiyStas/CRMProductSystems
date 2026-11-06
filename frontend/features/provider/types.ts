@@ -17,7 +17,7 @@ export type TenantModule =
 export type BusinessType =
   | "retail" | "auto_service" | "restaurant"
   | "warehouse" | "production" | "distribution"
-  | "pharmacy" | "floristry" | "supplier";
+  | "pharmacy" | "floristry" | "supplier" | "beauty";
 
 export interface TenantSummaryDto {
   id: string;
@@ -159,11 +159,12 @@ export const BUSINESS_TYPE_ICONS: Record<BusinessType, string> = {
   pharmacy:     "💊",
   floristry:    "🌸",
   supplier:     "🚚",
+  beauty:       "💅",
 };
 
 export const ALL_BUSINESS_TYPES: BusinessType[] = [
   "retail", "auto_service", "restaurant", "warehouse",
-  "production", "distribution", "pharmacy", "floristry", "supplier",
+  "production", "distribution", "pharmacy", "floristry", "supplier", "beauty",
 ];
 
 // Default module presets per business type (mirrors backend Tenant.DefaultModulesForBusinessType)
@@ -177,6 +178,8 @@ export const BUSINESS_TYPE_PRESETS: Record<BusinessType, TenantModule[]> = {
   pharmacy:     ["inventory", "procurement", "pos"],
   floristry:    ["inventory", "procurement", "pos"],
   supplier:     ["marketplace_supplier"],
+  // Beauty modules live in Beauty CRM (BEAUTY_MODULES), not in the ShelfGuard tenant.
+  beauty:       [],
 };
 
 // ── Modules ──────────────────────────────────────────────────────────────────
@@ -341,11 +344,12 @@ export interface CreateBeautyTenantRequest {
 export interface CreateBeautyTenantResponse {
   slug: string;
   status: "active";
-  inviteUrl: string;
-  inviteExpiresAt: string;
+  /** null / empty when the business already existed (no one-time invite is issued on a repeat). */
+  inviteUrl?: string | null;
+  inviteExpiresAt?: string | null;
 }
 
 export interface BeautyOwnerInviteResponse {
-  inviteUrl: string;
-  expiresAt: string;
+  inviteUrl?: string | null;
+  expiresAt?: string | null;
 }

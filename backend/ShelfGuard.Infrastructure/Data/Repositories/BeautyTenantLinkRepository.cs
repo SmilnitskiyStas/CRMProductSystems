@@ -12,5 +12,20 @@ public sealed class BeautyTenantLinkRepository(AppDbContext db) : IBeautyTenantL
     public async Task AddAsync(BeautyTenantLink link, CancellationToken ct) =>
         await db.BeautyTenantLinks.AddAsync(link, ct);
 
+    public async Task<bool> TryAddAsync(BeautyTenantLink link, CancellationToken ct)
+    {
+        await db.BeautyTenantLinks.AddAsync(link, ct);
+        try
+        {
+            await db.SaveChangesAsync(ct);
+            return true;
+        }
+        catch (DbUpdateException)
+        {
+            db.Entry(link).State = EntityState.Detached;
+            return false;
+        }
+    }
+
     public Task SaveChangesAsync(CancellationToken ct) => db.SaveChangesAsync(ct);
 }

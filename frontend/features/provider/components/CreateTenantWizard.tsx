@@ -1,9 +1,20 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
+import type { ReactNode } from "react";
 import { useTranslations } from "next-intl";
 import { ChevronRight, ChevronLeft, Check } from "lucide-react";
+import { ApiError } from "@/lib/api";
 import { useCreateTenant } from "../hooks/useProvider";
+import { useCreateBeautyTenant } from "../hooks/useProviderBeauty";
+import {
+  BeautyInviteDialog,
+  EMAIL_RE,
+  ModuleChecklist,
+  beautyErrorKey,
+  type Invite,
+} from "./BeautySection";
+import { BeautyDialog } from "./BeautyDialog";
 import { useItemCategories } from "@/features/marketplace/hooks/useMarketplace";
 import { slugify } from "@/lib/slug";
 import { Btn } from "@/components/ui/Btn";
@@ -17,7 +28,10 @@ import {
   ALL_MODULES,
   ALL_PLANS,
   PLAN_COLORS,
+  BEAUTY_DEFAULT_MODULES,
 } from "../types";
+
+const BEAUTY_SLUG_RE = /^[a-z0-9][a-z0-9-]{0,62}$/;
 
 interface Props {
   onClose: () => void;
@@ -30,7 +44,22 @@ export function CreateTenantWizard({ onClose, onCreated }: Props) {
   const tBusinessTypes = useTranslations("Dashboard.provider.businessTypes");
   const tModules = useTranslations("Dashboard.provider.modules");
   const tModuleDescriptions = useTranslations("Dashboard.provider.moduleDescriptions");
+  const tBeauty = useTranslations("Dashboard.provider.beauty");
   const createTenant = useCreateTenant();
+  const createBeauty = useCreateBeautyTenant();
+  const submitting = useRef(false);
+  const emailRef = useRef<HTMLInputElement>(null);
+  // The control that opened the wizard ("Add client"); captured before anything inside takes focus.
+  const openerRef = useRef<HTMLElement | null>(null);
+  if (openerRef.current === null && typeof document !== "undefined") {
+    openerRef.current = document.activeElement as HTMLElement | null;
+  }
+  useEffect(() => {
+    const opener = openerRef.current;
+    return () => {
+      if (opener && opener !== document.body) opener.focus?.();
+    };
+  }, []);
   const { data: itemCategories = [] } = useItemCategories();
 
   const [step,         setStep]         = useState<1 | 2 | 3>(1);
@@ -42,6 +71,12 @@ export function CreateTenantWizard({ onClose, onCreated }: Props) {
   const [supplierCategory, setSupplierCategory] = useState("");
   const [modules,      setModules]      = useState<TenantModule[]>([]);
   const [error,        setError]        = useState<string | null>(null);
+  const [ownerEmail,   setOwnerEmail]   = useState("");
+  const [emailError,   setEmailError]   = useState<string | null>(null);
+  const [ownerName,    setOwnerName]    = useState("");
+  const [beautyModules, setBeautyModules] = useState<string[]>([...BEAUTY_DEFAULT_MODULES]);
+  const [createdTenantId, setCreatedTenantId] = useState<string | null>(null);
+  const [beautyResult, setBeautyResult] = useState<{ invite: Invite | null } | null>(null);
 
   function handleNameChange(v: string) {
     setName(v);
@@ -50,7 +85,7 @@ export function CreateTenantWizard({ onClose, onCreated }: Props) {
 
   function handleBusinessTypeSelect(bt: BusinessType) {
     setBusinessType(bt);
-    setModules([...BUSINESS_TYPE_PRESETS[bt]]);
+    setModules(bt === "beauty" ? [] : [...BUSINESS_TYPE_PRESETS[bt]]);
     if (bt !== "supplier") setSupplierCategory("");
   }
 
@@ -60,8 +95,31 @@ export function CreateTenantWizard({ onClose, onCreated }: Props) {
     );
   }
 
+  function finish(tenantId: string) {
+    onCreated(tenantId);
+    onClose();
+  }
+
+  /** Never surfaces raw server text: only known statuses map to i18n copy. */
+  function createErrorText(e: unknown): string {
+    return e instanceof ApiError && e.status === 409 ? t("tenantSlugTaken") : t("errorCreateDefault");
+  }
+
+  // Closing while a request is in flight would lose the one-time invite; after a partial failure
+  // the already-created tenant is opened so the Beauty section can finish the job.
+  function handleClose() {
+    if (isBusy || submitting.current) return;
+    if (createdTenantId) finish(createdTenantId);
+    else onClose();
+  }
+
   async function handleSubmit() {
-    if (!businessType) return;
+    if (!businessType || submitting.current) return;
+    if (businessType === "beauty") {
+      await handleBeautySubmit();
+      return;
+    }
+    submitting.current = true;
     setError(null);
     try {
       const result = await createTenant.mutateAsync({
@@ -77,19 +135,98 @@ export function CreateTenantWizard({ onClose, onCreated }: Props) {
       onCreated(result.id);
       onClose();
     } catch (e: unknown) {
-      const msg = (e as { data?: { error?: string } })?.data?.error ?? t("errorCreateDefault");
-      setError(msg);
+      setError(createErrorText(e));
+    } finally {
+      submitting.current = false;
+    }
+  }
+
+  async function handleBeautySubmit() {
+    const trimmedSlug = slug.trim();
+    if (!BEAUTY_SLUG_RE.test(trimmedSlug)) {
+      setError(t("slugInvalid"));
+      return;
+    }
+    if (!EMAIL_RE.test(ownerEmail.trim())) {
+      setError(null);
+      setEmailError(t("emailInvalid"));
+      emailRef.current?.focus();
+      return;
+    }
+    if (beautyModules.length === 0) {
+      setError(t("modulesRequired"));
+      return;
+    }
+    submitting.current = true;
+    setError(null);
+    setEmailError(null);
+    let tenantId = createdTenantId;
+    try {
+      if (!tenantId) {
+        try {
+          const result = await createTenant.mutateAsync({
+            name: name.trim(),
+            slug: trimmedSlug,
+            businessType: "beauty",
+            plan,
+            modules: [],
+          });
+          tenantId = result.id;
+          setCreatedTenantId(tenantId);
+        } catch (e: unknown) {
+          setError(createErrorText(e));
+          return;
+        }
+      }
+      try {
+        const res = await createBeauty.mutateAsync({
+          shelfGuardTenantId: tenantId,
+          name: name.trim(),
+          slug: trimmedSlug,
+          ownerEmail: ownerEmail.trim(),
+          ownerName: ownerName.trim() || undefined,
+          modules: beautyModules,
+        });
+        createBeauty.reset();
+        setBeautyResult({
+          invite: res.inviteUrl && res.inviteExpiresAt ? { url: res.inviteUrl, expiresAt: res.inviteExpiresAt } : null,
+        });
+      } catch (e: unknown) {
+        setError(t("partialFailure", { error: tBeauty(`errors.${beautyErrorKey(e)}`) }));
+      }
+    } finally {
+      submitting.current = false;
     }
   }
 
   const canGoStep2 = name.trim().length >= 2 && slug.trim().length >= 2;
   const isSupplier = businessType === "supplier";
+  const isBeauty = businessType === "beauty";
   const canGoStep3 =
     businessType !== null && (!isSupplier || supplierCategory !== "");
+  const isBusy = createTenant.isPending || createBeauty.isPending;
+
+  if (beautyResult && createdTenantId) {
+    if (beautyResult.invite) {
+      return <BeautyInviteDialog invite={beautyResult.invite} onClose={() => finish(createdTenantId)} />;
+    }
+    return (
+      <BeautyDialog title={t("title")} onClose={() => finish(createdTenantId)} closeLabel={tBeauty("close")} width={480}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+          <div role="note" style={{ color: "#FCD34D", fontSize: 13, background: "#451A03", border: "1px solid #92400E", borderRadius: 8, padding: "10px 14px" }}>
+            {t("noInviteNotice")}
+          </div>
+          <Btn type="button" onClick={() => finish(createdTenantId)} style={{ justifyContent: "center" }}>
+            {t("doneButton")}
+          </Btn>
+        </div>
+      </BeautyDialog>
+    );
+  }
 
   return (
-    <Modal title={t("title")} onClose={onClose} width={640}>
-      <div style={{ color: "#4B5563", fontSize: 12, marginTop: -14, marginBottom: 16 }}>
+    <Modal title={t("title")} onClose={handleClose} width={640}>
+      <div style={{ color: "#9CA3AF", fontSize: 12, marginTop: -14, marginBottom: 16 }}>
         {t("stepLabel", {
           step,
           name:
@@ -126,12 +263,15 @@ export function CreateTenantWizard({ onClose, onCreated }: Props) {
           {step === 1 && (
             <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
               <Field label={t("companyNameLabel")}>
-                <input
-                  value={name}
-                  onChange={(e) => handleNameChange(e.target.value)}
-                  placeholder={t("companyNamePlaceholder")}
-                  style={inputStyle}
-                />
+                {(a) => (
+                  <input
+                    {...a}
+                    value={name}
+                    onChange={(e) => handleNameChange(e.target.value)}
+                    placeholder={t("companyNamePlaceholder")}
+                    style={inputStyle}
+                  />
+                )}
               </Field>
 
               {slug && (
@@ -248,8 +388,52 @@ export function CreateTenantWizard({ onClose, onCreated }: Props) {
           )}
 
           {/* ── Step 3: Modules ── */}
-          {step === 3 && businessType && (
+          {step === 3 && isBeauty && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+              <p style={{ color: "#9CA3AF", fontSize: 13, margin: 0 }}>{t("beautyHint")}</p>
+              <Field label={t("ownerEmailLabel")} error={emailError ?? undefined}>
+                {(a) => (
+                  <input
+                    {...a}
+                    ref={emailRef}
+                    type="email"
+                    aria-required="true"
+                    value={ownerEmail}
+                    onChange={(e) => { setOwnerEmail(e.target.value); setEmailError(null); }}
+                    autoComplete="off"
+                    disabled={isBusy}
+                    style={inputStyle}
+                  />
+                )}
+              </Field>
+              <Field label={t("ownerNameLabel")}>
+                {(a) => (
+                  <input
+                    {...a}
+                    value={ownerName}
+                    onChange={(e) => setOwnerName(e.target.value)}
+                    autoComplete="off"
+                    disabled={isBusy}
+                    style={inputStyle}
+                  />
+                )}
+              </Field>
+              <fieldset style={{ border: "none", padding: 0, margin: 0 }}>
+                <legend style={labelStyle}>{t("beautyModulesLabel")}</legend>
+                <ModuleChecklist
+                  selected={beautyModules}
+                  onToggle={(m) =>
+                    setBeautyModules((p) => (p.includes(m) ? p.filter((x) => x !== m) : [...p, m]))
+                  }
+                  disabled={isBusy}
+                />
+              </fieldset>
+            </div>
+          )}
+
+          {step === 3 && businessType && !isBeauty && (
             <div>
+
               <p style={{ color: "#6B7280", fontSize: 13, marginBottom: 16 }}>
                 {t("preselectedHintPrefix")}{" "}
                 <span style={{ color: "#93C5FD" }}>{tBusinessTypes(businessType)}</span>
@@ -295,7 +479,7 @@ export function CreateTenantWizard({ onClose, onCreated }: Props) {
           )}
 
           {error && (
-            <div style={{
+            <div role="alert" style={{
               marginTop: 16, padding: "10px 14px", borderRadius: 8,
               background: "#450a0a", border: "1px solid #7f1d1d",
               color: "#F87171", fontSize: 13,
@@ -314,7 +498,8 @@ export function CreateTenantWizard({ onClose, onCreated }: Props) {
           <Btn
             variant="ghost"
             icon={<ChevronLeft size={14} />}
-            onClick={() => step > 1 ? setStep((s) => (s - 1) as 1 | 2 | 3) : onClose()}
+            disabled={isBusy || (createdTenantId !== null && step > 1)}
+            onClick={() => step > 1 ? setStep((s) => (s - 1) as 1 | 2 | 3) : handleClose()}
           >
             {step === 1 ? t("cancelButton") : t("backButton")}
           </Btn>
@@ -331,9 +516,16 @@ export function CreateTenantWizard({ onClose, onCreated }: Props) {
             <Btn
               icon={<Check size={14} />}
               onClick={handleSubmit}
-              disabled={createTenant.isPending || modules.length === 0 || !canGoStep3}
+              disabled={
+                isBusy || !canGoStep3 ||
+                (isBeauty ? beautyModules.length === 0 : modules.length === 0)
+              }
             >
-              {createTenant.isPending ? t("creating") : t("createButton")}
+              {isBusy
+                ? t("creating")
+                : createdTenantId
+                  ? t("retryBeautyButton")
+                  : t("createButton")}
             </Btn>
           )}
         </div>
@@ -344,14 +536,41 @@ export function CreateTenantWizard({ onClose, onCreated }: Props) {
 
 // ── Internal helpers ──────────────────────────────────────────────────────────
 
-function Field({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
+interface FieldControlProps {
+  id: string;
+  "aria-invalid"?: true;
+  "aria-describedby"?: string;
+}
+
+/**
+ * Labelled field. Pass a render function to get the id / aria props to spread on a single input
+ * (label is linked via htmlFor); plain children (button groups) are wrapped in role="group".
+ */
+function Field({
+  label, hint, error, children,
+}: {
+  label: string;
+  hint?: string;
+  error?: string;
+  children: ReactNode | ((a: FieldControlProps) => ReactNode);
+}) {
+  const id = useId();
+  const labelId = `${id}-label`;
+  const errId = `${id}-err`;
+  const hintId = `${id}-hint`;
+  const describedBy = [error ? errId : null, hint ? hintId : null].filter(Boolean).join(" ") || undefined;
   return (
-    <div>
-      <label style={labelStyle}>
+    <div role={typeof children === "function" ? undefined : "group"} aria-labelledby={typeof children === "function" ? undefined : labelId}>
+      <label id={labelId} htmlFor={typeof children === "function" ? id : undefined} style={labelStyle}>
         {label}
       </label>
-      {children}
-      {hint && <p style={{ color: "#374151", fontSize: 11, marginTop: 4 }}>{hint}</p>}
+      {typeof children === "function"
+        ? children({ id, "aria-invalid": error ? true : undefined, "aria-describedby": describedBy })
+        : children}
+      {error && (
+        <div id={errId} role="alert" style={{ color: "#F87171", fontSize: 12, marginTop: 4 }}>{error}</div>
+      )}
+      {hint && <p id={hintId} style={{ color: "#9CA3AF", fontSize: 11, marginTop: 4 }}>{hint}</p>}
     </div>
   );
 }

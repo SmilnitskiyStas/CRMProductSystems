@@ -49,6 +49,7 @@ export function TenantDetailPanel({ tenantId, onClose, onImpersonated, onViewLog
   const locale = useLocale();
   const intlLocale = locale === "en" ? "en-US" : "uk-UA";
   const { data: tenant, isLoading } = useTenant(tenantId, true);
+  const isBeautyTenant = tenant?.businessType === "beauty";
   const updatePlan    = useUpdatePlan(tenantId);
   const updateModules = useUpdateModules(tenantId);
   const impersonate   = useImpersonate();
@@ -353,7 +354,7 @@ export function TenantDetailPanel({ tenantId, onClose, onImpersonated, onViewLog
           <div style={{ background: "#0D1117", border: "1px solid #1F2937", borderRadius: 10, padding: "14px 16px" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
               <div style={{ color: "#9CA3AF", fontSize: 12, fontWeight: 600 }}>{t("modulesSectionTitle")}</div>
-              {!editingModules && (
+              {!editingModules && !isBeautyTenant && (
                 <Btn variant="link" size="sm" onClick={() => startEditModules(tenant)}>
                   {t("configureButton")}
                 </Btn>
@@ -413,7 +414,9 @@ export function TenantDetailPanel({ tenantId, onClose, onImpersonated, onViewLog
           </div>
 
           {/* Beauty CRM control plane (TASK-828) */}
-          <BeautySection tenantId={tenantId} tenantName={tenant.name} tenantSlug={tenant.slug} />
+          {isBeautyTenant && (
+            <BeautySection tenantId={tenantId} tenantName={tenant.name} tenantSlug={tenant.slug} />
+          )}
 
           {/* AI agents (managed-AI Phase 1; per-slot since Phase 4) */}
           <div style={{ background: "#0D1117", border: "1px solid #1F2937", borderRadius: 10, padding: "14px 16px" }}>
@@ -633,9 +636,11 @@ export function TenantDetailPanel({ tenantId, onClose, onImpersonated, onViewLog
           <div style={{ background: "#0D1117", border: "1px solid #1F2937", borderRadius: 10, padding: "14px 16px" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
               <div style={{ color: "#9CA3AF", fontSize: 12, fontWeight: 600 }}>{t("adminsSectionTitle")}</div>
-              <Btn variant="link" size="sm" onClick={() => setShowAddUser(true)}>
-                {t("addButton")}
-              </Btn>
+              {!isBeautyTenant && (
+                <Btn variant="link" size="sm" onClick={() => setShowAddUser(true)}>
+                  {t("addButton")}
+                </Btn>
+              )}
             </div>
 
             {usersLoading ? (
@@ -679,15 +684,17 @@ export function TenantDetailPanel({ tenantId, onClose, onImpersonated, onViewLog
               {t("actionsSectionTitle")}
             </div>
             <div style={{ color: "#4B5563", fontSize: 12, marginBottom: 12 }}>
-              {t("impersonateHint")}
+              {tenant.businessType === "beauty" ? t("impersonateBeautyBlocked") : t("impersonateHint")}
             </div>
             {impersonateErr && (
               <div style={{ color: "#F87171", fontSize: 12, marginBottom: 10 }}>{impersonateErr}</div>
             )}
             <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-              <Btn icon={<LogIn size={15} />} onClick={handleImpersonate} disabled={impersonating || !tenant.isActive}>
-                {impersonating ? t("connecting") : t("impersonateButton")}
-              </Btn>
+              {tenant.businessType !== "beauty" && (
+                <Btn icon={<LogIn size={15} />} onClick={handleImpersonate} disabled={impersonating || !tenant.isActive}>
+                  {impersonating ? t("connecting") : t("impersonateButton")}
+                </Btn>
+              )}
 
               <Btn variant="ghost" icon={<ScrollText size={15} />} onClick={() => onViewLogs(tenantId)}>
                 {t("logsButton")}
